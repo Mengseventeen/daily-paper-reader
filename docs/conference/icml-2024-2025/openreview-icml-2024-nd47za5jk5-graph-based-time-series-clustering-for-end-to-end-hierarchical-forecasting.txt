@@ -1,0 +1,800 @@
+Title: 6401_Graph_based_Time_Series_C.pdf
+
+URL Source: https://openreview.net/pdf?id=nd47Za5jk5
+
+Number of Pages: 15
+
+Markdown Content:
+# Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+Andrea Cini 1 Danilo Mandic 2 Cesare Alippi 1 3 
+
+# Abstract 
+
+Relationships among time series can be exploited as inductive biases in learning effective forecast-ing models. In hierarchical time series, relation-ships among subsets of sequences induce hard constraints (hierarchical inductive biases) on the predicted values. In this paper, we propose a graph-based methodology to unify relational and hierarchical inductive biases in the context of deep learning for time series forecasting. In particular, we model both types of relationships as depen-dencies in a pyramidal graph structure, with each pyramidal layer corresponding to a level of the hierarchy. By exploiting modern – trainable – graph pooling operators we show that the hierar-chical structure, if not available as a prior, can be learned directly from data, thus obtaining cluster assignments aligned with the forecasting objec-tive. A differentiable reconciliation stage is incor-porated into the processing architecture, allowing hierarchical constraints to act both as an architec-tural bias as well as a regularization element for predictions. Simulation results on representative datasets show that the proposed method compares favorably against the state of the art. 
+
+# 1. Introduction 
+
+In most applications, collections of related time series can be organized and aggregated within a hierarchical struc-ture (Hyndman et al., 2011). One practical example is fore-casting energy consumption profiles which can be aggre-gated at the level of individual households as well as at city, regional, and national scales (Taieb et al., 2021). Similar arguments can be made for forecasting photovoltaic produc-tion (Yang et al., 2017), financial time series (Athanasopou-los et al., 2020), and the influx of tourists (Athanasopoulos      
+
+> 1The Swiss AI Lab IDSIA, Universit `a della Svizzera ital-iana, Switzerland 2Imperial College London, United Kingdom
+> 3Politecnico di Milano, Italy. Correspondence to: Andrea Cini
+> <andrea.cini@usi.ch >.
+> Proceedings of the 41 st International Conference on Machine Learning , Vienna, Austria. PMLR 235, 2024. Copyright 2024 by the author(s).
+
+et al., 2009), to name a few relevant application domains. By exploiting aggregation constraints, forecasts at different levels can be combined to obtain predictions at different resolutions. Similarly, coherency constraints can be used to regularize forecasts obtained for the different levels by considering forecast reconciliation (FR) methods (Hynd-man et al., 2011; Wickramasuriya et al., 2019; Panagiotelis et al., 2023). Said differently, constraining forecasts at dif-ferent levels to “add up” can positively impact forecasting accuracy. Based on similar ideas, cluster-based aggregate forecasting methods learn to predict aggregates of clustered time series as an intermediate step for obtaining forecasts for the total aggregate (Alzate and Sinn, 2013; Fahiman et al., 2017; Cini et al., 2020). The idea underlying both approaches is that combining multiple forecasts reduces variance, an observation dating back to Bates and Granger (1969). In particular, FR is a special case of forecast combi-nations (Hollyman et al., 2021). Besides hierarchical constraints, correlated time series fore-casting models can leverage relational inductive biases to predict any subset of the time series while sharing learn-able parameters (Cini et al., 2023c). Indeed, the com-bination of graph deep learning methods (Bacciu et al., 2020; Stankovi ´c et al., 2020; Bronstein et al., 2021) and deep learning for time series (Benidis et al., 2022) has led to state-of-the-art forecasting accuracy in several do-mains (Jin et al., 2023; Cini et al., 2023b). Current state-of-the-art methods, however, are limited to processing the input data at a single spatial resolution which might cause propagation bottlenecks (Alon and Yahav, 2020) and over-smoothing (Rusch et al., 2023). Graph pooling opera-tors (Grattarola et al., 2022) enable graph neural network (GNN) architectures to learn how to cluster nodes and ob-tain hierarchical, higher-order, graph representations tai-lored to the task at hand (Bianchi and Lachi, 2023). Yet the application of learnable graph pooling operators and the combination of hierarchical and relational constraints are underexplored in graph-based forecasting. To fill this void, this paper proposes a novel and compre-hensive graph-based framework for hierarchical time series clustering and forecasting. Our approach unifies hierarchical time series processing, graph pooling operators, and graph-based neural forecasting methods. This results in a learning architecture for multi-step ahead forecasting operating at 1Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+different levels of spatial resolution. Hierarchical and rela-tional structures are embedded as inductive biases into the processing by exploiting neural message passing (Gilmer et al., 2017) and graph pooling (Grattarola et al., 2022) operators. The proposed methodology, named Hierarchi-cal Graph Predictor (HiGP) can propagate representations along the hierarchical structure and ensure the coherency of predictions w.r.t. aggregation constraints. In particular, we focus on settings where the hierarchical structure is not given but learned directly from data. In this scenario, the forecast recombination mechanism is trained in a self-supervised manner, by exploiting the forecasting accuracy at different levels as a learning signal and the graph topol-ogy as a regularization mechanism. In other words, time series clusters are learned while maximizing the forecasting accuracy w.r.t. the corresponding aggregated time series. This provides an additional learning signal to the clustering procedure. Our main novel contributions are: • the introduction of a methodology to embed hierar-chical constraints as inductive biases in graph-based forecasting architectures (Sec. 3.1); • a methodological framework, based on graph pooling, to learn a proper hierarchical structure directly from data by clustering the input time series (Sec. 3.2); • an end-to-end learning architecture incorporating the above components in a time series forecasting model (Sec. 3.1, 3.2, 3.3). HiGP is extensively validated on relevant bench-marks (Sec. 5). Besides achieving state-of-the-art forecast-ing accuracy, we show that our approach can be used as a self-supervised architecture to learn meaningful cluster assignments. 
+
+# 2. Preliminaries 
+
+This section introduces preliminary concepts and provides the problem settings. 
+
+Graph-based spatiotemporal forecasting Consider a set of N univariate time series; xit ∈ R indicates the value observed at time step t w.r.t. the i-th time series. The obser-vation vector encompassing all the time series is analogously denoted by Xt ∈ RN ×1. Sequences of observations are indicated, e.g., as Xt:t+T where the index t : t + T refers to the time interval [t, t + T ). Available covariates can be encoded into a matrix Ut ∈ RN ×du . We assume the considered time series to be spatially correlated; i.e., time series are not independent, but are instead characterized by functional dependencies affecting the temporal evolution of 
+
+C =
+
+
+
+1 1 1 1 11 1 1 0 00 0 0 1 1
+
+
+
+y(2) ,1
+
+y(1) ,1 y(1) ,2
+
+x2
+
+x1 x3 x4 x5
+
+Figure 1: Example of hierarchical time series from (Hynd-man and Athanasopoulos, 2018). the system. Pairwise relationships among time series are encoded within a weighted adjacency matrix A ∈ RN ×N
+
+which is constant over time; the resulting attributed graph at time t is denoted by the triple Gt = ⟨Xt, Ut, A⟩. Ho-mogeneous sensors and static topology are assumed to ease the formalization of the problem; extensions beyond these settings are relatively straightforward, but outside of the paper’s scope. The multi-step time series forecasting prob-lem can then be modeled as the problem of predicting the 
+
+H-step-ahead observations Xt:t+H given a window of past data Gt−W :t by minimizing some estimate of the forecasting error. We focus on point forecasts , i.e., we do not model the uncertainty of the predictions. 
+
+Spatiotemporal graph neural networks (STGNNs) 
+
+STGNNs are effective global time series forecasting models for the problem above. As a reference, we consider time-then-space (TTS) architectures (Gao and Ribeiro, 2022; Cini et al., 2023b) with local learnable node embeddings (Cini et al., 2023c) where the input time series are processed by a temporal encoder followed by a stack of message-passing layers (Gilmer et al., 2017) accounting for “spatial” depen-dencies such that 
+
+hi, 0 
+
+> t
+
+= SEQ ENC 
+
+ xit−W :t, uit−W :t, vi , (1) 
+
+hi,l +1  
+
+> t
+
+= UPl
+
+hi,l t , AGGR  
+
+> j∈N (i)
+
+n
+
+MSG l hi,l t , hj,l t , a ji 
+
+o 
+
+, (2) where vi ⊂ V ∈ RN × de are the learnable node embed-dings associated with the i-th node, UPl( · ) and MSG ( · )l
+
+indicate update and message functions at the l-th layer, re-spectively, which can be implemented by, e.g., multi-layer perceptrons (MLPs). SEQ ENC ( · ) denotes a network en-coding each input sequence along the temporal dimension, e.g., a recurrent neural network (RNN), AGGR { · } is a per-mutation invariant aggregation function and N (i) refers to the set of neighbors of the i-th node, each associated to an edge with weight aji . In the following, the shorthand 
+
+Hl+1  
+
+> t
+
+= GNN l(Hlt , A) indicates a message-passing step w.r.t. the full node set and adjacency matrix A. Predictions can then be obtained by using any decoder, e.g., an MLP followed by a linear readout for each prediction step. 
+
+Hierarchical time series In the hierarchical setting, the set of raw time series is augmented by considering additional 2Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+sequences obtained by progressively aggregating those at the level below, thus building a pyramidal structure. In par-ticular, bottom observations (raw time series) are denoted as Y (0)  
+
+> t
+
+= Xt, while Y (k) 
+
+> t
+
+∈ RNk ×1, with k > 0, in-dicates values of Nk series obtained by aggregating (e.g., summing up) a partition of Y (k−1)  
+
+> t
+
+. The full collection of both raw and aggregated observations is denoted by matrix 
+
+Yt ∈ RM ×1, with M = PKk=0 Nk, obtained by stacking the Y (k) 
+
+> t
+
+matrices vertically in decreasing order w.r.t. index 
+
+k. In general, the level of the hierarchy is denoted as a super-script between parentheses. The aggregation constraints can be encoded in an aggregation matrix C ∈ { 0, 1}(M −N )×N
+
+such that the i-th aggregate time series can be obtained as 
+
+yit = PNj=1 cij xjt , i.e., by summing the bottom-level obser-vations given the hierarchical constraints 1. Given the above, the following relationships hold: 
+
+Yt =
+
+CI
+
+
+
+Xt, QY t =  I | − C  Yt = 0, (3) where I indicates an identity matrix of appropriate dimen-sions and | the concatenation operator. Fig. 1 provides an example of a time series hierarchy with the associated ag-gregation matrix. A forecast bYt is said to be coherent if the equality constraints in Eq. 3 holds, i.e., if Q bYt = 0. As discussed in the following, learning to forecast time series at different resolutions can act as an effective regulariza-tion mechanism, even when the hierarchical structure is not predefined. 
+
+# 3. Graph-based Hierarchical Clustering and Forecasting 
+
+This section presents our approach to graph-based hierarchi-cal time series forecasting. We start by discussing how to incorporate the hierarchical structure of the problem into a graph-based neural architecture (Sec. 3.1); then, we focus on our target setting and show how the hierarchical structure can be directly learned from data by exploiting trainable graph pooling operators (Sec. 3.2). Finally, we introduce an appropriate forecasting reconciliation mechanism to obtain forecasts coherent w.r.t. the learned hierarchy (Sec. 3.3). 
+
+3.1. Graph-based Hierarchical Forecasting 
+
+Embedding the hierarchical structure into the processing requires defining proper operators. In particular, we aim at designing a pyramidal processing architecture where each layer corresponds to a level of the time series hierarchy and has its own topology, related to those at the adjacent layers by the hierarchical structure. To obtain such processing, operators have to be specified to control how information     
+
+> 1Note the index idoes not refer to the level of the hierarchy but to the i-th element of the entire flattened collection Yt.
+
+is propagated among and within the levels of the hierarchy; we exploit the connection to graph pooling for defining such operators within the select, reduce, connect (SRC) frame-work (Grattarola et al., 2022). In particular, we use SRC building blocks as a high-level formalization of the opera-tors required to perform clustering, aggregation, and graph rewiring at each level of the hierarchy. The three operators are defined as follows, by indicating as H(k) 
+
+> t
+
+∈ RNk ×dh afeature matrix corresponding to representations at the k-th level of the hierarchy. 
+
+Select The selection operator SEL ( · ) outputs a map-ping from input nodes into supernodes (i.e., clusters) given by the aggregation constraints at each level. The mapping can be encoded in a selection matrix SEL (H(k) 
+
+> t
+
+, . . . ) = Sk ∈ { 0, 1}Nk−1×Nk where sij is equal to 1 if and only if the i-th time series at level k−1
+
+is mapped to the j-th aggregate at the k-th level. If the hierarchy is predefined, then the selection mechanism is given; conversely, learning a selection matrix is the key challenge for designing an end-to-end architecture and will be discussed in Sec. 3.2. 
+
+Reduce (and Lift) The reduction function RED ( · ) aggre-gates node features and propagates information from the k-th level to the adjacent upper level in the hi-erarchy. Reduction can be obtained by summation, i.e., RED (H(k−1)  
+
+> t
+
+, S(k)) .
+
+= S(k)T H(k−1)  
+
+> t
+
+, but other choices are possible. In practice, reduction is used in HiGP to propagate information along the pyrami-dal structure by aggregating node representations and implementing an inter-level message-passing mecha-nism (see Eq. 6). Similarly, we define the lift operator as LIFT (H(k+1)  
+
+> t
+
+, S(k)) .
+
+= S(k)H(k+1)  
+
+> t
+
+, i.e., as an up-sampling the pooled graph to the original size obtained by mapping each supernode back to the aggregated nodes. 
+
+Connect The connect operator CON ( · ) defines how the topology of the input graph is rewired after each ag-gregation step. There are several possible choices; we consider the rewiring where each pair of supernodes is connected by an edge with a weight obtained by sum-ming weights of the edges from one subset to the other, i.e., CON (S(k), A(k−1) ) .
+
+= S(k)T A(k−1) S(k), where 
+
+A(k) indicates the adjacency matrix w.r.t. k-th level. These operators can be used to design neural processing architectures to match the inductive biases coming from the hierarchical structure. Fig. 2 provides a graphical illus-tration of how these operators can be used to implement a hierarchical processing architecture. In particular, the figure shows subsequent applications of the selection, re-duction and connection operators allow for operating on a 3Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting time 
+
+Figure 2: Time series with a hierarchical relational structure. (Left) Graphical representation of hierarchical time series with graph-side information; SRC operators allow for modeling relationships among the time series in the hierarchy. 
+
+(Right) Pyramidal graph encompassing both hierarchical and relational dependencies; each pair of levels constitutes a bipartite graph. progressively coarser graph structure accounting for higher-order dependencies. By exploiting the introduced operators, we can move from the reference architecture in Eq. 2 to a hierarchical TTS model operating as 
+
+h(k),i, 0 
+
+> t
+
+= SEQ ENC (k) 
+
+y(k),i t−W :t, u(k),i t−W :t, v(k),i 
+
+, (4) 
+
+Z(k),l t = GNN (k)
+
+> l
+
+
+
+H(k),l t , A(k)
+
+, (5) 
+
+H(k),l +1  
+
+> t
+
+= UP(k) 
+
+> l
+
+Z(k),l  
+
+> t
+
+, S(k)T
+
+Z(k−1) ,l 
+
+> t
+
+| {z }
+
+> RED (k)
+
+, S(k)Z(k+1) ,l 
+
+> t
+
+| {z }
+
+> LIFT (k)
+
+!
+
+.
+
+(6) Eq. 4, shows the temporal encoding step, Eq. 5 refers to the intra-level propagation of messages, while Eq. 6 to the inter-level propagation; this needs further consideration to be fully appreciated. Matrix H(k),l t indicates representations w.r.t. the t-th time step obtained at the l-th message-passing layer for time series at the k-th level of the hierarchy (note the distinction between layers of message-passing and lev-els of the hierarchy). Compared to the model in Eq. 2, the hierarchical constraints add further structure to the process-ing. As shown in Eq.4, each time series is at first encoded along the temporal dimension by an encoder which can be either shared or different for each aggregation level. Then, representations are processed by a stack of layers propa-gating information within and among levels. As shown in Eq. 6, the representations are updated at each step by an update function UP(k) 
+
+> l
+
+( · ) (e.g., an MLP) taking as an in-put (1) the output Z(k),l t of a message-passing layer w.r.t. the graph topology at the k-th level (Eq. 5), (2) aggregated features from the level k − 1 and (3) the features correspond-ing to each node’s supernode obtained by lifting H(k+1) ,l t .Learnable parameters may optionally be shared among the different levels of the hierarchy. Final predictions can be obtained by using an arbitrary readout, i.e., a standard MLP, and by training the model to minimize the forecasting error w.r.t. all the time series as 
+
+ˆy(k),i t:t+H = MLP (k) 
+
+h(k),i,L t
+
+
+
+, (7) 
+
+L
+
+ bYt:t+H , Yt:t+H
+
+ .
+
+= bYt:t+H − Yt:t+H
+
+> pp
+
+, (8) where L( · ) indicates the loss function and p is equal to, e.g., 
+
+1 or 2. Note that the model is trained to make predictions for each level of the hierarchy. Representation at the different levels can capture patterns at different spatial scales, less apparent at fine-grained resolutions. Indeed, the aggregation and pooling operators increase the receptive field of each filter at each level of the hierarchy. Discussion on how to further regularize predictions given the hierarchical structure is postponed to Sec. 3.3. 
+
+3.2. End-to-end Clustering and Forecasting 
+
+Learning a hierarchy and, consequently, a cluster-based fore-casting architecture translates into learning a (differentiable) parametrization of the selection operator. For this task, we provide a general probabilistic framework, based on mod-eling cluster assignments as realizations of a parametrized categorical distribution. Then, we briefly discuss the applica-bility of standard graph pooling methods from the literature at the end of the section. 
+
+End-to-end clustering Similarly to popular dense train-able graph pooling operators (Bianchi et al., 2020a; Ying et al., 2018), we parametrize the selection operator with a score matrix Φ ∈ RNk−1×Nk , assigning a score ϕij to each node-cluster pair. However, differently from previous works, 4Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+we interpret such scores as (unnormalized) log-probabilities, such that 
+
+Φ(k) = Fψ
+
+
+
+Y (k−1)   
+
+> t−W:t
+
+, A(k−1) , V (k−1) 
+
+,
+
+S(k) ∼ P (S(k) 
+
+> ij
+
+= 1) = eϕ(k) 
+
+> ij /τ
+
+P 
+
+> j
+
+eϕ(k)  
+
+> ij /τ
+
+, (9) where τ is a temperature hyperparameter, while Fψ ( · )
+
+indicates a generic trainable function with trainable param-eters ψ. The conditioning on the input window Y (k−1)  
+
+> t−W:t
+
+can be dropped to obtain static cluster assignments; fur-thermore, depending on the dimensionality of the problem, the score matrix might also be parametrized directly as 
+
+Φ = ψ. Node embeddings and aggregates for the k-th level are then obtained through the reduction operator as 
+
+V (k) = S(k)T V (k−1) and Y (k) 
+
+> t
+
+= S(k)T Y (k−1)  
+
+> t
+
+, respec-tively. To differentiate through the sampling of S(k) we use the Gumbel softmax reparametrization trick (Jang et al., 2017; Maddison et al., 2017) followed by a discretization step to obtain hard cluster assignments via the straight-through gradient estimator (Bengio et al., 2013). In practice, 
+
+τ is set to 1 at the beginning of training and is exponen-tially decayed towards 0 at each training step. The above discretization step avoids soft cluster assignments that could lead to degenerate solutions given the loss in Eq. 8. Uniform soft assignments are indeed likely to minimize the variance of the aggregate time series and thus the prediction error at levels k > 0.
+
+Graph-based regularization To take the graph structure into account when learning the assignments, we exploit the min-cut regularization introduced by Bianchi et al. (2020a), i.e., we add to the loss the term 
+
+Lc 
+
+S(k) 
+
+> μ
+
+, A(k−1)  .
+
+= (10) 
+
+−
+
+Tr 
+
+
+
+S(k)
+
+> μ
+> T
+
+eA(k−1) S(k)
+
+> μ
+
+
+
+Tr 
+
+
+
+S(k)
+
+> μ
+> T
+
+eD(k−1) S(k)
+
+> μ
+
+ + S(k)
+
+> μ
+> T
+
+S(k)
+
+> μ
+
+S(k)
+
+> μ
+> T
+
+S(k) 
+
+> μ2
+
+− I
+
+√Nk
+
+> 2
+
+where S(k) 
+
+> μ
+
+= softmax  Φ(k), eD(k−1) is the degree matrix of eA(k−1) .
+
+= D− 12 A(k−1) D− 12 , i.e., of the symmetrically normalized adjacency matrix. The first term in the equation is a continuous relaxation of the min-cut problem (Dhillon et al., 2004) incentivizing the formation of clusters that pool together connected components of the graph; the second term helps in preventing degenerate solutions by favoring orthogonal cluster assignments (Bianchi et al., 2020a). 
+
+Training procedure The training objective identified in Eq. 8 entails that the cluster assignments are learned to min-imize the forecasting error w.r.t. both the bottom time series and aggregates. As a result, time series are clustered s.t. aggregates at all levels are easier to predict, thus providing a meaningful self-supervised learning signal. Intuitively, a signal will be easier to predict if characterized low intra-cluster variance . At the same time, different levels in the hierarchy will benefit from reading information from diverse supernodes, thus favoring a high inter-cluster variance .
+
+Alternative pooling operators Besides the clustering method described here, HiGP is compatible with any graph pooling approach from the literature (see Grattarola et al. 2022). In particular, one might be interested in exploiting non-trainable graph pooling operators that obtain cluster assignments based on the graph topology only. The lat-ter option becomes particularly attractive when obtaining predictions w.r.t. particular sub-graphs, or localized within specific connected components of the graph topology, is relevant for the downstream application. We discuss a selec-tion of appealing methods from the literature in Sec. 4 and refer to Grattarola et al. (2022) for an in-depth discussion. 
+
+3.3. Forecast Reconciliation 
+
+As mentioned in Sec. 1, FR allows for obtaining coherent forecast w.r.t. the hierarchical constraints (Eq. 3). Further-more, FR can often have a positive impact on forecasting accuracy as reconciled forecasts are obtained as a combi-nation of the predictions made at the different levels (Hol-lyman et al., 2021). We follow Rangapuram et al. (2021) and embed a (differentiable) reconciliation step within the architecture as a projection onto the subspace of coherent forecasts. 
+
+Forecast reconciliation Given (trainable) selection ma-trices S(1) , . . . , S(K) for each level of the hierarchy, the Q
+
+matrix (see Eq. 3) can be obtained as 
+
+Q =
+
+h
+
+I − C
+
+i
+
+= (11) 
+
+=
+
+
+
+I −
+
+h QKk=1 S(k) QK−1 
+
+> k=1
+
+S(k−i) ··· S(1) 
+
+iT 
+
+.
+
+Then, raw predictions bYt can be mapped into reconciled (co-herent) forecasts Y t through a projection onto the space of coherent forecasts (i.e., the null space of Q). The projection matrix can be computed as 
+
+P .
+
+= I − QT  QQ T −1 Q, Y t = P bYt, (12) where P is obtained by solving the constrained opti-mization problem min Z ∥Z − bYt∥2 s.t. QZ = 0. Model parameters are then learned by minimizing the loss 
+
+Lf
+
+.
+
+= L( bY , Y ) + L(Y , Y ) + λL(Y , bY ) where we omit-ted the time indices. Note that minimizing the regulariza-tion term L(Y , bY ) is equivalent to minimizing the distance between bYt:t+H and the space of coherent forecasts. Un-fortunately, computing the inverse of QQ T incurs the cost 5Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+O(M 3) in space and O(M 2) in time, which can be pro-hibitive for large time series collections. However, the solu-tion is still practical for up to a few thousand nodes (most practical applications), and the regularization term, com-puted as Lreg ( bY , λ ) .
+
+= λ∥Q bY ∥2, can be used in the other cases as the only regularization. The above FR method can be seamlessly integrated into our end-to-end forecast-ing framework, however, many possible alternatives could be considered here. The design of ad-hoc reconciliation methods for graph-based predictors is a promising research direction for future works (see Sec. 6). 
+
+# 4. Related Work 
+
+Hierarchical forecasting Hierarchical forecasting is a widely studied problem in time series analysis (Hyndman and Athanasopoulos, 2018; Hyndman et al., 2011). The standard approach consists of obtaining (possibly indepen-dent) forecasts for a subset of time series in the hierarchy in the first stage and then, in a separate step, reconciling and combining them to obtain (possibly coherent) predictions for the full hierarchy (Hyndman et al., 2011; Ben Taieb and Koo, 2019; Wickramasuriya et al., 2019). In particular, MinT (Wickramasuriya et al., 2019) allows for obtaining optimal reconciled forecasts given a set of unbiased H-step-ahead predictions and the covariance matrix of the associ-ated residuals. Analogous reconciliation methods have also been developed for probabilistic forecasts (Wickramasuriya, 2023; Taieb et al., 2017; Corani et al., 2021). End-to-end methods have been instead proposed in the context of deep learning for time series forecasting (Benidis et al., 2022) by exploiting the hierarchical structure either as a hard (Ran-gapuram et al., 2021; Zhou et al., 2023; Das et al., 2023) or soft constraint (Paria et al., 2021; Han et al., 2021). Notably, Rangapuram et al. (2021) incorporate the reconciliation step within the neural architecture as a differentiable convex optimization layer (Agrawal et al., 2019) and obtain proba-bilistic forecasts by Monte Carlo sampling. None of these methods consider relational dependencies among and within the levels of the hierarchical structure. 
+
+Graph-based forecasting and graph pooling Graph learning deep models have become popular in time series processing (Li et al., 2018; Cini et al., 2022; Jin et al., 2023). Graph pooling operators have been widely studied in GNN models for i.i.d. data (Grattarola et al., 2022; Bianchi and Lachi, 2023), but their application to time series data is un-derexplored. Dense trainable pooling methods (Ying et al., 2018; Bianchi et al., 2020a; Hansen and Bianchi, 2022) learn soft cluster assignment regularized by taking into account the graph structure. Sparse approaches, instead, produce hard cluster assignments usually learned by exploiting both the graph structure and a learned ranking on the nodes (Bac-ciu et al., 2023; Gao and Ji, 2019). Finally, non-trainable methods exploit a clustering of the nodes performed inde-pendently from the trained model (Bianchi et al., 2020b; Dhillon et al., 2007). Pyramidal graph-based architectures have been exploited in reservoir computing (Bianchi et al., 2022). Graph neural networks has also been used to pro-cess temporal hierarchies by Rangapuram et al. (2023). With regards to STGNNs, hierarchical representations have been exploited in specific domains such as traffic analyt-ics (Yu et al., 2019; Guo et al., 2021; Hermes et al., 2022), air quality monitoring (Chen et al., 2021), financial time series (Arya et al., 2023), and pandemic forecasting (Ma et al., 2022). In particular, Yu et al. (2019) propose a spa-tiotemporal graph U-network (Gao and Ji, 2019) where representations are pooled and then un-pooled to obtain a hierarchical processing of the time series. However, most of the above methods rely on fixed cluster assignments; further-more, none of them directly address the hierarchical time series forecasting problem by optimizing predictions at each level of the hierarchy to learn cluster assigments and taking into account coherency constraints. 
+
+# 5. Experiments 
+
+HiGP is validated over several settings considering forecast-ing benchmarks with no predefined hierarchical structure. In particular, we focus on validating of the proposed end-to-end clustering and forecasting architecture against relevant baselines and state-of-the-art architectures. We then provide a qualitative analysis of the learned time series clusters on datasets coming from sensor networks. Full details on the experimental setup are provided in Appendices B and C, while Appendix D contains additional empirical results and sensitivity analyses. 
+
+5.1. End-to-end Hierarchical Clustering and Forecasting 
+
+The empirical evaluation was set up by considering the following benchmarks and baselines. 
+
+Benchmarks We consider the multistep-ahead forecast-ing task and benchmark data coming from medium-sized sensor networks (hundreds of nodes). In particular, the benchmark consists of four datasets in total and includes two datasets from the traffic forecasting literature ( Metr-LA 
+
+and PeMS-Bay , Li et al. 2018), one dataset of air quality measurements ( AQI , Zheng et al. 2015) and a collection of energy consumption profiles ( CER-E , Commission for En-ergy Regulation 2016). Each dataset consists of correlated time series with graph-side information; no explicit prior hierarchical structure is given. We follow the setup of (Cini et al., 2023c), by adopting the same splits for training, vali-dation, and testing and the same procedure followed of pre-vious works to extract a graph topology for each dataset (Wu 6Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+Table 1: Forecasting performance on benchmark datasets (5 runs). Best result in bold , second best underlined. 
+
+MODELS Metr-LA PeMS-Bay CER AQI MAE MRE (%) MAE MRE (%) MAE MRE (%) MAE MRE (%) RNN 3.543 ± .005 6.134 ± .008 1.773 ± .001 2.839 ± .001 4.57 ± .00 21.65 ± .01 14.00 ± .03 21.84 ± .05 
+
+FC-RNN 3.566 ± .018 6.174 ± .031 2.305 ± .006 3.690 ± .009 7.13 ± .02 33.77 ± .11 18.33 ± .11 28.59 ± .18 
+
+GConv-TTS 3.071 ± .008 5.317 ± .015 1.584 ± .006 2.536 ± .009 4.12 ± .02 19.50 ± .08 12.30 ± .02 19.20 ± .03 
+
+Diff-TTS 3.012 ± .005 5.214 ± .008 1.569 ± .004 2.512 ± .006 4.11 ± .02 19.47 ± .11 12.24 ± .04 19.10 ± .05 
+
+Gated-TTS 3.027 ± .008 5.240 ± .013 1.582 ± .006 2.533 ± .009 4.13 ± .01 19.54 ± .06 12.07 ± .02 18.83 ± .03 
+
+GUNet-TTS 3.057 ± .016 5.292 ± .028 1.575 ± .006 2.522 ± .010 4.08 ± .02 19.32 ± .10 12.25 ± .03 19.11 ± .05 
+
+HiGP-TTS (C) 3.034 ± .008 5.253 ± .013 1.567 ± 0.005 2.508 ± 0.008 4.11 ± .07 19.45 ± .34 12.13 ± .02 18.92 ± .04 
+
+HiGP-TTS (D) 3.009 ± .005 5.209 ± .008 1.566 ± .005 2.506 ± .008 4.12 ± .06 19.49 ± .30 12.10 ± .01 18.88 ± .02 
+
+HiGP-TTS (G) 3.007 ± .009 5.205 ± .016 1.568 ± .008 2.510 ± .013 4.05 ± .01 19.20 ± .03 12.02 ± .04 18.75 ± .06 
+
+Table 2: Results on traffic datasets (5 runs). Best results in 
+
+bold , second best underlined. 
+
+MODELS MAE 15 min. 30 min. 60 min. Metr-LA DCRNN 2.82 ± .00 3.23 ± .01 3.74 ± .01 
+
+GWNet 2.72 ± .01 3.10 ± .02 3.54 ± .03 
+
+Gated-GN 2.72 ± .01 3.05 ± .01 3.44 ± .01 
+
+SGP 2.69 ± .00 3.05 ± .00 3.45 ± .00 
+
+HiGP (T) 2.68 ± .01 3.02 ± .01 3.40 ± .01 
+
+No rel. prop. 2.80 ± .01 3.14 ± .01 3.47 ± .02 
+
+No hier. prop. 2.68 ± .01 3.03 ± .02 3.43 ± .02 
+
+> PeMS-Bay
+
+DCRNN 1.36 ± .00 1.71 ± .00 2.08 ± .01 
+
+GWNet 1.31 ± .00 1.64 ± .01 1.94 ± .01 
+
+Gated-GN 1.32 ± .00 1.63 ± .01 1.89 ± .01 
+
+SGP 1.30 ± .00 1.60 ± .00 1.88 ± .00 
+
+HiGP (T) 1.31 ± .00 1.61 ± .00 1.87 ± .00 
+
+No rel. prop. 1.32 ± .00 1.63 ± .00 1.88 ± .01 
+
+No hier. prop. 1.31 ± .00 1.63 ± .00 1.89 ± .00 
+
+et al., 2019; Cini et al., 2022). Similarly, the length of the input window and forecasting horizon for each dataset are set according to related works (Li et al., 2018; Cini et al., 2023c) as detailed in the Appendix B. We use the mean absolute error (MAE) and the mean relative error (MRE) as performance metrics. 
+
+Baselines To carry out meaningful comparisons we select a reference TTS architecture (Cini et al., 2023c; Gao and Ribeiro, 2022) (see Eq. 2) obtained by stacking an node-wise temporal encoder implemented by an RNN, two GNN layers, and an MLP readout as RNN [dh] − MP [dh] − MP [dh] − FC [dh] − LIN [H]
+
+where MP indicates a generic message-passing block, FC indicates a dense fully connected layer, and LIN (H) is a linear layer with an output size corresponding to the fore-casting horizon. The number of neurons in each layer is indicated as dh. Learnable node embeddings (Cini et al., 2023c) are concatenated to the input before both the recur-rent encoder and after the message-passing layers. We com-pare the performance of different message-passing schemes commonly used in state-of-the-art graph-based forecasting architectures. In particular, the considered alternatives in-clude the standard graph convolution ( GConv-TTS , Kipf and Welling 2017), the bidirectional diffusion convolution operator ( Diff-TTS , Li et al. 2018), a more advanced gated message-passing scheme ( Gated-TTS , Cini et al. 2023c), and a hierarchical Graph U-Net ( GUNet-TTS , Gao and Ji 2019). We use a standard GRU (Cho et al., 2014) as se-quence encoder for all the baselines. Finally, we denote by 
+
+FC-RNN the baseline which considers the input sequences as a single multivariate time series and by RNN the global univariate model. The number of neurons dh is selected for each dataset on the validation set (more details in the appendix), while the other hyperparameters are kept fixed among baselines (see Appendix C). The HiGP-TTS model is implemented following the above template and Eq. 4–6. Notably, the only architectural difference w.r.t. the baselines is the addition of a hierarchical propagation step after each message-passing layer and readouts for each level of the hierarchy. HiGP is trained end-to-end as to minimize the forecasting error w.r.t. the aggregates corresponding to the learned clusters. For this experiment, we use a static learn-able hierarchical structure with 3 levels consisting of raw time series at the bottom, 20 supernodes in the middle level, and the total aggregate as the single time series at the top level. Selection matrices are learned directly by parametriz-ing the associated log-probabilities with tables of trainable parameters. 
+
+Results Tab. 1 show the results of the extensive empirical evaluation. We report HiGP forecasting accuracy w.r.t. 3
+
+different message-passing schemes; in particular, (C), (D), and (G) indicate respectively the standard graph convolution, the diffusion convolution operator and the gated message-passing operator cited above. HiGP variants are among 7Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting Wed Thu Fri Sat Sun 
+
+0
+
+5
+
+10 
+
+15 
+
+20 
+
+25 Avg. load (kWh) 
+
+# k = 1, Nk = 20 
+
+Wed Thu Fri Sat Sun 
+
+0
+
+5
+
+10 
+
+# k = 2, Nk = 10 
+
+Wed Thu Fri Sat Sun 
+
+0
+
+5
+
+10 
+
+# k = 3, Nk = 5
+
+> (a) CER-E dataset.
+
+Wed Thu Fri Sat Sun 
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 
+
+120 
+
+140 Air Quality (PM 2.5) 
+
+# k = 1, Nk = 20 
+
+Wed Thu Fri Sat Sun 
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 
+
+# k = 2, Nk = 7
+
+Wed Thu Fri Sat Sun 
+
+40 
+
+60 
+
+80 
+
+100 
+
+# k = 3, Nk = 5
+
+> (b) AQI dataset.
+
+Figure 3: Hierarchical cluster assignments learned by HiGP on 2 benchmark datasets. The models have been trained with a 
+
+5-level hierarchy and plots show, from left to right, the median for the clusters corresponding to levels from 1 to 3. The shaded areas correspond to 0.6 and 0.4 quantiles. the best-performing methods in all the considered settings. Notably, hierarchical forecasting does not only act as self-supervision to learn cluster assignments but also provides a positive inductive bias that results – on average – in im-proved forecasting accuracy w.r.t. the flat architectures. Con-versely, the GUNet baseline provides a comparison with a standard hierarchical message-passing architecture which, in this case, underperforms. 
+
+Comparison against the state of the art Next, we per-form an additional experiment by taking advantage of the popularity of Metr-LA and PeMS-Bay as traffic forecasting benchmarks and compare HiGP against specialized state-of-the-art architectures. We consider the following baselines from the literature: 1) DCRNN (Li et al., 2018), i.e., a re-current architecture; 2) Graph WaveNet ( GWNet , Wu et al. 2019), i.e., a popular time-and-space graph convolutional model; 3) Gated-GN (Satorras et al., 2022), i.e., a gated message-passing architecture operating on a fully connected graph; 4) SGP (Cini et al., 2023a), i.e., a scalable architec-ture exploiting a randomized spatiotemporal encoder. In this context, we tuned the HiGP architecture by simply adding residual connections and using a deeper MLP decoder; the tuned architecture is designeted as HiGP (T). The simu-lation results for multistep-ahead forecasting in the traffic datasets, provided in Tab. 2, show that HiGP can achieve state-of-the-art forecasting accuracy. Additionally, the same table reports an ablation study of the proposed architecture. In particular, we consider two variants of the model: the first is characterized by the removal of all the message-passing layers, while the second does not perform any propagation of the learned representations through the learned hierarchy. Results show that both aspects have a significant impact on forecasting accuracy. 
+
+5.2. Cluster Analysis 
+
+We analyze clusters extracted by HiGP on the CER-E and AQI datasets. Ideally, we would like to cluster customers w.r.t. their consumption patterns in the first case, and to par-tition air quality monitoring stations w.r.t. the different dy-8Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+namics and regions of the dataset. As discussed in Sec. 3.2, HiGP learns the cluster assignments by minimizing the fore-casting error at each level of the hierarchy end-to-end. This form of self-supervision rewards, then, the formation of clusters that result in aggregates that are easy to predict and that, at the same time, are formed by taking the graph structure into account (Eq. 10). We configure HiGP to learn 
+
+3 hierarchical cluster assignments and show the result of the procedure in Fig. 3. In both scenarios, HiGP extracts meaningful clusters with aggregates exhibiting different pat-terns. In particular, each level corresponds to progressively smoother dynamics. Appendix D.2 provides a spatial visu-alization of the clustered nodes for the AQI dataset. 
+
+# 6. Conclusions 
+
+We introduced the Hierarchical Graph Predictor , a method-ological framework unifying relational and hierarchical in-ductive biases in deep learning architectures for time series forecasting. HiGP has been designed to learn hard clus-ter assignments end-to-end, by taking the graph structure into account and minimizing the forecasting error w.r.t. the resulting aggregates and bottom-level time series. Perfor-mance on relevant benchmarks supports the validity of the approach which, as we show, can also learn meaningful hierarchical cluster assignments. 
+
+Future works There are many possible extensions to the framework, which can be seen as a starting point for sev-eral specific studies and research directions. Future works might focus on the clustering aspect and investigate addi-tional auxiliary objectives to provide more supervision to the procedure. Alternative reconciliation strategies should be as-sessed as well, together with their impact on the learned clus-ter assignments and forecasting accuracy. Future research could also apply HiGP-like methods to settings where the hierarchical constraints are predefined. The sensitivity of the approach to the number of input time series and obser-vations might also be further explored; notably, the number of time series usually considered in graph-based forecasting is higher than those considered in standard hierarchical fore-casting benchmarks. Finally, extensions of the framework to multivariate, heterogenous, and irregularly sampled time series would make the approach applicable to additional relevant and practical application domains. 
+
+# Acknowledgements 
+
+This work was partially supported by the Swiss National Science Foundation project FNS 204061: Higher-Order Relations and Dynamics in Graph Neural Networks . The authors thank Filippo Maria Bianchi and Ivan Marisca for the useful feedback and discussions and Stefano Imoscopi for helping with data pre-processing. 
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of machine learning and time series forecasting. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here. 
+
+# References 
+
+Akshay Agrawal, Brandon Amos, Shane Barratt, Stephen Boyd, Steven Diamond, and J Zico Kolter. Differentiable convex optimization layers. Advances in neural informa-tion processing systems , 32, 2019. Uri Alon and Eran Yahav. On the bottleneck of graph neural networks and its practical implications. In International Conference on Learning Representations , 2020. Carlos Alzate and Mathieu Sinn. Improved electricity load forecasting via kernel spectral clustering of smart meters. In 2013 IEEE 13th International Conference on Data Mining , pages 943–948. IEEE, 2013. Arie Arya, Yao Lei Xu, Ljubisa Stankovic, and Danilo Mandic. Hierarchical graph learning for stock market prediction via a domain-aware graph pooling operator. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) ,pages 1–5. IEEE, 2023. George Athanasopoulos, Roman A Ahmed, and Rob J Hyn-dman. Hierarchical forecasts for australian domestic tourism. International Journal of Forecasting , 25(1): 146–166, 2009. George Athanasopoulos, Puwasala Gamakumara, Anasta-sios Panagiotelis, Rob J Hyndman, and Mohamed Affan. Hierarchical forecasting. Macroeconomic forecasting in the era of big data: Theory and practice , pages 689–719, 2020. Davide Bacciu, Federico Errica, Alessio Micheli, and Marco Podda. A gentle introduction to deep learning for graphs. 
+
+Neural Networks , 129:203–221, 2020. Davide Bacciu, Alessio Conte, and Francesco Landolfi. Gen-eralizing downsampling from regular data to graphs. In 
+
+Thirty-Seventh AAAI Conference on Artificial Intelligence ,2023. John M Bates and Clive WJ Granger. The combination of forecasts. Journal of the operational research society , 20 (4):451–468, 1969. Souhaib Ben Taieb and Bonsoo Koo. Regularized regres-sion for hierarchical forecasting without unbiasedness conditions. In Proceedings of the 25th ACM SIGKDD In-ternational Conference on Knowledge Discovery & Data Mining , pages 1337–1347, 2019. 9Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+Yoshua Bengio, Nicholas L ´eonard, and Aaron Courville. Estimating or propagating gradients through stochastic neurons for conditional computation. arXiv preprint arXiv:1308.3432 , 2013. Konstantinos Benidis, Syama Sundar Rangapuram, Valentin Flunkert, Yuyang Wang, Danielle Maddix, Caner Turk-men, Jan Gasthaus, Michael Bohlke-Schneider, David Salinas, Lorenzo Stella, Fran c¸ ois-Xavier Aubet, Lau-rent Callot, and Tim Januschowski. Deep learning for time series forecasting: Tutorial and literature survey. 
+
+ACM Comput. Surv. , 55(6), dec 2022. ISSN 0360-0300. doi: 10.1145/3533382. URL https://doi.org/10. 1145/3533382 .Filippo Maria Bianchi and Veronica Lachi. The expressive power of pooling in graph neural networks. Advances in Neural Information Processing Systems , 2023. Filippo Maria Bianchi, Daniele Grattarola, and Cesare Alippi. Spectral clustering with graph neural networks for graph pooling. In International conference on machine learning , pages 874–883. PMLR, 2020a. Filippo Maria Bianchi, Daniele Grattarola, Lorenzo Livi, and Cesare Alippi. Hierarchical representation learning in graph neural networks with node decimation pooling. 
+
+IEEE Transactions on Neural Networks and Learning Systems , 33(5):2195–2207, 2020b. Filippo Maria Bianchi, Claudio Gallicchio, and Alessio Micheli. Pyramidal reservoir graph neural network. Neu-rocomputing , 470:389–404, 2022. Michael M Bronstein, Joan Bruna, Taco Cohen, and Petar Veli ˇckovi ´c. Geometric deep learning: Grids, groups, graphs, geodesics, and gauges. arXiv preprint arXiv:2104.13478 , 2021. Ling Chen, Jiahui Xu, Binqing Wu, Yuntao Qian, Zhenhong Du, Yansheng Li, and Yongjun Zhang. Group-aware graph neural network for nationwide city air quality fore-casting. arXiv preprint arXiv:2108.12238 , 2021. Kyunghyun Cho, Bart Van Merri ¨enboer, Dzmitry Bahdanau, and Yoshua Bengio. On the properties of neural machine translation: Encoder-decoder approaches. arXiv preprint arXiv:1409.1259 , 2014. Andrea Cini and Ivan Marisca. Torch Spatiotem-poral, 3 2022. URL https://github.com/ TorchSpatiotemporal/tsl .Andrea Cini, Slobodan Lukovic, and Cesare Alippi. Cluster-based aggregate load forecasting with deep neural net-works. In 2020 International Joint Conference on Neural Networks (IJCNN) , pages 1–8. IEEE, 2020. Andrea Cini, Ivan Marisca, and Cesare Alippi. Filling the G ap s: Multivariate Time Series Imputation by Graph Neural Networks. In International Conference on Learn-ing Representations , 2022. Andrea Cini, Ivan Marisca, Filippo Maria Bianchi, and Cesare Alippi. Scalable spatiotemporal graph neural net-works. Proceedings of the 37th AAAI Conference on Artificial Intelligence , 2023a. Andrea Cini, Ivan Marisca, Daniele Zambon, and Cesare Alippi. Graph deep learning for time series forecasting. 
+
+arXiv preprint arXiv:2310.15978 , 2023b. Andrea Cini, Ivan Marisca, Daniele Zambon, and Cesare Alippi. Taming Local Effects in Graph-based Spatiotem-poral Forecasting. Advances in Neural Information Pro-cessing Systems , 2023c. Djork-Arn ´e Clevert, Thomas Unterthiner, and Sepp Hochre-iter. Fast and accurate deep network learning by expo-nential linear units (ELUs). International Conference on Learning Representations (ICLR) , 2016. Commission for Energy Regulation. CER Smart Metering Project - Electricity Customer Be-haviour Trial, 2009-2010 [dataset]. Irish So-cial Science Data Archive. SN: 0012-00 , 2016. URL https://www.ucd.ie/issda/data/ commissionforenergyregulationcer .Giorgio Corani, Dario Azzimonti, Jo ˜ao PSC Augusto, and Marco Zaffalon. Probabilistic reconciliation of hierarchi-cal forecast via Bayes’ rule. In Machine Learning and Knowledge Discovery in Databases: European Confer-ence, ECML PKDD 2020, Ghent, Belgium, September 14– 18, 2020, Proceedings, Part III , pages 211–226. Springer, 2021. Abhimanyu Das, Weihao Kong, Biswajit Paria, and Rajat Sen. Dirichlet proportions model for hierarchically coher-ent probabilistic forecasting. In Uncertainty in Artificial Intelligence , pages 518–528. PMLR, 2023. Inderjit S Dhillon, Yuqiang Guan, and Brian Kulis. Kernel k-means: spectral clustering and normalized cuts. In 
+
+Proceedings of the tenth ACM SIGKDD international conference on Knowledge discovery and data mining ,pages 551–556, 2004. Inderjit S Dhillon, Yuqiang Guan, and Brian Kulis. Weighted graph cuts without eigenvectors a multilevel approach. IEEE Transactions on Pattern Analysis and Machine Intelligence , 29(11):1944–1957, 2007. Fateme Fahiman, Sarah M Erfani, Sutharshan Rajasegarar, Marimuthu Palaniswami, and Christopher Leckie. Im-proving load forecasting based on deep learning and k-shape clustering. In 2017 international joint conference 
+
+10 Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+on neural networks (IJCNN) , pages 4134–4141. IEEE, 2017. William Falcon and The PyTorch Lightning team. PyTorch Lightning, 3 2019. URL https://github.com/ PyTorchLightning/pytorch-lightning .Matthias Fey and Jan Eric Lenssen. Fast graph represen-tation learning with pytorch geometric. arXiv preprint arXiv:1903.02428 , 2019. Hongyang Gao and Shuiwang Ji. Graph U-Nets. In Inter-national Conference on Machine Learning , pages 2083– 2092. PMLR, 2019. Jianfei Gao and Bruno Ribeiro. On the equivalence between temporal and static equivariant graph representations. In 
+
+International Conference on Machine Learning , pages 7052–7076. PMLR, 2022. Justin Gilmer, Samuel S Schoenholz, Patrick F Riley, Oriol Vinyals, and George E Dahl. Neural message passing for quantum chemistry. In International conference on machine learning , pages 1263–1272. PMLR, 2017. Daniele Grattarola, Daniele Zambon, Filippo Bianchi, and Cesare Alippi. Understanding pooling in graph neu-ral networks. IEEE Transactions on Neural Networks and Learning Systems , pages 1–11, 2022. doi: 10.1109/ TNNLS.2022.3190922. Kan Guo, Yongli Hu, Yanfeng Sun, Sean Qian, Junbin Gao, and Baocai Yin. Hierarchical graph convolution network for traffic forecasting. In Proceedings of the 35th AAAI conference on artificial intelligence , volume 35, pages 151–159, 2021. Xing Han, Sambarta Dasgupta, and Joydeep Ghosh. Simul-taneously reconciled quantile forecasting of hierarchically related time series. In International Conference on Artifi-cial Intelligence and Statistics , pages 190–198. PMLR, 2021. Jonas Berg Hansen and Filippo Maria Bianchi. Clustering with total variation graph neural networks. arXiv preprint arXiv:2211.06218 , 2022. Charles R Harris, K Jarrod Millman, St ´efan J Van Der Walt, Ralf Gommers, Pauli Virtanen, David Cournapeau, Eric Wieser, Julian Taylor, Sebastian Berg, Nathaniel J Smith, et al. Array programming with numpy. Nature , 585 (7825):357–362, 2020. Luca Hermes, Barbara Hammer, Andrew Melnik, Riza Veli-oglu, Markus Vieth, and Malte Schilling. A Graph-based U-Net Model for Predicting Traffic in unseen Cities. In 
+
+2022 International Joint Conference on Neural Networks (IJCNN) , pages 1–8. IEEE, 2022. Ross Hollyman, Fotios Petropoulos, and Michael E Tipping. Understanding forecast reconciliation. European Journal of Operational Research , 294(1):149–160, 2021. Rob J Hyndman and George Athanasopoulos. Forecasting: principles and practice . OTexts, 2018. Rob J Hyndman, Roman A Ahmed, George Athanasopoulos, and Han Lin Shang. Optimal combination forecasts for hierarchical time series. Computational statistics & data analysis , 55(9):2579–2589, 2011. Eric Jang, Shixiang Gu, and Ben Poole. Categorical repa-rameterization with gumbel-softmax. In International Conference on Learning Representations , 2017. Ming Jin, Huan Yee Koh, Qingsong Wen, Daniele Zambon, Cesare Alippi, Geoffrey I Webb, Irwin King, and Shirui Pan. A survey on graph neural networks for time se-ries: Forecasting, classification, imputation, and anomaly detection. arXiv preprint arXiv:2307.03759 , 2023. Thomas N. Kipf and Max Welling. Semi-supervised classi-fication with graph convolutional networks. In Interna-tional Conference on Learning Representations (ICLR) ,2017. Yaguang Li, Rose Yu, Cyrus Shahabi, and Yan Liu. Diffu-sion convolutional recurrent neural network: Data-driven traffic forecasting. In International Conference on Learn-ing Representations , 2018. Yihong Ma, Patrick Gerard, Yijun Tian, Zhichun Guo, and Nitesh V Chawla. Hierarchical spatio-temporal graph neural networks for pandemic forecasting. In Proceedings of the 31st ACM International Conference on Information & Knowledge Management , pages 1481–1490, 2022. Chris J. Maddison, Andriy Mnih, and Yee Whye Teh. The concrete distribution: A continuous relaxation of discrete random variables. In International Conference on Learn-ing Representations , 2017. Anastasios Panagiotelis, Puwasala Gamakumara, George Athanasopoulos, and Rob J Hyndman. Probabilistic fore-cast reconciliation: Properties, evaluation and score op-timisation. European Journal of Operational Research ,306(2):693–706, 2023. Biswajit Paria, Rajat Sen, Amr Ahmed, and Abhimanyu Das. Hierarchically regularized deep forecasting. arXiv preprint arXiv:2106.07630 , 2021. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zem-ing Lin, Natalia Gimelshein, Luca Antiga, Alban Des-maison, Andreas Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, 11 Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chin-tala. Pytorch: An imperative style, high-performance deep learning library. In H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alch ´e-Buc, E. Fox, and R. Gar-nett, editors, Advances in Neural Information Processing Systems 32 , pages 8024–8035. Curran Associates, Inc., 2019. Syama Sundar Rangapuram, Lucien D Werner, Konstanti-nos Benidis, Pedro Mercado, Jan Gasthaus, and Tim Januschowski. End-to-end learning of coherent prob-abilistic forecasts for hierarchical time series. In Inter-national Conference on Machine Learning , pages 8832– 8843. PMLR, 2021. Syama Sundar Rangapuram, Shubham Kapoor, Rajbir Singh Nirwan, Pedro Mercado, Tim Januschowski, Yuyang Wang, and Michael Bohlke-Schneider. Coherent proba-bilistic forecasting of temporal hierarchies. In Interna-tional Conference on Artificial Intelligence and Statistics ,pages 9362–9376. PMLR, 2023. T Konstantin Rusch, Michael M Bronstein, and Siddhartha Mishra. A survey on oversmoothing in graph neural networks. arXiv preprint arXiv:2303.10993 , 2023. Victor Garcia Satorras, Syama Sundar Rangapuram, and Tim Januschowski. Multivariate time series fore-casting with latent graph inference. arXiv preprint arXiv:2203.03423 , 2022. Ljubi ˇsa Stankovi ´c, Danilo Mandic, Milo ˇs Dakovi ´c, Milo ˇsBrajovi ´c, Bruno Scalzo, Shengxi Li, Anthony G Constan-tinides, et al. Data analytics on graphs part III: machine learning on graphs, from graph topology to applications. 
+
+Foundations and Trends® in Machine Learning , 13(4): 332–530, 2020. Souhaib Ben Taieb, James W Taylor, and Rob J Hyndman. Coherent probabilistic forecasts for hierarchical time se-ries. In International Conference on Machine Learning ,pages 3348–3357. PMLR, 2017. Souhaib Ben Taieb, James W Taylor, and Rob J Hyndman. Hierarchical probabilistic forecasting of electricity de-mand with smart meter data. Journal of the American Statistical Association , 116(533):27–43, 2021. Guido Van Rossum and Fred L. Drake. Python 3 Reference Manual . CreateSpace, Scotts Valley, CA, 2009. ISBN 1441412697. Shanika L Wickramasuriya. Probabilistic forecast reconcili-ation under the Gaussian framework. Journal of Business & Economic Statistics , pages 1–14, 2023. Shanika L Wickramasuriya, George Athanasopoulos, and Rob J Hyndman. Optimal forecast reconciliation for hierarchical and grouped time series through trace mini-mization. Journal of the American Statistical Association ,114(526):804–819, 2019. Zonghan Wu, Shirui Pan, Guodong Long, Jing Jiang, and Chengqi Zhang. Graph wavenet for deep spatial-temporal graph modeling. In Proceedings of the 28th International Joint Conference on Artificial Intelligence , pages 1907– 1913, 2019. Dazhi Yang, Hao Quan, Vahid R Disfani, and Licheng Liu. Reconciling solar forecasts: Geographical hierarchy. So-lar Energy , 146:276–286, 2017. Xiuwen Yi, Yu Zheng, Junbo Zhang, and Tianrui Li. St-mvl: filling missing values in geo-sensory time series data. In 
+
+Proceedings of the 25th International Joint Conference on Artificial Intelligence , 2016. Zhitao Ying, Jiaxuan You, Christopher Morris, Xiang Ren, Will Hamilton, and Jure Leskovec. Hierarchical graph representation learning with differentiable pooling. Ad-vances in neural information processing systems , 31, 2018. Bing Yu, Haoteng Yin, and Zhanxing Zhu. ST-Unet: A spatio-temporal U-network for graph-structured time se-ries modeling. arXiv preprint arXiv:1903.05631 , 2019. Yu Zheng, Xiuwen Yi, Ming Li, Ruiyuan Li, Zhangqing Shan, Eric Chang, and Tianrui Li. Forecasting fine-grained air quality based on big data. In Proceedings of the 21th ACM SIGKDD international conference on knowledge discovery and data mining , pages 2267–2276, 2015. Fan Zhou, Chen Pan, Lintao Ma, Yu Liu, Shiyu Wang, James Zhang, Xinxin Zhu, Xuanwei Hu, Yunhua Hu, Yangfei Zheng, et al. Sloth: Structured learning and task-based optimization for time series forecasting on hierarchies. Proceedings of the 37th AAAI Conference on Artificial Intelligence , 2023. 12 Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+# Appendix 
+
+This appendix provides additional details on the setup and datasets used for the experiments presented in the paper, as well ass additional empirical results. 
+
+# A. Hardware and software platforms 
+
+Experimental setup and baselines have been developed with Python (Van Rossum and Drake, 2009) by relying on the following open-source libraries: • numpy (Harris et al., 2020); • PyTorch (Paszke et al., 2019); • PyTorch Lightning (Falcon and The PyTorch Lightning team, 2019); • PyTorch Geometric (Fey and Lenssen, 2019); • Torch Spatiotemporal (Cini and Marisca, 2022). Experiments were run on a server equipped with AMD EPYC 7513 CPUs and NVIDIA RTX A5000 GPUs. The code for reproducing the computational experiments is available online 2.
+
+# B. Datasets 
+
+Table 3: Statistics of datasets used in the experiments.                     
+
+> DATASETS Time steps Nodes Edges Type Metr-LA 34,272 207 1515 Directed PeMS-Bay 52,128 325 2369 Directed CER-E 25,728 485 4365 Directed AQI 8,760 437 2699 Undirected
+
+We use the same spatiotemporal forecasting benchmarks of (Cini et al., 2023c), which consist of the following datasets. 
+
+Metr-LA The Metr-LA dataset (Li et al., 2018) consists of measurements from loop detectors in the Los Angeles County Highway. 
+
+PeMS-Bay The PeMS-Bay dataset (Li et al., 2018), contains traffic speed measurements analogous to those of Metr-LA and acquired in the San Francisco Bay Area. 
+
+CER-E The CER-E dataset (Commission for Energy Regulation, 2016) consists of a collection of load profiles (i.e., energy consumption measurements) aggregated into 30 -minutes intervals, recorded by 485 smart meters in Irish small and medium-sized enterprises. The dataset has been introduced as a benchmark for graph-based time series processing in (Cini et al., 2022). 
+
+AQI The AQI dataset (Zheng et al., 2015) collects hourly measurements of the PM2.5 pollutant from 437 air quality monitoring stations spread over 43 Chinese cities. Similarly to CER-E, AQI has been introduced as a benchmark for graph-based processing in (Cini et al., 2022). All of the above datasets are either openly available (Metr-LA, PeMS-Bay, AQI) or obtainable free of charge for research purposes (CER-E 3). Tab. 3 provides relevant statistics on the considered datasets. For each dataset, we obtain the corre-sponding adjacency matrix and exogenous variables by following previous works (Cini et al., 2022; Li et al., 2018; Cini 
+
+> 2https://github.com/andreacini/higp
+> 3https://www.ucd.ie/issda/data/commissionforenergyregulationcer/
+
+13 Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+et al., 2023c). Following Cini et al. (2023c), datasets are split into windows of W time steps and the models are trained to predict the subsequent H observations. Window size W and forecasting horizon H are respectively set as W = 12 and 
+
+H = 12 for Metr-LA and PeMS-Bay, W = 48 , H = 6 for CER-E, and W = 24 , H = 3 for AQI. Training, validation, and testing data are respectively obtained with a 70% /10% /20% sequential split. Conversely, for AQI, we use the same data splits of (Yi et al., 2016). 
+
+# C. Baselines and hyperparameters 
+
+C.1. Reference architectures 
+
+As discussed in Sec. 5, the main empirical results of the paper (Tab. 1), were obtained by considering, for all the baselines, a template TTS architecture which can be schematically described as follows: 
+
+hi, 0 
+
+> t
+
+= GRU  xit−W :t, uit−W :t, vi , (13) 
+
+H1 
+
+> t
+
+= GNN 1
+
+ H0 
+
+> t
+
+, A , (14) 
+
+H2 
+
+> t
+
+= GNN 2
+
+ H1 
+
+> t
+
+, A , (15) 
+
+ˆxit+h = Whξ
+
+
+
+Wf c 
+
+h
+
+hi, 2 
+
+> t
+
+|vi
+
+i
+
++ bf c 
+
+
+
++ bh, h = 0 , 1, . . . , H − 1, (16) with ξ( · ) being the ELU activation function (Clevert et al., 2016), Wh ∈ R1×dh , Wh ∈ Rdh×dh , bh ∈ R, bf c ∈ Rdh
+
+denoting learnable weights, GRU and GNN indicating respectively a gated recurrent temporal encoder (Cho et al., 2014) and a generic message-passing layer (implemented differently for each baseline). For HiGP, the template was modified to account for the hierarchical structure as discussed in Sec. 3.1. Similarly, for the GUNet baselines the template was modified to take into account the pooling and lifting operations. For the tuned version of HiGP we simply added skip connections and used a deeper readout. 
+
+C.2. Hyperparameters and training details 
+
+We trained each model with early stopping on the validation set and a batch size of 64 samples for a maximum of 200 epochs each of 300 batches maximum. We used the Adam optimizer with an initial learning rate of 0.003 reduced by a factor 
+
+γ = 0 .25 every 50 epochs. The number of neurons dh in the layers of each model was set to 64 or 32 based on the validation error on each dataset. For HiGP, the regularization coefficient λ was tuned and set to 0.25 based on the validation error on the Metr-LA dataset and simply rescaled for the other datasets to take into account the different magnitude of the input. As discussed in Sec. 5, we used a 3-level hierarchy with 20 super-nodes in the middle level and a single super-node (the total aggregate) at the top level. Intra-level spatial propagation was performed only at the base level. For the Diff-TTS baseline, the order of the diffusion convolution was set to k = 2 , while the pooling factor for the GUNet was set to p = 0 .1. For what concerns the experimental results in Tab. 2, for each baseline we used the hyperparameters of the original papers and the open-source implementation provided by Cini et al. (2023a). Hyperparameters for HiGP (T) were obtained by tuning the model on the validation set of both datasets separately. 
+
+# D. Additional results 
+
+D.1. Sensitivity analyses Hierarchy size We ran a sensitivity analysis to assess the impact of the number of clusters and levels in the hierarchy. In particular, we ran the following experiment on the CER-E dataset using a simplified model (with 32 hidden units in each layer) to test different configurations. Each configuration addresses a hierarchy with different numbers of levels and clusters. The results in Tab. 4 show how forecasting accuracy varies across configurations and that these hyperparameters should be tuned on the task at hand. However, as shown in Tab. 1, we observed that using a simple hierarchy with 3 levels and a small number of clusters is sufficient to outperform flat predictors consistently. 
+
+Reconciliation strategy The reconciliation procedure should be considered as a hyperparameter of the approach. In this regard, we ran a sensitivity analysis on the CER-E dataset considering the HiGP model equipped with gated graph convolutions. Results are shown in Fig. 5: Reconciled , Only loss and Fit only base indicate respectively the full model including the hard reconciliation step, the model simply minimizing accuracy at all levels at the same time, and the model 14 Graph-based Time Series Clustering for End-to-End Hierarchical Forecasting 
+
+Table 4: Sensitivity analysis comparing different clustering hyperparameters in terms on MAE on CER-E (4 runs). The number of time series in each level are indicated between parentheses for each setting. Levels Hierarchy Sparse Dense. 3 levels 4.24 ± .02 4.26 ± .02 
+
+(N, 20, 1) (N, 100, 1) 4 levels 4.22 ± .02 4.23 ± .02 
+
+(N, 20, 4, 1) (N, 100, 50, 1) 5 levels 4.24 ± .01 4.23 ± .02 
+
+(N, 100, 20, 4, 1) (N, 200, 100, 50, 1) where the loss is computed only w.r.t. the base time series. Results further confirm that reconciliation and hierarchical biases can improve forecasting accuracy. Table 5: Sensitivity analysis comparing reconciliation strategies in terms on MAE on CER-E (4 runs). Method MAE MRE Reconciled 4.06 ± .01 19.202 ± .039 
+
+Only loss 4.08 ± .01 19.309 ± .034 
+
+Fit only base 4.07 ± .01 19.245 ± .052 
+
+D.2. Cluster analysis Level 0 Level 1 
+
+Figure 4: Visualizations of clustered nodes in the AQI dataset. Fig. 4 shows a visualization of the learned clusters for the Air Quality dataset to complement the one provided in the paper (Fig. 3b). In particular, the figure shows each sensor’s geographical location, the partitioning of the network into clusters, and a visualization of the pooled graph for the first level of the hierarchy. 15

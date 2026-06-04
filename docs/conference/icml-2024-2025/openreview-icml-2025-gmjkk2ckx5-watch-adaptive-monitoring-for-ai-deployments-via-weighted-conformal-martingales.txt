@@ -1,0 +1,2912 @@
+Title: WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales
+
+URL Source: https://openreview.net/pdf?id=GMjkK2CKx5
+
+Number of Pages: 30
+
+Markdown Content:
+## WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Drew Prinster 1 Xing Han 1 Anqi Liu 1 Suchi Saria 1
+
+Abstract 
+
+Responsibly deploying artificial intelligence (AI) / machine learning (ML) systems in high-stakes set-tings arguably requires not only proof of system reliability, but also continual, post-deployment monitoring to quickly detect and address any un-safe behavior. Methods for nonparametric se-quential testing—especially conformal test mar-tingales (CTMs) and anytime-valid inference— offer promising tools for this monitoring task. However, existing approaches are restricted to monitoring limited hypothesis classes or “alarm criteria” (e.g., detecting data shifts that violate cer-tain exchangeability or IID assumptions), do not allow for online adaptation in response to shifts, and/or cannot diagnose the cause of degradation or alarm. In this paper, we address these limita-tions by proposing a weighted generalization of conformal test martingales (WCTMs), which lay a theoretical foundation for online monitoring for any unexpected changepoints in the data distribu-tion while controlling false-alarms. For practical applications, we propose specific WCTM algo-rithms that adapt online to mild covariate shifts (in the marginal input distribution), quickly detect harmful shifts, and diagnose those harmful shifts as concept shifts (in the conditional label distribu-tion) or extreme (out-of-support) covariate shifts that cannot be easily adapted to. On real-world datasets, we demonstrate improved performance relative to state-of-the-art baselines. 
+
+1. Introduction 
+
+As AI/ML systems become integral to real-world applica-tions, ensuring their safety and utility under evolving con-     
+
+> 1Department of Computer Science, Johns Hopkins University, Baltimore, MD, USA. Correspondence to: Drew Prinster <drew-prinster@gmail.com >, Xing Han <aaronhan223@gmail.com >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+ditions is essential for responsible deployment. However, even meticulously trained models with apparent reliability guarantees can fail abruptly when shifts in the data distri-bution or operational environment violate the underlying conditions they were designed for (Amodei et al., 2016). That is, unforeseen deployment conditions can make it im-possible to guarantee reliability for all situations in advance. Consequently, there is growing recognition for the need to continuously monitor deployed AI systems for determining when model updates are required to mitigate downstream harm (Vovk et al., 2021; Podkopaev and Ramdas, 2021b; Feng et al., 2022; 2025). In this work, we moreover argue that such monitoring methods should ideally perform at least three key functions: (1) maintain end-user reliability and minimize unnecessary alarms by adapting online to mild or benign data shifts; (2) rapidly detect more extreme or harmful shifts that necessitate updates; and (3) identify the root-cause of degradation to inform appropriate recovery. For example, consider a healthcare use case where the goal is to predict the risk of sepsis, a life-threatening infection, 
+
+Y from electronic health record inputs X (e.g., vital signs, lab tests, medical history, demographics) using an AI/ML system (e.g., Adams et al. (2022)). Various clinical data shifts pose challenges to monitoring in practice (Finlayson et al., 2021). Figure 1 illustrates hypothetical synthetic-data shifts that can be interpreted through this sepsis example, where for simplicity X only represents a patient’s age. An example of a benign shift is a mild shift in patient demo-graphics primarily toward young adults; Figure 1a shows a corresponding covariate shift in the marginal X distribution. Such a mild shift to a younger population would be benign, as younger individuals are well-represented in the training data and also tend to have lower, less variable (easier to predict) sepsis risk—so, there is no need for an alarm. On the other hand, harmful shift examples include if the AI tool were deployed with a much older population than observed in the training data (e.g., Figure 1b) or if a new microbial strain were to arise that was especially severe in children (e.g., Figure 1c). In any such harmful shift case, swift de-tection and root-cause analysis is essential to initiate and inform retraining, to ultimately minimize harm. Recent advances in anytime-valid inference (Ramdas et al., 1WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Figure 1: Each column represents a data shift scenario: the top row is a simulated shift example and the bottom row shows WATCH’s response, averaged over 20 random seeds. WATCH raises an alarm to retrain the AI/ML once the WCTM (blue) exceeds its alarm threshold; meanwhile, an X-CTM (gray)—a standard CTM that only depends on inputs X, and thus only detects covariate shifts—dynamically initiates the WCTM’s adaptation phase and aids in root-cause analysis. In (a), the X-CTM starts the WCTM’s adaptation phase, which allows the WCTM to avoid raising an unnecessary alarm. In (b), the extreme covariate shift causes the WCTM to raise an alarm, indicating that the covariate shift is too severe to be adapted to. In (c), the illustrated concept shift causes WATCH to raise an alarm, but without the     
+
+> X-CTM detecting a shift in covariates X—this allows WATCH to diagnose the root-cause of the alarm as a concept shift in Y|X.
+
+2023) and especially conformal test martingales (CTMs) (Volkhonskiy et al., 2017; Vovk, 2021) offer promising tools for AI monitoring with sequential, nonparametric guaran-tees. However, existing CTM monitoring methods (e.g., Vovk et al. (2021)) all rely on some form of exchangeability 
+
+(e.g., IID) assumption in their null hypotheses—informally, meaning that the data distribution is the same across time or data batches—and as a result, standard CTMs can raise un-necessary alarms even when a shift is mild or benign (e.g., Figure 1a). Meanwhile, existing comparable monitoring methods for directly tracking the risk of a deployed AI (e.g., Podkopaev and Ramdas (2021b)) tend to be less efficient than CTMs in their speed of detecting harmful shifts, data usage, and/or computational complexity (Sec. 4.3). Our paper’s contributions can be summarized as follows: • Our main theoretical contribution is to propose weighted-conformal test martingales (WCTMs), con-structed from sequences of online weighted-conformal 
+
+p-values, which generalize their standard conformal precursors. WCTMs lay a theoretical foundation for sequential and continual testing of a broad class of null hypotheses beyond exchangeability, such as shifts that one aims to model and adapt to. • For practical applications, we propose WATCH: 
+
+Weighted Adaptive Testing for Changepoint 
+
+Hypotheses, a framework for AI monitoring using WCTMs. WATCH continuously adapts to mild or benign distribution shifts (e.g., Figure 1a) to maintain end-user safety and utility (and avoid unnecessary alarms), while quickly detecting harmful shifts (e.g., Figure 1b & c) and enabling root-cause analysis. 
+
+2. Background 
+
+Notation: Assume an initial dataset Z1: n := {Zi}ni=1 ,where each datapoint is a feature-label pair, Zi := (Xi, Y i) ∈ X × Y = Z. For simplicity, further assume that an AI/ML model bμ is pretrained on a separate dataset. 1
+
+After deploying the AI/ML model, the test points are ob-served sequentially at each time t = 1 , ..., T (batch data can be given random ordering), though for simpler expo-sition, we initially focus on t = 1 . We abbreviate indices 
+
+[m] := {1, ..., m }. Random variables are denoted with cap-ital letters (e.g., Zi) and observed values with lowercase (e.g., zi). For Z := Z1:( n+t), we let FZ denote the joint distribution function, fZ the joint density function. For a set of distributions FZ, we write Z1, Z 2, ... ∼ FZ to mean the sequence has some unknown distribution FZ ∈ FZ.
+
+2.1. Conformal Prediction and Conformal p-Values 
+
+Standard conformal prediction (CP) (Vovk et al., 2022) is an approach to predictive inference : the task of converting a black-box AI/ML prediction, bμ(Xn+1 ), into a predictive confidence interval/set , bC[n],α (Xn+1 ), that should contain the true label with a user-specified rate, 1 − α ∈ (0 , 1) (e.g., 
+
+> 1This corresponds to a split conformal setting (Papadopoulos, 2008), but our theory also extends to full conformal (Vovk et al., 2022), which avoids splitting data at a heavy computational cost.
+
+2WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+90%). This objective is called valid (marginal) coverage :2
+
+PYn+1 ∈ bC[n],α (Xn+1 ) ≥ 1 − α. (1) Constructing the CP set, bC[n],α (Xn+1 ), requires a labeled calibration dataset, 3 Z1: n, and a “nonconformity” score func-tion , bS : X × Y → R, which generally uses the prefit ML predictor to quantify how “strange” a point (x, y ) is relative to the training data. A common example is the absolute-value residual score, bS(x, y ) = |y − bμ(x)|.Though not always framed as such, the CP set bC[n],α (Xn+1 )
+
+can be computed via a conformal p-value , which places the “strangeness” of the test point’s score in context of the calibration-data scores. That is, with vi := bS(xi, y i) for all i ∈ [n + 1] , Vovk et al. (2022) defines the conformal 
+
+p-value for test point Zn+1 relative to calibration data Z1: n
+
+as the fraction of the n + 1 scores, v1:( n+1) , that are at least as large as vn+1 , with ties broken uniformly at random: 
+
+pn+1 := |{ i : vi > v n+1 }| + un+1 |{ i : vi = vn+1 }| 
+
+n + 1 , (2) where Un+1 
+
+> iid
+
+∼ Unif [0 , 1] ; that is, un+1 is obtained from an independent standard uniform distribution. 4 The CP set 
+
+bC[n],α (Xn+1 ) can then be understood as the subset of labels 
+
+y ∈ Y that would not result in too “extreme” of a test-point 
+
+p-value, pn+1 (Xn+1 , y ) (this is explicit notation for pn+1 
+
+to emphasize its dependence on the candidate label y): 
+
+bC[n],α (Xn+1 ) := y ∈ Y : pn+1 (Xn+1 , y ) > α . (3) 
+
+2.2. Exchangeability Underlies Standard CP Validity 
+
+For the standard CP set in Eq. (3) , the coverage guaran-tee in Eq. (1) holds assuming that the calibration data 
+
+Z1: n and test point Zn+1 are all exchangeable —intuitively, this means that the data distribution is invariant over time (e.g., independent and identically distributed or “IID” data). Formally, exchangeability means that the joint distribu-tion, FZ , is invariant to reorderings or permutations σ:that is, FZ (zσ(1) , ..., z σ(n+1) ) = FZ (z1, ..., z n+1 ) for all 
+
+z1, ..., z n+1 ∈ Z and all σ : [ n + 1] → [n + 1] . With Fex 
+
+> Z
+
+denoting the set of exchangeable joint distributions, we can write the assumption of exchangeability as a (composite and nonparametric) null hypothesis: 
+
+Hex  
+
+> 0
+
+: Z1, Z 2, ..., Z n+1 ∼ Fex  
+
+> Z
+
+. (4) 
+
+> 2
+
+Here, marginal means on average over the draw of calibration and test data; see, e.g., Foygel Barber et al. (2021) for more details. 
+
+> 3
+
+For t > 1, the calibration data might be kept fixed (i.e., Z1: n), or it may include past test points (i.e., Z1:( n+t−1) ); for now, we focus on t = 1 to avoid this distinction and simplify exposition. 
+
+> 4
+
+Conservative conformal p-values set un+1 := 1 ; the random variable Pn+1 corresponding to pn+1 is called a p-variable, but we will often refer to both as p-values for more common terminology. 
+
+Standard conformal p-values (Eq. (2) ) are valid or “bona-fide” p-values, in the usual statistical testing sense, for the exchangeablity null hypothesis (Vovk et al., 2022). That is, assuming Hex  
+
+> 0
+
+, then Pn+1 
+
+> iid
+
+∼ Unif [0 , 1] (Vovk, 2021) and 
+
+PHex  
+
+> 0
+
+(Pn+1 ≤ α) ≤ α ∀ α ∈ (0 , 1) . (5) Thus, observing an extreme value of pn+1 is evidence against Hex  
+
+> 0
+
+(Eq. (4)), or evidence for a distribution shift. 
+
+2.3. Standard Conformal Test Martingales: Testing Exchangeability Online via Betting 
+
+Standard conformal test martingales (CTMs) (Volkhonskiy et al., 2017; Vovk, 2021; Vovk et al., 2021) continually ag-gregate information from a sequence of conformal p-values (Eq. (2) ) to perform online testing of the exchangeability null, Hex  
+
+> 0
+
+. They can be constructed on top of any standard CP method, and thus on top of any conformalized AI/ML model, and used to monitor for deviations from Hex  
+
+> 0
+
+. We will describe CTMs from a game-theoretic “testing-by-betting” interpretation (Shafer and Vovk, 2019; Shafer, 2021). Under Hex  
+
+> 0
+
+, a stochastic process M0, M 1, ..., M t, ... is a CTM if it is a nonnegative martingale—i.e., Mt ≥ 0 for all t and EHex  
+
+> 0
+
+[Mt | M0, ..., M t−1] = Mt−1—constructed from a corresponding sequence of conformal p-values 
+
+p1, ..., p t, ... via an appropriately defined “betting process.” In the game-theoretic interpretation, a bettor has initial wealth M0 (usually set to M0 = 1 , for simplicity). Then, at each time t = 0 , 1, ... , she may use wealth Mt to bet on the value of pt+1 to be observed next; once pt+1 is revealed, she receives her reward and/or pays her losses, resulting in a new total wealth Mt+1 . The bettor bets against the null hypothesis Hex  
+
+> 0
+
+: if Hex  
+
+> 0
+
+is true, then Ptiid 
+
+∼ Unif [0 , 1] and she cannot expect to outperform random guessing; so, if the bettor grows her wealth by a large factor Mt/M 0 >> 1, this is evidence that the bettor “knows” an alternative hypothesis more accurate than Hex  
+
+> 0
+
+(Vovk, 2021). Mt/M 0 can be taken as an “anytime-valid” evidence against Hex  
+
+> 0
+
+. In particular, 
+
+Mt/M 0 is also an “ e-process” for Hex  
+
+> 0
+
+(see Vovk and Wang (2021); Ramdas et al. (2023)). More formally, define a betting function as a function h :[0 , 1] → [0 , ∞] that integrates to one, i.e., R 10 h(u)du = 1 .We follow Vovk (2021) and assume the betting function 
+
+hϵ(p) := 1 + ϵ(p − 0.5) , (6) where ϵ ∈ E := {− 1, 0, 1} (E is selected somewhat arbi-trarily). The intuition is that ϵ < 0 corresponds to betting on smaller p-values, ϵ > 0 corresponds to betting on larger 
+
+p-values, and ϵ = 0 represents not betting. A CTM can be constructed by selecting a betting strategy hϵt at each time 
+
+t that may depend only on the past p-value observations 
+
+p1, ..., p t−1; this paper uses the “composite jumper martin-3WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+gale” strategy described in Vovk et al. (2022). Then, a con-formal (test) martingale Mt : [0 , 1] ∗ → [0 , ∞], t = 0 , 1, ... ,is constructed by accumulating the “wealth” attained by the bets on the previous conformal p-values, p1, p 2, ..., p t−1.That is, for a single bet ϵi ∈ E at each time i, the product Qti=1 hϵi (pi) is a CTM that can be interpreted as the factor by which the bettor has multiplied her wealthy by time t.More broadly, CTMs may accommodate more flexible bet-ting strategies (while only depending on past p-values), ν,that may distribute bets across E at each time, as 
+
+Mt := 
+
+Z  tY
+
+> i=1
+
+hϵi (pi)
+
+
+
+ν d(ϵ0, ϵ 1, ... ), ∀ t. (7) For example, in our implementations we take ν to be the composite jumper Markov chain described by Vovk et al. (2022) to determine how the “wealth” values are spread across the betting space E at each timepoint. A standard CTM (Eq. (7) ) can be used to test the exchange-ability null Hex  
+
+> 0
+
+(Eq. (4) ) online either by using Mt/M 0 as an anytime-valid evidence metric, or by raising an alarm when Mt/M 0 exceeds some user-defined threshold c. That is, by Ville’s inequality for martingales (Ville, 1939), CTMs achieve anytime-valid control over the false alarm rate (i.e., over the probability of an alarm despite Hex  
+
+> 0
+
+being true), 
+
+PHex 
+
+> 0
+
+ ∃ t : Mt/M 0 ≥ c ≤ 1/c, (8) which is sometimes referred to as strong validity due to its control over ever raising a false alarm (Vovk, 2021). 
+
+2.4. Weighted Conformal Prediction for Adapting to Distribution Shifts 
+
+Whereas Standard CP computes valid predictive confidence sets assuming exchangeable data, weighted conformal pre-diction (WCP) (e.g., Tibshirani et al. (2019); Podkopaev and Ramdas (2021a); Barber et al. (2023); Prinster et al. (2024); Barber and Tibshirani (2025)) generalizes standard CP to attain valid coverage (Eq. (1) ) even under various distribution shifts. WCP methods are thus an approach to 
+
+adapting to distribution shift, that is by computing CP sets on a reweighted version of the empirical calibration set’s scores, which in effect can modulate the size of the predic-tion sets to maintain coverage. As we will see in the next section, WCP methods are asso-ciated with weighted-conformal p-values, a special-case of which was introduced in Jin and Cand `es (2023) for standard covariate shifts, based on Tibshirani et al. (2019). Concur-rently with our paper, Barber and Tibshirani (2025) also leverage weighted-conformal p-values to unify various the-ories of conformal prediction. However, there are several key differences: regarding motivation, that work discusses connections to (one-shot) hypothesis testing as a means of framing conformal prediction, while in our paper (sequen-tial) hypothesis testing is the primary focus; the conformal 
+
+p-values in that paper are deterministic and attain conserva-tive validity, whereas we incorporate randomness to achieve exact validity; lastly, whereas that paper focuses on a batch-data setting where all the data are observed simultaneously, we focus on an online monitoring setting where each p-value is determined only by the current and past data, and we im-portantly present new theory for when a sequence of WCP 
+
+p-values can be distributed uniformly and independently ,which is important for monitoring with WCTMs. 
+
+3. Theory and Methods: Weighted-Conformal p-Values and Test Martingales 
+
+Our main theory and method contribution is to introduce weighted-conformal test martingales (WCTMs), constructed from a generalized version of weighted-conformal p-values, which expand the scope of their standard conformal analogs. WCTMs enable more customizable and informative alarm criteria than standard CTMs, and our specific variants enable adaptation to mild shifts, while in response to severe shifts they raise alarms and enable root-cause analysis. 
+
+3.1. Generalized Weighted-Conformal p-Values 
+
+In this section we present a general version of weighted-conformal p-values. 5 Sequences of these generalized weighted-conformal p-values will lay a theoretical foun-dation for online testing of a broad range of null hypotheses beyond exchangeability. To begin, observe that standard conformal p-values (Eq. (2) ) can be equivalently written as 
+
+pn+1 =
+
+> n+1
+
+X
+
+> i=1
+
+1
+
+n + 1 
+
+h
+
+1{vi > v n+1 } + un+1 1{vi = vn+1 }
+
+i
+
+,
+
+where the purpose of this notation is to isolate where the comparison of vn+1 to each i-th score is given uni-form weight 1 
+
+> n+1
+
+. For some arbitrary weight vector ˜w =( ˜ w1, ..., ˜wn+1 ) ∈ [0 , 1] n+1 where Pn+1  
+
+> i=1
+
+˜wi = 1 , it is then straightforward to define weighted-conformal p-values as 
+
+p ˜wn+1 =
+
+> n+1
+
+X
+
+> i=1
+
+˜wi
+
+h
+
+1{vi > v n+1 } + un+1 1{vi = vn+1 }
+
+i
+
+.
+
+(9) Note that existing (split or full) weighted CP methods (e.g., Tibshirani et al. (2019); Podkopaev and Ramdas (2021a); Prinster et al. (2024) and certain methods in Barber et al. (2023)) can be also be defined by weighted-conformal p-values by plugging p ˜wn+1 (Xn+1 , y ) in for pn+1 (Xn+1 , y ) in   
+
+> 5Here, “weighted” refers to weights on the score distribution prior to computing a p-value, not to weighting the p-value itself.
+
+4WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Eq. (3) , where ˜w is an appropriately chosen weight vector. 6
+
+To understand the meaning of the weights ˜w for our hy-pothesis testing purpose, we draw from the general view of weighted CP described in Prinster et al. (2024), which expounded analysis from Tibshirani et al. (2019): For setup, let Ez denote the event {Z1, ..., Z n+1 } = {z1, ..., z n+1 },meaning that the empirical distribution of the datapoints has been observed, but we do not know whether Zi = zi, and so on. Then, the oracle weights ˜wo would be given by entries 
+
+˜woi = P{Vn+1 = vi | Ez } (10) 
+
+=
+
+P 
+
+> σ:σ(n+1)= i
+
+f (zσ(1) , ..., z σ(n+1) )
+
+P 
+
+> σ
+
+f (zσ(1) , ..., z σ(n+1) ) ,
+
+where f is the joint probability density function (PDF) and 
+
+σ is a permutation of [n + 1] . In words, the oracle weight 
+
+˜woi we would ideally use for ˜wi is the probability that the test score Vn+1 took on the value vi, conditioned on the em-pirical distribution Ez . For further exposition, see Prinster et al. (2024). While for arbitrary f , computing Eq. (10) is intractable due to requiring knowledge of f and the factorial complexity, we next turn to how simplifying or approximat-ing ˜wo can be useful in practical hypothesis testing. 
+
+3.2. Expanded Hypothesis Testing with Weighted-Conformal p-Values 
+
+We now look at how the weighted-conformal p-values intro-duced in Eq. (9) can be used to sequentially test a variety of nonparametric null hypotheses beyond exchangeability. Let us begin by using H0( ˆf ) to denote any set of assump-tions on the true f or some approximations on f that we wish to assume are true in our null hypothesis (e.g., which may enable testing for evidence of inaccurate estimation). Hereon let ˜w := ˜ w(H0( ˆf )) denote the weight vector com-puted with this approximation. For example, if we assume exchangeability as our null hypothesis ( H0( ˆf ) = H(ex)  
+
+> 0
+
+), then f (zσ(1) , ..., z σ(n+1) ) = f (z1, ..., z n+1 ) and Eq. (10) reduces to ˜wi = 1 
+
+> n+1
+
+, which recovers standard conformal 
+
+p-values. More generally, H0( ˆf ) may denote some other set of invariance assumptions on f or density-ratio estimates as-sumed to be accurate (see Sec. 3.3 and App. C for a worked example for our main testing objective). Then, P ˜wn+1 is a valid and exact p-value for the null hypothesis H0( ˆf ):
+
+PH0( ˆf )
+
+P ˜wn+1 ≤ α = α. (11) Moreover, when a sequence of weighted-conformal p-values is computed online, then they are not only distributed uni-formly, but also independently , at each timestep. We next state this formally.    
+
+> 6Conservatively valid weighted CP methods would need to further set un+1 = 1 in Eq. (9) to reduce appropriately.
+
+Theorem 3.1. (Independence and exact validity, for H0( ˆf ),of online WCP p-values.) For any T ∈ N, let H0( ˆf ) denote the set of all assumptions on the joint PDF, f , including that any appoximations used to estimate ˜wo (Eq. (10) ) are eactly accurate. Let ˜w := ˜ w(H0( ˆf )) be the corresponding esti-mated weights and α1, ..., α T ∈ (0 , 1) T some user-defined significance levels. If H0( ˆf ) holds for the true f , then 
+
+P ˜w 
+
+> 1
+
+, P ˜w 
+
+> 2
+
+, ... are IID uniform on [0,1]: 
+
+PH0( ˆf )
+
+P ˜w 
+
+> 1
+
+≤ α1, ..., P ˜wT ≤ αT = α1 · · · αT . (12) 
+
+Proof Sketch: We defer a full proof to Appendix B. The proof builds on those for standard CTMs in Vovk (2002) and Vovk et al. (2003), which leverage the idea of “reversing time,” while drawing on ideas from Tibshirani et al. (2019) and Prinster et al. (2024). We imagine that the sequence of data observations (z1, ..., z T ) is generated in two steps: first, the unordered bag of data observations, {z1, ..., z T },is generated from some probability distribution; then—here generalizing Vovk (2002) and Vovk et al. (2003) by weight-ing permutations according to their likelihood—from all possible permutations σ of the values {z1, ..., z T }, each possible sequence (zσ(1) , ..., z σ(T )) is chosen with proba-bility proportional to f (zσ(1) , ..., z σ(T )), where f := fZ
+
+is the probability-density function 7 for the distribution FZ .Roughly (ignoring borderline effects), the second step en-sures that, conditionally on knowing {z1, ..., z T } (and there-fore unconditionally), that P ˜wo 
+
+> T
+
+has a standard uniform distribution; when ZT = zσ(T ) is observed, this settles the value of P ˜wo 
+
+> T
+
+= p ˜wo 
+
+> σ(T)
+
+, and conditionally on knowing 
+
+{z1, ..., z T } and ZT = zσ(T ) (and therefore, after relabeling indices, on knowing {z1, ..., z T −1}), that P ˜wo  
+
+> T−1
+
+also has a standard uniform distribution, and so on. 
+
+3.3. Main Practical Testing Objective: Testing for 
+
+{Concept Shift or Unanticipated Covariate Shift }
+
+We now provide a worked example for how weighted-conformal p-values can be used to test a common assump-tion in the robust ML literature: namely, the covariate shift (Shimodaira, 2000; Sugiyama et al., 2007) assumption, where the marginal input distribution FX may shift to some other distribution GX at test time, but the conditional label distribution FY |X is assumed to remain invariant. In the standard covariate shift setting considered in Tibshirani et al. (2019), the oracle weights ˜woi in Eq. (10) are proportional to density-ratio weights gX (Xi)/f X (Xi). A common goal is to adapt to covariate shift by learning an approximate density-ratio function bw(x) ≈ gX (x)/f X (x) for reweight-ing the data (e.g., Sugiyama et al. (2007); Tibshirani et al. (2019); Yang et al. (2024); Zhang et al. (2024)). However, whereas robustness results often rely on the density-ratio estimator being reasonably accurate, i.e., 
+
+> 7More generally, the Radon–Nikodym derivative.
+
+5WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+bw(x) ≈ gX (x)/f X (x), there is little work on testing for whether this reliability criterion is achieved in practice. Let 
+
+G( bw) 
+
+> X
+
+denote the set of distributions for X with density-ratio function bw(x) with respect to the true FX ∈ FX. Then, we aim to test the following joint null hypothesis: 
+
+H(cs)  
+
+> 0
+
+:= 
+
+(
+
+(Xi, Y i) iid 
+
+∼ FY|X × FX, i ∈ [n + tad − 1] (Xn+t, Y n+t) iid 
+
+∼ FY|X × G( bw) 
+
+> X
+
+, t ≥ tad ,
+
+(13) which can be roughly read as assuming that Y | X is in-variant and that bw(x) = gX (x)/f X (x). Thus, observing an extreme value of p ˜wn+1 would convey evidence against H(cs)  
+
+> 0
+
+,meaning that there has been a concept shift in Y | X or that the density-ratio adaptation bw(x) is inaccurate. 
+
+3.4. Weighted-Conformal Test Martingales for Continual Monitoring 
+
+With Theorem 3.1 at hand, weighted-conformal test mar-tingales (WCTMs) can be constructed from a sequence of weighted-conformal p-values to enable continual, anytime-valid monitoring of a customizeable null hypothesis H0( ˆf ).Just as in the construction of standard CTMs (Section 2.3), WCTMs require a betting function h (we assume the betting function in Eq. (6) ) and a strategy ν for placing bets ϵt
+
+at each time t that can only depend on past p-value obser-vations (we use the composite jumper strategy from Vovk et al. (2022)). Then, a WCTM is constructed by feeding a sequence of weighted-conformal p-values p ˜w 
+
+> 1
+
+, ..., p ˜wt , ... 
+
+into Eq. (7) (i.e., by setting pi := p ˜wi in Eq. (7) ). Due to the P ˜wt being IID uniform on [0,1] under H0( ˆf ) (Theorem 3.1), the stochastic process ˜M0, ˜M1, ..., ˜Mt is a nonnegative test martingale for H0( ˆf ), and by Ville’s inequality (Ville, 1939) it achieves the anytime-valid control over false alarms in the following proposition (proof in Appendix B). 
+
+Proposition 3.2. (WCTM anytime-valid false-alarm con-trol) Let ˜M0, ˜M1, ..., ˜Mt, ... be a WCTM constructed from the sequence of weighted-conformal p-values 
+
+p ˜w 
+
+> 1
+
+, p ˜w 
+
+> 2
+
+, ..., p ˜wt , ... . Then, assuming H0( ˆf ),
+
+PH0( ˆf )
+
+ ∃ t : ˜Mt/ ˜M0 ≥ c ≤ 1/c. (14) 
+
+3.5. Scheduled or Multistage WCTM-Based Monitoring 
+
+The anytime-valid guarantee in Eq. (14) controls the proba-bility of raise a false alarm at any time in an infinite sequence of observations, but this can be overly strong, especially when one has a set time horizon in mind for monitoring. For such “scheduled” or “multistage” monitoring, we im-prove the efficiency (speed in detecting true shifts) by fol-lowing Vovk et al. (2021); Vovk (2021) and augmenting WCTMs with standard changepoint detection metrics such as CUSUM (Page, 1954) and Shiryaev-Roberts (Roberts, 1966; Shiryaev, 1963) while achieving a weaker form of validity. Consider the Shiryaev-Roberts procedure applied to WCTMs ˜Mt, whose k-th stage alarm time is 
+
+τk := min t > τ k−1 :
+
+> t−1
+
+X 
+
+> i=τk−1
+
+˜Mt
+
+˜Mi
+
+≥ c , k ∈ N. (15) This Shiryaev-Roberts procedure based on standard CTMs controls the average run length (ARL) under H0( ˆf ), where the procedure is expected to be reset after c timesteps. 
+
+Proposition 3.3. (WCTM-based Shiryaev-Roberts ARL con-trol) Let τ1 denote the Shiryaev-Roberts stopping time (Eq. 
+
+(15) ) based on a WCTM ˜M0, ˜M1, ..., ˜Mt, ... constructed for the null hypothesis H0( ˆf ). Then, assuming H0( ˆf ),
+
+EH0( ˆf )
+
+τ1
+
+ ≥ c. (16) 
+
+3.6. WCTM Implementation in WATCH: Dynamic Online Adaptation and Root-Cause Analysis 
+
+All our implementations and experiments in this paper focus on WCTMs that continuously adapt to mild covariate shifts (e.g., Fig 1a) while raising alarms in response to either extreme covariate shifts (e.g., Fig 1b) or concept shifts in 
+
+Y |X (e.g., Fig 1c). These goals correspond to monitoring the H(cs )0 null hypothesis given in Eq. (13) . Our adaptation procedure performs online density ratio estimation with an online probabilistic classifier (e.g., a multilayer perceptron or logistic regression model similar to in Zhang et al. (2024)) to update the estimation of bw(t)(x) at each timestep t.
+
+Online Adaptation with Dynamic Initialization For the initial adaptation stage, a key question is when to begin the adaptation procedure, or when to begin estimating bw(t)(x).Our methods make this determination automatically and dynamically by running a secondary standard CTM that is restricted to only monitoring for changepoints in the marginal X distribution via a nearest-neighbor nonconfor-mity score (Vovk et al., 2021). At deployment, the main WCTM method is initially a standard CTM (with uniform weights); then, once the secondary “ X-CTM” method ex-ceeds a pre-determined adaptation threshold (see gray paths in Fig 1) at some time tad , this triggers the adaptation of the main WCTM monitoring method (blue paths in Fig 1) and corresponding weighted CP intervals. For efficiency purposes, after the adaptation time tad , the CP calibration set [n + tad ] is treated as fixed (no longer adding test points to it online), meaning the weighted-conformal p-values are computed summing only over [n + tad − 1] ∪ { n + t},
+
+p ˜wn+t = X
+
+> i∈[n+tad −1] ∪{ n+t}
+
+˜w(t)
+
+> i
+
+"
+
+1{vi > v n+t}
+
++un+t1{vi = vn+t}
+
+#
+
+,
+
+(17) where here ˜w(t) 
+
+> i
+
+∝ bw(t(Xi). See Appendix C for details. 6WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Medical Expenditure Panel Survey (MEPS) 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t
+
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> Mean Coverage (  )
+
+Coverage 
+
+(Prediction Safety)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Target coverage
+> Changepoint 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 3.8
+> 3.9
+> 4.0
+> 4.1
+> 4.2
+> 4.3
+> Median Interval Widths (  )
+
+Interval Widths 
+
+(Prediction Informativeness)   
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+
+Before Changepoint   
+
+> 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 20000
+> 40000
+> 60000
+> 80000
+> 100000
+
+After Changepoint 
+
+Histograms of P-Values (Monitoring Inputs) 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t 
+
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> Mean Martingale Values ( Mt/M0)
+
+Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> 10 9
+> Mean Shiryaev-Roberts Values (
+> t 1
+> i = 0
+> Mt/Mi)
+
+Shiryaev-Roberts Paths 
+
+(Variable Schedule Monitoring Criterion) 
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+Superconductivity 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t
+
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> Mean Coverage (  )
+
+Coverage 
+
+(Prediction Safety)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Target coverage
+> Changepoint 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 33
+> 34
+> 35
+> 36
+> 37
+> 38
+> 39
+> 40
+> Median Interval Widths (  )
+
+Interval Widths 
+
+(Prediction Informativeness)   
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+
+Before Changepoint   
+
+> 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 10000
+> 20000
+> 30000
+> 40000
+> 50000
+> 60000
+> 70000
+
+After Changepoint 
+
+Histograms of P-Values (Monitoring Inputs) 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t
+
+> 10 0
+> 10 2
+> 10 4
+> 10 6
+> 10 8
+> 10 10
+> 10 12
+> Mean Martingale Values ( Mt/M0)
+
+Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> 10 9
+> 10 11
+> 10 13
+> 10 15
+> Mean Shiryaev-Roberts Values (
+> t 1
+> i = 0
+> Mt/Mi)
+
+Shiryaev-Roberts Paths 
+
+(Variable Schedule Monitoring Criterion) 
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+Bike Sharing 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t
+
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> Mean Coverage (  )
+
+Coverage 
+
+(Prediction Safety)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Target coverage
+> Changepoint 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 240
+> 250
+> 260
+> 270
+> 280
+> 290
+> Median Interval Widths (  )
+
+Interval Widths 
+
+(Prediction Informativeness)   
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+
+Before Changepoint   
+
+> 0.0 0.5 1.0
+
+P-Values 
+
+> 0
+> 10000
+> 20000
+> 30000
+> 40000
+> 50000
+
+After Changepoint 
+
+Histograms of P-Values (Monitoring Inputs) 0 500 1000 1500 2000 2500 3000 
+
+Test (Deployment) Datapoint Index t
+
+> 10 0
+> 10 2
+> 10 4
+> 10 6
+> 10 8
+> Mean Martingale Values ( Mt/M0)
+
+Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion)       
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold 0500 1000 1500 2000 2500 3000
+
+Test (Deployment) Datapoint Index t
+
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> 10 9
+> 10 11
+> 10 13
+> Mean Shiryaev-Roberts Values (
+> t 1
+> i = 0
+> Mt/Mi)
+
+Shiryaev-Roberts Paths 
+
+(Variable Schedule Monitoring Criterion) 
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+Figure 2: Tabular data results for the benign covariate shift setting to evaluate the adaptation ability of proposed WCTM methods (blue); all values are averaged over 200 random seeds. Training and calibration sets were sampled uniformly at random (with 1/3 of the total data used for training and calibration each), while post-changepoint test-set datapoints were bias-sampled from the remaining holdout data with probability proportional to exp( λ · h(x)) . The shift-magnitude scalar λ for each dataset was set as λmep = 5 .0 , λsup = 2 .5, and 
+
+λbik = 5 .0. The function h was selected to simuluate realistic shifts as described in the main text. Error regions represent standard errors for coverage, martingale paths, ans Shiryaev-Roberts paths, and interquartile range for interval widths. Whereas standard CTMs (orange) raise unnecessary alarms with their anytime-valid and scheduled monitoring criteria, WCTMs avoid doing so by adapting online to the shift. That is, WCTMs maintain target coverage, adapt by increasing interval sharpness, and avoid unneeded alarms. 
+
+Root-Cause Analysis with Parallelized WCTM and X-CTM The parallel implementation of both the primary WCTM and the secondary X-CTM method furthermore enables root-cause analysis, that is to diagnose whether performance degradation was due to a harmful covariate shift (e.g., Fig 1b) or a fundamental concept shift (e.g., Fig 1c). That is, if both the WCTM and the X-CTM have detected changepoints, then a harmful shift can be diagnosed as an extreme covariate shift (e.g., Fig 1b); on the other hand, if the X-CTM does not detect a changepoint, this suggests that no covariate shift is present, and the WCTM alarm was instead due to a concept shift in Y |X (Figure 1). 
+
+4. Experiments 
+
+We conduct a comprehensive empirical analysis of the WATCH framework on real-world datasets with various distribution shifts. Our results show that WATCH adapts effectively to benign shifts (Section 4.1) and triggers alarms when it fails to adapt (Section 4.2), while also quickly de-tecting harmful shifts with little delay (Section 4.3). De-tails on the datasets, models, and additional results, can be found in Appendix E. Code to reproduce all experi-ments is available at the following repository: https: //github.com/aaronhan223/watch .
+
+Baselines We compare the proposed WCTM methods that constitute WATCH against standard CTMs (Vovk et al., 2021) in all experiments. To evaluate detection speed on true harmful shifts (sec 4.3), we also compare against methods for directly performing sequential hypothesis testing and changepoint detection on the set-prediction miscoverage risk, as proposed by Podkopaev and Ramdas (2021b). In all experiments and for all baselines, the underlying ML predictor being monitored was a neural network. On the tab-ular data, we used the scikit-learn (Pedregosa et al., 2011) MLPRegressor (with L-BFGS solver and logistic activa-tion); for the image data, we used a 3-layer MLP with ReLU activations on the MNIST datasets and a ResNet-32 (He et al., 2016) on CIFAR-10 datasets. For weight estimation, we use a 3-layer MLP with ReLU activations to distinguish between source and target distributions. 7WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 0 100 200 300 400 500 600  
+
+> Test (Deployment) Datapoint Index t
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> 10 6
+> Martingale Value ( Mt/M0) No Corruption
+> (Anytime-Valid Monitoring Criterion)
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+(a) 0 100 200 300 400 500 600   
+
+> Test (Deployment) Datapoint Index t
+> 10 1
+> 10 5
+> 10 9
+> 10 13
+> 10 17
+> 10 21
+> 10 25
+> 10 29
+> Martingale Value ( Mt/M0) Minor Benign Corruption
+> (Anytime-Valid Monitoring Criterion)
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+(b) 0 100 200 300 400 500 600   
+
+> Test (Deployment) Datapoint Index t
+> 10 1
+> 10 5
+> 10 9
+> 10 13
+> 10 17
+> 10 21
+> 10 25
+> 10 29
+> Martingale Value ( Mt/M0) Benign Corruption
+> (Anytime-Valid Monitoring Criterion)
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+(c) 0 100 200 300 400 500 600   
+
+> Test (Deployment) Datapoint Index t
+> 10 3
+> 10 10
+> 10 17
+> 10 24
+> 10 31
+> 10 38
+> 10 45
+> 10 52
+> 10 59
+> Martingale Value ( Mt/M0) Extreme Corruption
+> (Anytime-Valid Monitoring Criterion)
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+> Alarm threshold
+
+(d) 
+
+Figure 3: Example martingale trajectories of WCTM and CTM on CIFAR-10-C with increasing levels of corruption. WCTM adapt to milder shifts to avoid unnecessary alarms while still detecting severe shifts. All plots are averaged from 5 random experiments. 
+
+Table 1: Average detection delay (ADD) computed over 200 random seeds for each monitoring method and dataset (error bars are standard errors). Anytime-valid monitoring methods are WCTMs (proposed), CTMs (Vovk, 2021), and sequential testing from Podkopaev and Ramdas (2021b) (PR-ST); multistage monitoring methods are Shiryaev-Roberts (SR) procedure applied to WCTMs (proposed), SR applied to CTMs (Vovk, 2021), changepoint detection on the miscoverage risk from Podkopaev and Ramdas (2021b) in both online (PR-CD-online) and minibatched (PR-CD-50) variants. Results corresponding to our method are in blue. The best ADD are bolded .
+
+Monitoring Criterion (→) Anytime-Valid Criterion Scheduled, Multistage Criterion Monitoring Method (→) (W)CTM PR-ST SR via (W)CTM PR-CD-online PR-CD-50 
+
+Dataset (↓) CP Type (↓) ADD ( ± SE) ADD ( ± SE) ADD ( ± SE) ADD ( ± SE) ADD ( ± SE) MEPS Weighted 115.8 ( ±3.8) 536.6 ( ±23 .9) 102.1 ( ±3.2) 111.3 (±3.8) 196.5 (±5.4) 
+
+Standard 114.8 ( ±3.7) 475.2 ( ±18 .8) 101.8 ( ±3.2) 111.0 ( ±3.9) 194.5 ( ±5.3)
+
+Bike Sharing Weighted 190.0 ( ±8.6) 602.5 (±24 .7) 155.6 (±6.6) 154.3 (±5.9) 241.2 (±6.5) 
+
+Standard 192.4 (±8.9) 607.7 (±24 .7) 157.4 (±6.6) 157.4 (±5.9) 244.3 (±6.6) 
+
+Superconduct Weighted 173.2 (±6.2) 802.9 (±30 .5) 142.8 (±5.0) 192.9 (±6.0) 289.1 (±6.1) 
+
+Standard 169.7 (±5.8) 813.1 (±29 .9) 142.3 (±5.0) 187.6 (±5.8) 287.9 (±6.1) 
+
+4.1. WCTMs Adapt to Mild and Benign Shifts to Avoid Unnecessary Alarms WCTMs Adapt to Benign Covariate Shifts Figure 2 com-pares the average performance (across 200 random seeds) of WCTMs to standard CTMs across 3000 sequentially-observed test datapoints, where the true changepoint shift is induced after the 500th test point. From the conformal cov-erage plots in the first column, it is clear that all the shifts are benign in that coverage for the corresponding (standard or weighted) CP methods—a metric of prediction safety—does not degrade below the target level (0.9) after the change-point. In fact, for the baseline method (orange), coverage 
+
+increases , which could be considered a “beneficial” shift; nonetheless, the standard CTM raises unnecessary alarms across all datasets, for both its anytime-valid (fourth column) and scheduled (fifth column) monitoring criteria. In contrast, the proposed WCTM (blue) avoids these unnecessary alarms across all datasets and both monitoring criteria. That is, the WCTM adapts to the benign covariate shift by decreasing its interval widths (second column)—indicating more in-formative predictions—while maintaining target coverage. The relatively uniform distribution of the postchangepoint weighted p-values (third column, blue) is empirical evidence validating Theorem 3.1; meanwhile, the martingale (fourth column) and Shiryaev-Roberts (fifth column) WCTM paths avoiding alarms supports Theorems 3.2 and 3.3 respectively. 
+
+4.2. From Mild to Extreme Covariate Shifts: WCTMs Raise Alarms if Unable to Adapt 
+
+We demonstrate such a property of WCTM using image corruption experiments. Shift severity was controlled by increasing the proportion of corrupted samples in the test set relative to training and calibration. Figure 3 illustrates the behavior of WCTM in comparison to CTM on CIFAR-10 un-der varying levels of brightness corruption. When the target distribution is completely clean (a), neither method triggers a false alarm. We then introduce level-1 brightness corrup-tion while retaining over 50% clean samples (b), creating a very mild, benign shift. In this scenario, CTM quickly raises an unnecessary alarm, whereas WCTM successfully avoids it. Next, we increase the corruption to level-3 and reduce the clean-sample ratio to 40% (c). Although WCTM reacts to this shift, it still does not trigger an alarm. Finally, at corruption level-5, with the clean-sample ratio reduced to 
+
+30% (d), WCTM does raise the alarm. See Appendix D.6 for further experiments on corrupted image data and D.2 for further analysis and explanation of what characterizes mild, moderate, or extreme covariate shifts. 
+
+4.3. WCTMs Detect Harmful Concept Shifts Faster than Sequentially Tracking Loss Metrics 
+
+Because concept shifts fundamentally change the Y |X rela-tionship, they are generally harmful, and monitoring meth-8WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 0 500 1000 1500 2000                   
+
+> Test (Deployment) Datapoint Index t
+> 10 1
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> Mean Martingale Values  Benign/mild covariate shift
+> 0500 1000 1500 2000
+> Test (Deployment) Datapoint Index t
+> 10 1
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> Mean Martingale Values  Harmful/extreme covariate shift
+> 0500 1000 1500 2000
+> Test (Deployment) Datapoint Index t
+> 10 1
+> 10 1
+> 10 3
+> 10 5
+> 10 7
+> Mean Martingale Values  Fundamental concept shift
+> X-CTM (Adapt Criterion) X-CTM Adapt Threshold WCTM (Alarm Criterion) WCTM Alarm Threshold Changepoint
+
+Figure 4: Results for root-cause analysis with a WCTM (blue) and a secondary X-CTM (gray) on the MEPS dataset, averaged over 200 random seeds. The WCTM and X-CTM together are able to diagnose different types of shifts. ods should detect them as quickly as possible. Our ex-periments compare the average detection delay (ADD) of WCTM methods relative to comparable CTM methods, as well as against methods for sequentially tracking the loss metrics directly with comparable false-alarm control. That is, the sequential testing procedures proposed in Podkopaev and Ramdas (2021b) (PR-ST) have anytime-valid control comparable to (W)CTMs, while the changepoint detection procedure in Podkopaev and Ramdas (2021b) (PR-CD) has average-run-length control comparable to running the Shiryaev-Roberts procedure (15) on top of (W)CTMs. Both PR-ST and PR-CD methods can be used to monitor the miscoverage risks of either weighted CP or standard CP methods, though they are less data efficient (requiring an extra holdout set for computing concentration inequalities). We compared to the betting-based -process in Podkopaev and Ramdas (2021b) (with ϵtol = 0 ) because those meth-ods were reported to perform the best and are more com-parable to (W)CTMs, which are also betting-based. We compared WCTMs to sequential testing variant with stan-dardized anytime-false alarm rate of 0.01; for SR-WCTMs we compared vs changepoint detection variant with common average-run-length (under the null) of 20,000. Table 1 reports the average detection delay (ADD) results for monitoring methods grouped by false-alarm control type, with proposed methods in blue. Among the anytime-valid monitoring methods, WCTMs and CTMs achieve compa-rably fast ADD; however, relative to comparable PR-ST methods, (W)CTMs are over three times faster. Mean-while, among the stagewise monitoring methods, WCTM and CTM-based SR procedures are comparable, but with significantly faster ADD than PR-CD run either online or in minibatches. PR-CD-online has lower ADD than in mini-batches, but its wall-clock runtime is far slower (Appendix D.3) due to the method’s O(t2) time complexity, whereas the proposed WCTM and SR-WCTM methods are O(t).
+
+4.4. WCTMs Diagnose Root Cause of Harmful Shifts 
+
+The left plot corresponds to a benign covariate shift setting (same setting as in Figure 2), and WATCH diagnoses it as such with the X-CTM achieving a large value while the WCTM adapts to the shift, avoiding an alarm. The middle plot corresponds to an extreme covariate shift setting, and WATCH diagnoses it by the X-CTM identifying covariate shift and the WCTM raising an alarm due to potential harm. Lastly, the right plot corresponds to a harmful concept shift, and WATCH identifies it as such by the WCTM raising an alarm, but with the X-CTM maintaining lower values, suggesting that no covariate shift has occurred. 
+
+5. Summary and Future Directions 
+
+In this paper we introduced the novel methods of weighted-conformal test martingales (WCTMs), which are con-structed from sequences of weighted-conformal p-values. We presented new theory for how online weighted-conformal p-values can be used in sequential hypothesis testing, and we demonstrated how WCTMs enable contin-ual monitoring of deplyed AI/ML models. The proposed approach, WATCH, achieves three main goals: (1) adap-tation to benign shifts to avoid unnecessary alarms and improve the utility of CP prediction sets for end-users; (2) 
+
+fast detection of harmful shifts; and (3) root-cause analysis 
+
+to identify the cause of any performance degradation as a harmful covariate shift or a fundamental concept shift. Our contribution opens up several promising directions for future work. Future theory directions include developing specific WCTM algorithms for testing other nonparamet-ric null hypotheses, exploring connections to conditional permutation tests (e.g., Berrett et al. (2020)), analyzing WCTMs’ efficiency with respect to certain alternative hy-potheses, developing robustness results for approximate weights, and finer-grained root-cause analysis. For applica-tions, implementations of WATCH to monitor the risks of AI systems in real practical settings such as healthcare and ex-tensions to monitor foundation models and AI agents would be valuable. We hope that WATCH encourages greater at-tention on post-deployment monitoring for safer AI systems, with a focus on adaptive monitoring, fast detection of harm-ful shifts, and diagnostics to inform recovery. 9WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Impact Statement 
+
+This paper presents research aimed at propelling advance-ments in the broad domain of machine learning. The im-plications of our findings are wide-ranging, with potential high-stake applications in sectors including healthcare, au-tonomous driving, and e-commerce. Based on our current understanding, this research does not warrant an ethics re-view, and a detailed discussion of the potential societal impacts is not required at the current stage. 
+
+Acknowledgements 
+
+D.P. was funded by a PhD fellowship from the Amazon Initiative for Interactive AI (AI2AI); D.P., X.H., A.L., and S.S. were partially funded by the Gordon and Betty Moore Foundation grant #12128; D.P., X.H., and S.S. were par-tially funded by National Science Foundation (NSF) grant #1840088. A.L. is also supported by an Amazon Research Award. The authors would like to thank Yaniv Romano for helpful discussions on a draft of this paper; Jwala Dhamala and Jie Ding for helpful discussions throughout the JHU + AI2AI collaboration; and the anonymous ICML reviewers for informative feedback. 
+
+References 
+
+Adams, R., Henry, K. E., Sridharan, A., Soleimani, H., Zhan, A., Rawat, N., Johnson, L., Hager, D. N., Cosgrove, S. E., Markowski, A., et al. (2022). Prospective, multi-site study of patient outcomes after implementation of the trews machine learning-based early warning system for sepsis. Nature medicine , 28(7):1455–1460. Amodei, D., Olah, C., Steinhardt, J., Christiano, P., Schul-man, J., and Man ´e, D. (2016). Concrete problems in ai safety. arXiv preprint arXiv:1606.06565 .Angelopoulos, A. N., Barber, R. F., and Bates, S. (2024). Theoretical foundations of conformal prediction. arXiv preprint arXiv:2411.11824 .Bar, Y., Shaer, S., and Romano, Y. (2024). Protected test-time adaptation via online entropy matching: A betting approach. arXiv preprint arXiv:2408.07511 .Barber, R. F., Candes, E. J., Ramdas, A., and Tibshirani, R. J. (2023). Conformal prediction beyond exchangeability. 
+
+The Annals of Statistics , 51(2):816–845. Barber, R. F. and Tibshirani, R. J. (2025). Unifying dif-ferent theories of conformal prediction. arXiv preprint arXiv:2504.02292 .Bashari, M., Epstein, A., Romano, Y., and Sesia, M. (2023). Derandomized novelty detection with fdr control via con-formal e-values. Advances in Neural Information Pro-cessing Systems , 36:65585–65596. Bates, S., Cand `es, E., Lei, L., Romano, Y., and Sesia, M. (2023). Testing for outliers with conformal p-values. The Annals of Statistics , 51(1):149–178. Berrett, T. B., Wang, Y., Barber, R. F., and Samworth, R. J. (2020). The conditional permutation test for indepen-dence while controlling for confounders. Journal of the Royal Statistical Society Series B: Statistical Methodol-ogy , 82(1):175–197. Cohen, J. W., Cohen, S. B., and Banthin, J. S. (2009). The medical expenditure panel survey: a national information resource to support healthcare cost re-search and inform policy and practice. Medical care ,47(7 Supplement 1):S44–S50. Eliades, C. and Papadopoulos, H. (2022). A betting function for addressing concept drift with conformal martingales. In Conformal and Probabilistic Prediction with Applica-tions , pages 219–238. PMLR. Eliades, C. and Papadopoulos, H. (2023). A conformal martingales ensemble approach for addressing concept drift. In Conformal and Probabilistic Prediction with Applications , pages 328–346. PMLR. Fanaee-T, H. (2013). Bike Sharing. UCI Machine Learning Repository. DOI: https://doi.org/10.24432/C5W894. Fannjiang, C., Bates, S., Angelopoulos, A. N., Listgarten, J., and Jordan, M. I. (2022). Conformal prediction under feedback covariate shift for biomolecular de-sign. Proceedings of the National Academy of Sciences ,119(43):e2204569119. Farinhas, A., Zerva, C., Ulmer, D., and Martins, A. F. (2023). Non-exchangeable conformal risk control. arXiv preprint arXiv:2310.01262 .Fedorova, V., Gammerman, A., Nouretdinov, I., and Vovk, V. (2012). Plug-in martingales for testing exchangeability on-line. arXiv preprint arXiv:1204.3251 .Feldman, S. and Romano, Y. (2024). Robust conformal prediction using privileged information. arXiv preprint arXiv:2406.05405 .Feng, J., Phillips, R. V., Malenica, I., Bishara, A., Hubbard, A. E., Celi, L. A., and Pirracchio, R. (2022). Clinical arti-ficial intelligence quality improvement: towards continual monitoring and updating of ai algorithms in healthcare. 
+
+NPJ digital medicine , 5(1):66. Feng, J., Xia, F., Singh, K., and Pirracchio, R. (2025). Not all clinical ai monitoring systems are created 10 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+equal: Review and recommendations. NEJM AI ,2(2):AIra2400657. Finlayson, S. G., Subbaswamy, A., Singh, K., Bowers, J., Kupke, A., Zittrain, J., Kohane, I. S., and Saria, S. (2021). The clinician and dataset shift in artificial intelligence. 
+
+New England Journal of Medicine , 385(3):283–286. Fischer, L. and Ramdas, A. (2025). Sequential monte carlo testing by betting. Journal of the Royal Statistical Society Series B: Statistical Methodology , page qkaf014. Foygel Barber, R., Candes, E. J., Ramdas, A., and Tibshi-rani, R. J. (2021). The limits of distribution-free condi-tional predictive inference. Information and Inference: A Journal of the IMA , 10(2):455–482. Gauthier, E., Bach, F., and Jordan, M. I. (2025). E-values expand the scope of conformal prediction. arXiv preprint arXiv:2503.13050 .Hamidieh, K. (2018). Superconductivty Data. UCI Machine Learning Repository. DOI: https://doi.org/10.24432/C53P47. He, K., Zhang, X., Ren, S., and Sun, J. (2016). Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 770–778. Hendrycks, D. and Dietterich, T. (2019). Benchmarking neural network robustness to common corruptions and perturbations. In International Conference on Learning Representations .Hindy, A., Luo, R., Banerjee, S., Kuck, J., Schmerling, E., and Pavone, M. (2024). Diagnostic runtime monitoring with martingales. arXiv preprint arXiv:2407.21748 .Ho, S.-S. (2005). A martingale framework for concept change detection in time-varying data streams. In Pro-ceedings of the 22nd international conference on Machine learning , pages 321–327. Ho, S.-S., Schofield, M., Sun, B., Snouffer, J., and Kirschner, J. (2019). A martingale-based approach for flight behavior anomaly detection. In 2019 20th IEEE International Conference on Mobile Data Management (MDM) , pages 43–52. IEEE. I Amoukou, S., Bewley, T., Mishra, S., Lecue, F., Maga-zzeni, D., and Veloso, M. (2024). Sequential harmful shift detection without labels. Advances in Neural Information Processing Systems , 37:129279–129302. Jin, Y. and Cand `es, E. J. (2023). Model-free selective in-ference under covariate shift via weighted conformal p-values. arXiv preprint arXiv:2307.09291 .Lee, Y. and Ren, Z. (2025). Selection from hierar-chical data with conformal e-values. arXiv preprint arXiv:2501.02514 .Mu, N. and Gilmer, J. (2019). Mnist-c: A robust-ness benchmark for computer vision. arXiv preprint arXiv:1906.02337 .Nair, Y. and Janson, L. (2023). Randomization tests for adap-tively collected data. arXiv preprint arXiv:2301.05365 .Page, E. S. (1954). Continuous inspection schemes. 
+
+Biometrika , 41(1/2):100–115. Papadopoulos, H. (2008). Inductive conformal prediction: Theory and application to neural networks. In Tools in artificial intelligence . Citeseer. Papadopoulos, H., Proedrou, K., Vovk, V., and Gammerman, A. (2002). Inductive confidence machines for regression. In Machine learning: ECML 2002: 13th European con-ference on machine learning Helsinki, Finland, August 19–23, 2002 proceedings 13 , pages 345–356. Springer. Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., et al. (2011). Scikit-learn: Ma-chine learning in python. the Journal of machine Learn-ing research , 12:2825–2830. Podkopaev, A. and Ramdas, A. (2021a). Distribution-free uncertainty quantification for classification under label shift. In Uncertainty in artificial intelligence , pages 844– 853. PMLR. Podkopaev, A. and Ramdas, A. (2021b). Tracking the risk of a deployed model and detecting harmful distribution shifts. arXiv preprint arXiv:2110.06177 .Podkopaev, A. and Ramdas, A. (2023). Sequential predic-tive two-sample and independence testing. Advances in neural information processing systems , 36:53275–53307. Prinster, D., Liu, A., and Saria, S. (2022). Jaws: Auditing predictive uncertainty under covariate shift. Advances in Neural Information Processing Systems , 35:35907– 35920. Prinster, D., Saria, S., and Liu, A. (2023). Jaws-x: address-ing efficiency bottlenecks of conformal prediction under standard and feedback covariate shift. In International Conference on Machine Learning , pages 28167–28190. PMLR. Prinster, D., Stanton, S. D., Liu, A., and Saria, S. (2024). Conformal validity guarantees exist for any data distri-bution (and how to find them). Forty-first International Conference on Machine Learning .11 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Ramdas, A., Gr ¨unwald, P., Vovk, V., and Shafer, G. (2023). Game-theoretic statistics and safe anytime-valid infer-ence. Statistical Science , 38(4):576–601. Ramdas, A., Ruf, J., Larsson, M., and Koolen, W. M. (2022). Testing exchangeability: Fork-convexity, supermartin-gales and e-processes. International Journal of Approxi-mate Reasoning , 141:83–109. Roberts, S. (1966). A comparison of some control chart procedures. Technometrics , 8(3):411–430. Romano, Y., Sesia, M., and Candes, E. (2020). Classifica-tion with valid and adaptive coverage. Advances in neural information processing systems , 33:3581–3591. Saha, A. and Ramdas, A. (2024). Testing exchangeability by pairwise betting. In International Conference on Artificial Intelligence and Statistics , pages 4915–4923. PMLR. Shaer, S., Maman, G., and Romano, Y. (2023). Model-x sequential testing for conditional independence via testing by betting. In International Conference on Artificial Intelligence and Statistics , pages 2054–2086. PMLR. Shafer, G. (2021). Testing by betting: A strategy for sta-tistical and scientific communication. Journal of the Royal Statistical Society Series A: Statistics in Society ,184(2):407–431. Shafer, G. and Vovk, V. (2019). Game-theoretic foundations for probability and finance , volume 455. John Wiley & Sons. Shekhar, S. and Ramdas, A. (2023a). Nonparametric two-sample testing by betting. IEEE Transactions on Infor-mation Theory , 70(2):1178–1203. Shekhar, S. and Ramdas, A. (2023b). Reducing sequential change detection to sequential estimation. arXiv preprint arXiv:2309.09111 .Shekhar, S. and Ramdas, A. (2023c). Sequential change-point detection via backward confidence sequences. In 
+
+International Conference on Machine Learning , pages 30908–30930. PMLR. Shimodaira, H. (2000). Improving predictive inference under covariate shift by weighting the log-likelihood function. Journal of statistical planning and inference ,90(2):227–244. Shin, J., Ramdas, A., and Rinaldo, A. (2022). E-detectors: A nonparametric framework for sequential change detection. 
+
+arXiv preprint arXiv:2203.03532 .Shiryaev, A. N. (1963). On optimum methods in quickest detection problems. Theory of Probability & Its Applica-tions , 8(1):22–46. Shiryaev, A. N. (2016). Probability-1 , volume 95. Springer. Stanton, S., Maddox, W., and Wilson, A. G. (2023). Bayesian optimization with conformal prediction sets. In International Conference on Artificial Intelligence and Statistics , pages 959–986. PMLR. Sugiyama, M., Krauledat, M., and M ¨uller, K.-R. (2007). Covariate shift adaptation by importance weighted cross validation. Journal of Machine Learning Research , 8(5). Tartakovsky, A., Nikiforov, I., and Basseville, M. (2014). 
+
+Sequential analysis: Hypothesis testing and changepoint detection . CRC press. Teneggi, J. and Sulam, J. (2024). Testing semantic im-portance via betting. Advances in Neural Information Processing Systems , 37:76450–76499. Tibshirani, R. J., Foygel Barber, R., Candes, E., and Ramdas, A. (2019). Conformal prediction under covariate shift. 
+
+Advances in neural information processing systems , 32. Veeravalli, V. V. and Banerjee, T. (2014). Quickest change detection. In Academic press library in signal processing ,volume 3, pages 209–255. Elsevier. Ville, J. (1939). Etude critique de la notion de collectif .Gauthier-Villars Paris. Volkhonskiy, D., Burnaev, E., Nouretdinov, I., Gammerman, A., and Vovk, V. (2017). Inductive conformal martingales for change-point detection. In Conformal and Probabilis-tic Prediction and Applications , pages 132–153. PMLR. Vovk, V. (2002). On-line confidence machines are well-calibrated. In The 43rd Annual IEEE Symposium on Foundations of Computer Science, 2002. Proceedings. ,pages 187–196. IEEE. Vovk, V. (2003). Well-calibrated predictions from on-line compression models. In Algorithmic Learning The-ory: 14th International Conference, ALT 2003, Sapporo, Japan, October 17-19, 2003. Proceedings 14 , pages 268– 282. Springer. Vovk, V. (2020). Testing for concept shift online. arXiv preprint arXiv:2012.14246 .Vovk, V. (2021). Testing randomness online. Statistical Science , 36(4):595–611. Vovk, V. (2023). The power of forgetting in statistical hypothesis testing. In Conformal and Probabilistic Pre-diction with Applications , pages 347–366. PMLR. Vovk, V., Gammerman, A., and Shafer, G. (2005). Algorith-mic learning in a random world , volume 29. Springer. 12 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Vovk, V., Gammerman, A., and Shafer, G. (2022). Algorith-mic Learning in a Random World . Springer Nature. Vovk, V., Nouretdinov, I., and Gammerman, A. (2003). Test-ing exchangeability on-line. In Proceedings of the 20th international conference on machine learning (ICML-03) ,pages 768–775. Vovk, V., Petej, I., Nouretdinov, I., Ahlberg, E., Carlsson, L., and Gammerman, A. (2021). Retrain or not retrain: Conformal test martingales for change-point detection. In 
+
+Conformal and Probabilistic Prediction and Applications ,pages 191–210. PMLR. Vovk, V. and Wang, R. (2021). E-values: Calibration, combination and applications. The Annals of Statistics ,49(3):1736–1754. Vovk, V. and Wang, R. (2023). Confidence and discoveries with e-values. Statistical Science , 38(2):329–354. Wald, A. (1945). Sequential tests of statistical hypotheses. In Breakthroughs in statistics: Foundations and basic theory , pages 117–186. Springer. Wasserman, L., Ramdas, A., and Balakrishnan, S. (2020). Universal inference. Proceedings of the National Academy of Sciences , 117(29):16880–16890. Waudby-Smith, I. and Ramdas, A. (2024). Estimating means of bounded random variables by betting. Jour-nal of the Royal Statistical Society Series B: Statistical Methodology , 86(1):1–27. Xie, L., Zou, S., Xie, Y., and Veeravalli, V. V. (2021). Se-quential (quickest) change detection: Classical results and new directions. IEEE Journal on Selected Areas in Information Theory , 2(2):494–514. Xu, C. and Xie, Y. (2021). Conformal prediction interval for dynamic time-series. In International Conference on Machine Learning , pages 11559–11569. PMLR. Yang, Y., Kuchibhotla, A. K., and Tchetgen Tchetgen, E. (2024). Doubly robust calibration of prediction sets under covariate shift. Journal of the Royal Statistical Society Series B: Statistical Methodology , page qkae009. Zhang, Y.-J., Zhang, Z.-Y., Zhao, P., and Sugiyama, M. (2024). Adapting to continuous covariate shift via online density ratio estimation. Advances in Neural Information Processing Systems , 36. 13 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+## Appendix for “WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales” 
+
+A. Related Works 
+
+This work is motivated by developing methods for monitoring AI/ML deployments that perform three key functions: (1) online adaptation to mild or benign data shifts; (2) rapid detection of extreme or harmful shifts that necessitate updates; and (3) identifying the root-cause of degradation to inform appropriate recovery. Although these monitoring goals could be viewed from many perspectives, in discussing related work we primarily focus on methods in anytime-valid inference, sequential testing of nonparametric null hypotheses, and especially conformal test martingales, which most closely related to our own. 
+
+Sequential testing for changepoints in the data distribution: Sequential hypothesis testing to detect changes in the data distribution is an old and widely-studied problem, dating at least to Wald’s sequential probability ratio test (Wald, 1945). However, classic sequential changepoint detection methods often required a prespecified stopping time and were primarily designed for testing simple, often parametrically-specified null hypotheses—for an overview of classic parametric methods, we defer to a relevant textbook Tartakovsky et al. (2014) and review articles (Veeravalli and Banerjee, 2014; Xie et al., 2021). In contrast, our weighted-conformal test martingale (WCTM) methods belong to a more recent literature called sequential anytime-valid inference (SAVI), which allow for arbitrary stopping times, and specifically our work is situated in the recent SAVI literature on testing composite and nonparametric null hypotheses. We refer readers to Ramdas et al. (2023) for a recent review of the SAVI literature, as well as to the textbook by Shafer and Vovk (2019) on the closely related topic of testing-by-betting. 
+
+Standard conformal test martingales: Within the SAVI literature, our work is most closely related to conformal test martingales (CTMs), which are martingales constructed from a sequence of standard conformal p-values for continually testing the assumption that the data are exchangeability or independent and identically distributed (IID). Our WCTM methods generalize standard CTMs for testing a broader range of null hypotheses, including those where one wishes to accommodate or adapt to certain anticipated changes in the data distribution (e.g., adapting to mild covariate shifts). Standard CTMs were initially introduced by Vovk et al. (2003), while drawing on theory for the calibration of online conformal prediction methods developed in Vovk (2002). Since then, various works have further developed standard CTMs, such as by introducing new betting and score functions for more efficient changepoint detection, ensembling CTMs, and demonstrating their performance on real-world applications (Ho, 2005; Fedorova et al., 2012; Volkhonskiy et al., 2017; Ho et al., 2019; Vovk et al., 2021; Vovk, 2021; Eliades and Papadopoulos, 2022; 2023). CTMs are also discussed in textbooks on conformal prediction (Vovk et al., 2005; Angelopoulos et al., 2024). The online form of conformal prediction that CTMs are based on is one form of online compression model, as defined and discussed in Vovk (2003); Vovk et al. (2005); Vovk (2023). In particular, Volkhonskiy et al. (2017) developed inductive CTMs (i.e., CTMs based on inductive or split conformal (Papadopoulos et al., 2002; Papadopoulos, 2008)) with score and betting functions specifically taylored to fast changepoint detection; Vovk et al. (2021) proposed an approach to using standard CTMs to monitor for when a deployed AI/ML system should be retrained; and Vovk (2021) provided a comprehensive and detailed review of CTMs as methods for testing the IID or exchangeability assumptions. Bar et al. (2024) implement methods based on CTMs for test time-adaptation of a classifier’s point prediction and Hindy et al. (2024) leverage multiple CTMs over different feature spaces to aid in diagnostic runtime monitoring. Several works have developed or used CTMs for testing for concept shift (i.e., shift in 
+
+Y | X) (Ho, 2005; Eliades and Papadopoulos, 2022; 2023; Vovk, 2020), but all of these have focused on a classification setting with a limited number of classes (e.g., to implement label-conditional CTMs, or using standard CTMs that lack ability to disambiguate between covariate and concept shifts). In contrast, our specific WCTMs implemented in this paper are able to test for concept shift in both regression and classification settings while also being able to disambiguate between concept shifts and extreme covariate shifts with the aid of an additional X-CTM. 
+
+Confidence sequences, e-processes, and other multiple-hypothesis testing methods: Our work also relates more broadly to other SAVI and testing-by-betting methods outside of CTMs such as confidence sequences and e-processes—we refer to the review paper of Ramdas et al. (2023) for full exposition of these topics. In particular, in the main paper we empirically compared our WCTM methods against the betting-based sequential testing and changepoint detection methods in Podkopaev and Ramdas (2021b) (the theory for which was developed in Waudby-Smith and Ramdas (2024)) because this paper is the 14 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+closest to ours in its motivation of monitoring deployed AI/ML deployments among (non-CTM) SAVI papers. As we note in the main paper, for monitoring the risk of a set-valued (e.g., conformalized) AI/ML predictor, our WCTM methods are generally more data-efficient (not requiring separate datasets for conformalization and testing, as Podkopaev and Ramdas (2021b) does); our WCTM-based Shiryaev-Roberts procedure is more computationally efficient than the compareable changepoint detection method in Podkopaev and Ramdas (2021b) (i.e., O(t) versus O(t2)); and, empirically we found that our methods often detect harmful concept shifts faster than comparable methods in Podkopaev and Ramdas (2021b). More recently, I Amoukou et al. (2024) built on Podkopaev and Ramdas (2021b) by developing similar methods for when ground-truth labels do not become available and need to be estimated. A key target of the SAVI literature on testing composite or nonparametric null hypotheses has been developing new approaches for testing the IID or exchangeability assumptions. Other than CTMs, the other main nontrivial approach to sequentially testing exchangeability was developed in Ramdas et al. (2022) based on the ideas of universal inference (Wasserman et al., 2020); more recently, other approaches have emerged based on pairwise betting (Saha and Ramdas, 2024) and sequential Monte Carlo testing (Fischer and Ramdas, 2025), the latter of which can be viewed as a special case of CTMs (Vovk, 2021) streamlined for a particular alternative hypothesis. Otherwise, there are various and proliferating other methods for sequential nonparametric changepoint detection (e.g., Shin et al. (2022); Shekhar and Ramdas (2023a;b;c); Podkopaev and Ramdas (2023)). SAVI and testing-by betting methods are also being leveraged for a wide variety of applications including interpretability (Teneggi and Sulam, 2024), conditional independence testing (Shaer et al., 2023), applications in finance (Shafer and Vovk, 2019), and more. Testing-by-betting, which is fundamental to SAVI (Ramdas et al., 2023), can be understood as one approach to multiple hypothesis testing that is especially advantageous in sequential settings. Other related works that leverage conformal prediction for hypothesis testing while accounting for multiple-testing corrections, but in batch settings, include Bates et al. (2023); Bashari et al. (2023); Vovk and Wang (2023); Gauthier et al. (2025); Lee and Ren (2025). 
+
+Weighted conformal prediction and adapting to distribution shifts: Weighted conformal prediction (e.g., Tibshirani et al. (2019); Podkopaev and Ramdas (2021a); Xu and Xie (2021); Fannjiang et al. (2022); Prinster et al. (2022; 2023); Stanton et al. (2023); Barber et al. (2023); Farinhas et al. (2023); Nair and Janson (2023); Yang et al. (2024); Feldman and Romano (2024); Barber and Tibshirani (2025)) is broadly an approach to proactively adapting the validity of conformal predictive sets to distribution shift by reweighting nonconformity scores using either knowledge or estimates of the distribution shift. Any weighted CP prediction set is associated with a weighted-conformal p-values, as described in the main paper; accordingly, a WCTM can be constructed on top of any weighted CP method deployed on a sequence of data observations to continually monitor the assumptions or approximations underlying that WCP method’s implementation. There are of course many other approaches to adapting to distribution shifts at test time; for example, one work that is similar to ours with regard to this motivation, but that does not fall under weighted CP, is Bar et al. (2024), which leverages standard CTMs to guide the test-time adaptation of a classifier’s point prediction by entropy matching. 
+
+B. Proof of Theorems 
+
+B.1. Proof for Theorem 3.1 (Weighted Conformal p-value Validity) 
+
+The proof can be viewed as a generalization of the proofs for Theorem 1 in Vovk et al. (2003) and Theorem 2 in Vovk (2002), while drawing on analysis from Tibshirani et al. (2019) and exposition and discussion from Prinster et al. (2024). The key difference relative to Vovk (2002) and Vovk et al. (2003) is that, whereas those papers use the assumption of exchangeability to place equal weight on every permutation of the data observations, here we avoid this assumption by first proving a general result for an arbitrary (potentially non-exchangeable) joint distribution. We then describe how this implies that the validity of more specific and tractable methods is premised on the assumptions or approximations used for practical implementation. The basic idea for the proof begins with setup from Vovk (2002), for “reversing time.” In particular, we imagine that the sequence of data observations (z1, ..., z T ) is generated in two steps: first, the unordered bag or multiset of data observations, 
+
+{z1, ..., z T }, is generated from some probability distribution (that is, the image of FZ under the mapping (z1, z 2, ... ) →{z1, ..., z T }); then—here generalizing Vovk (2002) and Vovk et al. (2003) by weighting permutations according to their likelihood—from all possible permutations σ of the values {z1, ..., z T }, each possible sequence (zσ(1) , ..., z σ(T )) is chosen with probability proportional to f (zσ(1) , ..., z σ(T )), where f := fZ is the probability-density function 8 for the distribution 
+
+FZ . Roughly (ignoring borderline effects), the second step ensures that, conditionally on knowing {z1, ..., z T } (and therefore 
+
+> 8More generally, the Radon–Nikodym derivative.
+
+15 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+unconditionally), that P ˜wo 
+
+> T
+
+has a standard uniform distribution; when ZT = zσ(T ) is observed, this settles the value of 
+
+P ˜wo 
+
+> T
+
+= p ˜wo 
+
+> σ(T)
+
+, and conditionally on knowing {z1, ..., z T } and ZT = zσ(T ) (and therefore, after relabeling indices, on knowing {z1, ..., z T −1}), that P ˜wo  
+
+> T−1
+
+also has a standard uniform distribution, and so on. 
+
+Lemma B.1. For any trial t and any confidence level α ∈ (0 , 1) ,
+
+P{P ˜wo 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+} = α. (18) 
+
+Proof of Lemma B.1. We begin by conditioning on the event {Z1, ..., Z t} = {z1, ..., z t}, which we denote as E(t) 
+
+> z
+
+, and we consider drawing any particular ordering or permutation σ of the data values with probability according to f , that is with probability proportional to f (zσ(1) , ..., z σ(t)).Note that for any i ∈ [t], if a permutation is drawn such that σ(t) = i, this means that Zt = zσ(t) = zi; moreover, because the score function bS is bijective, this further implies that Vt = vσ(t) = vi. Thus, given the bag of data E(t) 
+
+> z
+
+, recall that for each i ∈ [t], the probability of drawing such a permutation is given by the “oracle weights” 
+
+˜woi := P{Vt = vi | E(t) 
+
+> z
+
+} = P{Zt = zi | E(t) 
+
+> z
+
+} =
+
+P 
+
+> σ:σ(t)= i
+
+f (zσ(1) , ..., z σ(t))
+
+P 
+
+> σ
+
+f (zσ(1) , ..., z σ(t)) , (19) which we assume to be well-defined, which will generally be the case in practice, where at least f (z1, ..., z T ) > 0 for the true (identity permutation) ordering of the data observations (z1, ..., z T ).This implies that the distribution of Vt | E(t) 
+
+> z
+
+, the conditional distribution of the test-point score given the bag of data values 
+
+E(t) 
+
+> z
+
+, is given by 
+
+Vt | E(t) 
+
+> z
+
+∼
+
+> t
+
+X
+
+> i=1
+
+˜woi · δvi .
+
+For any i ∈ [t], define a conservative WCP p-value, p ˜wo+ 
+
+> i
+
+, and an anticonservative WCP p-value, p ˜wo− 
+
+> i
+
+, as 
+
+p ˜wo+ 
+
+> i
+
+:= 
+
+> t
+
+X
+
+> j=1
+
+˜woj · 1{vj ≥ vi}
+
+p ˜wo− 
+
+> i
+
+:= 
+
+> t
+
+X
+
+> j=1
+
+˜woj · 1{vj > v i}.
+
+It is worth noting that p ˜wo+ 
+
+> t
+
+is a valid p-value for f : P{P ˜wo+ 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+} ≤ α =⇒ P{P ˜wo+ 
+
+> t
+
+≤ α} ≤ α. However, the lemma claims exact validity for p ˜wo 
+
+> t
+
+conditional on E(t) 
+
+> z
+
+, which we will now proceed to show. Observe that for all i ∈ [t], p ˜wo− 
+
+> i
+
+< p ˜wo+ 
+
+> i
+
+and 
+
+p ˜wo+ 
+
+> i
+
+− p ˜wo− 
+
+> i
+
+=
+
+> t
+
+X
+
+> j=1
+
+˜woj · 1{vj = vi}.
+
+Moreover, observe that as in the proof for Lemma 1 in Vovk (2002), the semi-closed intervals [p ˜wo− 
+
+> i
+
+, p ˜wo+ 
+
+> i
+
+) either coincide or are disjoint, and ∪ti=1 [p ˜wo− 
+
+> i
+
+, p ˜wo+ 
+
+> i
+
+) = [0 , 1) .Similarly as in the proof for Lemma 1 in Vovk (2002), for an α ∈ (0 , 1) , let us partition the indices as follows, where we say that an index i is • “strange” if p ˜wo+ 
+
+> i
+
+≤ α,• “ordinary” if p ˜wo− 
+
+> i
+
+> α ,• and “borderline” if p ˜wo− 
+
+> i
+
+≤ α < p ˜wo+ 
+
+> i
+
+.16 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Let i′ denote the index of any borderline example, and denote p ˜wo+ := p ˜wo+ 
+
+> i′
+
+and p ˜wo− := p ˜wo− 
+
+> i′
+
+. Then, the probability (conditional on E(t) 
+
+> z
+
+, drawing each permutation σ with probabilities according to f ) that the last index σ(t) is strange is p ˜wo−; the probability that σ(t) is ordinary is 1 − p ˜wo+; and, the probability that σ(t) is borderline is p ˜wo+ − p ˜wo−.Moreover, observe that if σ(t) is strange, then p ˜wo 
+
+> σ(t)
+
+≤ α (by definition) and if σ(t) is borderline then the event that p ˜wo 
+
+> σ(t)
+
+≤ α
+
+is determined by the independent uniform ut, and thus the probability of this event is α−p ˜wo−   
+
+> p˜wo+−p˜wo−
+
+. That is, 
+
+P{P ˜wo 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+} = P{P ˜wo 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+, σ (t) is strange } · P{σ(t) is strange | E(t) 
+
+> z
+
+}
+
++ P{P ˜wo 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+, σ (t) is ordinary } · P{σ(t) is ordinary | E(t) 
+
+> z
+
+}
+
++ P{P ˜wo 
+
+> t
+
+≤ α | E(t) 
+
+> z
+
+, σ (t) is borderline } · P{σ(t) is borderline | E(t) 
+
+> z
+
+}
+
+= p ˜wo− + 0 + ( p ˜wo+ − p ˜wo−) · α − p ˜wo−
+
+p ˜wo+ − p ˜wo−
+
+= α. 
+
+With Lemma 1 in hand, we can now proceed with the proof for the main theorem. Temporarily fix a positive integer 
+
+T ; following the strategy of Vovk et al. (2003), we will first prove by induction that for any t = 1 , ..., T and any 
+
+α1, ..., α t ∈ [0 , 1] t, that 
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+} = αt · · · α1. (20) For t = 1 , Eq. (20) immediately follows from Lemma 1. For t > 1, by the law of total probability over σ(t) (i.e., over the last index value after drawing a permutation σ from E(t) 
+
+> z
+
+), the fundamental bridge between probability and expectation, and properties of the indicator function, we have 
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+}
+
+=
+
+> t
+
+X
+
+> σ(t)=1
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+, Z t = zσ(t)} · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}
+
+=
+
+> t
+
+X
+
+> σ(t)=1
+
+E1{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1} | E(t) 
+
+> z
+
+, Z t = zσ(t)
+
+ · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}
+
+=
+
+> t
+
+X
+
+> σ(t)=1
+
+E1{P ˜wo 
+
+> t
+
+≤ αt} · 1{P ˜wo 
+
+> t−1
+
+≤ αt−1, ..., P ˜wo 
+
+> 1
+
+≤ α1} | E(t) 
+
+> z
+
+, Z t = zσ(t)
+
+ · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}
+
+Next, observe that conditioning on E(t) 
+
+> z
+
+and Zt = zσ(t) in the expectation term settles the value of 1{P ˜wo 
+
+> t
+
+≤ αt} to be 
+
+1{p ˜wo 
+
+> σ(t)
+
+≤ αt}; that is, noting that the score function bS is bijective, {E(t) 
+
+> z
+
+, Z t = zσ(t)} =⇒ {E(t) 
+
+> z
+
+, V t = vσ(t)} =⇒
+
+P ˜wo 
+
+> t
+
+= p ˜wo
+
+> σ(t)
+
+. So, 1{P ˜wo 
+
+> t
+
+≤ αt} = 1{p ˜wo 
+
+> σ(t)
+
+≤ αt} can be pulled out from the expectation to obtain 
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+}
+
+=
+
+> t
+
+X
+
+> σ(t)=1
+
+1{p ˜wo 
+
+> σ(t)
+
+≤ αt} · E1{P ˜wo 
+
+> t−1
+
+≤ αt−1, ..., P ˜wo 
+
+> 1
+
+≤ α1} | E(t) 
+
+> z
+
+, Z t = zσ(t)
+
+ · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}.
+
+Now, observe that conditioning on E(t) 
+
+> z
+
+and Zt = zσ(t) implies that {Z1, ..., Z t−1} = {z1, ..., z t}\{ zσ(t)}. That is, observing the bag of t data values (i.e., observing E(t) 
+
+> z
+
+) and the value taken on by the t-th random variable ( Zt = zσ(t))implies that each of Z1, ..., Z t−1 takes a value in {z1, ..., z t}\{ zσ(t)}.17 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Without loss of generality, we can relabel the indices on the data values as {z1, ..., z t−1} ← { z1, ..., z t}\{ zσ(t)}, and so we denote this event {Z1, ..., Z t−1} = {z1, ..., z t−1} as E(t−1)  
+
+> z
+
+. The WCP p-variable P ˜wo 
+
+> t−1
+
+is determined by drawing a sequence zσ(1) , ..., z σ(t−1) (i.e., determined by a permutation σ : [ t − 1] → [t − 1] ) from the bag of data values {z1, ..., z t−1}
+
+with probability proportional to fZ1,...,Z t−1 (zσ(1) , ..., z σ(t−1) ) and then applying the the nonconformity score function S,and so E(t−1)  
+
+> z
+
+is a “sufficient statistic” for P ˜wo 
+
+> t−1
+
+(for a known fZ1,...,Z t−1 ). In other words, we can substitute the conditioning on the event E(t) 
+
+> Z
+
+and Zt = zσ(t) with conditioning on E(t−1)  
+
+> Z
+
+:
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+}
+
+=
+
+> t
+
+X
+
+> σ(t)=1
+
+1{p ˜wo 
+
+> σ(t)
+
+≤ αt} · P{P ˜wo 
+
+> t−1
+
+≤ αt−1, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t−1)  
+
+> z
+
+} · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}.
+
+Using the inductive assumption and Lemma B.1, this becomes 
+
+P{P ˜wo 
+
+> t
+
+≤ αt, ..., P ˜wo 
+
+> 1
+
+≤ α1 | E(t) 
+
+> z
+
+} =
+
+> t
+
+X
+
+> σ(t)=1
+
+1{p ˜wo 
+
+> σ(t)
+
+≤ αt} · αt−1 · · · α1 · P{Zt = zσ(t) | E(t) 
+
+> z
+
+}
+
+= PP ˜wo 
+
+> t
+
+≤ αt | E(t) 
+
+> z
+
+· αt−1 · · · α1
+
+= αt · · · α1,
+
+which proves Eq. (20) . Note that Eq. (20) is a conditional result for any t = 1 , ..., T ; marginalizing over the event E(t) 
+
+> z
+
+and taking t = T implies 
+
+P{P ˜wo 
+
+> T
+
+≤ αT , ..., P ˜wo 
+
+> 1
+
+≤ α1} = αT · · · α1. (21) We have proven that P ˜wo 
+
+> 1
+
+, P ˜wo 
+
+> 2
+
+, ..., P ˜wo
+
+> Tiid
+
+∼ Unif [0 , 1] T ; this implies the analogous result for the infinite sequence, that is, 
+
+P ˜wo 
+
+> 1
+
+, P ˜wo 
+
+> 2
+
+, ... iid 
+
+∼ Unif [0 , 1] ∞ (Shiryaev, 2016; Vovk et al., 2003). Note that Eq. (21) holds in theory for an arbitrary joint PDF f , but it is an abstract statement because it relies on the oracle weights in Eq. (19) , which are intractable due to requiring knowledge of f and factorial complexity. Thus, if the oracle weights in Eq. (19) are simplified using some assumptions or approximations on f (e.g., conditional independence or invariance assumptions, density-ratio estimations) that we denote by H0( ˆf ), and denoting the resulting approximated weights as ˜w, then the P ˜wt are IID uniformly distributed, assuming H0( ˆf ):
+
+PH0( ˆf )
+
+P ˜wT ≤ αT , ..., P ˜w 
+
+> 1
+
+≤ α1 = αT · · · α1. (22) Eq. (22) implies that P ˜w 
+
+> 1
+
+, P ˜w 
+
+> 2
+
+, ..., P ˜wT | H 0( ˆf ) iid 
+
+∼ Unif [0 , 1] T . Similarly as before, this result for a fixed number of points 
+
+T implies the corresponding result for infinite sequences (Shiryaev, 2016; Vovk et al., 2003), that is, P ˜w 
+
+> 1
+
+, P ˜w 
+
+> 2
+
+, ... | H 0( ˆf ) iid 
+
+∼
+
+Unif [0 , 1] ∞.
+
+B.2. Proofs for Proposition 3.2 (WCTM Anytime False-Alarm Control) and Proposition 3.3 (Average-Run-Length Control for WCTM-based Shiryaev-Roberts Procedure) 
+
+The proofs for Proposition 3.2 and Proposition 3.3 follow from Theorem 3.1 and Vovk (2021)’s results for standard conformal test martingales. By Theorem 3.1, weighted conformal p-values have IID uniform distribution on [0,1] premised on some assumptions H0( ˆf ). Thus, a sequence of weighted conformal p-values is a sequence of IID random variables drawn from Unif [0,1], assuming that the null hypothesis H0( ˆf ) is true. Because the construction of a weighted conformal test martingale (e.g., Eq. (7) ) is only allowed to depend on the data via the sequence of weighted conformal p-values, we can draw from Vovk (2021)’s results that construct betting martingales that only assume a sequence of IID uniform [0,1] random variables. That is, by construction, weighted conformal test martingales are a betting martingale (Vovk, 2021) whose validity is premised on the assumptions H0( ˆf ) (used to compute the weights). Then, Proposition 3.2 follows by Ville’s inequality (Ville, 1939) and Proposition 3.3 follows from Proposition 4.2 in Vovk (2021). 18 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+C. Deriving Specific WCTM Algorithms for Main Practical Testing Objective: Testing for 
+
+{Concept Shift or Unanticipated Covariate Shift }
+
+In this section we describe the derivation for the specific WCTM algorithms implemented in this paper for our primary testing objective, of detecting either concept shift (in Y | X) or unanticipated covariate shift (extreme shift in X). Because a WCTM is constructed on top of a corresponding weighted CP method by a betting process on the associated sequence of weighted CP p-values, this will initially parallel the procedure described in Prinster et al. (2024) for deriving weighted CP methods. The resulting weighted CP method (that the WCTM algorthims are built on top of) will be similar to that used in Tibshirani et al. (2019), except whereas that paper focuses on CP for a shift between two batches of data, we focus on an online monitoring setting where a shift may occur at an unknown post-deployment time and density-ratio weights may be estimated online. 
+
+Step 1: List assumptions/null hypothesis of interest 
+
+We begin by restating the null hypothesis (i.e., the nonparametric assumptions on what aspects of the data distribution are expected to stay invariant versus change) that is of primary practical interest in this paper. That is, as in Eq. (13) in the main paper, our null hypothesis H(cs )0 assumes that the conditional label distribution Y | X remains invariant and that the marginal X distribution can shift, but that at some post-deployment time tad (the time at which to begin adaptation to covariate shift), the covariates X shift in distribution in a manner described by the (estimated) density-ratio function bw(x).That is, we want to sequentially test the null hypothesis 
+
+H(cs)  
+
+> 0
+
+:= 
+
+(
+
+(Xi, Y i) iid 
+
+∼ FY|X × FX, i ∈ [n + tad − 1] (Xn+t, Y n+t) iid 
+
+∼ FY|X × G( bw) 
+
+> X
+
+, t ≥ tad , (23) where boldface is used to denote a set of distributions, and in particular G( bw) 
+
+> X
+
+denotes the set of distributions for X with density-ratio function bw(x) (with respect to the true but unknown source covariate distribution FX ∈ FX): 
+
+G( bw) 
+
+> X
+
+:= 
+
+n
+
+GX : dGX (x)/dFX (x) = bw(x) if dFX (x) > 0
+
+o
+
+.
+
+The density-ratio function bw(x) can be estimated with offline data and/or continually updated as each test point is observed. 
+
+Step 2: Factorize joint density using null hypothesis assumptions 
+
+We now use our null hypothesis assumptions H(cs)  
+
+> 0
+
+to factorize the joint probability density function. See Prinster et al. (2024)’s Appendix B.1 for a more detailed derivation for a more general setting. 
+
+f (z1, ..., z n+t) = fX (x1) · · · fX (xn+tad −1) · gX (xn+tad ) · · · gX (xn+t) ·
+
+> n+t
+
+Y
+
+> j=1
+
+h
+
+fY |X (yj |xj )
+
+i
+
+=
+
+> n+tad −1
+
+Y
+
+> j=1
+
+h
+
+fX (xj )
+
+i
+
+·
+
+> n+t
+
+Y
+
+> j=n+tad
+
+h
+
+gX (xj )
+
+i
+
+·
+
+> n+t
+
+Y
+
+> j=1
+
+h
+
+fY |X (yj |xj )
+
+i
+
+,
+
+multiplying by 1 =        
+
+> Qn+tj=n+tad fX(xj)
+> Qn+tj=n+tad fX(xj)
+
+, we have 
+
+f (z1, ..., z n+t) = 
+
+> n+t
+
+Y
+
+> j=1
+
+h
+
+fX (xj )
+
+i
+
+·
+
+> n+t
+
+Y
+
+> j=n+tad
+
+ gX (xj )
+
+fX (xj )
+
+
+
+·
+
+> n+t
+
+Y
+
+> j=1
+
+h
+
+fY |X (yj |xj )
+
+i
+
+,
+
+and approximating the density-ratio function gX (xj )   
+
+> fX(xj)
+
+with our estimate bw(xj ), this becomes 19 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+f (z1, ..., z n+t) = 
+
+> n+t
+
+Y
+
+> j=n+tad
+
+bw(xj ) ·
+
+> n+t
+
+Y
+
+> j=1
+
+h
+
+fY |X (yj |xj ) · fX (xj )
+
+i
+
+=
+
+> n+t
+
+Y
+
+> j=n+tad
+
+bw(xj )
+
+| {z }
+
+> Time-dependent factors
+
+·
+
+> n+t
+
+Y
+
+> j=1
+
+fZ (zj )
+
+| {z }
+
+> Time-invariant factor
+
+. (24) 
+
+Step 3: Compute or estimate weights and weighted-conformal p-values 
+
+Recalling the definition of the CP weights from the main paper (Eq. (10)) and plugging in the factorization from Eq. (24): 
+
+P{Zn+t = zi | E(t) 
+
+> z
+
+} =
+
+P 
+
+> σ:σ(n+t)= i
+
+f (zσ(1) , ..., z σ(n+t))
+
+P 
+
+> σ
+
+f (zσ(1) , ..., z σ(n+t))=
+
+P
+
+> σ:σ(n+t)= i
+
+Qn+tj=n+tad bw(xσ(j)) · Qn+tj=1 fZ (zσ(j))
+
+P
+
+> σ
+
+Qn+tj=n+tad bw(xσ(j)) · Qn+tj=1 fZ (zσ(j))=
+
+P
+
+> σ:σ(n+t)= i
+
+Qn+tj=n+tad bw(xσ(j))
+
+P
+
+> σ
+
+Qn+tj=n+tad bw(xσ(j)) , (25) where the last line follows because the factor Qn+tj=1 fZ (zσ(j)) is invariant to permutations and thus cancels in the ratio. However, the computational complexity for computing Eq. (25) is still n + t choose tad (i.e., requiring (n+t)! 
+
+> tad !( n+t−tad )!
+
+computations), so to enable tractabile estimation, we focus only on permuting the test point value with values assumed to be from the source distribution (prior to the adaptation beginning); that is, we the sums to permutations σ′ : [ n + t] → [n + t]
+
+such that σ′(j) = j for all j ∈ { n + tad , ..., n + t − 1}:
+
+P{Zn+t = zi | E(t) 
+
+> z
+
+} ≈ ˜w(t) 
+
+> i
+
+:= 
+
+P 
+
+> σ′:σ′(n+t)= i
+
+bw(xσ′(n+t))
+
+P 
+
+> σ′
+
+bw(xσ′(n+t))= bw(xi)
+
+P 
+
+> i∈[n+tad −1] ∪{ n+t}
+
+bw(xi) . (26) Then, the corresponding weighted-conformal p-value is 
+
+p ˜wn+t = X
+
+> i∈[n+tad −1] ∪{ n+t}
+
+˜w(t)
+
+> i
+
+h
+
+1{vi > v n+t} + un+t1{vi = vn+t}
+
+i
+
+. (27) Due to the modification made in Eq. (26) , Theorem 3.1 only directly applies for the covariate shift null hypothesis (i.e., for testing H0( ˆf ) = H(cs )0 as in Eq. (23) ) for the timepoint t = tad . This is due to that, when a weighted-conformal p-value is not computed fully online, 9 the proof-by-induction approach in Section B.1 may not apply; in other words, for two test points n + t and n + t′, their p-values p ˜wn+t and p ˜wn+t′ may not be statistically independent due to their common dependency on the calibration data [n + tad − 1] in Eq. (27) . This gap can be resolved to enable testing of Eq. (23) if the calibration data [n + tad − 1] are resampled for each test point, which restores independence trivially (due to each calibration set being entirely new). Alternatively, we can modify Eq. (23) to also assume that we have enough initial source data (i.e., n is large enough) so that the calibration scores’ empirical CDF is equal to the true source score distribution, that is, bF [n+tad −1]  
+
+> V
+
+= FV ,
+
+> 9
+
+That is, not computed relative to all the full observed data sequence with indices [n + t], but only relative to a strict subset of [n + t];for example, Eq. (27) computes the p-value relative to the data with indices [n + tad − 1] ∪ { n + t}, where tad < t .
+
+20 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+which is of course true in the limit n → ∞ . Accordingly, the p-value in Eq. (27) is effectively testing the modified null hypothesis of H(cs)  
+
+> 0
+
+and bF [n+tad −1]  
+
+> V
+
+= FV :
+
+H(cs)  
+
+> 0
+
+∧ ( bF [n+tad −1]  
+
+> V
+
+= FV ) = 
+
+
+
+(Xi, Y i) iid 
+
+∼ FY|X × FX, i ∈ [n + tad − 1] (Xn+t, Y n+t) iid 
+
+∼ FY|X × G( bw) 
+
+> X
+
+, t ≥ tad 
+
+bF [n+tad −1]  
+
+> V
+
+= FV .
+
+(28) In practice, Eq. (28) can roughly be thought of as also testing whether the weighted CP calibration set is “large enough” for CP coverage to hold precisely conditional on the calibration data. That is, letting Zcal denote the event that {Z1, ..., Z n+tad −1} =
+
+{z1, ..., z n+tad −1}, taking Eq. (28) as given would imply that, for all α ∈ (0 , 1) ,
+
+P{P ˜wn+t ≤ α | Zcal } = α ⇐⇒ PYn+t ∈ bC[n+tad −1] ,α (Xn+t) | Zcal = 1 − α, (29) where P ˜wn+t is the random variable taking values in Eq. (23) and the probability is only over the draw of the test point Zn+t.In other words, Eq. (28) =⇒ Eq. (29) , so via the contrapositive, violations of calibration-set-conditional coverage (Eq. (29)) would imply violations of H(cs)  
+
+> 0
+
+∧ ( bF [n+tad −1]  
+
+> V
+
+= FV ) (Eq. (28)). 
+
+Step 4: Construct WCTM by a betting process on the weighted-conformal p-values 
+
+Lastly, the practical WCTM algorithms implemented in this paper are constructed on top of a sequence of weighted-conformal p-values p ˜wn+1 , p ˜wn+2 , ..., p ˜wn+t, ... , as defined in Eq. (27) . The resulting WCTM thus achieves the anytime-valid false alarm guarantee in Proposition 3.2 for the null hypothesis H0( ˆf ) = H(cs)  
+
+> 0
+
+∧ ( bF [n+tad −1]  
+
+> V
+
+= FV ), as defined in Eq. (28) (and analogously for the scheduled, Shiryaev-Roberts monitoring procedure based on WCTMs). 
+
+D. Additional Experimental Results 
+
+D.1. Root-Cause Analysis with WCTMs D.2. What Makes a Covariate Shift Mild, Moderate, or Extreme? 
+
+While the distinction between mild, moderate, and extreme covariate shifts can be gradual, problem-specific, and sometimes user-driven, these disctinctions are not arbitrary, and WCTMs arguably even provide an approach to such delineation with statistical guarantees. Intuitively, benign shifts can be considered those where the “safety” of the CP coverage is maintained nontrivially (i.e., without the prediction set covering the whole label space). This intuition corresponds to the WCTMs’ null hypothesis (and, harmful shifts violate it), as follows: • Benign: The betting martingale’s null hypothesis is that the WCP p-values are IID Unif [0 , 1] (Appendix B.2); this null implies that coverage is satisfied (exactly) for all α ∈ (0 , 1) (ie, the martingale’s null =⇒ intuitive definition of “benign” regarding coverage validity). • Harmful: (Contrapositive of the above.) If coverage is not satisfied (exactly) for some α ∈ (0 , 1) , then the p ˜wt
+
+are not IID Unif [0 , 1] (ie, violation of coverage validity =⇒ violation of martingale’s null, thus possibility for detection). Larger violations are easier to detect, and thus more likely to quickly raise an alarm. Note that this can be due to under-coverage (safety violation) or over-coverage (uninformative prediction sets); we further penalize trivial overcoverage—i.e., when bC(Xn+t) = Y—by using anticonservative WCP p-values whenever this occurs. (See pseudocode in Appendix F.) • Medium: A shift may initially be “harmful” as described above, due to density-ratio estimator having insufficient data, but later become “benign” once enough data has been collected. Figure 5 provides an ablation study illustrating synthetic data example of WATCH performance for different magnitudes of covariate shift (in the input X distribution). Each row corresponds to a specific magnitude of covariate shift and illustrates WATCH’s response regarding coverage (prediction safety), interval widths (prediction informativeness), and WCTMs (monitoring criteria for alarms). The post-changepoint test points are sampled from the full source distribution with probabilities proportional to exp (|x − 18 | ∗ λ); larger values of λ thus correspond to more severe covariate shift toward extreme (and particularly toward large) values of the input X. Experiments are averaged over 20 seeds. 21 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Figure 5: Ablation study illustrating synthetic data example of WATCH performance for different magnitudes of covariate shift (in the input X distribution). 
+
+D.3. Wall-Clock Runtimes 
+
+Table 2 presents wall-clock runtimes averaged over 20 random seeds for the same experimental settings as reported in the average detection delay (ADD) experiments in Table 1, except with the true changepoint occurring 200 datapoints after deployment (whereas the results for Table 1 are for 100 samples after deployment). Across all datasets and for both the anytime-valid and the scheduled monitoring criteria, the CTM and WCTM-based methods have faster empirical runtime than baselines. The starkest difference is between the Shiyaev-Roberts (W)CTM methods and the online changepoint detection method from Podkopaev and Ramdas (2021b), due to the former’s runtime having complexity O(t) and the latter’s complexity being O(t2), where t is the number of post-deployment timesteps. Table 2: Wall-clock runtimes in seconds, averaged over 20 random seeds for each monitoring method and dataset (error bars are standard errors). Anytime-valid monitoring methods are WCTMs (proposed), CTMs (Vovk, 2021), and sequential testing from Podkopaev and Ramdas (2021b) (PR-ST); multistage monitoring methods are Shiryaev-Roberts (SR) procedure applied to WCTMs (proposed), SR applied to CTMs (Vovk, 2021), changepoint detection on the miscoverage risk from Podkopaev and Ramdas (2021b) in both online (PR-CD-online) and minibatched (PR-CD-50) variants. Results corresponding to our method are in blue. The best runtimes are bolded .
+
+Monitoring Criterion (→) Anytime-Valid Criterion Scheduled, Multistage Criterion Monitoring Method (→) (W)CTM PR-ST SR via (W)CTM PR-CD-online PR-CD-50 
+
+Dataset (↓) CP Type (↓) Time ( ± SE) Time ( ± SE) Time ( ± SE) Time ( ± SE) Time ( ± SE) MEPS Weighted 0.38 ( ±0.01 ) 7.65 (±1.29) 0.73 (±0.05) 81.75 (±10 .17) 0.15 (±0.01) 
+
+Standard 0.38 ( ±0.01 ) 5.55 ( ±1.01 ) 0.73 ( ±0.05 ) 81.97 ( ±1.01 ) 0.15 ( ±0.01 )
+
+Bike Sharing Weighted 0.44 ( ±0.02 ) 10.26 (±1.72) 0.87 (±0.08) 138.11 (±16 .36) 0.14 (±0.01) 
+
+Standard 0.43 ( ±0.02 ) 8.45 ( ±1.27 ) 0.88 ( ±0.09 ) 135.94 ( ±16 .92 ) 0.14 ( ±0.01 )
+
+Superconduct Weighted 0.43 ( ±0.02 ) 9.93 ( ±1.32 ) 0.88 ( ±0.09 ) 215.72 (±20 .63) 0.20 (±0.01) 
+
+Standard 0.42 ( ±0.02 ) 9.94 ( ±1.03 ) 0.86 ( ±0.09 ) 213.72 ( ±23 .82 ) 0.18 ( ±0.01 )
+
+22 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+D.4. Ablation Experiments for Density-Ratio Weight Estimation 
+
+Another factor determining whether a covariate shift can be considered benign or harmful to deployment is whether a deployed density-ratio estimator is well-specified and thus able to approximate the shift. Figure 6 provides selected synthetic-data example where logistic regression is a misspecified probabilistic classifier for distinguishing between pre- and post-changepoint data, but where a neural network (MLP) is able to accurately discriminate between the same pre- and post-changepoint data. That is, in this example the pre- and post-changepoint data are not linearly separable in the input X
+
+domain, so logistic regression is not able to reliably discriminate, and thereby it is unable to reliably estimate density-ratio weights via probabilistic classification. The result is that the changepoint causes a large increase in coverage, despite some adaptation (decreasing interval widths); the estimator’s misspecification thus causes WCTMs to raise an alarm, indicating that the covariate shift cannot be adapted to by the estimator. In contrast, the MLP estimator is able to appropriately adapt by maintaing target coverage, improving interval sharpness, and avoiding unnecessary alarms. 
+
+Figure 6: Ablation study on density-ratio estimator for synthetic data. 
+
+D.5. Ablation Experiments for Betting Function 
+
+The primary role of the betting function in (W)CTMs and testing-by-betting more broadly is for quickly rejecting the null hypothesis (i.e., raising an alarm) when it is violated. Figure 7 provides ablation experiment on the betting function used for X-CTMs and WCTMs, on three settings of the synthetic-data example. The ”Composite” Jumper betting function is the betting function used in all other experiments, and it is an average of Simple Jumper betting functions over “jumping parameters” J ∈ [0 .0001 , 0.001 , 0.01 , 0.1, 1] ; here, we set the Simple Jumper baseline to have J = 0 .01 . See Vovk et al. (2021) for pseudocode and exposition of the Simple Jumper algorithm. J = 1 means conservatively spreading bets across all options to avoid cumulative losses, while smaller J encourages “doubling down” on bets that were previously successful. The CTMs with Composite betting are thus lower bounded at Mt = 0 .2, whereas those with Simple betting continually decrease, resulting in slightly delayed detection speed relative to Composite. 
+
+D.6. Further Experiments on Corrupted Image Data 
+
+Here we provide additional experiments on the corrupted image data. Our evaluation metrics include the average detection delay (ADD), the average number of unnecessary alarms, and the average number of missed alarms. First, WCTM exhibits shorter detection delays compared to CTM. Given that CTM often doesn’t trigger alarms in the face of severe corruption, which significantly increases its overall ADD. Additionally, as the corruption level intensifies, WCTM detects shifts more quickly, whereas CTM’s detection speed shows minimal change—consistent with our earlier visualizations. To evaluate unnecessary alarms, we again create a mild, benign shift in the target distribution by mixing clean samples into MNIST and level-1 CIFAR-10 corruption data, while treating higher-level corruptions as harmful. We find that WCTM’s unnecessary alarm rate is roughly one-third that of CTM. Moreover, WCTM also exhibits fewer missed alarms, especially under more severe corruptions. These findings highlight the flexibility of our framework, which not only avoids unnecessary alarms but 23 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Figure 7: Ablation study on betting function. Table 3: WCTM achieves a lower Average Detection Delay (ADD), especially under severe image corruptions, and also exhibits fewer false alarms and missed alarms. Results are averaged over 10 random seeds and all corruption types.                               
+
+> MNIST-C CIFAR10-C L1 CIFAR10-C L3 CIFAR10-C L5 ADD WCTM 156.4 188.0 163.6 129.7
+> CTM 285.3 176.5 175.2 170.3
+> Unnecessary Alarm WCTM 7.3 12.2 ––CTM 25.4 34.3 ––
+> Missed Alarm WCTM 2.9 6.6 3.8 0.9
+> CTM 2.4 5.9 4.6 1.2
+
+also better detects harmful shifts. Whereas Table 3 provided metrics averaged over all corruption types, Figure 8 provides specific example results on each corruption type separately, focusing on harmful shifts with high severity of corruption. These plots illustrate how WCTMs quickly react to harmful shifts. 
+
+E. Experiment Details 
+
+E.1. Datasets 
+
+The evaluation datasets include both real-world tabular and image datasets. The tabular datasets are for regression tasks (where conformal methods used the absolute value residual nonconformity score bS(x, y ) = |y − bμ(x)|), and the datasest span various sizes and dimensionalities: the Medical Expenditure Panel Survey (MEPS) dataset (33005 samples, 107 features) (Cohen et al., 2009), the UCI Superconductivity dataset (21263 samples, 81 features) (Hamidieh, 2018), and the UCI bike sharing dataset (17379 samples, 12 features) (Fanaee-T, 2013). The image datasets were for classification tasks (where conformal methods used the one-minus-softmax score bS(x, y ) = 1 − bp(yi | xi)) were the MNIST-corruption (Mu and Gilmer, 2019) (60000 clean samples, 10000 corrupted samples) and CIFAR-10-corruption (Hendrycks and Dietterich, 2019) (50000 clean samples, 10000 corrupted samples), which are standard benchmarks for assessing distribution shifts. 24 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 1
+
+10 5
+
+10 9
+
+10 13 
+
+10 17 
+
+10 21 
+
+10 25 
+
+10 29 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold 
+
+(a) brightness 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (b) contrast 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (c) defocus blur 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (d) elastic transform 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 1
+
+10 4
+
+10 7
+
+10 10 
+
+10 13 
+
+10 16 
+
+10 19 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold 
+
+(e) fog 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (f) frost 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (g) gaussian blur 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 1
+
+10 4
+
+10 7
+
+10 10 
+
+10 13 
+
+10 16 
+
+10 19 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (h) gaussian noise 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold 
+
+(i) glass blur 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 0
+
+10 2
+
+10 4
+
+10 6
+
+10 8
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (j) impulse noise 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (k) jpeg compression 0 100 200 300 400 500 600 
+
+Test (Deployment) Datapoint Index t
+
+10 3
+
+10 10 
+
+10 17 
+
+10 24 
+
+10 31 
+
+10 38 
+
+10 45 
+
+10 52 
+
+> Mean Martingale Values ( Mt/M0)
+
+Corrupted Martingale Paths 
+
+(Anytime-Valid Monitoring Criterion) 
+
+WCTM (proposed) 
+
+CTM (Vovk et al., 2021) 
+
+Changepoint 
+
+Alarm threshold (l) motion blur 
+
+Figure 8: Results on CIFAR-10 with various corruption types, all at the highest severity level. WCTM reacts more quickly than the standard CTM under these conditions. Moreover, with several types of corruption, the standard CTM does not raise any alarms at all. 25 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 0 2000 4000 6000 8000 10000 12000 14000  
+
+> Test (Deployment) Datapoint Index t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Coverage Rate (  )
+
+Class Coverage Rate 
+
+(Proportion of True Classes in Prediction Sets)         
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 02000 4000 6000 8000 10000 12000 14000
+> Test (Deployment) Datapoint Index t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Coverage Rate (  )
+
+Class Coverage Rate 
+
+(Proportion of True Classes in Prediction Sets)         
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 02000 4000 6000 8000 10000 12000 14000
+> Test (Deployment) Datapoint Index t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Coverage Rate (  )
+
+Class Coverage Rate 
+
+(Proportion of True Classes in Prediction Sets)         
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 02000 4000 6000 8000 10000 12000 14000
+> Test (Deployment) Datapoint Index t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Coverage Rate (  )
+
+Class Coverage Rate 
+
+(Proportion of True Classes in Prediction Sets)        
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint 01000 2000 3000 4000 5000 6000
+> Test (Deployment) Datapoint Index t
+> 1.15
+> 1.20
+> 1.25
+> 1.30
+> 1.35
+> Average Set Size (  )
+
+Prediction Set Size 
+
+(Number of Classes in Set) 
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+
+(a) No Corruption 0 2000 4000 6000 8000 10000 12000 14000  
+
+> Test (Deployment) Datapoint Index t
+> 1.0
+> 1.2
+> 1.4
+> 1.6
+> 1.8
+> Average Set Size (  )
+
+Prediction Set Size 
+
+(Number of Classes in Set)  
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+
+(b) Minor Benign Corruption 0 2000 4000 6000 8000 10000 12000 14000  
+
+> Test (Deployment) Datapoint Index t
+> 1.0
+> 1.2
+> 1.4
+> 1.6
+> 1.8
+> 2.0
+> Average Set Size (  )
+
+Prediction Set Size 
+
+(Number of Classes in Set)  
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+
+(c) Benign Corruption 0 2000 4000 6000 8000 10000 12000 14000  
+
+> Test (Deployment) Datapoint Index t
+> 1.0
+> 1.2
+> 1.4
+> 1.6
+> 1.8
+> 2.0
+> Average Set Size (  )
+
+Prediction Set Size 
+
+(Number of Classes in Set)  
+
+> WCTM (proposed)
+> CTM (Vovk et al., 2021)
+> Changepoint
+
+(d) Extreme Corruption 
+
+Figure 9: The results supplement Figure 3 in the main paper. They demonstrate the coverage rate and prediction set size under four different corruption scenarios. In the multi-class classification setting, we adopt metrics different from those used in the regression experiments and follow Romano et al. (2020) to measure the prediction set size and coverage rate (defined as the proportion of true classes in the specified range, NOT conformal coverage) as principled risk metrics for distinguishing benign from harmful shifts. We increased the size of the validation set and the number of samples visualized to yield more robust performance and provide a clearer view of the trajectory; the results are averaged over a window size of 200, while all other configurations remain unchanged from the original setting. As discussed in the paper, we mixed test samples (target corrupted) with validation samples (source clean) to improve the estimation of weights for CTMs. So under corrupted scenarios, the “starting points” before the change points for WCTM and CTM differ, as the mixture allows the validation set to contain corrupted data; however, this difference is not clearly reflected in the martingale paths. Overall, the models initially exhibit relatively high classification performance under the clean setting, while CTM rapidly declines to a lower performance level under all corruption conditions. Although WCTM adapts to changes in benign scenarios, it eventually demonstrates severe metric changes under extreme shifts as well, which corresponds to the results in Figure 3. 
+
+E.2. Simulating Shifts in Tabular Data 
+
+To evaluate the online adaptation performance of our proposed WCTMs on the tabular, regression-task datasets, we simulated mild or benign covariate shifts by exponentially tilting (i.e., up-sampling) the test samples from the full dataset based on selected covariates. On the MEPS healthcare dataset, h was selected to simulate a demographic shift towards younger, higher-educated patients (expected to be a benign shift due to youth tending to correlate with fewer, less variable health issues). On the bike-sharing dataset, h simulated a shift in weather patterns to colder, windier days; meanwhile, a more complex shift was simulated on the superconductivity dataset by sampling proportional to the projection onto the first principal component representation of the training data. Harmful concept shifts in tabular data were simulated by biasing the label values as a function of selected input covariates for each dataset. 
+
+E.3. Further Details of Image Classification Experiments 
+
+We provide further discussions on the image classification experiments from Section 4.2. Figure 9 demonstrates the coverage rates and set sizes of different corruption levels as discussed in the main paper. Details of model architectures and training configurations can be found in Table 4 - Table 7. 26 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Table 4: MNISTDiscriminator Model Details 
+
+Component Details 
+
+Model Name MNISTDiscriminator Purpose Binary classifier to distinguish between source (uncorrupted) and target (cor-rupted) MNIST data Architecture Type Convolutional Neural Network (CNN) with 2 conv blocks + FC layers Input Shape (Batch size, 1, 28, 28) - Grayscale MNIST images Output Shape (Batch size, 2) - Binary classification logits Total Parameters ≈1.3M parameters Layers First Conv Block: Conv2d (1 →32, 3×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Second Conv Block: Conv2d (32 →64, 3 ×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Fully Connected: Linear (64 ×7×7→128) → BatchNorm → ReLU →
+
+Dropout 
+
+Output: Linear (128 →2) Regularization Dropout (rate=0.3), BatchNormalization 
+
+Calibration Method Temperature scaling (initial temp=1.5) Activation Functions ReLU 
+
+Loss Function Cross-entropy (implicit in the code) Training Epochs 30 Batch Size 64 Learning Rate 0.001 Optimizer Adam 
+
+Special Features Temperature scaling parameter for improved probability calibration Usage Context Used for estimating likelihood ratios in weighted conformal prediction 
+
+Algorithm 1 Calculate weighted conformal prediction set for covariate shift (Tibshirani et al., 2019). 
+
+Input: Calibration data Z1: n := {(Xi, Y i)}ni=1 ; Test point input Xn+1 ; Score function ˆs : ( X × Y )∗ → (R+)∗;Density-ratio weight function ˆw : X ∗ → [0 , 1] ∗; Significance level (target miscoverage) α.
+
+Output: Conformal prediction set bCn,α (Xn+1 ) ⊆ Y .
+
+Calculate n nonconformity scores and n + 1 density-ratio weights: 
+
+v1, ..., v n = ˆ s(Z1, ..., Z n)˜w1, ..., ˜wn+1 = ˆ w(X1, ..., X n+1 )
+
+Calculate 1 − α quantile over weighted score distribution (with conservative ad-justment vn+1 = ∞, as Yn+1 is unknown): 
+
+q1−α = bQ1−α
+
+  P ni=1 ˜wi · δvi + ˜ wn+1 · δ∞
+
+ {Note: ˜wn+1 ≥ α =⇒ q1−α = ∞.}
+
+Calculate weighted conformal prediction set: 
+
+bCn,α (Xn+1 ) = y ∈ Y : ˆ s(Xn+1 , y ) ≤ q1−α {Note: q1−α = ∞ =⇒ bCn,α (Xn+1 ) = Y.}
+
+Return: bCn,α (Xn+1 )
+
+F. Algorithms 
+
+Only limited algorithm pseudocode is provided at this time, focused on algorithms that explain how we penalized noninfor-mative conformal prediction intervals (i.e., with anticonservative p-values). We aim to update the arXiv version of this paper with more comprehensive pseudocode. 27 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Table 5: CIFAR10 Discriminator Model Details 
+
+Component Details 
+
+Model Name CIFAR10Discriminator Purpose Binary classifier to distinguish between source (uncorrupted) and target (cor-rupted) CIFAR-10 data Architecture Type Convolutional Neural Network (CNN) with 3 conv blocks + FC layers Input Shape (Batch size, 3, 32, 32) - RGB CIFAR-10 images Output Shape (Batch size, 2) - Binary classification logits Total Parameters ≈4.8M parameters Layers First Conv Block: Conv2d (3 →64, 3×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Second Conv Block: Conv2d (64 →128, 3 ×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Third Conv Block: Conv2d (128 →256, 3 ×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+First FC Layer: Linear (256 ×4×4→512) → BatchNorm → ReLU →
+
+Dropout 
+
+Second FC Layer: Linear (512 →128) → BatchNorm → ReLU → Dropout 
+
+Output: Linear (128 →2) Regularization Dropout (rate=0.3), BatchNormalization at each layer Calibration Method Temperature scaling (initial temp=1.5) Activation Functions ReLU throughout the network Loss Function Cross-entropy Training Epochs 30 Batch Size 64 Learning Rate 0.001 Optimizer Adam 
+
+Special Features Temperature scaling parameter for improved probability calibration Usage Context Used for estimating likelihood ratios in weighted conformal prediction 
+
+Algorithm 2 Calculate weighted conformal p-value that penalizes noninformativeness. 
+
+Input: Calibration scores V1: n := {V1, ..., V n}ni=1 ; Test point score Vn+1 ; Weight vector ew := ( ew1, ..., ewn+1 ); Signifi-cance level (target miscoverage) α.
+
+Output: Weighted conformal p-value p ˜wn+1 .
+
+if ewn+1 < α then 
+
+Calculate exact weighted conformal p-value (Eq. (9) ): 
+
+Sample un+1 
+
+> iid
+
+∼ Unif [0 , 1] 
+
+p ˜wn+1 = Pn+1  
+
+> i=1
+
+˜wi
+
+h
+
+1{vi > v n+1 } + un+1 1{vi = vn+1 }
+
+i
+
+.
+
+else 
+
+{Note: This "else" condition implies the corresponding CP set for the test point was noninformative, i.e., bCn,α (Xn+1 ) = Y; thus, penalize noninformative-ness by using derandomized, anticonservative p-value, equivalent to setting 
+
+un+1 = 0 . These will cause WCTM to raise an alarm more quickly, as they inten-tionally break IID uniformity based on the magnitude of ˜wn+1 .}
+
+p ˜wn+1 = Pn+1  
+
+> i=1
+
+˜wi
+
+h
+
+1{vi > v n+1 }
+
+i
+
+.
+
+end if Return: p ˜wn+1 
+
+28 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Table 6: RegularizedMNISTModel Details 
+
+Component Details 
+
+Model Name RegularizedMNISTModel Purpose Classification model for MNIST digits (0-9) with robustness to corrupted images Architecture Type Convolutional Neural Network (CNN) with 3 conv blocks + FC layers Input Shape (Batch size, 1, 28, 28) - Grayscale MNIST images Output Shape (Batch size, 10) - Logits for 10-class digit classification Total Parameters ≈600K parameters Layers First Conv Block: Conv2d (1 →32, 3×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Second Conv Block: Conv2d (32 →64, 3 ×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Third Conv Block: Conv2d (64 →128, 3 ×3) → BatchNorm → ReLU →
+
+MaxPool (2 ×2) → Dropout 
+
+Fully Connected: Linear (128 ×3×3→256) → BatchNorm → ReLU →
+
+Dropout 
+
+Output: Linear (256 →10) Regularization Dropout (rate=0.3), BatchNormalization at each layer Activation Functions ReLU throughout the network Loss Function Cross-entropy Training Epochs 30 Batch Size 64 Learning Rate 0.001 Optimizer Adam 
+
+Special Features Extensive regularization for robustness to corrupted images Usage Context Primary classification model for MNIST digits in conformal prediction frame-work 29 WATCH: Adaptive Monitoring for AI Deployments via Weighted-Conformal Martingales 
+
+Table 7: ResNet20 Model Details (Standard Format) 
+
+Component Details 
+
+Model Name ResNet20 Purpose Classification model for CIFAR-10 images Architecture Type Residual Network (ResNet v1) with basic blocks Input Shape (Batch size, 3, 32, 32) - RGB CIFAR-10 images Output Shape (Batch size, 10) - Logits for 10-class CIFAR-10 classification Total Parameters ≈270K parameters Depth 20 layers (1 initial conv + 18 layers in blocks + 1 final linear) Block Structure BasicBlock : Conv →BN →ReLU →Conv →BN + shortcut connection, fol-lowed by ReLU 
+
+Network Architecture Initial Layer: Conv2d (3 →16, 3 ×3) → BatchNorm → ReLU 
+
+Stage 1: 3 BasicBlocks (16 channels, stride=1) Stage 2: 3 BasicBlocks (32 channels, stride=2) Stage 3: 3 BasicBlocks (64 channels, stride=2) Output: Global AvgPool → Linear (64 →10) Regularization BatchNormalization in each block Activation Functions ReLU Weight Initialization Kaiming normal for convolutional layers, constant for batch normalization Loss Function Cross-entropy Training Epochs 30 Batch Size 64 Learning Rate 0.001 Optimizer Adam Special Features Skip connections (residual learning) for better gradient flow Usage Context Primary classification model for CIFAR-10 in conformal prediction framework 30

@@ -1,0 +1,1763 @@
+Title: Autonomous Sparse Mean-CVaR Portfolio Optimization
+
+URL Source: https://openreview.net/pdf?id=0NacraIYrA
+
+Number of Pages: 17
+
+Markdown Content:
+# Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+Yizun Lin 1 Yangyu Zhang 2 Zhao-Rong Lai 1 Cheng Li 1
+
+## Abstract 
+
+The `0-constrained mean-CVaR model poses a significant challenge due to its NP-hard nature, typically tackled through combinatorial methods characterized by high computational demands. From a markedly different perspective, we pro-pose an innovative autonomous sparse mean-CVaR portfolio model, capable of approximat-ing the original `0-constrained mean-CVaR model with arbitrary accuracy. The core idea is to con-vert the `0 constraint into an indicator function and subsequently handle it through a tailed ap-proximation. We then propose a proximal alter-nating linearized minimization algorithm, cou-pled with a nested fixed-point proximity algo-rithm (both convergent), to iteratively solve the model. Autonomy in sparsity refers to retaining a significant portion of assets within the selected asset pool during adjustments in pool size. Con-sequently, our framework offers a theoretically guaranteed approximation of the `0-constrained mean-CVaR model, improving computational ef-ficiency while providing a robust asset selection scheme. 
+
+## 1. Introduction 
+
+Value-at-risk (VaR, Jorion 1997) is a widely-used downside-risk metric in finance that assesses the extreme percentage loss in a disadvantageous situation. Since it fails to sat-isfy the subadditivity property (Artzner et al., 1999), it is improved to its tail statistic named conditional value-at-risk (CVaR, Rockafellar & Uryasev 2000). CVaR not only has the good theoretical property of coherence (Artzner et al., 1999; Gotoh & Takeda, 2011), but also accords with dual stochastic dominance (Ogryczak & Ruszczy ´nski, 2002).     
+
+> 1Department of Mathematics, College of Information Sci-ence and Technology, Jinan University, Guangzhou, China 2Jinan University-University of Birmingham Joint Institute, Jinan Uni-versity, Guangzhou, China. Correspondence to: Zhao-Rong Lai
+> <laizhr@jnu.edu.cn >.
+> Proceedings of the 41 st International Conference on Machine Learning , Vienna, Austria. PMLR 235, 2024. Copyright 2024 by the author(s).
+
+Moreover, CVaR is more tractable than VaR from the per-spective of optimization. It can serve as the risk metric in Markowitz’s mean-risk criterion (Markowitz, 1952) which balances the expected return and the risk of a portfolio. The original mean-CVaR model with linear constraints can be efficiently solved by linear programming (Rockafellar & Uryasev, 2000). In practical portfolio optimization (PO), it is desirable to constrain the scale of selected assets while keeping an ap-propriate investing performance, in order to reduce transac-tion cost and managerial burden. This can be done via the managerial approach, such as the endowment model (Dim-mock et al., 2023), market crashes (Liu & Loewenstein, 2013), and the revenue-driven resource allocation (Chao et al., 2009). However, these methods still demand profes-sional knowledge in management and finance. Recently, the arising development in machine learning methods for management science provides an alternative way for PO. For example, (Ban et al., 2018) propose the performance-based regularization with a data-driven strategy to improve the out-of-sample performance in PO. (Brodie et al., 2009) adopt the `1 regularization to construct a sparse and stable Markowitz portfolio (SSMP). (Lai et al., 2018) and (Luo et al., 2020) propose short-term sparse portfolio optimiza-tion models with `1 and `0 regularizations, respectively. (Lai et al., 2020) propose a sparse structure for the covariance estimation based on the spectral decomposition. Among all the sparsity approaches, the `0 constraint can exactly control the number of selected assets. However, the `0 constraint generally leads to an NP-hard problem that has a very high computational complexity. A gen-eral approach to exactly solve the `0-constrained problems is the combinatorial approach, such as the mixed-integer optimization (G ¨unl ¨uk & Linderoth, 2010) and the branch-and-bound procedure (Kobayashi et al., 2021). For exam-ple, (Bertsimas & Cory-Wright, 2022) propose a cutting-plane approach with some heuristics to exactly solve an 
+
+`0-constrained mean-variance model, which saves some computational time according to the experimental results. (Kobayashi et al., 2021) further adopt this approach to ex-actly solve an `0-constrained mean-CVaR model. It is es-sentially a branch-and-bound algorithm: for each visit of a node (a combinatorial case), it conducts one ordinary mean-CVaR optimization. Since its experimental results show 1Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+that the number of visited nodes ranges from about 1,300 to more than 77,000, the computational complexity is still high in practical portfolio management. Moreover, (Kobayashi et al., 2021) requires the commercial optimizer Gurobi 1 to deploy this cutting-plane approach. We try to run the pro-gram, but it prompts an error that the models are too large in our experiments. In summary, the existing exactly-solving approaches have high computational complexity and rely on the external commercial optimizer, thus economic and practical approaches still need to be developed. Instead of exactly solving the `0-constrained mean-CVaR model, we propose an autonomous sparse mean-CVaR (ASMCVaR) PO model that can approximate it to arbitrary accuracy. The core idea is to convert the `0 constraint into an indicator function and approximate it to arbitrary accu-racy through a tailed approximation approach (Definition 3.1). By this way, we can replace the nonconvex and com-plex geometric structure of `0 constraint by a simple and more tractable tailed approximation. To solve the ASMC-VaR model, we develop a Proximal Alternating Linearized Minimization Algorithm (PALM) with a nested Fixed-Point Proximity Algorithm (FPPA) that can handle all the con-straints and guarantee convergence. It saves much computa-tional complexity and keeps a certain accuracy at the same time. ASMCVaR can keep a large proportion of assets in the selected asset pool when adjusting the pool size, which reduces managerial burden and delivers convenience. Our main contributions can be summarized as follows. 1. We propose an ASMCVaR model and prove that it can approximate the `0-constrained mean-CVaR model to arbitrary accuracy based on item 2. 2. We propose a tailed approximation for the indicator function of the `0 constraint. We also find that this ap-proximation can be arbitrarily accurate as the positive approximation parameter tends to 0. See Definition 3.1 and Figure 1 for more detail. 3. We propose a convergent PALM algorithm with a nested FPPA to iteratively solve ASMCVaR. It does not require any external or commercial optimizers. 4. ASMCVaR can keep a large proportion of assets in the selected asset pool when adjusting the pool size, thus the selected assets are stable. It is beneficial to practi-cal portfolio management when the manager needs to adjust the asset pool size. 
+
+## 2. Preliminaries and Related Works 
+
+We present some preliminaries on CVaR, and then introduce some approximate or exact solutions to the `0-constrained mean-CVaR model. 
+
+> 1https://www.gurobi.com/
+
+2.1. VaR and CVaR 
+
+VaR measures the percentage loss of portfolio return in a bad scenario and with a certain confidence level c:
+
+Pr {VaR 6 −rs} = 1 − c, 
+
+where Pr {·} denotes the probability of an event and rs de-notes the rate of return of a portfolio (representing some kind of investing strategy). Specifically, if VaR( c = 95%) = 0.1, then this investing strategy may suffer a loss greater than 10% with a probability of 5% .CVaR further averages the values greater than the VaR at a given confidence level c:
+
+CVaR := min  
+
+> τ∈R
+
+{
+
+τ + 11 − c E (max {− rs − τ, 0})
+
+}
+
+,
+
+where E(·) denotes the expectation of a random variable. 
+
+2.2. Original Mean-CVaR Model 
+
+In a real-world investing environment, the CVaR can be for-mulated as a linear program. Let R := [ r> 
+
+> 1
+
+; · · · ; r> 
+
+> T
+
+] ∈
+
+RT ×N be the sample return matrix of N assets and T
+
+observations gathered from a financial market. Accord-ingly, a portfolio (investing strategy) can be seen as an 
+
+N -dimensional vector w. Then the sample returns of this portfolio are {r> 
+
+> t
+
+w}Tt=1 . Using the sample average estima-tor for CVaR yields 
+
+min    
+
+> w∈RN, τ ∈R,z∈RT
+
+{
+
+τ + 1(1 − c)T 1> 
+
+> T
+
+z
+
+}
+
+(1) s.t. z > −Rw − τ 1T , z > 0T , (2) 
+
+w ∈ ∆ := {w ∈ RN : w > 0N , w>1N = 1 } , (3) 
+
+(w> ˆμ = ρ), (4) where z is the auxiliary variable to deal with the positive part in the expectation. 1T or 0T is a vector of 1 or 0 with dimen-sionality shown in the subscript, respectively. The inequality for vectors dominates each dimension. In (2) , inequality constraints for z can be used instead of equality constraints because z is greater than 0T and the objective is a mini-mization. (3) is the simplex constraint that consists of the no-short-selling constraint and the self-financing constraint, respectively. Such constraints ensure feasibility of the port-folio in real-world investment. (4) is an optional constraint for the expected portfolio return, where ˆμ = 1 
+
+> T
+
+R>1T is the sample asset return vector. (1) ∼(4) constitute the original mean-CVaR model (Rockafellar & Uryasev, 2000). Since all the constraints are convex and linear, this model can be efficiently solved by the simplex method. 
+
+2.3. Mean-CVaR Model with `1 Regularization 
+
+A widely adopted approach for sparsity is to impose `1
+
+regularization. This method is favored for its compatibil-2Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+ity with widely recognized solving techniques, such as the linear programming, the Lasso (Tibshirani, 1996) and the LARS (Efron et al., 2004) algorithms. (Cheng & Gao, 2015) propose a mean-CVaR model with a re-weighted `1 regular-ization as follows: 
+
+min   
+
+> w∈RN,τ ∈R,z∈RT
+
+{
+
+τ + 1(1 − c)T 1> 
+
+> T
+
+z + λ>w
+
+}
+
+s.t. z> −Rw −τ 1T , z > 0T , w ∈ ∆, (w> ˆμ = ρ),
+
+(5) where λ ∈ { x ∈ RN : x > 0N } is the weight vector for the `1 regularization. Since w > 0N , the re-weighted 
+
+`1 regularization in (5) can be simplified: ∑Ni=1 λi|wi| =
+
+∑Ni=1 λiwi = λ>w. This formulation can also be ef-ficiently solved by linear programming. In each outer-iteration, the algorithm updates λ by some rules regarding 
+
+w, for example, λk+1  
+
+> i
+
+= 1 /(|wki | + ). Then in the inner-iteration, (5) is solved with fixed λk+1 to obtain wk+1 . This approach enjoys a low computational cost, but it cannot ex-actly control the number of selected assets. One can just empirically tune λ to get a rough number of selected as-sets. Besides, it is also intractable to assess the accuracy of approximation of `1 regularization to the `0 constraint. 
+
+2.4. `0-constrained Mean-CVaR Model 
+
+To impose exact sparsity on the portfolio, the `0 constraint should be used: 
+
+min    
+
+> w∈RN, τ ∈R,z∈RT
+
+{
+
+τ + 1(1 − c)T 1> 
+
+> T
+
+z
+
+}
+
+(6) s.t. z > −Rw − τ 1T , z > 0T , w ∈ ∆, (w> ˆμ = ρ),
+
+‖w‖0 6 m, (7) where ∆ is defined in (3) , and ‖w‖0 represents the number of nonzero components in w. The `0 constraint in (7) is also called the m-sparse constraint, since m controls the number of selected assets. The above `0-constrained mean-CVaR problem is NP-hard. To solve it by the combinatorial approach, (Kobayashi et al., 2021) introduce an auxiliary variable y ∈ Z mN := {y ∈ { 0, 1}N : 1> 
+
+> N
+
+y 6 m}, then (7) is equivalent to the logical constraint 
+
+y ∈ Z mN , yi = 0 ⇒ wi = 0 . (8) Let Y := diag( y) be the diagonalized matrix for y. Then model (6) can be reformulated as a bilevel optimization problem (upper-level) min 
+
+> y∈Z mN
+
+f (y), (9) (lower-level) 
+
+f (y) = min   
+
+> w∈RN,τ ∈R,z∈RT
+
+{ 12γ w>w+τ + 1(1 −c)T 1> 
+
+> T
+
+z
+
+}
+
+(10) s.t. z> −RY w −τ 1T , z>0T , Y w ∈∆, (w>Y ˆμ=ρ),
+
+(11) where the logical constraint (8) is embedded in Y w . Note that w = Y w after minimization (10) , thus (Y w )>Y w is replaced by w>w (Bertsimas & Cory-Wright, 2022). As 
+
+γ → +∞, this bilevel optimization can approximate the `0-constrained mean-CVaR optimization to arbitrary accuracy. In the upper-level optimization, (Kobayashi et al., 2021) solve the following problem 
+
+min   
+
+> (y,θ )∈Z mN×R
+
+θ s.t. (y, θ ) ∈ F k ⊆ Z mN × R (12) to obtain the node (yk, θ k) of the k-th visit, where Fk de-notes the k-th feasible region for (y, θ ). θ indicates any possible value for f (y) in the current iteration, and its in-fimum provides a lower bound for f (y). To initialize, one can just solve a continuously-relaxed and lower-bounded version of (6) ∼(7) to obtain θ1 for all y ∈ Z mN and pick up any y1 ∈ Z mN . In the lower-level optimization, (10) ∼(11) is a convex quadratic optimization for which efficient al-gorithms exist. If it is infeasible, then Fk+1 is obtained by removing (yk, θ k) from Fk; or else it can be solved to obtain f (yk). Since f (y) is convex in y ∈ [0 , 1] N , the set 
+
+{(y, θ ) ∈ Z mN × R : θ > f (yk) + g> 
+
+> yk
+
+(y − yk)} (13) provides new lower bounds for all the unvisited cases y ∈ZmN , where gyk is a subgradient of f at yk. Intersecting (13) and Fk yields Fk+1 . Either feasible or infeasible, the lower-level optimization narrows down the searching region from Fk to Fk+1 . Then in the next visit (iteration), (12) is solved in Fk+1 . During this procedure, LB k := 
+
+θk serves as the current uniform lower bound for all the unvisited cases, while U B k := min 16j6k f (yj ) serves as the current uniform upper bound for all the visited cases. If 
+
+(U B k − LB k <  ) for a sufficiently small positive , then 
+
+{yj : 1 6 j 6 k, f (yj ) = U B k} can be considered as the 
+
+-optimal solution set. In fact, this is a branch-and-bound strategy. Though the above bilevel optimization takes the exact solv-ing objective as the initial intention, it involves two ap-proximations: one is the term 12γ w>w in (10) , the other is the  optimality of the gap (U B k − LB k). Moreover, this branch-and-bound approach may visit tens of thousands of combinatorial cases to achieve satisfactory optimality. In addition, external commercial optimizers are also required to deploy the whole algorithm. The program is unable to run in our experiments because the models are too large. To develop economic and practical methods, we propose to approximate the `0-constrained mean-CVaR model from a very different perspective based on a tailed approximation. 
+
+## 3. Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+In this section, we propose an Autonomous Sparse Mean-CVaR (ASMCVaR) model and develop a Proximal Alter-3Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+nating Linearized Minimization (PALM) algorithm to solve this model. 
+
+3.1. Autonomous Sparse Mean-CVaR Model 
+
+Before introducing the ASMCVaR model, we revise the 
+
+`0-constrained Mean-CVaR model and reformulate it as a nonconvex three-term optimization model. Note that there is an equality constraint w>μ = ρ in the Mean-CVaR model (6) . In general, the expected return level ρ is generally set to a positive number. However, this constraint is not always feasible not only in reality but also in theory. The satisfaction of a tight equality constraint for the return level in PO with an ever-changing financial market is difficult. To avoid this problem, we use a regularization term (w> ˆμ −
+
+ρ)2 in the objective function instead of using the equality constraint. In this way, the portfolio return w> ˆμ is balanced between the expected level ρ and the risk metric CVaR. Then the revised `0-constrained Mean-CVaR model is given by 
+
+min    
+
+> w∈RN, τ ∈R,z∈RT
+
+{
+
+τ + 1(1 − c)T 1> 
+
+> T
+
+z + λ(w>μ − ρ)2
+
+}
+
+s.t. z > −Rw − τ 1T , z > 0T , w ∈ ∆, ‖w‖0 6 m. 
+
+(14) For notation simplicity, we define N1 := N + 1 + T , N2 := 2T + N + 2 . We then rewrite model (14) as a more compact form. To this end, we let v := ( w>, τ, z>)> ∈ RN1 ,
+
+h1:= 
+
+(
+
+0> 
+
+> N
+
+, 1, 1(1 −c)T 1>
+
+> T
+
+)>
+
+, h2:= (μ>, 0>
+
+> 1+ T
+
+)> , (15) 
+
+˜Q := 
+
+( R 1T IT
+
+0T ×N 0T IT
+
+)
+
+∈ R2T ×N1 ,
+
+˜I := (IN 0N ×(T +1) 
+
+) ∈ RN ×N1 ,
+
+and define 
+
+Q := 
+
+
+
+˜QIN 0N ×(T +1) 
+
+1> 
+
+> N
+
+0> 
+
+> T+1
+
+−1> 
+
+> N
+
+0> 
+
+> T+1
+
+ ∈ RN2×N1 ,
+
+q := 
+
+
+
+02T +N
+
+1
+
+−1
+
+ ∈ RN2 . (16) Then model (14) can be rewritten as the following model with respect to (w.r.t.) v:
+
+min 
+
+> v∈RN1
+
+{h> 
+
+> 1
+
+v + λ(h> 
+
+> 2
+
+v − ρ)2}
+
+s.t. Qv > q, ‖ ˜Iv ‖0 6 m. 
+
+(17) Model (17) comprises two constraints. In fact, it can be reformulated as an equivalent three-term unconstrained min-imization model. For this purpose, we define two indicator functions 
+
+ιq (u) := 
+
+{
+
+0, if u > q;+∞, otherwise ,ιm(w) := 
+
+{
+
+0, if ‖w‖0 6 m;+∞, otherwise ,
+
+for u ∈ RN2 and w ∈ RN , respectively; and define 
+
+f (v) := h> 
+
+> 1
+
+v + λ(h> 
+
+> 2
+
+v − ρ)2, v ∈ RN1 . (18) Then model (17) is equivalent to the following model: 
+
+min 
+
+> v∈RN1
+
+{
+
+Φ( v) := f (v) + ιq (Qv ) + ιm( ˜Iv )
+
+}
+
+. (19) Directly solving model (19) is very tough due to the nondif-ferentiability of ιq and the nonconvexity of ιm. Instead, we introduce a surrogate model of model (19) and de-velop an efficient algorithm to solve the surrogate model. To this end, we introduce a function to approximate the exact m-sparse function ιm. For vector w ∈ RN , let 
+
+{j1, j 2, . . . ,jN } be any rearrangement of {1, 2, · · · , N }
+
+such that |wj1 | > |wj2 | > · · · > |wjN |. Then we call 
+
+{j1, j 2, · · · , j m} an m-largest absolute value ( m-LAV) in-dex set of w. Note that the m-LAV index sets of w may not be unique since the components of w may not be distinct. Throughout this paper, for w ∈ RN , we denote by Jm 
+
+> w
+
+an 
+
+m-LAV index set of w. By smoothing the giant leap of 
+
+ιm between ‖w‖0 6 m and ‖w‖0 > m , we construct the following tailed approximation. 
+
+Definition 3.1 (Tailed Approximation of `0 Constraint) .
+
+The tailed approximation for the m-sparse indicator func-tion is defined by 
+
+˜ιm,γ (w) = 
+
+
+
+0, if ‖w‖0 6 m;
+
+> 12γ
+
+∑ 
+
+> j∈NN\Jm
+> w
+
+w2 
+
+> j
+
+, if ‖w‖0 > m. (20) where γ > 0 is the approximation parameter. When ‖w‖0 > m , the tail term 12γ
+
+∑ 
+
+> j∈NN\Jm
+> w
+
+w2 
+
+> j
+
+> 0, then 
+
+> 12γ
+
+∑ 
+
+> j∈NN\Jm
+> w
+
+w2 
+
+> j
+
+↗ +∞ as γ ↘ 0. Hence for any fixed 
+
+w, either ˜ιm,γ (w) = ιm(w) (‖w‖0 6 m) or ˜ιm,γ (w) ↗
+
+ιm(w) as γ ↘ 0 (‖w‖0 > m ). Figure 1 shows a diagram for ˜ιm,γ (w) with N = 10 and m = 5 .Now the proposed ASMCVaR model is given by 
+
+min 
+
+> v∈RN1
+
+{
+
+Ψ( v) := f (v) + ιq (Qv ) + ˜ ιm,γ ( ˜Iv )
+
+}
+
+. (21) We then establish the relationship between the solutions of model (19) and the ASMCVaR model. For this purpose, we need the following technical lemma, whose proof is given in Supplementary A.1. 4Autonomous Sparse Mean-CVaR Portfolio Optimization 5-LAV Index Set                           
+
+> Tail=
+> Figure 1. Diagram for tailed approximation of `0constraint:
+> ˜ιm,γ (w)with N= 10 and m= 5 . As γ↘0,12γ
+> ∑10
+> k=6 w2
+> jk↗
+> +∞and ˜ιm,γ (w)↗ιm(w)for any fixed w(‖w‖0>5).
+
+Lemma 3.2. Let v∗ be a solution of model (21) and w∗ := ˜Iv ∗. Then there exists a constant ˜L > 0 such that 
+
+w∗ 
+
+> j
+
+6
+
+√
+
+2 ˜Lγ, for all j ∈ NN \Jm 
+
+> w∗
+
+. (22) The following theorem indicates that the optimal value of 
+
+f in (21) can approximate that in (19) to arbitrary accuracy by letting γ ↘ 0.
+
+Theorem 3.3. Let v∗ and v∗∗ be solutions of models (21) 
+
+and (19) , respectively. Then there exists a constant ˜L > 0
+
+such that 
+
+0 6 f (v∗∗ ) − f (v∗) 6
+
+√
+
+2 ˜L3γ. (23) The proof is given in Supplementary A.2. To solve model (21) , we further rewrite it as an optimization model w.r.t. two variables v and y as follows: 
+
+min   
+
+> v∈RN1,y∈RN
+
+{G(v, y) := H(v, y) + ιq (Qv ) + ιm(y)} ,
+
+(24) where 
+
+H(v, y) := f (v) + 12γ
+
+∥∥∥ ˜Iv − y
+
+∥∥∥22 , γ > 0. (25) This model can be directly solved by the proximal alternat-ing linearized minimization algorithm (Attouch et al., 2013; Bolte et al., 2014). We shall then prove the equivalence of the solutions of models (21) and (24) . To this end, we need the following two lemmas. We let 
+
+Ωm := {w ∈ RN : ‖w‖0 6 m}, (26) and define the thresholding operator Sm w.r.t. the m largest components by 
+
+[Sm(w)] j := 
+
+{
+
+wj , if j ∈ Jm 
+
+> w
+
+;0, if j ∈ NN \Jm 
+
+> w
+
+, (27) for w ∈ RN . Note that Sm(w) may not be unique and it depends on a corresponding m-LAV index set of w.Throughout this paper, the equality x = Sm(w) represents 
+
+x ∈ S m(w).
+
+Lemma 3.4. If a pair (v∗, y∗) is a solution of model (24) ,then y∗ = Sm( ˜Iv ∗).
+
+Lemma 3.5. Let G be defined in (24) , v ∈ RN1 . If ˜y =
+
+Sm( ˜Iv ), then 
+
+G(v, ˜y) 6 G(v, y), ∀y ∈ RN . (28) The proof of Lemma 3.4 and Lemma 3.5 are given in Sup-plementary A.3 and A.4, respectively. According to these two lemmas, we have the following theorem, whose proof is provided in Supplementary A.5. 
+
+Theorem 3.6. Let functions Ψ and G be defined by (21) 
+
+and (24) , respectively. Then 
+
+Ψ( v) = G(v, y), ∀v ∈ RN1 , y = Sm( ˜Iv ). (29) 
+
+Moreover, a pair (v∗, y∗) is a solution of model (24) if and only if v∗ is a solution of model (21) and y∗ = Sm( ˜Iv ∗).
+
+We remark that the original model (19) presents a three-term single-variable optimization problem (w.r.t. v), comprising a convex and differentiable term f , a convex but nondiffer-entiable term ιq ◦ Q, and a nonconvex and nondifferentiable term ιm ◦ ˜I. This model cannot be directly tackled using the PALM algorithm. Resolving such multi-term nondif-ferentiable optimization models typically necessitates the introduction of proximity operators through subdifferen-tial. When dealing with the summation of two functions 
+
+ϕ1 and ϕ2, where at least one function is differentiable, the additivity property of subdifferential ( ∂) holds: 
+
+∂(ϕ1 + ϕ2)( x) = ∂ϕ 1(x) + ∂ϕ 2(x).
+
+If ϕ1 and ϕ2 are both nondifferentiable, this property may not hold. The absence of additivity in subdifferential com-plicates the design of proximity algorithms to solve the original model. Theoretical proof of convergence becomes exceedingly challenging under such circumstances. The proposed relaxation technique precisely aims to convert the original model into a three-term dual-variable optimiza-tion model (w.r.t. v and y) in the form of (24) , which can be solved via the PALM algorithm. The advantage of such a format lies in its ability to decompose the model into two separate optimization problems, each concerning variables v and y respectively. Moreover, due to the differ-entiability of H, the subdifferentials corresponding to these two problems exhibit additivity, thus greatly facilitating the theoretical convergence analysis of the PALM algorithm. Furthermore, we demonstrate, through Theorems 3.3 and 3.6, the equivalence of solutions in both formats in the sense of approximation, thereby ensuring the effectiveness of uti-lizing the PALM algorithm to solve the model. 5Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+3.2. Proximal Alternating Linearized Minimization 
+
+In this subsection. We employ the Proximal Alternating Linearized Minimization (PALM) algorithm to solve model (24) . We verify in the following proposition that the partial gradients ∇v H(v, y) and ∇y H(v, y) of function H de-fined by (25) are both globally Lipschitz continuous, which is required for the convergence of PALM (Bolte et al., 2014). 
+
+Proposition 3.7. Let function H be defined by (25) . Then there exist positive real numbers L1 and L2 such that 
+
+‖∇ v H(v1, y) − ∇ v H(v2, y)‖2 6 L1‖v1 − v2‖2,
+
+∀v1, v2 ∈ RN1 , ∀y ∈ RN ;
+
+‖∇ y H(v, y1) − ∇ y H(v, y2)‖2 6 L2‖y1 − y2‖2,
+
+∀y1, y2 ∈ RN , ∀v ∈ RN1 .
+
+The proof is given in Supplementary A.6. For function ψ :
+
+Rn → (−∞ , +∞], we recall that the proximity operator of 
+
+ψ at x ∈ Rn is defined by 
+
+prox ψ (x) := arg min 
+
+> u∈Rn
+
+{ 12 ‖u − x‖22 + ψ(u)
+
+}
+
+.
+
+Then the iterative scheme of PALM to solve model (24) can be given by 
+
+{
+
+vk+1 = prox ιq ◦Q
+
+(vk − β1∇v H(vk, yk)),
+
+yk+1 = Sm
+
+(yk − β2∇y H(vk+1 , yk)),
+
+where β1 and β2 are two introduced step-size parameters. As shown in (Bolte et al., 2014), to guarantee the con-vergence of PALM, it suffices to let β1 ∈
+
+(
+
+0, 1
+
+> L1
+
+)
+
+and 
+
+β2 ∈
+
+(
+
+0, 1
+
+> L2
+
+)
+
+, where L1 := 2 λ‖h2‖22 + 1 
+
+> γ
+
+and L2 := 1 
+
+> γ
+
+.To implement the PALM algorithm, we need the closed form of prox ιq ◦Q, which requires solving the following minimization problem: 
+
+arg min 
+
+> u∈RN1
+
+{ 12 ‖u − v‖22 + ιq (Qu )
+
+}
+
+, (30) for a given v ∈ RN1 . However, obtaining the closed-form solution of prox ιq ◦Q is very tough, due to the complexity of matrix Q. Instead, we use the Fixed-Point Proximity Algorithm (FPPA, Micchelli et al. 2011) to solve model (30) iteratively. Before this, we give the closed form of operator 
+
+prox ιq . From the definition of proximity operator, it is easy to see that 
+
+prox ιq (x)= arg min 
+
+> u∈
+
+{z∈RN2 :z>q}
+
+{ 12 ‖u−x‖22
+
+}
+
+= max {x, q} .
+
+The whole ASMCVaR approach is summarized as Algo-rithm 1 in Supplementary A.7, with PALM and FPPA in the outer and the inner iterations, respectively. It is noteworthy that both the proposed relaxation (tailed approximation) technique and the PALM algorithm can be readily extended to various other machine learning prob-lems. To exemplify this, we have introduced two addi-tional modules. Firstly, we apply the proposed relaxation technique and the PALM algorithm to the sparse regres-sion problem, as detailed in Supplementary A.8. Secondly, we have developed a PyTorch module based on this relax-ation technique and PALM, facilitating its application to deep learning scenarios. The codes for these two modules are available in the folders Sparse Relaxation Test and Py-torch Demo , respectively, accessible via the link: https: //github.com/linyizun2024/ASMCVaR .
+
+## 4. Experimental Results 
+
+We conduct extensive experiments on 6 real-world financial data sets from Kenneth R. French’s Data Library 2, whose details are provided in Table 1. They contain monthly price relative sequences of some portfolios formed by different criteria, and one portfolio here is considered as one asset actually. Both FF25 and FF25EU contain 25 portfolios, while the former is built on BE/ME (book equity to market equity) and investment from the US market, the latter is built on ME and prior return from the European market. FF32 consists of 32 portfolios built on BE/ME and investment from the US market, while FF49 consists of 49 industry portfolios from the US market. FF100 and FF100MEOP consist of 100 portfolios from the US market. FF100 is built on ME and BE/ME, while FF100MEOP is built on ME and operating profitability, respectively.                              
+
+> Table 1. Information of 6 real-world monthly benchmark data sets.
+> Data Set Region Time Months # Assets FF25 US Jul/1971 - May/2023 623 25 FF25EU EU Nov/1990 - May/2023 391 25 FF32 US Jul/1971 - May/2023 623 32 FF49 US Jul/1971 - May/2023 623 49 FF100 US Jul/1971 - May/2023 623 100 FF100MEOP US Jul/1971 - May/2023 623 100
+
+To assess the effectiveness of the proposed ASMCVaR, we take 9 state-of-the-art PO methods as well as 1 baseline into comparison. They are SSMP (Brodie et al., 2009), SSPO (Lai et al., 2018), SPOLC (Lai et al., 2020), S1, S2, S3 (Luo et al., 2020), Mean-CVaR (Rockafellar & Uryasev, 2000), Mean-CVaR-`1 (Cheng & Gao, 2015), MT-CVaR (Lai et al., 2022), and the 1/N strategy (baseline, DeMiguel et al. 2009). We also try to run the cutting plane approach (Kobayashi et al., 2021) for Mean-CVaR-`0 but the program prompts an error that the models are too large in our experiments. There are 3 slightly different versions in (Luo et al., 2020): S1 is deterministic but S2 and S3 are randomized. Thus we average the results of 10 times for S2 and S3. The 
+
+> 2http://mba.tuck.dartmouth.edu/pages/ faculty/ken.french/data_library.html
+
+6Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+parameters for these competitors are set according to their original papers, while those for ASMCVaR will be set in Section 4.1. We adopt the standard moving-window trading scheme in the literature (Cover, 1991; Li et al., 2016; Lai & Yang, 2023) to assess the investing performance of different methods. Assume we observe T trading periods for N
+
+assets in a financial market. Without loss of generality, we can assume the initial wealth S(0) = 1 and the cumulative wealth (CW) S(t) at time t increases (or decreases) with a factor: S(t) = S(t−1) · (( x(t))> ˆw(t)),where x(t) := rt + 1N denotes the price relative vector at time t and ˆw(t) denotes the portfolio for a strategy built on the time window [t − T : t − 1] . At the beginning where there may be insufficient observations for some strategies, the 1/N strategy can be temporally used. This procedure goes on to the end and forms a backtest CW sequence {S(t)}T 
+
+> t=0
+
+that can be used in the assessment. We set for all the methods T = 60 as a conventional setting for the time window size in the literature (Goto & Xu, 2015; Ao et al., 2019). All the data sets and codes of this section are accessible via the link: https: //github.com/linyizun2024/ASMCVaR/tree/ main/Codes_for_Experiments_in_Paper .
+
+4.1. Parameter Setting and Autonomous Sparsity 
+
+The model parameters in (21) are set as follows: the con-fidence level is set as a conventional one c = 0 .99 . The expected return level is empirically set as ρ = 0 .02 based on observations from real-world financial markets. The approx-imation parameter is set as γ = 10 −5, which indicates a tight approximation of `0 constraint. The mixing parameter is set as 
+
+λ =
+
+√T h1[( N + 2) : ( N + 1 + T )] >(1T /T )(h2[1 : N ]>(1N /N ) − ρ)2
+
+= 1(1 − c)√T (¯ r − ρ)2 ,
+
+where h1[( N + 2) : ( N + 1 + T )] and h2[1 : N ] denote the last T indices of h1 and the first N indices of h2, re-spectively. ¯r is the mean return of the entries of R. This setting of λ is a quotient between the CVaR term and the return term in (18) with equal weights 1T /T and 1N /N .As for the number of selected assets m, we assess 3 different sparsities: m1 = 10 , m2 = 15 , and m3 = 20 .The algorithm parameters can be conveniently set based on the convergence criteria. For FPPA, we set θ = 1 .99 /‖ ˜Q‖22.Its maximum iteration and relative difference tolerance are set as M axIter 1 = 200 and tol 1 = 0 .001 . For PALM, the learning rates are set as β1 = 0.99  
+
+> L1
+
+and β2 = 0.99  
+
+> L2
+
+,respectively. Its maximum iteration and relative difference tolerance are set as M axIter 2 = 10 4 and tol 2 = 10 −4.We further investigate the sparsity parameter m and find that the support sets of two different sparsities overlap with a large proportion. To be specific, ASMCVaR produces a portfolio ˆw(t,j ) for each sparsity mj and each trade time t.The overlapped proportion can be computed by 
+
+p(t) 
+
+> j
+
+:= |supp ( ˆ w(t,j )) ∩ supp ( ˆ w(t,j +1) )||supp ( ˆ w(t,j ))| , j = 1 , 2.
+
+The sample means ¯pj and the sample standard deviations (STD) ˆσ(pj ) of {p(t) 
+
+> j
+
+}T 
+
+> t=1
+
+on the benchmark data sets are presented in Table 2. More than 89% assets overlap on aver-age between two different sparsities. We call this property autonomous sparsity since a large proportion of assets can remain in the selected asset pool when the portfolio manager adjusts the pool size. It helps to save transaction costs and reduce the managerial burden.                               
+
+> Table 2. Proportion of overlapped assets for ASMCVaR with dif-ferent sparsities on 6 benchmark data sets.
+> FF25 FF25EU FF32 FF49 FF100 FF100 MEOP
+> ¯p10.9115 0.9147 0.8919 0.9468 0.9222 0.9018
+> ˆσ(p1)0.1182 0.1215 0.1307 0.0832 0.1060 0.1154
+> ¯p20.9554 0.9553 0.9348 0.9372 0.9543 0.9478
+> ˆσ(p2)0.0808 0.0854 0.0958 0.0825 0.0766 0.0724
+
+4.2. Cumulative Wealth 
+
+The CW sequence {S(t)}T 
+
+> t=0
+
+represents the investing gain of a method along with time. The final CWs of different methods on 6 benchmark data sets are provided in Table 4. ASMCVaR with any of the 3 sparsity settings outperforms all the other competitors on all 6 data sets. For example, the final CW of ASMCVaR is about 10 times those of Mean-CVaR and Mean-CVaR-`1 on FF100. Figure 2 in Supple-mentary A.9 shows the CW plots of different methods on the benchmark data sets. The CW sequences of ASMCVaR (m = 10 , red color) are steadily over others on most trade times. Besides, ASMCVaR has increasing trends in the long run, indicating that it is growing in wealth during the backtests. 
+
+4.3. α Factor 
+
+According to the Capital Asset Pricing Model (CAPM, Sharpe 1964), a portfolio cannot exclude the influence from the underlying financial market. To derive a pure excess return to the market, the α factor is proposed (Lintner, 1965) and becomes a popular score for the relative performance to the market. Let rs and rm denote the returns for a nontrivial strategy and the Market strategy, respectively. The port-folio return rs can be decomposed into the market return component rm and the α factor: 
+
+E (rs) = βE (rm) + α. 
+
+7Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+Table 3. α factors with p-values of t-tests of different portfolio optimization models on 6 benchmark data sets. Method FF25 FF25EU FF32 FF49 FF100 FF100MEOP 
+
+α p-value α p-value α p-value α p-value α p-value α p-value 1/N 0 0.4318 -0.0031 1 0.0001 0.3782 0 0.5487 -0.0004 0.9427 -0.0002 0.9083 SSMP 0.0002 0.4465 -0.0027 0.9992 -0.0028 0.9744 0.0017 0.1935 -0.0068 0.9999 -0.0051 0.9983 SSPO -0.0024 0.9440 -0.0098 1 -0.0046 0.9994 -0.0056 0.9278 -0.0100 0.9999 -0.0071 0.9996 SPOLC -0.0032 0.9984 -0.0103 1 -0.0011 0.8050 -0.0037 0.9008 -0.0073 1 -0.0050 0.9977 S1 -0.0027 0.9701 -0.0104 1 -0.0049 0.9997 -0.0062 0.9463 -0.0110 1 -0.0069 0.9991 S2 -0.0029 0.9740 -0.0101 1 -0.0050 0.9996 -0.0062 0.9475 -0.0106 1 -0.0072 0.9994 S3 -0.0028 0.9738 -0.0103 1 -0.0049 0.9997 -0.0062 0.9465 -0.0110 1 -0.0068 0.9991 Mean-CVaR 0.0009 0.1133 -0.0014 0.9216 0.0019 0.0183 0.0025 0.0098 -0.0006 0.7222 0.0017 0.0405 Mean-CVaR-`1 0.0015 0.0339 -0.0011 0.8947 0.0017 0.0300 0.0027 0.0065 0 0.4987 0.0006 0.2969 MT-CVaR -0.0041 0.9984 -0.0090 1 -0.0067 1 -0.0044 0.8979 -0.0105 1 -0.0050 0.9891 ASMCVaR( m = 10 ) 0.0022 0.0006 0.0027 0 0.0027 0.0002 0.0029 0.0049 0.0023 0.0038 0.0020 0.0060 ASMCVaR( m = 15 ) 0.0019 0.0029 0.0027 0 0.0025 0.0001 0.0024 0.0112 0.0025 0.0012 0.0017 0.0109 ASMCVaR( m = 20 ) 0.0019 0.0017 0.0025 0 0.0024 0.0001 0.0023 0.0098 0.0024 0.0010 0.0016 0.0114 
+
+Table 4. Final cumulative wealths of different portfolio optimiza-tion models on 6 benchmark data sets.                                                                                        
+
+> Method FF25 FF25EU FF32 FF49 FF100 FF100 MEOP 1/N 355.98 13.05 424.42 235.48 364.87 348.70 SSMP 248.67 13.47 158.98 186.79 10.09 26.06 SSPO 129.35 1.22 30.20 1.33 0.89 3.90 SPOLC 57.53 0.96 169.60 5.44 2.39 8.23 S1 100.76 1.08 29.47 1.09 0.54 4.31 S2 83.10 1.19 25.93 1.15 0.66 3.55 S3 96.26 1.11 29.45 1.09 0.55 4.38 Mean-CVaR 333.41 18.60 331.14 150.15 70.31 306.40 Mean-CVaR-`1440.32 18.58 332.55 178.93 102.11 163.77 MT-CVaR 34.58 1.53 7.96 4.93 0.61 11.66 ASMCVaR( m= 10 )973.23 122.82 1122.76 758.66 966.32 783.47
+> ASMCVaR( m= 15 )827.18 123.13 1303.80 694.83 1126 712.45
+> ASMCVaR( m= 20 )872.03 113.28 1317.01 767.61 1117.20 714.49
+
+β and α can be computed by the linear regression: 
+
+ˆβ = ˆc (rs, r m)ˆσ2 (rm) , ˆα = ¯ rs − ˆβ¯rm,
+
+where ˆc(·, ·) and ˆσ2(·) are the sample covariance and vari-ance, respectively. ¯rs denotes the sample mean, which can be computed by ¯rs = 1
+
+> T
+
+∑T 
+
+> t=1
+
+r(t) 
+
+> s
+
+, where r(t) 
+
+> s
+
+=(x(t))> ˆw(t) 
+
+> s
+
+− 1 and ˆw(t) 
+
+> s
+
+is the portfolio of this nontriv-ial strategy at time t. ¯rm can be computed likewise. We adopt the uniform-buy-and-hold strategy (Li et al., 2016) as the conventional representative of the market return. To test whether α > 0 is statistically significant, the right-tailed t-test can also be implemented. Table 3 shows the α factors with p-values of t-tests of differ-ent methods. ASMCVaR( m = 10 ) achieves the highest αsamong all the compared methods on all 6 data sets. More-over, ASMCVaR( m = 10 ) achieves positive αs at the signif-icance level of 1% in all the cases, since all the p-values are smaller than 1% . Hence ASMCVaR obtains positive excess returns to the market with high statistical significance. 
+
+4.4. Sharpe Ratio 
+
+Since an investor usually has to take a higher risk to obtain a higher return in financial markets, it is necessary to develop risk-adjusted returns to evaluate this balancing performance. The Sharpe ratio (SR, Sharpe 1966) is such a metric that takes the ratio between return and risk of a strategy: 
+
+SR = ¯rs − rf
+
+ˆσ (rs) ,
+
+where the risk-free return is set as rf = 0 in this paper. The (monthly) SRs for different methods on the 6 data sets are shown in Table 5. ASMCVaR with m = 10 , m = 15 or 
+
+m = 20 achieves the highest SRs among all the competitors on all the data sets. For example, the SRs of ASMCVaR are about 45 .7% higher than those of Mean-CVaR and Mean-CVaR-`1 on FF25EU. These results indicate that ASMCVaR performs well in balancing return and risk. 
+
+Table 5. Sharpe ratios of different portfolio optimization models on 6 benchmark data sets. Method FF25 FF25EU FF32 FF49 FF100 FF100 MEOP 1/N 0.2278 0.1576 0.2236 0.2059 0.2089 0.2077 SSMP 0.1935 0.1598 0.1536 0.1659 0.0883 0.1085 SSPO 0.1545 0.0412 0.1182 0.0588 0.0425 0.0685 SPOLC 0.1453 0.0316 0.1735 0.0753 0.0563 0.0864 S1 0.1498 0.0370 0.1169 0.0559 0.0327 0.0709 S2 0.1446 0.0408 0.1137 0.0571 0.0367 0.0670 S3 0.1486 0.0381 0.1170 0.0559 0.0331 0.0712 Mean-CVaR 0.2305 0.1803 0.2375 0.2220 0.1738 0.2204 Mean-CVaR-`1 0.2392 0.1862 0.2330 0.2262 0.1815 0.1939 MT-CVaR 0.1251 0.0505 0.0844 0.0767 0.0325 0.0911 ASMCVaR( m = 10 ) 0.2610 0.2758 0.2638 0.2339 0.2446 0.2363 
+
+ASMCVaR( m = 15 ) 0.2541 0.2765 0.2615 0.2286 0.2503 0.2326 
+
+ASMCVaR( m = 20 ) 0.2558 0.2713 0.2603 0.2300 0.2501 0.2322 
+
+4.5. Transaction Cost 
+
+The transaction cost with portfolio change is inevitable in practical portfolio management. We adopt the proportional transaction cost model (Blum & Kalai, 1999; Lai & Yang, 2023) to compute the CW at the beginning of the t-th trade 8Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+time: 
+
+S(T )=S(0) 
+
+> T
+
+∏
+
+> t=1
+
+[((x(t))> ˆw(t))(
+
+1− ν
+
+2
+
+> N
+
+∑
+
+> i=1
+
+∣∣ ˆw(t) 
+
+> i
+
+− ˜w(t−1) 
+
+> i
+
+∣∣)]
+
+,
+
+˜w(t−1)  
+
+> i
+
+= ˆw(t−1)  
+
+> i
+
+· x(t−1) 
+
+> i
+
+(x(t−1) )> ˆw(t−1) ,
+
+where ˜w(t−1)  
+
+> i
+
+denotes the evolved portfolio weight of the 
+
+i-th asset at the end of the (t−1) -th trade time, and ˜w(0) can be initialized as 0N . ν is the bidirectional transaction cost rate, which is examined in the range [0 , 0.5%] . When the cost rates of buying and selling are the same, changing the evolved portfolio ˜w(t−1) to the next portfolio ˜w(t) yields a proportional transaction cost of ν
+
+> 2
+
+∑Ni=1 
+
+∣∣ ˆw(t) 
+
+> i
+
+− ˜w(t−1) 
+
+> i
+
+∣∣.When ν changes from 0 to 0.5% , the final CWs for different methods are plotted in Figure 3 of Supplementary A.10. ASMCVaR outperforms all the other competitors on all the data sets with all ν, showing a good performance against the transaction cost. Note that the 1/N strategy is well known for its little turnover rate mechanism, but ASMCVaR still has an advantage over 1/N, especially with low and medium cost rates. Moreover, if a mutual fund has sufficient capital, then the transaction cost rate ν can be negotiated to be low. Hence ASMCVaR is effective in practical portfolio management with transaction cost. 
+
+## 5. Conclusion 
+
+We develop an autonomous sparse mean-CVaR (ASMC-VaR) model for portfolio optimization. It aims to optimize a mean-CVaR objective function under the `0 and the simplex constraints for exact and feasible asset selection. It is an NP-hard problem and the existing combinatorial approach requires a high computational cost. From a markedly dif-ferent perspective, we propose to convert the `0 constraint into an indicator function and handle it with a tailed ap-proximation. By this way, ASMCVaR can approximate the 
+
+`0-constrained mean-CVaR model to arbitrary accuracy. We also develop a proximal alternating linearized minimization algorithm, coupled with a nested fixed-point proximity al-gorithm (both convergent) to iteratively solve ASMCVaR. It has a good property of autonomous sparsity because a large proportion of assets can remain in the selected asset pool when adjusting the pool size. Experimental results show that ASMCVaR achieves state-of-the-art performance in several common evaluating metrics of investing performance and risk control. A direct impact of ASMCVaR is to provide a novel tailed approximation approach to the long-standing NP-hard `0-constrained problem. It can be conveniently transferred to other related `0-constrained problems via similar estab-lishment. Further improvements on ASMCVaR may lie in accelerating the solving algorithm with momentum meth-ods, generalizing the objective function to a broader class of functions, or considering more constraints with practical sense. 
+
+## Acknowledgements 
+
+The authors thank the anonymous reviewers for their con-structive comments and valuable suggestions in improving this paper. This work was supported in part by National Nat-ural Science Foundation of China under Grant 62176103, in part by Guangdong Basic and Applied Basic Research Foundation under Grant 2021A1515110541, and in part by the Science and Technology Planning Project of Guangzhou under Grants 2024A04J3940 and 2024A04J9896. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are no potential societal con-sequences of our work that we feel must be specifically highlighted here. 
+
+## References 
+
+Ao, M., Li, Y., and Zheng, X. Approaching mean-variance efficiency for large portfolios. The Review of Financial Studies , 32(7):2890–2919, 2019. Artzner, P., Delbaen, F., Eber, J.-M., and Heath, D. Coherent measures of risk. Mathematical Finance , 9(3):203–228, 1999. Attouch, H., Bolte, J., and Svaiter, B. F. Convergence of descent methods for semi-algebraic and tame problems: proximal algorithms, forward–backward splitting, and regularized Gauss–Seidel methods. Mathematical Pro-gramming , 137(1):91–129, 2013. Ban, G.-Y., Karoui, N. E., and Lim, A. E. B. Machine learning and portfolio optimization. Management Science ,64(3):1136–1154, Mar. 2018. Bertsimas, D. and Cory-Wright, R. A scalable algorithm for sparse portfolio selection. INFORMS Journal on Computing , 34(3):1489–1511, 2022. Blum, A. and Kalai, A. Universal portfolios with and with-out transaction costs. Machine Learning , 35(3):193–205, 1999. Bolte, J., Sabach, S., and Teboulle, M. Proximal alternating linearized minimization for nonconvex and nonsmooth problems. Mathematical Programming , 146(1):459–494, 2014. 9Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+Brodie, J., Daubechies, I., Mol, C. D., Giannone, D., and Loris, I. Sparse and stable Markowitz portfolios. Proceed-ings of the National Academy of Sciences of the United States of America , 106(30):12267–12272, Jul. 2009. Chao, R. O., Kavadias, S., and Gaimon, C. Revenue driven resource allocation: Funding authority, incentives, and new product development portfolio management. Man-agement Science , 55(9):1556–1569, 2009. Cheng, R. and Gao, J. On cardinality constrained mean-cvar portfolio optimization. In The 27th Chinese Control and Decision Conference (2015 CCDC) , pp. 1074–1079, 2015. Cover, T. M. Universal portfolios. Mathematical Finance , 1 (1):1–29, Jan. 1991. DeMiguel, V., Garlappi, L., and Uppal, R. Optimal versus naive diversification: How inefficient is the 1/N portfolio strategy? The Review of Financial Studies , 22(5):1915– 1953, May 2009. Dimmock, S. G., Wang, N., and Yang, J. The endowment model and modern portfolio theory. Management Science ,pp. 1–26, Apr. 2023. doi: 10.1287/mnsc.2023.4759. Efron, B., Hastie, T., Johnstone, I., and Tibshirani, R. Least angle regression. Annals of Statistics , 32(2):407–451, 2004. Goto, S. and Xu, Y. Improving mean variance optimiza-tion through sparse hedging restrictions. The Journal of Financial and Quantitative Analysis , 50(6):1415–1441, 2015. Gotoh, J.-Y. and Takeda, A. On the role of norm constraints in portfolio selection. Computational Management Sci-ence , 8:323–353, 2011. G ¨unl ¨uk, O. and Linderoth, J. Perspective reformulations of mixed integer nonlinear programs with indicator vari-ables. Mathematical Programming , 124(1):183–205, 2010. Jorion, P. Value at Risk: The New Benchmark for Managing Financial Risk . McGraw-Hill, New York, 1997. Kobayashi, K., Takano, Y., and Nakata, K. Bilevel cutting-plane algorithm for cardinality-constrained mean-cvar portfolio optimization. Journal of Global Optimization ,81(2):493–528, 2021. Lai, Z.-R. and Yang, H. A survey on gaps between mean-variance approach and exponential growth rate approach for portfolio optimization. ACM Computing Surveys , 55 (2):1–36, Mar. 2023. Article No. 25. Lai, Z.-R., Yang, P.-Y., Fang, L., and Wu, X. Short-term sparse portfolio optimization based on alternating direc-tion method of multipliers. Journal of Machine Learning Research , 19(63):1–28, Oct. 2018. Lai, Z.-R., Tan, L., Wu, X., and Fang, L. Loss control with rank-one covariance estimate for short-term portfolio optimization. Journal of Machine Learning Research , 21 (97):1–37, Jun. 2020. Lai, Z.-R., Li, C., Wu, X., Guan, Q., and Fang, L. Multitrend conditional value at risk for portfolio optimization. IEEE Transactions on Neural Networks and Learning Systems ,pp. 1–14, 2022. doi: 10.1109/TNNLS.2022.3183891. Li, B., Sahoo, D., and Hoi, S. C. OLPS: a toolbox for on-line portfolio selection. Journal of Machine Learning Research , 17(1):1242–1246, 2016. Lintner, J. The valuation of risk assets and the selection of risky investments in stock portfolios and capital budgets. 
+
+Review of Economics and Statistics , 47(1):13–37, Feb. 1965. Liu, H. and Loewenstein, M. Market crashes, correlated illiquidity, and portfolio choice. Management Science , 59 (3):715–732, 2013. Luo, Z., Yu, X., Xiu, N., and Wang, X. Closed-form solu-tions for short-term sparse portfolio optimization. Opti-mization , 2020. Markowitz, H. M. Portfolio selection. Journal of Finance ,7(1):77–91, Mar. 1952. Micchelli, C. A., Shen, L., and Xu, Y. Proximity algorithms for image models: denoising. Inverse Problems , 27(4): 045009, 2011. Ogryczak, W. and Ruszczy ´nski, A. Dual stochastic domi-nance and related mean-risk models. SIAM Journal on Optimization , 13:60–78, 2002. Rockafellar, R. T. and Uryasev, S. Optimization of condi-tional value-at-risk. Journal of Risk , 2(3):21–41, 2000. Sharpe, W. F. Capital asset prices: A theory of market equilibrium under conditions of risk. Journal of Finance ,19(3):425–442, Sep. 1964. Sharpe, W. F. Mutual fund performance. Journal of Busi-ness , 39(1):119–138, Jan. 1966. Tibshirani, R. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society , 58(1): 267–288, 1996. 10 Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+## A. Supplementary Materials 
+
+A.1. Proof of Lemma 3.2 
+
+Proof. For the case ‖w∗‖0 6 m, it is obvious that (22) holds, since w∗ 
+
+> j
+
+= 0 for all j ∈ NN \Jm 
+
+> w∗
+
+. We then consider the case ‖w∗‖0 > m . In this case, we construct an approximation ˜v := ( ˜ w>, ˜τ , ˜z>)> ∈ RN1 of v∗ := (( w∗)>, τ ∗, (z∗)>)>
+
+such that it satisfies the constraints of (17) , that is, the constraints of (14) . Note that v∗ satisfies that Qv ∗ > q. We let 
+
+˜wj = w∗ 
+
+> j
+
+for j ∈ Jm 
+
+> w∗
+
+\{ j1}, ˜wj = 0 for j ∈ NN \Jm 
+
+> w∗
+
+and ˜wj1 = w∗ 
+
+> j1
+
++ ∑ 
+
+> j∈NN\Jm
+> w∗
+
+w∗ 
+
+> j
+
+. Then ˜w ∈ ∆ and ‖ ˜w‖0 6 m. For 
+
+˜z and ˜τ , we define δ := max  
+
+> j∈NN\Jm
+> w∗
+
+{w∗ 
+
+> j
+
+} and ζ := max  
+
+> i∈NT,j ∈NN
+
+{| ri,j − ri,j 1 |} , where ri,j is the (i, j )th component of matrix 
+
+R in model (21) , and then let ˜z = z∗, ˜τ = τ ∗ + δζ . It is obvious that ˜z > 0T since z∗ > 0T . To show that Q˜v > q, it remains to be shown that 
+
+˜τ 1T > − ˜z − R ˜w. (31) Note that Rw ∗ − R ˜w = ∑ 
+
+> j∈NN\Jm
+> w∗
+
+w∗
+
+> j
+
+(r(j) − r(j1)), where r(j) is the jth column of R. From the definitions of δ and ζ,we have that 
+
+˜τ 1T > τ ∗1T + ∑ 
+
+> j∈NN\Jm
+> w∗
+
+w∗
+
+> j
+
+(
+
+r(j) − r(j1))
+
+= τ ∗1T + Rw ∗ − R ˜w. (32) Then (31) follows from (32) and the fact τ ∗1T > −z∗ − Rw ∗.Now we know that ˜ιm,γ ( ˜ w) = 0 and ιq (Q˜v) = 0 . Hence 
+
+Ψ(˜ v) = f (˜ v). (33) The fact w∗ ∈ ∆ gives that ‖w∗‖2 6 √‖w∗‖1 = 1 , where ‖ · ‖ 2 and ‖ · ‖ 1 denote the `2 and `1 norms, respectively. Similarly, we also have ‖ ˜w‖2 6 1. In addition, 
+
+‖w∗ − ˜w‖22 =
+
+ ∑ 
+
+> j∈NN\Jm
+> w∗
+
+w∗
+
+> j
+
+
+
+> 2
+
++ ∑ 
+
+> j∈NN\Jm
+> w∗
+
+(w∗ 
+
+> j
+
+)2 6 [( N − m)2 + ( N − m)] δ2
+
+Then it follows from the definition of function f in (18) that 
+
+|f (v∗) − f (˜ v)| = |(τ ∗ − ˜τ ) + λ(μ>w∗ − ρ)2 − λ(μ> ˜w − ρ)2|
+
+6 δζ + λ|μ>(w∗ + ˜ w) − 2ρ)| · | μ>(w∗ − ˜w)|
+
+6 δζ + λ (2 ‖μ‖2 + 2 ρ) ‖μ‖2‖w∗ − ˜w‖2
+
+6 ˜Lδ 6 ˜L, (34) where ˜L := ζ + 2 λ√[( N − m)2 + ( N − m)] (‖μ‖22 + ρ‖μ‖2
+
+) . (35) This together with (33) and the fact Ψ( v∗) 6 Ψ(˜ v) yields that 
+
+f (v∗) + ˜L > f (˜ v) > Ψ( v∗) = f (v∗) + ˜ ιm,γ (w∗) > f (v∗) + 12γ δ2.
+
+Thus δ 6
+
+√
+
+2 ˜Lγ , which implies the desired result. 
+
+A.2. Proof of Theorem 3.3 
+
+Proof. For the case ‖ ˜Iv ∗‖0 6 m, since ˜ιm,γ ( ˜Iv ∗) = ιm( ˜Iv ∗∗ ) = 0 and ιq (Qv ∗) = ιq (Qv ∗∗ ) = 0 , it is obvious that 
+
+f (v∗) = f (v∗∗ ), and hence (23) holds. For the case ‖ ˜Iv ∗‖0 > m , we define ˜v as an approximation of v∗, following the same definition as in the proof of Lemma 3.2. Then Q˜v > q and ‖ ˜I ˜v‖0 6 m. Further, f (v∗∗ ) 6 f (˜ v). By Lemma 3.2 and the inequality (34) in its proof, we know that |f (v∗) − f (˜ v)| 6 ˜Lδ 6
+
+√
+
+2 ˜L3γ, where ˜L is defined by (35) and 
+
+δ := max  
+
+> j∈NN\Jm
+> w∗
+
+{w∗ 
+
+> j
+
+}. Thus 
+
+f (v∗∗ ) 6 f (˜ v) 6 f (v∗) + 
+
+√
+
+2 ˜L3γ. (36) 11 Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+The prerequisite v∗ and v∗∗ are solutions of models (21) and (19) gives that Ψ( v∗) 6 Ψ( v∗∗ ) and Ψ( v∗∗ ) = f (v∗∗ ).Hence 
+
+f (v∗) 6 Ψ( v∗) 6 f (v∗∗ ). (37) Now (23) can be obtained by (36) and (37) directly. This completes the proof. 
+
+A.3. Proof of Lemma 3.4 
+
+Proof. Since (v∗, y∗) is a solution of model (24), we have that ‖y∗‖0 6 m and 
+
+G(v∗, y∗) 6 G(v∗, y), ∀y ∈ RN . (38) Subtracting f (v∗) + ιq (Qv ∗) on both sides of (38) yields that 
+
+12γ ‖ ˜Iv ∗ − y∗‖22 + ιm(y∗) 6 12γ ‖ ˜Iv ∗ − y‖22 + ιm(y), ∀y ∈ RN . (39) Let w∗ := ˜Iv ∗. Then (39) implies that 
+
+‖w∗ − y∗‖22 6 ‖w∗ − y‖22, ∀y ∈ Ωm. (40) We consider two cases for w∗. If w∗ ∈ Ωm, (40) implies that y∗ = w∗, that is, y∗ = Sm(w∗).We then consider the case w∗ /∈ Ωm. In this case, we have ‖y∗‖0 = m. Suppose not, then ‖y∗‖0 < m . Since w∗ /∈ Ωm,we know that w∗ has at least m + 1 nonzero components. Hence there exists some j′ ∈ NN such that y∗ 
+
+> j′
+
+= 0 and w∗ 
+
+> j′
+
+6 = 0 .By letting y ∈ Ωm such that 
+
+yj′ = w∗ 
+
+> j′
+
+and yj = y∗ 
+
+> j
+
+for j ∈ NN \{ j′}, (41) then 
+
+‖w∗ − y∗‖2 − ‖ w∗ − y‖2 = ( w∗ 
+
+> j′
+
+− y∗ 
+
+> j′
+
+)2 > 0, (42) which contradicts (40) . Thus ‖y∗‖0 = m. Note that the components in w∗ may not be distinct. We let J1, J 2, J 3 ⊂ NN
+
+be three index sets such that |w∗ 
+
+> j
+
+| > |w∗ 
+
+> jm
+
+| for all j ∈ J1, |w∗ 
+
+> j
+
+| = |w∗ 
+
+> jm
+
+| for all j ∈ J2, and |w∗ 
+
+> j
+
+| < |w∗ 
+
+> jm
+
+| for all j ∈ J3,respectively. 
+
+(i) We first prove that y∗ 
+
+> j
+
+= w∗ 
+
+> j
+
+for all j ∈ J1 if J1 6 = ∅. To this end, we show that y∗ 
+
+> j
+
+6 = 0 for all j ∈ J1. Assume that there exists some j′ ∈ J1 such that y∗ 
+
+> j′
+
+= 0 . Since ‖y∗‖0 = m, there must be some j′′ ∈ NN \J1 such that y∗ 
+
+> j′′
+
+6 = 0 . Note that 
+
+|w∗ 
+
+> j′
+
+| > |w∗ 
+
+> j′′
+
+|. By letting y ∈ Ωm such that 
+
+yj′ = w∗ 
+
+> j′
+
+, y j′′ = 0 and yj = y∗ 
+
+> j
+
+for j ∈ NN \{ j′, j ′′ }, (43) then 
+
+‖w∗ − y∗‖22 − ‖ w∗ − y‖22 = ( w∗ 
+
+> j′
+
+)2 + ( w∗ 
+
+> j′′
+
+− y∗ 
+
+> j′′
+
+)2 − (w∗ 
+
+> j′′
+
+)2 > 0, (44) which contradicts (40) . Hence y∗ 
+
+> j
+
+6 = 0 for all j ∈ J1. Now we are able to prove by contradiction that y∗ 
+
+> j
+
+= w∗ 
+
+> j
+
+for all j ∈ J1.Assume that there exists j′ ∈ J1 such that y∗ 
+
+> j
+
+6 = w∗ 
+
+> j′
+
+. Since y∗ 
+
+> j′
+
+6 = 0 , letting y ∈ RN be given by (41) , then y ∈ Ωm and (42) holds, which contradicts (40). Hence y∗ 
+
+> j
+
+= w∗ 
+
+> j
+
+for all j ∈ J1.
+
+(ii ) We next prove that y∗ 
+
+> j
+
+= 0 for all j ∈ J3 if J3 6 = ∅. Otherwise, there exists j′′ ∈ J3 such that y∗ 
+
+> j′′
+
+6 = 0 . Note that the number of elements in J1 ∪ J2 = NN \J3 is greater than or equal to m. To guarantee that ‖y∗‖0 = m, there must be some 
+
+j′ ∈ NN \J3 such that y∗ 
+
+> j′
+
+= 0 . In this case, we let y ∈ Ωm be given by (43) . Note that |w∗ 
+
+> j′
+
+| > |w∗ 
+
+> j′′
+
+|. We have that (44) holds, which contradicts (40). Hence y∗ 
+
+> j
+
+= 0 for all j ∈ J3.Note that J1 $ Jm 
+
+> w∗
+
+, Jm 
+
+> w∗
+
+\J1 ⊂ J2. In addition, w∗ /∈ Ωm implies that w∗ 
+
+> j
+
+6 = 0 for all j ∈ J1 ∪ J2. Let m1 ∈{0, 1, . . . , m − 1} be the number of elements in J1. The fact ‖y∗‖0 = m together with (i) and (ii ) implies that there must be an index set J′ 
+
+> 2
+
+⊂ J2 with (m − m1) components such that y∗ 
+
+> j
+
+6 = 0 for j ∈ J′ 
+
+> 2
+
+and y∗ 
+
+> j
+
+= 0 for j ∈ J2\J′
+
+> 2
+
+. As shown in (i), we can also prove that y∗ 
+
+> j
+
+= w∗ 
+
+> j
+
+for j ∈ J′
+
+> 2
+
+. Now by setting J = J1 ∪ J′
+
+> 2
+
+, then it is an m-LAV index set of w. In addition, we see from (27) that y∗ = Sm( ˜Iv ∗), which completes the proof. 12 Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+A.4. Proof of Lemma 3.5 
+
+Proof. Let w := ˜Iv . We first prove that 
+
+‖ ˜y − w‖22 6 ‖y − w‖22, ∀y ∈ Ωm. (45) If w ∈ Ωm, then it is easy to see from the definition (27) of operator Sm that ˜y = w and hence (45) holds. For the case 
+
+w /∈ Ωm, since ˜y = Sm( ˜Iv ), we know that ˜y ∈ Ωm and 
+
+‖ ˜y − w‖22 = ∑ 
+
+> j∈NN\Jm
+> w
+
+w2 
+
+> j
+
+. (46) For any y ∈ Ωm, there exists an index set Jy ⊂ NN with m elements such that yj = 0 for all j ∈ NN \Jy . Since Jm
+
+> w
+
+contains the m largest components of w in absolute value, we have that ∑
+
+> j∈Jm
+> w
+
+w2 
+
+> j
+
+> ∑
+
+> j∈Jy
+
+w2 
+
+> j
+
+, which together with (46) implies that 
+
+‖y − w‖22 > ∑ 
+
+> j∈NN\Jy
+
+w2 
+
+> j
+
+> ∑ 
+
+> j∈NN\Jm
+> w
+
+w2 
+
+> j
+
+= ‖ ˜y − w‖22.
+
+This completes the proof of (45). Now by (45), we have 
+
+12γ ‖ ˜y − ˜Iv ‖22 + ιm( ˜ y) 6 12γ ‖y − ˜Iv ‖22 + ιm(y), ∀y ∈ RN . (47) Adding f (v) + ιq (Qv ) on both sides of (47) yields (28) immediately. 
+
+A.5. Proof of Theorem 3.6 
+
+Proof. Let w := ˜Iv . The definition of ˜ιm,γ in (20) implies that ˜ιm,γ (w) = 12γ ‖w − S m(w)‖22. Then for y = Sm(w), we know that ιm(y) = 0 and ˜ιm,γ (w) = 12γ ‖w − y‖22. Hence Ψ( v) = G(v, y).Suppose that (v∗, y∗) is a solution of model (24) . From Lemma 3.4, we know that y∗ = Sm( ˜Iv ∗), and hence Ψ( v∗) = 
+
+G(v∗, y∗). If v∗ is not a solution of model (21) , then there exists ˜v ∈ RN1 such that Ψ(˜ v) < Ψ( v∗). In this case, we have that G(˜ v, ˜y) = Ψ(˜ v) < Ψ( v∗) = G(v∗, y∗), for any ˜y = Sm( ˜I ˜v), which contradicts the assumption that (v∗, y∗) is a solution of model (24). This proves that v∗ is a solution of model (21). Conversely, suppose that v∗ is a solution of model (21) and y∗ = Sm( ˜Iv ∗). We confirm that (v∗, y∗) is a solution of model (24) . If it is not true, according to Lemma 3.5, we can find vectors ¯v ∈ RN1 and ¯y = Sm( ˜I ¯v) such that 
+
+G(¯ v, ¯y) < G (v∗, y∗). We see from (29) that Ψ(¯ v) = G(¯ v, ¯y) and Ψ( v∗) = G(v∗, y∗). Hence Ψ(¯ v) < Ψ( v∗), which contradicts that v∗ is a solution of model (21). This completes the proof. 
+
+A.6. Proof of Proposition 3.7 
+
+Proof. Compute that 
+
+∇v H(v, y) = h1 + 2 λ (h2h> 
+
+> 2
+
+v − ρh2
+
+) + 1
+
+γ
+
+( ˜I> ˜Iv − ˜I>y
+
+)
+
+,
+
+∇y H(v, y) = 1
+
+γ (y − ˜Iv ).
+
+Let 
+
+L1 := 2 λ‖h2‖22 + 1
+
+γ and L2 := 1
+
+γ .
+
+13 Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+Then for all v1, v2 ∈ RN1 and y ∈ RN ,
+
+‖∇ v H(v1, y) − ∇ v H(v2, y)‖2 =
+
+∥∥∥∥(
+
+2λh2h> 
+
+> 2
+
++ 1
+
+γ ˜I> ˜I
+
+)
+
+(v1 − v2)
+
+∥∥∥∥2
+
+6
+
+∥∥∥∥(
+
+2λh2h> 
+
+> 2
+
++ 1
+
+γ ˜I> ˜I
+
+)∥ ∥∥∥2
+
+· ‖ v1 − v2‖2
+
+6
+
+(
+
+2λ‖h2‖22 + 1
+
+γ
+
+)
+
+‖v1 − v2‖2
+
+= L1‖v1 − v2‖2.
+
+For all y1, y2 ∈ RN and v ∈ RN1 ,
+
+‖∇ y H(v, y1) − ∇ y H(v, y2)‖2 = 1
+
+γ ‖y1 − y2‖2 = L2‖y1 − y2‖2,
+
+which completes the proof. 
+
+A.7. Algorithm for ASMCVaR Algorithm 1 ASMCVaR 
+
+Require: Given the sample asset price relative matrix X ∈ RT ×N ; the parameters m and λ; the maximum iteration numbers (M axIter 1, M axIter 2) and tolerances (tol 1, tol 2). Set the approximation parameter γ, the expected return level ρ and the confidence level c.
+
+Preparation : Compute the return matrix R = X − 1T ×N , the sample mean vector ˆμ = 1 
+
+> T
+
+R>1T . Let matrix Q
+
+and vector q be given by (16) , ˜I be given by (16) , h1 and h2 be given by (15) . Compute the Lipschitz constants 
+
+L1 = 2 λ‖h2‖22 + 1 
+
+> γ
+
+and L2 = 1 
+
+> γ
+
+.
+
+Initialization : Given the initial vectors by v0 = ( 1 
+
+> N
+
+1> 
+
+> N
+
+, 0>
+
+> 1+ T
+
+)> and y0 = 1 
+
+> N
+
+1N . Set β1 = 0.99  
+
+> L1
+
+and β2 = 0.99  
+
+> L2
+
+in PALM. Set θ = 1.99 
+
+> ‖Q‖22
+
+in FPPA. 
+
+repeat 
+
+pk=vk−β1
+
+[
+
+h1+2 λ (h2h> 
+
+> 2
+
+vk−ρh2
+
+) + 1
+
+> γ
+
+( ˜I> ˜Iv k− ˜I>yk
+
+)] 
+
+repeat 
+
+1. xl = Qp k + zl − θQQ >zl
+
+2. zl+1 = xl − max {xl, q}
+
+3. l = l + 1 
+
+until ‖zl−zl−1‖2 
+
+> ‖zl−1‖2
+
+6 tol 1 or l > M axIter 1.4. vk+1 = pk − θQ>zl
+
+5. yk+1 = Sm
+
+(
+
+yk − β2
+
+( 1 
+
+> γ
+
+(yk − ˜Iv k+1 )
+
+)) 
+
+6. k = k + 1 
+
+until ‖vk −vk−1‖2 
+
+> ‖vk−1‖2
+
+6 tol 2 or k > M axIter 2.
+
+Ensure: Portfolio w∗ = vk 
+
+> 1: N
+
+.
+
+A.8. PALM for Relaxed Sparse Regression 
+
+To see the performance of the proposed relaxation technique and the PALM algorithm for the sparse regression problem, we consider the following two models: 
+
+min 
+
+> β
+
+{ 12 ‖Xβ − y‖22 + ιm(β)
+
+}
+
+,
+
+min 
+
+> β,η
+
+{ 12 ‖Xβ − y‖22 + 12γ ‖β − η‖22 + ιm(η)
+
+}
+
+.
+
+They correspond to the original model (19) and the relaxed dual-variable optimization model (24) , respectively. We conducted two sets of experiments to validate two aspects: 14 Autonomous Sparse Mean-CVaR Portfolio Optimization 
+
+1. The equivalence of the above relaxation model and original model, in the sense of approximation. 2. The effectiveness of the PALM algorithm for solving the relaxation model. In these experiments, data sets comprising 50 samples are synthetically generated according to the model y = x>β∗ + ,where β∗ = ( 13, 07)> ∈ R10 represents the true coefficient vector and  denotes the random error following a normal distribution N (0 , 1) . The input vector x ∈ R10 is generated by a normal distribution with mean zero and covariance matrix 
+
+Σ ∈ R10 ×10 , where Σij := 0 .5|i−j|. We set the sparsity level m as 3. The direct exhaustive approach is utilized to enumerate all possible support set configurations, totaling C310 = 120 cases. By comparing the optimal solutions corresponding to these 120 cases, we can ascertain the exact globally optimal solutions of the aforementioned two models. The iterative scheme of the PALM algorithm for solving the above relaxed model can be given by 
+
+
+
+βk+1 = βk − α1
+
+[
+
+X>(Xβ k − y) + 1 
+
+> γ
+
+(βk − ηk)
+
+]
+
+,
+
+ηk+1 = Sm
+
+(( 
+
+1 − α2
+
+> γ
+
+)
+
+ηk + α2 
+
+> γ
+
+βk+1 
+
+)
+
+,
+
+where Sm is defined by (27) . Parameters α1 and α2 are set as 0.99 · ‖ X>X + 1 
+
+> γ
+
+I‖−12 and 0.99 γ, respectively. To ensure a better convergence, we conduct 5 × 10 6 iterations of PALM. The initial vectors for iteration are casually chosen as 
+
+β0 = η0 = 010 .To demonstrate the robustness of our findings, we repeated each of the aforementioned two sets of experiments for 10 times, with different X and y in each run. Through the first set of experiments, we observed that for sufficiently small γ (e.g., 
+
+10 −7), the solutions of the original and relaxed models are identical. This suggests that as γ tends to zero, the optimal solution of the relaxed model indeed converges to that of the original model. In the subsequent set of experiments, we observed that across the 10 trials, the solutions obtained by PALM consistently approached the optimal solutions of the relaxed model to a remarkable degree. This reflects that in certain scenarios, PALM may be capable of directly converging to the globally optimal solution of the original nonconvex optimization model, even though the initializations may not necessarily be very close to the true solution. 
+
+A.9. Cumulative Wealth Plots (Figure 2) A.10. Transaction Cost Plots (Figure 3) 
+
+15 Autonomous Sparse Mean-CVaR Portfolio Optimization 0 100 200 300 400 500 600 
+
+Trade Time 
+
+0200 400 600 800 1000 1200 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(a) FF25 0 50 100 150 200 250 300 350 
+
+Trade Time 
+
+050 100 150 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (b) FF25EU 0 100 200 300 400 500 600 
+
+Trade Time 
+
+0500 1000 1500 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(c) FF32 0 100 200 300 400 500 600 
+
+Trade Time 
+
+0200 400 600 800 1000 1200 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (d) FF49 0 100 200 300 400 500 600 
+
+Trade Time 
+
+0200 400 600 800 1000 1200 1400 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(e) FF100 0 100 200 300 400 500 600 
+
+Trade Time 
+
+0200 400 600 800 1000 
+
+> Cumulative Wealth
+
+1/N SSMP SSPO SPOLC S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (f) FF100MEOP 
+
+Figure 2. Cumulative wealths of different portfolio optimization models along with trade time on 6 benchmark data sets. 
+
+16 Autonomous Sparse Mean-CVaR Portfolio Optimization 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+0100 200 300 400 500 600 700 800 900 1000 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(a) FF25 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+020 40 60 80 100 120 140 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (b) FF25EU 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+0200 400 600 800 1000 1200 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(c) FF32 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+0100 200 300 400 500 600 700 800 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (d) FF49 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+0100 200 300 400 500 600 700 800 900 1000 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) 
+
+(e) FF100 0 0.1 0.2 0.3 0.4 0.5 
+
+Transaction Cost Rate (%) 
+
+0100 200 300 400 500 600 700 800 
+
+> Cumulative Wealth
+
+1/N SSMP SPOLC SSPO S1 S2 S3 Mean-CVaR Mean-CVaR-L 1
+
+MT-CVaR ASMCVaR(m=10) (f) FF100MEOP 
+
+Figure 3. Final cumulative wealths of different portfolio optimization models w.r.t. transaction cost rate ν on 6 benchmark data sets. 
+
+17

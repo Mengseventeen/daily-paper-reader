@@ -1,0 +1,4829 @@
+Title: Learning to Stop: Deep Learning for Mean Field Optimal Stopping
+
+URL Source: https://openreview.net/pdf?id=LJvtuXhcIs
+
+Number of Pages: 34
+
+Markdown Content:
+## Learning to Stop: Deep Learning for Mean Field Optimal Stopping 
+
+Lorenzo Magnino * 1 Yuchen Zhu * 2 Mathieu Lauriere 1 3 
+
+Abstract 
+
+Optimal stopping is a fundamental problem in optimization with applications in risk manage-ment, finance, robotics, and machine learning. We extend the standard framework to a multi-agent setting, named multi-agent optimal stopping (MAOS), where agents cooperate to make optimal stopping decisions in a finite-space, discrete-time environment. Since solving MAOS becomes com-putationally prohibitive as the number of agents is very large, we study the mean-field optimal stop-ping (MFOS) problem, obtained as the number of agents tends to infinity. We establish that MFOS provides a good approximation to MAOS and prove a dynamic programming principle (DPP) based on mean-field control theory. We then propose two deep learning approaches: one that learns optimal stopping decisions by simulating full trajectories and another that leverages the DPP to compute the value function and to learn the optimal stopping rule using backward induc-tion. Both methods train neural networks to ap-proximate optimal stopping policies. We demon-strate the effectiveness and the scalability of our work through numerical experiments on 6 differ-ent problems in spatial dimension up to 300. To the best of our knowledge, this is the first work to formalize and computationally solve MFOS in discrete time and finite space, opening new di-rections for scalable MAOS methods. Code is available at Learning-to-Stop. 
+
+1. Introduction 
+
+Optimal stopping (OS) has emerged as a powerful frame-work for addressing real-world problems involving uncer-              
+
+> *Equal contribution, random order 1Shanghai Frontiers Sci-ence Center of Artificial Intelligence and Deep Learning, NYU Shanghai 2Machine Learning Center, Georgia Institute of Technology 3NYU-ECNU Institute of Mathematical Sci-ences, NYU Shanghai. Correspondence to: Mathieu Lauriere
+> <mathieu.lauriere@nyu.edu >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+tainty and sequential decision-making, where the goal is to determine the best time to stop a stochastic process to achieve a specific objective (see (Shiryaev, 2007), (Ekren et al., 2014) for theoretical foundations; (Lippman & Mc-Call, 1976) for the well-known secretary problem; and (Wang et al., 1993; Dai et al., 2019) for machine learning perspectives) The OS framework has been extended to cover multi-agent scenarios, in which the aim is to stop several (possibly in-teracting) dynamical systems (agents) at different times in order to minimize a common cost function. We will refer to this setting as multi-agent optimal stopping (MAOS). It has gained significant importance in a variety of fields. In robotics, it has been applied to mission monitoring tasks, where multiple robots track the progress of other robots performing a specific operation (Best et al., 2018). In fi-nance, the problem of pricing options with multiple stopping times (see (Kobylanski et al., 2011)) can be formulated as an MAOS problem, motivating recent studies (Talbi et al., 2023; 2024). 
+
+However, the problem’s complexity increases drastically as the number of agents grows. To address this challenge, we consider the limit as the number of agents tends to in-finity and study mean-field approximations (see Fig. 1). In multi-agent control, this approach leads to the theory of Mean Field Control (MFC), which models large systems of interacting agents that cooperatively minimize a social cost by selecting optimal controls (see (Bensoussan et al., 2013; Carmona & Delarue, 2018)). Applications include crowd motion (Achdou & Lauri `ere, 2016b; Achdou & Lasry, 2019), flocking (Fornasier & Solombrino, 2014), finance (Carmona & Lauri `ere, 2023), opinion dynamics (Liang & Wang, 2019), and artificial collective behavior (Carmona et al., 2019; Gu et al., 2021; Cui et al., 2024). Computa-tional methods for MFC problems include numerical meth-ods for partial differential equations (Achdou & Lauri `ere, 2015; Achdou & Lauri `ere, 2016a; Brice ˜no Arias et al., 2018; Reisinger et al., 2024), numerical methods for back-ward stochastic differential equations (Chassagneux et al., 2019; Balata et al., 2019), deep learning methods (Fouque & Zhang, 2020; Carmona & Lauri `ere, 2021; Germain et al., 2022a; Dayanıklı et al., 2024) and reinforcement learning methods (Carmona et al., 2019; Gu et al., 2023; Chen et al., 2020; Carmona et al., 2023; Cui et al., 2024). 1Learning to Stop: Deep Learning for MFOS 1 Agent 
+
+> What probability of stopping?
+
+N agents 
+
+Xi, α 
+
+> n+1
+
+=
+
+{
+
+Xi, α 
+
+> n
+
+, if stopped 
+
+F (n, X i, α 
+
+> n
+
+, μ N, α 
+
+> n
+
+, ϵ in+1 ), otherwise 
+
+> Interdependence
+
+N → ∞ 
+
+Approximation Theorem 
+
+> Representative Agent
+
+Xαn+1 =
+
+{
+
+Xαn , if stopped 
+
+F (n, X αn , L(Xαn ), ϵ n+1 ), otherwise 
+
+Figure 1: Finite-agent vs mean-field: Each agent decides to stop or continue. In the multi-agent setting, agents interact via the empirical distribution. As N → ∞ , this interaction is captured by the Ap. The approximation theorem (Thm 3.2) ensures that MFOS is a good proxy for MAOS. In contrast with optimal control and Markov decision pro-cesses, mean-field approximations have not been used for OS problems, except for (Talbi et al., 2024; 2023; Yu & Yuan, 2023; Agram & Øksendal, 2024; He, 2025) in the continuous time and continuous space setting, and compu-tational methods have not yet been developed .Our work takes a first step in this direction by focusing on discrete-time, finite-space MFOS models. We establish a theoretical foundation and introduce two deep learning methods capable of solving MFOS with many states by learning optimal stopping decisions as functions of the en-tire population distribution. We refer to these methods as the Direct Approach (DA) and the Dynamic Programming Ap-proach (DP) and evaluate their performance across multiple environments (see Fig. 2). 
+
+Contributions. Our main contributions are twofold: 
+
+Theoretically : we provide a DPP for MFOS and we prove that MFOS in discrete space and time yields to an approximate optimal stopping decision for N -agent MAOS with a rate of O(1 /√N ) (Thm 3.2). 
+
+Computationally : we propose two deep learning meth-ods to solve MFOS problems, by learning the optimal stopping decision as a function of the whole population distribution (Alg. 2 and 1). To the best of our knowledge, this is the first work to study discrete-time, finite-space MFOS problems. Our theoretical results rely on the interpretation of MFOS problems as MFC problems, which provides a new perspective and opens up new directions to study MFOS problems. Additionally, it is the first time that computational methods are proposed to solve MFOS. This is a first step towards solving complex MAOS problems with a large number of agents. Time: 0 Time: 10 Time: 30 Final State Random initial distribution of drones 
+
+> Target distribution
+
+Figure 2: An infinite population of agents (e.g., drones) evolves from a random initial distribution to a target one by stopping each agent at the right time (Appx E.6). 
+
+Related works. MFOS has been recently studied in contin-uous time and space from a purely theoretical view by Talbi et al. (2023; 2024) who studied the connection with finite-agent MAOS problems and characterized the solution of (continuous) MFOS using a PDE on the infinite-dimensional space of probability measures, which is intractable. Instead, we focus on discrete time scenarios with finite state space 
+
+(i.e., an individual agent’s state can take only finitely many different values), and hence the distribution is finite dimen-sional. This setting can be viewed as an approximation of the continuous setting. Another difference with (Talbi et al., 2023; 2024) is that these work purely rely on an OS viewpoint, while we unveil a connection with MFC prob-lems. This is a conceptual contribution of our work. Some popular classical methods for OS problems are the least-square Monte Carlo approach of (Longstaff & Schwartz, 2001) for American options in finance and numerical meth-ods for partial differential equations (Achdou & Pironneau, 2005). Early works on machine learning methods for opti-mal stopping problems include the dynamic programming 2Learning to Stop: Deep Learning for MFOS 
+
+approach of (Tsitsiklis & Van Roy, 1999). Deep learning methods have been proposed for discrete time single-agent 
+
+OS problems. (Becker et al., 2019) proposed to learn the stopping decision at each time using a deep neural network. (Herrera et al., 2023) extended the approach using random-ized neural networks. (Damera Venkata & Bhattacharyya, 2024) proposed to use recurrent neural networks to solve non-Markovian OS problems. Other approaches have been proposed, particularly for continuous-time OS problems, such as learning the stopping boundary (Reppen et al., 2022). These single-agent OS approaches cannot be easily adapted to solve MAOS problems: the solution obtained by treating the whole system as one agent would lead to stopping all the agents at the same time, and, more importantly, single-agent methods do not capture the interdependence between agents. Furthermore, these approaches are not suitable to tackle continuous space MFOS problems as introduced by Talbi et al. (2023) because the value function must be a function of the population distribution, which leads to an infinite-dimensional problem. For this reason, there are no existing computational methods for MFOS .
+
+2. Model 
+
+When the number of agents tends to infinity, an aggregation effect takes place, allowing us to represent the influence of the community using an “average” term, commonly re-ferred to as the mean-field term. As the number of agents approaches infinity, they become independent and identi-cally distributed (i.i.d.), and the behavior of each individual agent is determined by a stochastic differential equation (SDE) of McKean-Vlasov type. This phenomenon is often known as the “propagation of chaos” (Sznitman, 1991). The objective is to discern the properties of the solutions to the limiting problem. By integrating these properties into the formulation of the N -agent control framework, we can de-rive approximate solutions to the latter problem (for more theoretical background on MFC, see (Bensoussan et al., 2013; Carmona et al., 2013; Carmona & Delarue, 2018)). 
+
+2.1. Motivation and challenges: finite agent model 
+
+The mean-field problem that we will solve is motivated by the N -agent problem that we are about to describe. Let 
+
+X be a finite state space. Let us denote by P(X ) the set of probability distributions on X , and let E be the set of realizations of the random noise. Let T be a time horizon and let N be the number of agents that are interacting.. Each agent i has a state denoted by Xin at time n. At time n, each agent stops with probability pin(Xα 
+
+> n
+
+), where 
+
+piT (·) = 1 . We introduce αin a random variable taking value 0 if the agent continues and 1 if it stops. We denote by πin(·| Xα 
+
+> n
+
+) = Be (pin(Xα 
+
+> n
+
+)) its distribution, which is a Bernoulli distribution. We denote by Xαn = ( X1
+
+> n
+
+, . . . , X Nn )
+
+and α = ( α1, . . . , α N ) the vectors of states and stopping decisions at time n.
+
+Dynamics. We assume that the agents are indistinguishable and interact in a symmetric fashion, i.e. through their em-pirical distribution μN, α 
+
+> n
+
+(x) := 1
+
+> N
+
+PNi=1 δXi, α 
+
+> n
+
+(x), which is the proportion of agents at x at time n with δ the indica-tor function. The system evolves according to a transition function F : N × X × P (X ) × E → X . In particular: for every i = 1 , . . . , N ,
+
+
+
+Xi, α 
+
+> 0
+
+∼ μ0 αin ∼ πin(·| Xα 
+
+> n
+
+),Xi, α 
+
+> n+1
+
+=
+
+(
+
+F (n, X i, α 
+
+> n
+
+, μ N, α 
+
+> n
+
+, ϵ in+1 ), if Pnm=0 αim = 0 
+
+Xi, α 
+
+> n
+
+, otherwise, (1) where ϵin is a random noise that affects the evolution of agent i and m0 is the initial distribution. Let us define the stopping time for agent i: τ i = inf {n ≥
+
+0 : Pnm=0 αim ≥ 1}, which is the first time for player i
+
+that the decision is to stop. Note that, since piT (·) = 1 , this means that τ i ≤ T for all i = 0 , . . . , N .
+
+Objective function. Let us consider a function Φ : X × P(X ) → R. Φ( x, μ ) denotes the cost that an agent incurs if she stops at x and the current population distribution is μ.The goal for all the N agents is to collectively minimize the following social cost function: 
+
+JN (α1, . . . , α N ) = E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Φ( Xi, α  
+
+> τi
+
+, μ N, α  
+
+> τi
+
+)
+
+#
+
+. (2) The problem consists in finding the best controls 
+
+(α1, . . . , α N ) ∈ argmin JN . Next, we give an example. 
+
+Motivating Example: We take as a state space X =
+
+{1, 2, 3, 4, 5, 6, 7} with boundaries (i.e., in 1 agents cannot move left and in 7 they cannot move right), time horizon 
+
+T = 3 , transition function F (n, x, μ, ϵ ) = x + ϵ, where ϵ =0 with probability p = 1 /2, ϵ = 1 with probability p = 1 /4
+
+and ϵ = −1 with probability p = 1 /4. Following (1), the dynamics of agent i is: Xin+1 = Xin +ϵin+1 if the agent does not stop, and Xin+1 = Xin otherwise. All agents start in 
+
+x = 4 . We define a target distribution ρtarget = 12 δ4 + 14 δ5 + 
+
+> 14
+
+δ3. If the agent i stops at time n, then she is incurred the cost: Φ( Xin, μ Nn ) = P 
+
+> x∈X
+
+|μNn (x) − ρtarget (x)|2, which is smaller if the agent stops when the population distribution matches the target one. Notice that some agents might have to stop even though the target distribution is not matched, so that other agents can later have a lower cost because this is a cooperative task. Solving exactly this problem (i.e., finding the optimal stopping time for every agent) is very complex. Our approach is to consider the mean-field problem, which leads to an efficient approximate solution (see Example 4 in Section 6). 3Learning to Stop: Deep Learning for MFOS 
+
+Challenges: Single-agent methods cannot be readily applied to the multi-agent setting since they cannot capture the interdependence due to the distribution in the cost and in the dynamics. In particular, in the multi-agent setting, we allow agents to stop at different times. When the number of agents is very large, computing exactly the optimal stopping times is infeasible. Mean-field optimal stopping (MFOS) can intuitively provide an approximate solution, but (1) this needs to be jus-tified, and (2) scalable numerical methods for MFOS need to be developed. 
+
+2.2. Mean-field model 
+
+As mentioned earlier, if we let the number of players tend to infinity, we expect, thanks to propagation of chaos type results, that the states will become independent and each state will have the same evolution, which will be a nonlinear Markov chain. More precisely, passing formally to the limit in the dynamics (1), we obtain the following evolution: 
+
+
+
+Xα 
+
+> 0
+
+∼ μ0 αn ∼ πn(·| Xαn ) = Be (pn(Xαn )) 
+
+Xαn+1 =
+
+(
+
+F (n, X αn , μ αn , ϵ n+1 ), if Pnm=0 αm = 0 
+
+Xαn , otherwise, (3) where pn(x) denotes the probability with which the agent continues if she is in state x at time n, and μαn is the distri-bution of Xαn itself, which we may also denote by L(Xαn ).We want to emphasize the fact that the introduction of ran-domized stopping times for individual agents is crucial for our purpose; see the example in Appx. A.1. We can define, in the same way we did before, the first time at which the control α is 1 as τ := inf {n ≥ 0 : Pnm=0 αm ≥ 1}. Then the social cost function in the mean-field problem is defined as: 
+
+J(α) = E
+
+
+
+Φ( Xατ , L(Xατ )) 
+
+
+
+. (4) Notice that here the expectation has the effect of averaging over the whole population, so there is no counterpart to the empirical average that appears in the finite agent cost (2). To stress the dependence on the initial distribution, we will sometimes write J(α, m 0).
+
+2.3. Mean-field model with extended state 
+
+A key step towards building efficient algorithms is dy-namic programming, which relies on the Markovian prop-erty. However, in its current form, the above problem is not Markovian. To ensure Markovianity, we need to keep track of the information about whether the player’s pro-cess has been stopped in the past. This information is not contained in the state, so we need to extend the state. Let 
+
+Aα = ( Aαn )n=0 ,...,T the process such that Aαn = 0 if the agent has already stopped before time n, and 1 otherwise. We can interpret this process as the “Alive” process, while 
+
+α stands for the “action”, namely, to stop or not. So Aαn = 1 
+
+means the agent has not stopped yet; when the agent stops, 
+
+αn = 1 and Aαn+1 switches to 0. It is important to notice that if the agent is stopped precisely at time n then, we still have Aαn = 1 but Aαm = 0 for every m > n . We define the extended state as: Y αn = ( Xαn , A αn ), which takes value in the extended state space S := X × { 0, 1}. Then, the dynamics (3) of the representative player can rewritten as: 
+
+
+
+Xα 
+
+> 0
+
+∼ μ0, Aα 
+
+> 0
+
+= 1 
+
+αn ∼ πn(·| Xαn ) = Be (pn(Xαn )); Aαn+1 = Aαn (1 − αn)
+
+Xαn+1 =
+
+(
+
+F (n, X αn , L(Xαn ), ϵ n+1 ), if Aαn (1 − αn) = 1 
+
+Xαn , otherwise. (5) The idea of extending the state using the extra information is similar to Talbi et al. (2023) in continuous time and space. The mean-field social cost (4) can rewritten as: 
+
+J(α) = E
+
+ TX
+
+> m=0
+
+Φ( Xαm, L(Xαm)) Aαmαm
+
+
+
+(6) Actually, notice that the expectation amounts to taking a sum with respect to the extended state’s distribution. Let us denote by νpn = L(Y αn ) the distribution at time n. We denote νpX the first marginal of νp (sometimes also denoted by μ). Note that it does not depend on α but only on the stopping probability p, so we use the superscript p when referring to ν. This distribution evolves according to the mean-field dynamics: 
+
+(νp 
+
+> 0
+
+(x, 0) = 0 , νp 
+
+> 0
+
+(x, 1) = μ0(x), x ∈ X ,νpn+1 = ¯F (νpn, p n), (7) where the function ¯F is defined as follows. We denote by H the set of all functions h : X → [0 , 1] , which represent a stopping probability (for each state). Then, 
+
+¯F : {0, . . . , T } × P (S) × H → P (S) is defined, for every 
+
+x ∈ X , a ∈ { 0, 1}, by: 
+
+( ¯F (ν, h ))( x, a ) = 
+
+
+
+ν(x, 0) + ν(x, 1) h(x)
+
+
+
+(1 − a)+ 
+
+ X
+
+> z∈X
+
+ν(z, 1) 
+
+
+
+qνz,x (1 − h(z)) 
+
+ 
+
+a, (8) where Qν = ( qνz,x )z,x ∈X is the transition matrix associated to the unstopped process X, i.e. qνz,x is the probability to go from the state z to the state x knowing that we are not going to stop in x. Notice that in general the transitions may depend on ν itself, which is why this type of dynamics 4Learning to Stop: Deep Learning for MFOS 10 1 10 2 10 3 10 4                                        
+
+> Number of agents N
+> 10 2
+> 10 1
+> L2 error to Mean field distribution
+> Multi-agent numerical result
+> f(N) = 1.635 N1/2
+> 10 110 210 310 4
+> Number of agents N
+> 10 2
+> 10 1
+> Optimality gap to Mean field cost
+> Multi-agent numerical result
+> f(N) = 0.456 N1/2 0.0
+> 0.5
+> 1.0
+> N = 10
+> Time 0 Time 1 Time 2 Time 3 Time 4 Final State
+> 0.0
+> 0.5
+> 1.0
+> N = 100
+> 0.0
+> 0.5
+> 1.0
+> N = 1000
+> 01234
+> X
+> 0.0
+> 0.5
+> 1.0
+> Mean field
+> 01234
+> X
+> 01234
+> X
+> 01234
+> X
+> 01234
+> X
+> 01234
+> X
+> Probability Mass  Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+> Stopped
+> Continuing
+> Target dist.
+
+Figure 3: MFOS v.s. MAOS. We use the stopping probability function learned by Algorithm 1 for MFOS to simulate the multi-agent OS. Top left: L2 distance of multi-agent empirical distribution to mean-field distribution, averaged over 10 
+
+runs. Top right: Optimality gap between multi-agent and mean-field cost, averaged over 10 runs. Bottom: Evolution of multi-agent empirical distribution for different agents N .is sometimes referred to nonlinear dynamics. The mean-field social cost can be rewritten purely in terms of the distribution as follows: 
+
+J(p) = 
+
+TX
+
+m=0 
+
+X
+
+(x,a )∈S 
+
+νpm(x, a )Φ( x, μ pm)ap m(x), (9) where p : {0, . . . , T } × X → [0 , 1] is the function that associates to every time step and state the probability to stop (in that state at that time). Let us define P0,T to be the set of all such functions. The link with the formulation in (6) is that αn(x) is dis-tributed according to Be (pm(x)) , and νpm := L(Y αm ) is the extended state’s distribution. Moreover, νpm(x, 0) is the mass in x that has stopped. Last, L(Xαm) = μαm(x) = P
+
+a∈{ 0,1} νpm(x, a ) is the first marginal of this distribution. 
+
+3. Approximate optimality for finite-agent model 
+
+In this section, we aim to address the following questions: 
+
+Q: “Is the mean-field model capable of solving the original problem of N agents? If so, in what sense?” 
+
+Specifically, we demonstrate that the MFOS solution pro-vides an approximately optimal solution for the finite-agent MAOS problem. The main assumption we use is: 
+
+Assumption 3.1. Let Lp > 0 and let us define P := {p :
+
+{0, . . . , T } × X × P (S) → [0 , 1] : p is Lp-Lipschitz }, the set of all possible admissible policies p. Assume that the 
+
+mean-field dynamics ¯F described in (8) is L ¯F - Lipschitz. Assume also that the function Ψ : P(X ×{ 0, 1})×P (X ) →
+
+R defined as Ψ( ν, h ) := P
+
+(x,a )∈S ν(x, a )Φ( x, ν X )ah (x)
+
+is LΨ-Lipschitz. Assuming Lipschitz dynamics, cost, and policies is clas-sical in the literature on mean-field control problems, see e.g. (Mondal et al., 2022; P ´asztor et al., 2023; Cui et al., 2023) and can be achieved using neural networks (Araujo et al., 2022). Due to space constraints, we simply provide an informal statement here. The precise statement is deferred to Appx. A.2, see Theorem A.3, along with the detailed setting and notations. 
+
+Theorem 3.2 (ε-approximation of the N -agent prob-lem) . Suppose Assumption 3.1 holds. If p∗ is the op-timal policy for the MFOS problem and ˆp is the op-timal policy for the N -agent problem (when all the agents use the same policy), then: as N → +∞,
+
+JN (p∗, . . . , p ∗)−JN (ˆ p, . . . , ˆp) → 0, with rate of con-vergence O
+
+
+
+1/√N
+
+
+
+(the explicit bound is given in the proof). 
+
+A key step in the proof consists in analyzing the difference between the N -agent dynamics and the mean-field dynamics under a stopping policy, see Lemma A.1 (“Convergence of the measure”) in the Appendix. Theorem 3.2 is further supported through empirical evidence as is shown in Fig. 3, where we apply the stopping probabil-ity function learned by Algorithm 2 on MFOS in Example 1 (see Section 5 and 6 for details) to the N -agent problem with varying N (see Appx. E.1). We compute the L2 distance of 5Learning to Stop: Deep Learning for MFOS 
+
+multi-agent empirical distribution to mean-field distribution and the optimality gap between multi-agent and mean-field cost, both averaged over 10 runs. The plots demonstrate a clear decay rate of order N −1/2. This theorem justifies that MFOS is not only an intrinsically interesting problem, but the solution to MFOS also serves as an approximate solution to the corresponding MAOS problem . In the sequel, we will focus on solving the MFOS problem. 
+
+4. Dynamic programming 
+
+Our motivation for developing a dynamic programming principle (DPP) for our formulation comes from both the literature and numerical purposes. In the control theory of a dynamic system, it has been studied and used very often to find solutions to a given optimization problem. Moreover, implementing an algorithm that is built on DPP often leads to precise optimal solutions that perform better than other methods. We introduce the dynamical form of the social cost (9) as: 
+
+Vn(ν) := inf 
+
+> p∈P n,T
+
+J(p(x), ν ) (10) 
+
+:= inf 
+
+> p∈P n,T
+> T
+
+X
+
+> m=n
+
+X
+
+> (x,a )∈S
+
+νp,ν,n m (x, a )Φ( x, μ p,ν,n m )ap m(x),
+
+where Pn,T is the set of all possible function p :
+
+{n, . . . , T }×X → [0 , 1] and νp,ν,n denotes the distribution of the process that starts at time n with a given distribution 
+
+ν; it satisfies (7) but starting at time n instead of 0 with 
+
+νp,ν,n n = ν. The optimal value at time 0 will be denoted: 
+
+V ∗(ν) = V0(ν), which is also equal to inf p J(p, ν ). We can now state and prove the following DPP. 
+
+Theorem 4.1 (Dynamic Programming Principle) . For the dynamics given by (5) and the value function given by (10) the following dynamic programming principle holds: 
+
+
+
+VT (ν) = P 
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )a, Vn(ν) = inf h∈H 
+
+P 
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )ah (x)+ Vn+1 ( ¯F (ν, h )) , n < T, 
+
+(11) 
+
+where νX is the first marginal of the distribution ν, i.e., 
+
+νX (x) = ν(x, 0)+ ν(x, 1) . The sequence of optimizers define an optimal stopping decision that we will denote by h∗ : {0, . . . , T − 1} × X × P (S) → [0 , 1] and satis-fies: for every n ∈ { 0, . . . , T −1} and every ν ∈ P (S),
+
+Vn(ν) = P 
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )ah ∗
+
+> n
+
+(x, ν ) + 
+
+Vn+1 ( ¯F (ν, h ∗
+
+> n
+
+(x, ν ))) .
+
+To prove this result, we will show that we can reduce the problem to a mean-field optimal control problem in dis-crete time and continuous space. See details in Appx. B. Dynamic programming for MFC problem (Lauri `ere & Piron-neau, 2014; Pham & Wei, 2017) and mean-field MDPs (Gu et al., 2023; Motte & Pham, 2022; Carmona et al., 2023) have been extensively studied, and DPP for continuous time MFOS has been established by (Talbi et al., 2023) using a PDE approach. However, to the best of our knowledge, this is the first DPP result for MFOS problems in discrete time. It serves as a building block for one of the deep learning methods proposed below. 
+
+Algorithm 1 Dynamic Programming (DP) 
+
+Require: stopping decision neural networks: ψnθ : X × P(S) → [0 , 1] for n ∈ { 0, . . . , T − 1}, max training iteration Niter .
+
+1: Set ψTθ = 1 
+
+2: for n = T − 1, . . . , 0 do 
+
+3: for k = 0 , . . . , N iter − 1 do 
+
+4: Sample νpn
+
+5: for m = n, . . . , T do 
+
+6: if m = n then 
+
+7: pm(x) = ψmθ (x, ν pm; θnk )
+
+8: else 
+
+9: pm(x) = ψmθ (x, ν pm; θm, ∗)
+
+10: ℓm = P 
+
+> x
+
+νpm(x, 1)Φ( x, μ m)pm(x)
+
+11: νpm+1 = ¯F (νpm, p m)
+
+12: ℓ = PTm=n ℓm
+
+13: θnk+1 = optim up (θmk , ℓ (θnk )) 
+
+14: Set θn, ∗ = θnNiter 
+
+15: return (ψnθn, ∗ )n=0 ,...,T 
+
+In fact, we can show that this DPP still holds for a restricted class of randomized stopping times in which all the agents (regardless of their own state) have the same probability of stopping. Let ˜Pn,T be the set of p : {0, . . . , T } → [0 , 1] .Notice that here pn does not depend on the individual state 
+
+x. At every time step n = m, all agents have the same probability to stop pm, i.e., for every x ∈ X at time n = m,
+
+pn(x) = pn. We call this set synchronous stopping times. Let us define the value: 
+
+˜Vn(ν) := inf  
+
+> p∈˜Pn,T
+> T
+
+X
+
+> m=n
+
+pm
+
+X
+
+> (x,a )∈S
+
+νp,ν,n m (x, a )Φ( x, μ p,ν,n m )a. 
+
+Theorem 4.2. For the setting of synchronous stopping times, the value function satisfies: 
+
+
+
+˜VT (ν) = P 
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )a, 
+
+˜Vn(ν) = inf h∈[0 ,1] 
+
+P 
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )ah 
+
++ Vn+1 ( ¯F (ν, h )) , n < T. 
+
+(12) 
+
+6Learning to Stop: Deep Learning for MFOS 
+
+The proof follows the same argument as that of Theorem 4.1, therefore we omit it here. 
+
+Algorithm 2 Direct Approach (DA) 
+
+Require: time-dependent stopping decision neural net-work: ψθ : {0, . . . , T } × X × P (S) → [0 , 1] , max number of training iteration Niter  
+
+> 1:
+
+for k = 0 , . . . , N iter − 1 do  
+
+> 2:
+
+Sample initial νp 
+
+> 0
+> 3:
+
+for n = 0 , . . . , T do  
+
+> 4:
+
+pn(x) = ψθ (x, ν pn, n ; θk),x ∈ X  
+
+> 5:
+
+ℓn = ¯Φ( νpn, p n) 
+
+> 6:
+
+νpn+1 = ¯F (νpn, p n) 
+
+> 7:
+
+ℓ = PTn=0 ℓn 
+
+> 8:
+
+θk+1 = optim up (θk, ℓ (θk))  
+
+> 9:
+
+Set θ∗ = θNiter  
+
+> 10:
+
+return ψθ∗
+
+5. Algorithms 
+
+To address the MFOS problem numerically, we propose two approaches based on two different formulations. As the most naive approach, we can attempt to directly minimize the mean-field social cost J(p) stated in (9), where we op-timize over all the possible stopping probability functions 
+
+p : {0, . . . , T } × X → [0 , 1] . A more ideal treatment is to leverage the Dynamic Programming Principle (DPP) dis-cussed in Theorem 4.1 and solve for the optimal stopping probability using induction backward in time. For each of the timestep n, we implicitly learn the true value function 
+
+Vn(ν) by solving the optimization problem in (11), where we search over all possible one-step stopping probability function h : X → [0 , 1] for each time n. We refer to the method of directly optimizing mean-field social cost as the direct approach (DA) and the attempt to solve MFOS via backward induction of the DPP approach. Short versions of the pseudocodes are presented in Alg. 2 and 1. Long ver-sions are in Appx. C (see Alg. 3 and 4). To alleviate the nota-tions, we denote: ¯Φ( ν, h ) = P 
+
+> x∈X
+
+ν(x, 1)Φ( x, ν X )h(x),which represents the one-step mean-field cost. In the code, 
+
+optim up denotes one update performed by the optimizer (e.g. Adam in our simulations). 
+
+6. Experiments 
+
+In this section, we present 6 experiments of increasing com-plexity to validate our proposed method and demonstrate its potential applications. Due to space constraints, two of them have been included in Appx. E. It is important to emphasize that each experiment reflects a distinct scenario, varying both in dynamics (random, deterministic; with or without mean-field interactions) and in the cost function (with or without mean-field dependence). This provides a comprehensive overview of the method’s versatility and potential applications. We solve all 6 environments with both algorithms (the details are in Appx. E). 
+
+Problem Dimensions: For the problem dimension, we count it as the sum of the dimensions of the information input to the neural network. Since the state is in X , which is finite, we encode it as a one-hot vector in R|X | before pass-ing it to the neural network to ensure differentiability. For the mean-field distribution with stopped and non-stopped parts, it is an element of the (2 |X | − 1) -simplex, and is represented as a non-negative vector in R2|X | . Therefore, MFOS tasks are of spatial dimension |X | + 2 |X | = 3 |X | ,
+
+|X | being the cardinality of an individual agent’s state space. 
+
+Comparison of the Two Proposed Algorithms: While in theory both algorithms are equally capable of tackling MFOS problems, in practice, these algorithms have advan-tages in different settings. Empirically, we found that the op-timal stopping decision is learned faster by DA than by DP when the amount of compute is not a restriction. However, DA requires differentiating through the whole trajectory at each gradient step, which requires a large amount of mem-ory when the dimension is high. The minimum required memory for training with DA increases with T , whereas DP requires only constant order memory that is independent of the time horizon, since it trains independently per time step. Therefore, when targeting MFOS problems with a long time horizon T , DPP becomes more efficient, at least memory-wise. For similar observations in the context of continuous time optimal control, see (Germain et al., 2022b). 
+
+Example 1 (Towards the uniform) and Example 2 (Rolling a die), on a 1D gridworld state space, are described in details in Appx. E.1 and E.2 respectively due to space constraint. 
+
+Example 3: Crowd Motion with Congestion. This example extends the setting of Example 2 by incorporat-ing a congestion term into the dynamics. The outcome of the die takes the role of the noise ϵ ∼ U (X ) where 
+
+X = {1, 2, 3, 4, 5, 6}. The system starts in the initial distri-bution η = 14 δ1 + 14 δ2 + 12 δ5, and evolves according to the dynamics (5) with μ0 = η, and F (n, x, μ, ϵ ) = ϵ where we are going to introduce a term of congestion multiplying the probability of moving by (1 − Ccong μ(x)) to model the fact that it is difficult to move from a state x if the distribution is concentrated in that state (see Appx. E.3). The social cost function associated to this scenario is Φ( x, μ ) = x. Time horizon is set to T = 4 . We perform the experiment without congestion (see Appx. E.2), and we expect congestion to slow down the movement. DA results are shown in Fig. 4. This example demonstrates that two classes of stopping times (synchronous and asynchronous) can lead to very dif-ferent optimal stopping decisions and induce distributions. Although the true value is unknown, the results indicate that synchronous stopping times yield a higher value, while asynchronous stopping times lead to a significant reduction 7Learning to Stop: Deep Learning for MFOS 0 1 2 3 4 5                                                                 
+
+> X
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Time 0
+> 012345
+> X
+> Time 1
+> 012345
+> X
+> Time 2
+> 012345
+> X
+> Time 3
+> 012345
+> X
+> Time 4
+> 012345
+> X
+> Time 5
+> 012345
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing 012345
+> X
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Time 0
+> 012345
+> X
+> Time 1
+> 012345
+> X
+> Time 2
+> 012345
+> X
+> Time 3
+> 012345
+> X
+> Time 4
+> 012345
+> X
+> Time 5
+> 012345
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+
+Figure 4: Example 3. DA results, asynchronous vs synchronous stopping times. Comparison of the evolution of the distribution after training (asynchronous stopping class on top, synchronous stopping class on bottom). 0 1 2 3 4 5 6                        
+
+> X
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time 0
+> 0123456
+> X
+> Time 1
+> 0123456
+> X
+> Time 2
+> 0123456
+> X
+> Time 3
+> 0123456
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+> Target dist.
+
+Figure 5: Example 4. DA results, asynchronous stopping. Evolution of the distribution after training. in the cost. Additionally, in the asynchronous case, conges-tion leads to reduced movement, as observed between time 0 and time 1 in state 4. See Appx. E.3 for the DPP results. 0 1 2 3 4                                             
+
+> 01234
+> Time: 0
+> 01234
+> Time: 1
+> 01234
+> Time: 2
+> 01234
+> Time: 3
+> 0.4
+> 0.6
+> 0.8 Decision Prob 01234
+> Stopped Dist.
+> Time: 0 Time: 1 Time: 2 Time: 3 Time: 4 Final State
+> 01234
+> 01234
+> Continuting Dist.
+> 0123401234012340123401234
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+
+Figure 6: Example 5. DA results, asynchronous stopping. Left: stopping decision probability. Right: evolution of the distribution after training. 
+
+Example 4: Distributional Cost. This example extends, at the mean field level, the motivating example described at the end of Section 2.1. Based on Theorem 3.2, the mean-field solution provides a good approximation of the N -agent problem. DA results are shown in Fig. 5. The results for other settings are shown in Appx. E.4. 
+
+Example 5: Towards Uniform in Dimension 2. This example extends Example 1 (see Appx. E.1) to two di-mensions, demonstrating how the algorithm performs in higher-dimensional settings. We take state space X =
+
+{0, 1, 2, 3, 4} × { 0, 1, 2, 3, 4}, time horizon T = 4 , tran-sition function F (n, x, μ, ϵ ) = x + (1 , 0) which means that the agent deterministically moves to the state on the right on the same row, with boundary at x = 4 , and cost func-tion Φ( x, μ ) = μ(x) which depends on the mean field only through the state of the agent (this is sometimes called local dependence). For the testing distribution, we take a distri-bution concentrated on state x = 0 , denoted as μ0 = δ0.Fig. 6 shows that the distribution evolves towards a uniform distribution across each row, as expected, and also illus-trates the optimal strategy (decision probability) required to achieve this outcome. Results for the DPP algorithm and the synchronous stopping are in Appx. E.5. 
+
+Example 6: Matching a Target with a Fleet of Drones. 
+
+We conclude with a more realistic and complex example to showcase the potential applications of our algorithms. This example aims to align a fleet of drones with a given target distribution at terminal time T , starting from a random ini-tial distribution. To make this experiment more interesting, we expand the framework described so far by considering a different type of cost and by including a noisy obstacle hin-dering the drones’ movements (see Appx. E.6 for the mathe-matical formulation). We take X = {0, . . . , 9}×{ 0, . . . , 9}
+
+that represents a 10 × 10 grid. Hence, the neural network’s input is of dimension 3|X | = 300 . The system follows the dynamics that diffuse uniformly over the possible neigh-bors, where the possible neighbors of x ∈ X are defined as x ± (0 , 1) or x ± (1 , 0) if the resulting state is still an element of X . Moreover, we introduce extra stochastic-ity into the dynamics by placing an obstacle at a random state on the grid at each time step. The location is uni-formly selected from X and is viewed as a common noise 
+
+affecting the dynamics of all the agents. This introduces additional complexity in the learning problem because even 8Learning to Stop: Deep Learning for MFOS 02468                                                                                                                                                                  
+
+> Stopped Dist.
+> Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State
+> 02468
+> 02468
+> Continuting Dist.
+> 02468024680246802468024680246802468024680246802468
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04 0123456789
+> 0123456789
+> Time: 0
+> 0123456789
+> Time: 4
+> 0123456789
+> Time: 9
+> 0123456789
+> Time: 14
+> 0123456789
+> Time: 19
+> 0123456789
+> Time: 24
+> 0123456789
+> Time: 29
+> 0123456789
+> Time: 34
+> 0123456789
+> Time: 39
+> 0123456789
+> Time: 44
+> 0123456789
+> Time: 49
+> 0.25
+> 0.50
+> 0.75 Decision Prob
+
+Figure 7: Example 6. DPP results, asynchronous stopping. Match the Letter “M” in 10 × 10 grid with common noise. We plot the stopped distribution, continuing distribution, and decision probability function every 5 timestep. The marked red square indicates the random obstacles (common noise). 02468                                                                                    
+
+> Initial Dist.
+> Test Dist. : 1 Test Dist. : 2 Test Dist. : 3 Test Dist. : 4
+> 02468
+> 02468
+> Terminal Dist.
+> 024680246802468
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> 0.06
+> 0.07 02468
+> Initial Dist.
+> Test Dist. : 1 Test Dist. : 2 Test Dist. : 3 Test Dist. : 4
+> 02468
+> 02468
+> Terminal Dist.
+> 024680246802468
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05 02468
+> Initial Dist.
+> Test Dist. : 1 Test Dist. : 2 Test Dist. : 3 Test Dist. : 4
+> 02468
+> 02468
+> Terminal Dist.
+> 024680246802468
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> 0.06 02468
+> Initial Dist.
+> Test Dist. : 1 Test Dist. : 2 Test Dist. : 3 Test Dist. : 4
+> 02468
+> 02468
+> Terminal Dist.
+> 024680246802468
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+
+Figure 8: Example 6. DPP results, asynchronous stopping. Match the Letter “M”, “F”, “O”, and “S”. Tested with the randomly sampled initial distribution. for a fixed stopping decision rule, the evolution of the popu-lation is stochastic. We consider the target distribution ρ to be the uniform distribution over the grid of the letter “M”, “F”, “O”, and “S” respectively, and we set the terminal cost 
+
+gρ(ν) = P
+
+x∈X |ν(x) − ρ(x)|2 (see results in Fig. 7). We choose the time horizon T = 50 . Another important aspect of the algorithms’ outcome is that the learned stopping de-cisions are agnostic to the initial distribution in the sense that the same stopping decision rule can be used on different initial distributions and always leads to matching the target distribution. Fig. 8 shows the terminal distributions under random initial testing distributions: the learned stopping probability function is robust to any test distribution used at inference time. Results for the DA algorithm are shown in Appx. E.6. 
+
+7. Conclusion 
+
+We proposed a discrete-time, finite-state MAOS problem with randomized stopping times and its mean-field version. We proved that the latter is a good approximation of the former, and we established a DPP for MFOS. These new problems cannot be directly tackled by adapting previous methods for single-agent OS problems. To overcome these challenges, we proposed two deep learning methods and evaluated their performance over six different scenarios. When an analytical solution exists, our method recovers it in just a few iterations. In complex settings, it efficiently achieves high performance. This work lays the foundation for understanding and learning optimal stopping problems in complex interacting systems. 
+
+Limitations and Future Works: We did not establish a convergence proof for our algorithms due to the complex-ity of analyzing deep networks. Additionally, we left for future work a detailed analysis of different classes of stop-ping times. Finally, extending our framework to continuous spaces and validating it on real-world, ambitious applica-tions remains an exciting direction for future research. 9Learning to Stop: Deep Learning for MFOS 
+
+Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+Acknowledgements 
+
+The authors are grateful to the anonymous reviewers and area chairs for their comments, which helped improve the quality of the paper. M. L. and L. M. were partially sup-ported by the Shanghai Frontiers Science Center of Artifi-cial Intelligence and Deep Learning at NYU Shanghai. M.L. was partially supported by the grant “AI-driven Initiative to Promote Research Paradigm Reform and Empower Disci-pline Advancement.” M. L. and Y. Z. would like to thank Lexie Zhu for fruitful discussions at the early stage of this project. 
+
+References 
+
+Achdou, Y. and Lasry, J.-M. Mean field games for model-ing crowd motion. Contributions to partial differential equations and applications , pp. 17–42, 2019. Achdou, Y. and Lauri `ere, M. On the system of partial differential equations arising in mean field type con-trol. Discrete Contin. Dyn. Syst. , 35(9):3879–3900, 2015. ISSN 1078-0947. doi: 10.3934/dcds.2015.35.3879. URL https://DOI.org/10.3934/dcds.2015. 35.3879 .Achdou, Y. and Lauri `ere, M. Mean Field Type Control with Congestion (II): An augmented Lagrangian method. Appl. Math. Optim. , 74(3):535–578, 2016a. ISSN 0095-4616. doi: 10.1007/s00245-016-9391-z. URL http://dx. DOI.org/10.1007/s00245-016-9391-z .Achdou, Y. and Lauri `ere, M. Mean field type control with congestion. Applied Mathematics & Optimization , 73: 393–418, 2016b. Achdou, Y. and Pironneau, O. Computational methods for option pricing . SIAM, 2005. Agram, N. and Øksendal, B. Optimal stopping of con-ditional McKean–Vlasov jump diffusions. Systems & Control Letters , 188:105815, 2024. Araujo, A., Havens, A. J., Delattre, B., Allauzen, A., and Hu, B. A unified algebraic perspective on Lipschitz neural networks. In The Eleventh International Conference on Learning Representations , 2022. Arjovsky, M., Chintala, S., and Bottou, L. Wasserstein gen-erative adversarial networks. In International conference on machine learning , pp. 214–223. PMLR, 2017. Balata, A., Hur ´e, C., Lauri `ere, M., Pham, H., and Pimentel, I. A class of finite-dimensional numerically solvable McKean-Vlasov control problems. ESAIM: Proceedings and Surveys , 65:114–144, 2019. B ¨auerle, N. Mean field markov decision processes. Applied Mathematics & Optimization , 88(1):12, 2023. Becker, S., Cheridito, P., and Jentzen, A. Deep optimal stopping. Journal of Machine Learning Research , 20(74): 1–25, 2019. Bensoussan, A., Frehse, J., and Yam, S. C. P. Mean field games and mean field type control theory . Springer Briefs in Mathematics. Springer, New York, 2013. ISBN 978-1-4614-8507-0; 978-1-4614-8508-7. Best, G., Huang, S., and Fitch, R. Decentralised mission monitoring with spatiotemporal optimal stopping. In 
+
+2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 4810–4817. IEEE, 2018. Brice ˜no Arias, L. M., Kalise, D., and Silva, F. J. Proximal methods for stationary mean field games with local cou-plings. SIAM J. Control Optim. , 56(2):801–836, 2018. ISSN 0363-0129. doi: 10.1137/16M1095615. URL 
+
+https://DOI.org/10.1137/16M1095615 .Carmona, R. and Delarue, F. Probabilistic theory of mean field games with applications. I , volume 83 of Probability Theory and Stochastic Modelling . Springer, Cham, 2018. ISBN 978-3-319-56437-1; 978-3-319-58920-6. Mean field FBSDEs, control, and games. Carmona, R. and Lauri `ere, M. Convergence analysis of machine learning algorithms for the numerical solution of mean field control and games i: The ergodic case. 
+
+SIAM Journal on Numerical Analysis , 59(3):1455–1485, 2021. Carmona, R. and Lauri `ere, M. Deep learning for mean field games and mean field control with applications to finance. Machine Learning and Data Sciences for Finan-cial Markets: A Guide to Contemporary Practices , pp. 369, 2023. Carmona, R., Delarue, F., and Lachapelle, A. Control of McKean-Vlasov dynamics versus mean field games. 
+
+Math. Financ. Econ. , 7(2):131–166, 2013. ISSN 1862-9679. Carmona, R., Lauri `ere, M., and Tan, Z. Linear-quadratic mean-field reinforcement learning: convergence of pol-icy gradient methods. arXiv preprint arXiv:1910.04295 ,2019. 10 Learning to Stop: Deep Learning for MFOS 
+
+Carmona, R., Lauri `ere, M., and Tan, Z. Model-free mean-field reinforcement learning: mean-field MDP and mean-field Q-learning. The Annals of Applied Probability , 33 (6B):5334–5381, 2023. Chassagneux, J.-F., Crisan, D., and Delarue, F. Numerical method for FBSDEs of McKean-Vlasov type. Ann. Appl. Probab. , 29(3):1640–1684, 2019. ISSN 1050-5164. doi: 10.1214/18-AAP1429. URL https://DOI.org/10. 1214/18-AAP1429 .Chen, D., Qi, Q., Zhuang, Z., Wang, J., Liao, J., and Han, Z. Mean field deep reinforcement learning for fair and efficient UAV control. IEEE Internet of Things Journal ,8(2):813–828, 2020. Cui, K., Hauck, S. H., Fabian, C., and Koeppl, H. Learning decentralized partially observable mean field control for artificial collective behavior. In The Twelfth International Conference on Learning Representations , 2023. Cui, K., Hauck, S. H., Fabian, C., and Koeppl, H. Learning decentralized partially observable mean field control for artificial collective behavior. In The Twelfth International Conference on Learning Representations , 2024. Dai, Z., Yu, H., Low, B. K. H., and Jaillet, P. Bayesian optimization meets Bayesian optimal stopping. In Inter-national conference on machine learning , pp. 1496–1506. PMLR, 2019. Damera Venkata, N. and Bhattacharyya, C. Deep recur-rent optimal stopping. Advances in Neural Information Processing Systems , 36, 2024. Dayanıklı, G., Lauri `ere, M., and Zhang, J. Deep learning for population-dependent controls in mean field control problems with common noise. In Proceedings of the International Joint Conference on Autonomous Agents and Multiagent Systems, AAMAS , volume 2024, pp. 2231– 2233, 2024. Ekren, I., Touzi, N., and Zhang, J. Optimal stopping under nonlinear expectation. Stochastic Processes and Their Applications , 124(10):3277–3311, 2014. Fornasier, M. and Solombrino, F. Mean-field optimal con-trol. ESAIM: Control, Optimisation and Calculus of Variations , 20(4):1123–1152, 2014. Fouque, J.-P. and Zhang, Z. Deep learning methods for mean field control problems with delay. Frontiers in Applied Mathematics and Statistics , 6:11, 2020. Germain, M., Lauri `ere, M., Pham, H., and Warin, X. Deepsets and their derivative networks for solving sym-metric pdes. Journal of Scientific Computing , 91(2):63, 2022a. Germain, M., Mikael, J., and Warin, X. Numerical reso-lution of mckean-vlasov fbsdes using neural networks, 2022b. Gu, H., Guo, X., Wei, X., and Xu, R. Mean-field controls with Q-learning for cooperative MARL: convergence and complexity analysis. SIAM Journal on Mathematics of Data Science , 3(4):1168–1196, 2021. Gu, H., Guo, X., Wei, X., and Xu, R. Dynamic program-ming principles for mean-field controls with learning. 
+
+Operations Research , 71(4):1040–1054, 2023. He, X. On the limit theory of mean field optimal stopping with non-markov dynamics and common noise. Stochas-tic Processes and their Applications , pp. 104681, 2025. Herrera, C., Krach, F., Ruyssen, P., and Teichmann, J. Opti-mal stopping via randomized neural networks. Frontiers of Mathematical Finance , pp. 0–0, 2023. Kobylanski, M., Quenez, M.-C., and Rouy-Mironescu, E. Optimal multiple stopping time problem. The Annals of Applied Probability , 21(4):1365 – 1399, 2011. Lauri `ere, M. and Pironneau, O. Dynamic programming for mean-field type control. C. R. Math. Acad. Sci. Paris , 352 (9):707–713, 2014. ISSN 1631-073X. Liang, Y. and Wang, B. Robust mean field social opti-mal control with applications to opinion dynamics. In 
+
+2019 IEEE 15th International Conference on Control and Automation (ICCA) , pp. 1079–1084, 2019. doi: 10.1109/ICCA.2019.8899655. Lippman, S. A. and McCall, J. J. The economics of job search: A survey. Economic inquiry , 14(2):155–189, 1976. Longstaff, F. A. and Schwartz, E. S. Valuing American options by simulation: a simple least-squares approach. 
+
+The review of financial studies , 14(1):113–147, 2001. Mondal, W. U., Agarwal, M., Aggarwal, V., and Ukkusuri, S. V. On the approximation of cooperative heterogeneous multi-agent reinforcement learning (MARL) using mean field control (MFC). Journal of Machine Learning Re-search , 23(129):1–46, 2022. Motte, M. and Pham, H. Mean-field Markov decision pro-cesses with common noise and open-loop controls. The Annals of Applied Probability , 32(2):1421–1458, 2022. P ´asztor, B., Krause, A., and Bogunovic, I. Efficient model-based multi-agent mean-field reinforcement learning. 
+
+Transactions on Machine Learning Research , 2023. 11 Learning to Stop: Deep Learning for MFOS 
+
+Pham, H. and Wei, X. Dynamic programming for optimal control of stochastic McKean-Vlasov dynamics. SIAM J. Control Optim. , 55(2):1069–1101, 2017. ISSN 0363-0129. Reisinger, C., Stockinger, W., and Zhang, Y. A fast iterative PDE-based algorithm for feedback controls of nonsmooth mean-field control problems. SIAM Journal on Scientific Computing , 46(4):A2737–A2773, 2024. Reppen, A. M., Soner, H. M., and Tissot-Daguette, V. Neural optimal stopping boundary. arXiv preprint arXiv:2205.04595 , 2022. Shiryaev, A. N. Optimal stopping rules , volume 8. Springer Science & Business Media, 2007. Sznitman, A.-S. Topics in propagation of chaos. In Ecole d’ ´et ´e de probabilit ´es de Saint-Flour XIX—1989 , pp. 165– 251. Springer, 1991. Talbi, M., Touzi, N., and Zhang, J. Dynamic programming equation for the mean field optimal stopping problem. 
+
+SIAM Journal on Control and Optimization , 61(4):2140– 2164, 2023. Talbi, M., Touzi, N., and Zhang, J. From finite population optimal stopping to mean field optimal stopping. The Annals of Applied Probability , 34(5):4237 – 4267, 2024. Tsitsiklis, J. N. and Van Roy, B. Optimal stopping of markov processes: Hilbert space theory, approximation al-gorithms, and an application to pricing high-dimensional financial derivatives. IEEE Transactions on Automatic Control , 44(10):1840–1851, 1999. Villani, C. The Wasserstein distances. Optimal transport: old and new , pp. 93–111, 2009. Wang, C., Venkatesh, S., and Judd, J. Optimal stopping and effective machine complexity in learning. Advances in neural information processing systems , 6, 1993. Yu, X. and Yuan, F. Time-inconsistent mean-field stopping problems: A regularized equilibrium approach. arXiv preprint arXiv:2311.00381 , 2023. 12 Learning to Stop: Deep Learning for MFOS 
+
+A. N -agent cooperative optimal stopping 
+
+A.1. Why do we need randomization in the control? An Example 
+
+We want to show with an example that the extension to randomized stopping times is necessary in the mean-field formulation, because when we try to plug an optimal strategy into the N -agent problem, we notice that the latter is no longer optimal. 
+
+Example 1 (Randomized is better) . Let consider the following scenario: we take the state space X = {T, C } and initial distribution μ0 = 3 /4δT + 1 /4δC ; transition function F (T, x, μ, ϵ ) = C, F (C, x, μ, ϵ ) = T , meaning that the system at any time step, can stop or switch the state. We take as social cost: 
+
+Φ( x, μ ) = 
+
+(
+
+1 if μ(x) ≤ 1/25 if μ(x) > 1/2. (13) Notice that without allowing the randomized stopping the value is V ∗ = 3 /4 · 5 + 1 /4 · 1 = 4 , which corresponds to stop all the distribution ( in every state) at time n = 0 . In the end, this formulation cannot reflect the optimum in the association of N agents. Indeed when we plug this policy into the N agent formulation we obtained the value 
+
+V N = 1 /N (3 N/ 4 · 5 + N/ 4 · 1) = 4 , which is not optimal since we can use the strategy ( which is going to be optimal for the N -agent problem) to stop, at time 0, only the 1/3 of players in state T , allowing the others to change state. This leads to a final configuration of m1 = 1 /2δT + 1 /2δC and a value of V ∗,N = 1 /N (N/ 4 · 5 + 3 N/ 4 · 1) = 2 < V N = 4 .In particular, we want to emphasize the fact that, without allowing a randomized stopping time in the MF formulation, we find an optimal state-dependent strategy, which corresponds , in the problem with finite agents, to the fact that every player in the same state will have the same stopping time. 
+
+A.2. Proof of Theorem 3.2 
+
+This section demonstrates that solving the optimal control problem at the asymptotic regime for the number of agents tending to infinity allows one to find the solution to the multi-agent problem by including the solution found at the regime in the latter. This is of fundamental importance in applications as it allows a simpler and clearer situation to be analyzed for the purpose of solving a complicated problem. Let us recall the N -agent formulation. We are going to work in the framework where the central planner use the same policy p to control each agent. We suppose Assumption 3.1 holds. Let us fix the following notation νN,p m := 1
+
+> N
+
+PNi=1 δY i, α 
+
+> m
+
+and νpm := L(Y αm ) .
+
+
+
+Xi, α 
+
+> 0
+
+∼ μ0, Ai, α 
+
+> 0
+
+= 1 
+
+αin ∼ πin(·| Xi, α 
+
+> n
+
+) = Be (pn(Xi, α 
+
+> n
+
+)) 
+
+Ai, α 
+
+> n+1
+
+= Ai, α 
+
+> n
+
+· (1 − αin)
+
+Xi, α 
+
+> n+1
+
+=
+
+(
+
+F (n, X i, α 
+
+> n
+
+, 1
+
+> N
+
+PNj=0 δY j, α 
+
+> n
+
+, ϵ in+1 ), if Ai, α 
+
+> n
+
+· (1 − αin) = 1 
+
+Xi, α 
+
+> n
+
+, otherwise. (14) The social cost is defined as: 
+
+JN (p) := JN (p, . . . , p ) := 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+E
+
+" TX
+
+> m=0
+
+Φ( Xi, α 
+
+> m
+
+, 1
+
+N
+
+> N
+
+X
+
+> i=0
+
+δXi, α 
+
+> m
+
+)Ai, α 
+
+> m
+
+αim
+
+#
+
+= E
+
+" TX
+
+> m=0
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Φ( Xi, α 
+
+> m
+
+, 1
+
+N
+
+> N
+
+X
+
+> i=0
+
+δXi, α 
+
+> m
+
+)Ai, α 
+
+> m
+
+αim
+
+#
+
+= E
+
+
+
+> T
+
+X
+
+> m=0
+
+X
+
+> (x,a )∈S
+
+νN,p m (x, a )Φ( x, ν N,p X,m )ap m(x)
+
+
+
+= E
+
+" TX
+
+> m=0
+
+Ψ( νN,p m , p m(νN,p m )) 
+
+#
+
+(15) 13 Learning to Stop: Deep Learning for MFOS 
+
+The asymptotic problem is written as: 
+
+
+
+Xα 
+
+> 0
+
+∼ μ0, Aα 
+
+> 0
+
+= 1 
+
+αn ∼ πn(·| Xαn ) = Be (pn(Xαn )) 
+
+Aαn+1 = Aαn · (1 − αn)
+
+Xαn+1 =
+
+(
+
+F (n, X αn , L(Xαn ), ϵ n+1 ), if Aαn · (1 − αn) = 1 
+
+Xαn , otherwise, (16) where the social cost is defined as: 
+
+J(p) := 
+
+> T
+
+X
+
+> m=n
+
+X
+
+> (x,a )∈S
+
+νp,ν,n m (x, a )Φ( x, ν pX,m )ap m(x)=
+
+> T
+
+X
+
+> m=n
+
+Ψ( νpm, p m(νpm)) .
+
+(17) Let us recall that P := {p : {0, . . . , T } × X × P (S) → [0 , 1] : p is Lp-Lipschitz }, the set of all possible admissible policies 
+
+p. From now we are going to use the notation ∥ · ∥ for the norm associated to the total variation distance. Firstly we want to prove the at time time n the distributions νN,p m and νpm are close in the following sense (see (Cui et al., 2023) for a similar setting). 
+
+Lemma A.1 (Convergence of the measure) . Suppose Assumption 3.1 holds. Given the dynamics (14) and (16) for every 
+
+n = 0 , . . . , T it holds: 
+
+sup 
+
+> p∈P
+
+E ∥νN,p n − νpn∥ = O(1 /√N ). (18) 
+
+Proof. We are going to follow an induction argument over the time steps: 
+
+Initialization: for n = 0 , since we have indipendent samples at the starting point, by the law of large numbers (LLN) we have: 
+
+sup 
+
+> p∈P
+
+E
+
+h
+
+∥νN,p  
+
+> 0
+
+− νp 
+
+> 0
+
+∥
+
+i
+
+→ 0
+
+with rate of convergence O
+
+
+
+> 1√N
+
+
+
+.In particular, let us denote S := {y1, · · · , y K }, νp 
+
+> 0
+
+(yi) = pi, νN,p  
+
+> 0
+
+(yi) = 1
+
+> N
+
+PNi=1 δY α 
+
+> i
+
+(yi) = C(yi) 
+
+> N
+
+, where C(yi) is defined as the number of agent that are in the state yi at time 0. We can write: 
+
+E
+
+h
+
+∥νN,p  
+
+> 0
+
+− νp 
+
+> 0
+
+∥
+
+i
+
+= 12 E
+
+
+
+> |S|
+
+X
+
+> i=1
+
+C(yi)
+
+N − pi
+
+ ≤
+
+p|S|
+
+2 E
+
+
+
+> |S|
+
+X
+
+> i=1
+
+ C(yi)
+
+N − pi
+
+2
+
+
+
+> 1/2
+
+by Cauchy-Schwarz inequality. Notice now that C(yi) ∼ Bin( N, p i) and so 
+
+> |S|
+
+X
+
+> i=1
+
+Var 
+
+ C(yi)
+
+N
+
+
+
+=
+
+> |S|
+
+X
+
+> i=1
+
+pi(1 − pi)
+
+N = 1 − P|S| 
+
+> i=1
+
+p2
+
+> i
+
+N ≤ |S| − 1
+
+N |S|
+
+since the quantity 1 − P|S| 
+
+> i=1
+
+p2 
+
+> i
+
+has its max when pi = 1 
+
+> |S|
+
+.Eventually, we obtain the explicit constant: 
+
+E
+
+h
+
+|| νN,p  
+
+> 0
+
+− νp 
+
+> 0
+
+|| 
+
+i
+
+≤
+
+p|S| − 12√N .
+
+14 Learning to Stop: Deep Learning for MFOS 
+
+Remark A.2 . Notice that the bound depends on the cardinality of the state space: more states lead to a larger upper bound, meaning possibly a larger discrepancy between the empirical and mean-field distributions. This is due to the fact that we used the total variation distance as metric, which sums over all possible states. In continuous space, this metric is not feasible and so usually the Wasserstein distance is used for convergence analysis (see (Carmona & Delarue, 2018)). Actually, in the finite space and discrete time setting, we have the following inequality: 
+
+dmin ∥μ − ν∥TV ≤ W1(μ, ν ) ≤ D∥μ − ν∥TV ,
+
+where dmin := min x̸ =y d(x, y ) and D := max x̸ =y d(x, y ). Notice that the Wasserstein distance in finite space and discrete time is defined as: 
+
+Wp(μ, ν ) = 
+
+ min  
+
+> T∈C (μ,ν )
+> n
+
+X
+
+> i=1
+> n
+
+X
+
+> j=1
+
+d(xi, x j )p · Ti,j 
+
+
+
+> 1
+> p
+
+,
+
+where C(μ, ν ) is the set of couplings defined as: 
+
+C(μ, ν ) = 
+
+T ∈ Rn×n
+
+> n
+
+X
+
+> j=1
+
+Ti,j = μi,
+
+> n
+
+X
+
+> i=1
+
+Ti,j = νj , T i,j ≥ 0, ∀i, j 
+
+ ,
+
+and d(xi, x j ) is the distance between points xi and xj in the metric space. More details on Wasserstein distances are described in (Villani, 2009) and (Arjovsky et al., 2017). 
+
+Induction step: assume now that (18) holds at time n. Using triangle inequality, at time n + 1 we have, for any p ∈ P ,
+
+E
+
+h
+
+∥νN,p n+1 − νpn+1 ∥
+
+i
+
+≤ E
+
+h
+
+∥νN,p n+1 − ¯F (νN,p n , p n(νN,p n )) ∥
+
+i
+
++ E ∥ ¯F (νN,p n , p n(νN,p n )) − νpn+1 ∥
+
+where we recall the expression of ¯F described by (8). For the first term, we have: 
+
+E
+
+h
+
+νN,p n+1 − ¯F (νN,p n , p n(νN,p n )) 
+
+i
+
+= E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+− ¯F (νN,p n , p n(νN,p n )) 
+
+#
+
+= 12 E
+
+ X
+
+> y∈S
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+(y) − ¯F (νN,p n , p n(νN,p n ))( y)
+
+
+
+= 12
+
+X
+
+> y∈S
+
+E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+(y) − ¯F (νN,p n , p n(νN,p n ))( y)
+
+#
+
+= 12
+
+X
+
+> y∈S
+
+E
+
+"
+
+E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+(y) − ¯F (νN,p n , p n(νN,p n ))( y) Y α
+
+> n
+
+## 
+
+The interpretation of ¯F gives us: 
+
+¯F (νN,p n , p n(νN,p n ))( y) = X
+
+> y′
+
+νN,p n (y′)P(Y pn+1 = y|Y pn = y′)= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+P(Y pn+1 = y|Y pn = Y i,p n )= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+P(Y i,p n+1 = y|Y i,p n )= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+E[δi,p Yn+1 (y)|Y i,p n ]
+
+15 Learning to Stop: Deep Learning for MFOS 
+
+where we used that the i particles are indistinguishable and have the same transition functions. So we can conclude the argument as: 
+
+E
+
+h
+
+νN,p n+1 − ¯F (νN,p n , p n(νN,p n )) 
+
+i
+
+= 12
+
+X
+
+> y∈S
+
+E
+
+"
+
+E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+(y) − E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δY i, α
+
+> n+1
+
+(y) Y α
+
+> n
+
+#
+
+Y α
+
+> n
+
+## 
+
+≤ |S|
+
+4√N
+
+by the LLN, where again the bound is independent of p ∈ P .Indeed, given the past history Y α 
+
+> n
+
+the random variables δY i, α
+
+> n+1
+
+become conditionally independent for every i = 1 , . . . , N .Furthermore each δY i, α 
+
+> n+1 (y)
+
+is a Bernoulli random variable, therefore its variance V ar (δY i, α
+
+> n+1
+
+(y)|Y α 
+
+> n
+
+) ≤ 14 . Summing over all agents, the variance of the empirical mean becomes 14N . Using Cauchy-Schwarz inequality, for any random variable Z
+
+with finite variance E[|Z − E[Z]|] ≤ pV ar (Z), so in our case we obtained the constant |S| 
+
+> 4√N
+
+.For the second term, by Lipschitz property of ¯F and p(ν), we can write : 
+
+E ∥ ¯F (νN,p n , p n(νN,p n )) − νpn+1 ∥
+
+= E ∥ ¯F (νN,p n , p n(νN,p n )) − ¯F (νpn, p n(νpn)) ∥
+
+≤ L ¯F E |∥ νN,p n − νpn∥ + ∥pn(νN,p n ) − pn(νpn)∥| 
+
+≤ L ¯F E |∥ νN,p n − νpn∥ + Lp∥νN,p n − νpn∥| 
+
+= ( L ¯F (1 + Lp)) E ∥νN,p n − νpn∥
+
+≤ |S|
+
+4√N
+
+ 1 − Kn+1 
+
+1 − K
+
+
+
++ Kn+1 
+
+p|S| − 12√N − |S|
+
+4√N
+
+by induction step, where K := L ¯F (1 + Lp) and the upper bound is independent of p ∈ P (since the constant Lp is the same for all the control p ∈ P ). We have thus proved by induction that: 
+
+E
+
+h
+
+∥νN,p n+1 − νpn+1 ∥
+
+i
+
+≤ |S|
+
+4√N ( 1 − (L ¯F (1 + Lp)) n+1 
+
+1 − (L ¯F (1 + Lp)) ) + ( L ¯F (1 + Lp))) n+1 
+
+p|S| − 12√N ,
+
+for every time step n = 0 , . . . , T .This result allows us to prove the following main theorem on the optimal cost approximation in the N -agent problem. This is a precise version of the informal statement in Theorem 3.2. 
+
+Theorem A.3 (ε-approximation of the N -agent problem) . Suppose Assumption 3.1 holds. Given the dynamics (14) and (16) and the social cost associated (15), (17), let us denote by p∗ the optimal policy for the mean-field problem and by ˆp the optimal policy for the N -agent problem. It holds: 
+
+JN (p∗, . . . , p ∗) − JN (ˆ p, . . . , ˆp) = O(1 /√N ). (19) 
+
+Proof. We can write: 
+
+JN (p∗, . . . , p ∗) − JN (ˆ p, . . . , ˆp) = 
+
+
+
+JN (p∗, . . . , p ∗) − J(p∗)
+
+
+
++
+
+
+
+J(p∗) − J(ˆ p)
+
+
+
++
+
+
+
+J(ˆ p) − JN (ˆ p)
+
+
+
+Notice first that we can bound this term simply deleting the second term in the r.h.s noticing J(p∗) − J(ˆ p) ≤ 0 since p∗ is 16 Learning to Stop: Deep Learning for MFOS 
+
+optimal for the mean-field cost J(p). For the first term we can write: 
+
+JN (p∗, . . . , p ∗) − J(p∗)= E
+
+" TX
+
+> m=0
+
+Ψ( νN,p ∗ 
+
+> m
+
+, p ∗
+
+> m
+
+(νN,p ∗ 
+
+> m
+
+)) 
+
+#
+
+−
+
+> T
+
+X
+
+> m=n
+
+Ψ( νp∗ 
+
+> m
+
+, p ∗
+
+> m
+
+(νp∗ 
+
+> m
+
+)) =
+
+> T
+
+X
+
+> n=0
+
+E
+
+h
+
+Ψ( νN,p ∗ 
+
+> n
+
+, p ∗
+
+> n
+
+(νN,p ∗ 
+
+> n
+
+)) − Ψ( νp∗ 
+
+> n
+
+, p ∗
+
+> n
+
+(νp∗ 
+
+> n
+
+)) 
+
+i
+
+≤ LΨ
+
+> T
+
+X
+
+> n=0
+
+E
+
+h
+
+νN,p ∗ 
+
+> n
+
+− νp∗ 
+
+> n
+
++ p∗
+
+> n
+
+(νN,p ∗
+
+) − p∗
+
+> n
+
+(νp∗ 
+
+> n
+
+)
+
+i
+
+≤ LΨ(1 + Lp)
+
+> T
+
+X
+
+> n=0
+
+E
+
+h
+
+νN,p ∗ 
+
+> n
+
+− νp∗
+
+> n
+
+i
+
+≤ T L Ψ(1 + Lp) sup  
+
+> n∈{ 0,...,T }
+
+E
+
+h
+
+νN,p ∗ 
+
+> n
+
+− νp∗
+
+> n
+
+i
+
+≤ T L Ψ(1 + Lp)
+
+ |S|
+
+4√N
+
+ 1 − (L ¯F (1 + Lp)) T
+
+1 − (L ¯F (1 + Lp)) 
+
+
+
++ ( L ¯F (1 + Lp))) T
+
+p|S| − 12√N
+
+
+
+,
+
+by Lemma A.1. For the last term J(ˆ p) − JN (ˆ p), we can apply the same argument that we just described. Similarly, we obtain: 
+
+JN (p∗, . . . , p ∗) − JN (ˆ p, . . . , ˆp) ≤ 2T L Ψ(1 + Lp)
+
+ |S|
+
+4√N
+
+ 1 − (L ¯F (1 + Lp)) T
+
+1 − (L ¯F (1 + Lp)) 
+
+
+
++ ( L ¯F (1 + Lp))) T
+
+p|S| − 12√N
+
+
+
+B. Proof of Theorem 4.1 
+
+Let us prove Theorem 4.1. 
+
+Proof. To prove this result, we will show that we can reduce the problem to a mean-field optimal control problem in discrete time and continuous space. Then we can apply the well-studied dynamic programming principle for mean-field Markov decision processes (MFMDPs) (see e.g. (Motte & Pham, 2022; Carmona et al., 2023; B¨ auerle, 2023)). We have: 
+
+Vn(ν) = inf 
+
+> p∈P n,T
+> T
+
+X
+
+> m=n
+
+X
+
+> (x,a )∈S
+
+νp,ν,n m (x, a )Φ( x, μ p,ν,n m )ap m(x)= inf 
+
+> p∈P n,T
+> T
+
+X
+
+> m=n
+
+Ψ( νp,ν,n m , p m),
+
+where Ψ : P(X × { 0, 1}) × P (X ) → R and it is defined as: 
+
+Ψ( ν, q ) := X
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )aq (x).
+
+Then we can define the process Z taking value in P(X × { 0, 1}):
+
+Zpn = z = ν; Zpm := νp,ν,n m ∀m ≥ n
+
+such that it follows the dynamics Zpm+1 = ¯F (Zpm, p m) for every m = n, . . . , T − 1. We can write: 
+
+Vn(z) = inf 
+
+> p∈P n,T
+> T
+
+X
+
+> m=n
+
+Ψ( Zpm, p m),
+
+17 Learning to Stop: Deep Learning for MFOS 
+
+and we recognize a well-studied control problem for which the DPP is: 
+
+Vn(z) = inf  
+
+> h∈H
+
+Ψ( z, h ) + Vn+1 ( ¯F (z, h )) .
+
+where H is the set of all functions h : X → [0 , 1] . Finally, we can recover our result: 
+
+Vn(ν) = inf 
+
+> h∈H
+
+X
+
+> (x,a )∈S
+
+ν(x, a )Φ( x, ν X )ah (x) + Vn+1 ( ¯F (ν, h )) . (20) where νX is the first marginal of the distribution ν.
+
+C. Algorithms 
+
+Alg. 3 and 4 present respectively the direct approach and the DP-based method. 
+
+Algorithm 3 Direct Approach for MFOS 
+
+Require: Time-dependent stopping decision neural network: ψθ : {0, . . . , T } × X × P (S) → [0 , 1] , cost function Φ,mean-field dynamic transition ¯F , time horizon T , max training iteration Niter .
+
+// TRAINING 
+
+1: for k = 0 , . . . , N iter − 1 do 
+
+2: Uniformly sample initial distribution νp 
+
+> 0
+
+from the probability simplex on R2|X | 
+
+3: for n = 0 , . . . , T do 
+
+4: pn(x) = ψθ (x, ν pn, n ; θk) for any x ∈ X ▷ Compute stopping probability 
+
+5: ℓn = P 
+
+> x∈X
+
+νpn(x, 1)Φ( x, μ n)pn(x) ▷ Compute loss at time n
+
+6: νpn+1 = ¯F (νpn, p n) ▷ Simulate MF dynamic 
+
+7: ℓ = PTn=0 ℓn ▷ Compute the total loss 
+
+8: θk+1 = optimizer update (θk, ℓ (θk)) ▷ AdamW optimizer step 
+
+9: Set θ∗ = θNiter 
+
+10: return ψθ∗
+
+Algorithm 4 Dynamic Programming Approach for MFOS 
+
+Require: A sequence of stopping decision neural network: ψnθ : X × P (S) → [0 , 1] for n ∈ { 0, . . . , T − 1}, cost function 
+
+Φ, mean-field dynamic transition ¯F , time horizon T , max training iteration Niter .
+
+// TRAINING 
+
+1: Set ψTθ = 1 since all distribution stopped at time T .
+
+2: for n = T − 1, . . . , 0 do ▷ Train backward in time 
+
+3: for k = 0 , . . . , N iter − 1 do 
+
+4: Uniformly sample initial distribution νpn from the probability simplex on R2|X | 
+
+5: for m = n, . . . , T do 
+
+6: if m = n then 
+
+7: pm(x) = ψmθ (x, ν pm; θnk ) ▷ Compute with NN for current time 
+
+8: else 
+
+9: pm(x) = ψmθ (x, ν pm; θm, ∗) ▷ Compute with trained NN from future time 
+
+10: ℓm = P 
+
+> x∈X
+
+νpm(x, 1)Φ( x, μ m)pm(x) ▷ Compute loss at time m
+
+11: νpm+1 = ¯F (νpm, p m) ▷ Simulate MF dynamic 
+
+12: ℓ = PTm=n ℓm ▷ Compute the total loss from time n to T
+
+13: θnk+1 = optimizer update (θmk , ℓ (θnk )) ▷ AdamW optimizer step 
+
+14: Set θn, ∗ = θnNiter ▷ Stored trained weight 
+
+D. Implementation details 
+
+In this section, we will discuss the choice of neural networks, training batch size, learning rate, and iterations, and all the related hyperparameters as well as computational resources used. 18 Learning to Stop: Deep Learning for MFOS 
+
+Neural Network Architectures: We have 4 variants of neural networks. For the direct approach, the neural network takes an input time t, while for the DPP approach, the neural network does not need time input. For the asynchronous stopping problem, besides time, the neural network has two spatial inputs 1) the state x, represented as an integer, goes through an embedding layer with learnable parameters and the results are fed to other operations. 2) the distribution ν, represented as a vector, is inputted to the neural net directly. For the synchronous stopping problem, the neural network only has one spatial input, which is the distribution ν, and is treated as the same way as discussed before. In general, our neural network has the following structure. Our neural network takes an input pair (x, t ), where x is the spatial input, t is the time. If t is a needed input, then it is passed through a module to generate a standard sinusoidal embedding and then fed to 2 fully connected layers with Sigmoid Linear Unit (SiLU) and generate an output tout . Spatial input x is passed through an MLP with k residual blocks, each containing 4 linear layers with hidden dimension D and SiLU activation. This generates an output yout . Our final output out is computed through, out = Outmod (GroupNorm( yout + tout )) 
+
+where Outmod is an out module that consists of 3 fully connected layers with hidden dimension D and SiLU activation, 
+
+GroupNorm stands for group normalization. If t is not a needed input, then set tout = 0 .For all the test cases we have experimented with, we use k = 3 , D = 128 for all the 1D experiments and k = 5 , D = 256 
+
+for the 2D experiments. 
+
+Computational Resources: We run all the numerical experiments on an RTX 4090 GPU and a MacBook Pro with M2 Chip. For any of the test cases, one run took at most 3 minutes on GPUs and 7 minutes on CPUs. 
+
+Training Hyperparameters: For all the experiments, we choose an initial learning rate 10 −4 of the AdamW optimizer. Each training is at most 10 4 iterations, with a batch size 128 . The number of training iterations is chosen based on numerical evidence and trial and error. We start with a moderate number and then increase it if the model shows signs of undertraining and is far from convergence. 
+
+E. Numerical Experiments details 
+
+This section aims to complete the results of the 6 numerical experiments conducted. While some of the following plots have been previously discussed in Section 6, we provide the full descriptions of Example E.1 and Example E.2 here for the sake of completeness. 
+
+E.1. Example 1: Towards the Uniform 
+
+We take state space X = {0, 1, 2, 3, 4}, time horizon T = 4 , transition function F (n, x, μ, ϵ ) = x + 1 which means that the agent deterministically moves to the state on the right, with boundary at x = 4 (meaning that once at 4, the agent does not move anymore), and cost function Φ( x, μ ) = μ(x) which depends on the mean field only through the state of the agent (this is sometimes called local dependence). For the testing distribution, we take a distribution concentrated on state x = 0 ,denoted as μ0 = δ0. It can be seen that the optimal strategy consists in spreading the mass to make it as close as uniform as possible (hence the name of this example). Fig. 9 shows that the testing loss decays towards the true optimal value, and the distribution evolves towards a uniform distribution as expected. Fig. 10 shows the losses with DPP: there is one curve per time step. At time 0, the value is close to the optimal value. First, we explain how the optimal value is computed. Since the agents move deterministically to the right, the only option to freeze some mass at a state x is to do it at time n. It can be seen that: for every n = 0 , . . . , T and for every x ∈ X , we want to have pn(x = n) = 1  
+
+> T+1 −n
+
+1x=n for n < T and pn(x) = 1 
+
+for n = T . Actually notice that for all x̸ = n the choice of pn is arbitrary so, at every time-step n we can apply the same pn
+
+for every state x. This brings us to optimize over the set of synchronous stopping times. Then we can compute the optimal value and obtain: V ∗,δ 0 := T +2 2( T +1) .
+
+Figs. 11 and 12 show the result for synchronous stopping. 19 Learning to Stop: Deep Learning for MFOS 0 2000 4000 6000 8000 10000 
+
+> Iterations
+> 0.270
+> 0.280
+> 0.290
+> 0.300
+> 0.310
+> 0.320
+> Loss
+
+Training Loss      
+
+> 02000 4000 6000 8000 10000
+> Iterations
+> 0.600
+> 0.625
+> 0.650
+> 0.675
+> 0.700
+> 0.725
+> Loss
+
+Testing Loss                         
+
+> Testing Loss
+> Optimal Cost 01234
+> X
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time 0
+> 01234
+> X
+> Time 1
+> 01234
+> X
+> Time 2
+> 01234
+> X
+> Time 3
+> 01234
+> X
+> Time 4
+> 01234
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+
+Figure 9: Example 1. DA results, asynchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution after training. 0.280 
+
+> 0.300
+> Time 0
+> Loss
+
+Training Loss 
+
+> 0.600
+> 0.650
+> Loss
+
+Testing Loss          
+
+> Testing Loss
+> Optimal Cost
+> 0.110
+> 0.120
+> 0.130
+> Time 1
+> Loss
+> 0.660
+> 0.680
+> Loss
+> 0.110
+> 0.120
+> 0.130
+> Time 2
+> Loss
+> 0.660
+> 0.680
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.120
+> 0.140
+> Time 3
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.660
+> 0.670
+> 0.680
+> Loss
+
+Figure 10: Example 1. DPP results, asynchronous stopping. Training and testing losses. 0 2000 4000 6000 8000 10000 
+
+> Iterations
+> 0.280
+> 0.300
+> 0.320
+> 0.340
+> Loss
+
+Training Loss      
+
+> 02000 4000 6000 8000 10000
+> Iterations
+> 0.600
+> 0.650
+> 0.700
+> 0.750
+> Loss
+
+Testing Loss                         
+
+> Testing Loss
+> Optimal Cost 01234
+> X
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time 0
+> 01234
+> X
+> Time 1
+> 01234
+> X
+> Time 2
+> 01234
+> X
+> Time 3
+> 01234
+> X
+> Time 4
+> 01234
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+
+Figure 11: Example 1. DA results, synchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution after training. 0.290 
+
+> 0.300
+> 0.310
+> Time 0
+> Loss
+
+Training Loss 
+
+> 0.600
+> 0.650
+> 0.700
+> Loss
+
+Testing Loss          
+
+> Testing Loss
+> Optimal Cost
+> 0.110
+> 0.120
+> 0.130
+> Time 1
+> Loss
+> 0.640
+> 0.660
+> 0.680
+> Loss
+> 0.110
+> 0.120
+> 0.130
+> Time 2
+> Loss
+> 0.660
+> 0.680
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.120
+> 0.140
+> Time 3
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.660
+> 0.680
+> Loss
+
+Figure 12: Example 1. DPP results, synchronous stopping. Training and testing losses. 
+
+E.2. Example 2: Rolling a Die 
+
+In this example, at every time step, a fair six-sided die is rolled. This takes the role of the noise ϵ ∼ U (X ) where 
+
+X = {1, 2, 3, 4, 5, 6}. The system starts in the initial distribution η = 14 δ1 + 14 δ2 + 12 δ5, and evolves according to the dynamics (5) with: μ0 = η, F (n, x, μ, ϵ n+1 ) = ϵn+1 . The social cost function associated to this scenario is Φ( x, μ ) = x.DA and DPP results are shown in Figs. 13 and 14 respectively.Again, we observe convergence to the true optimal value here. The optimal value is computed as follows. Using the dynamic programming principle described in (11), we can compute the optimal strategy and the optimal value: 
+
+p0(·) = (1 , 0, 0, 0, 0, 0) p1(·) = (1 , 1, 0, 0, 0, 0) 
+
+p2(·) = (1 , 1, 0, 0, 0, 0) p3(·) = (1 , 1, 0, 0, 0, 0) 
+
+p4(·) = (1 , 1, 1, 0, 0, 0) p5(·) = (1 , 1, 1, 1, 1, 1) 
+
+V ∗,η = 1 , 6525 .
+
+For our considered initial distribution, this is one of the possible optimal strategies, since we have no mass on some states and thus can assign any stopping probability to them. However, the solution we have presented is the only optimal solution for all possible initial distributions. Note that if we optimize on the class of synchronous stop times, we do not reach 20 Learning to Stop: Deep Learning for MFOS 
+
+the same optimal value, but we reach a higher value, concluding that for this type of problem, it is better to optimize on asynchronous stop times. In fact, when you narrow the decision only to the class of synchronous stop times is better to stop everyone at the first initial state reaching a value of ˜V ∗ = 3 , 25 > 1, 6525 = V ∗. Synchronous stopping results are shown in Fig. 15 and 16. 0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+2.000 
+
+2.500 
+
+3.000 
+
+3.500 
+
+> Loss
+
+Training Loss 
+
+0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+2.000 
+
+2.500 
+
+3.000 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 0 1 2 3 4 5                              
+
+> X
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Time 0
+> 012345
+> X
+> Time 1
+> 012345
+> X
+> Time 2
+> 012345
+> X
+> Time 3
+> 012345
+> X
+> Time 4
+> 012345
+> X
+> Time 5
+> 012345
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+
+Figure 13: Example 2. DA results, asynchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution after training. 2.000 
+
+2.500 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+2.000 
+
+2.500 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+1.000 
+
+1.250 
+
+> Time 1
+> Loss
+
+2.600 
+
+2.800 
+
+3.000 
+
+> Loss
+
+1.000 
+
+1.250 
+
+1.500 
+
+> Time 2
+> Loss
+
+3.100 
+
+3.200 
+
+3.300 
+
+> Loss
+
+1.200 
+
+1.400 
+
+1.600 
+
+> Time 3
+> Loss
+
+3.250 
+
+3.300 
+
+3.350 
+
+> Loss
+
+0 1000 2000 3000 4000 
+
+Iterations 
+
+1.400 
+
+1.600 
+
+1.800 
+
+> Time 4
+> Loss
+
+0 1000 2000 3000 4000 
+
+Iterations 
+
+3.350 
+
+3.400 
+
+> Loss
+
+Figure 14: Example 2. DPP results, asynchronous stopping. Training and testing losses. 0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+3.200 
+
+3.300 
+
+3.400 
+
+3.500 
+
+> Loss
+
+Training Loss 
+
+0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+2.000 
+
+2.500 
+
+3.000 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 0 1 2 3 4 5                              
+
+> X
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Time 0
+> 012345
+> X
+> Time 1
+> 012345
+> X
+> Time 2
+> 012345
+> X
+> Time 3
+> 012345
+> X
+> Time 4
+> 012345
+> X
+> Time 5
+> 012345
+> X
+> Final State
+> Probability Mass
+> Stopped
+> Continuing
+
+Figure 15: Example 2. DA results, synchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution after training. 3.200 
+
+3.400 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+2.000 
+
+3.000 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+1.600 
+
+1.800 
+
+> Time 1
+> Loss
+
+3.370 
+
+3.380 
+
+> Loss
+
+1.600 
+
+1.800 
+
+> Time 2
+> Loss
+
+3.370 
+
+3.380 
+
+> Loss
+
+1.600 
+
+1.800 
+
+> Time 3
+> Loss
+
+3.370 
+
+3.380 
+
+> Loss
+
+0 1000 2000 3000 4000 
+
+Iterations 
+
+1.600 
+
+1.800 
+
+> Time 4
+> Loss
+
+0 1000 2000 3000 4000 
+
+Iterations 
+
+3.370 
+
+3.380 
+
+> Loss
+
+Figure 16: Example 2. DPP results, synchronous stopping. Training and testing losses. 21 Learning to Stop: Deep Learning for MFOS 
+
+E.3. Example 3: Crowd Motion with Congestion. 
+
+This example extends the previous one, adding a congestion factor. The transition probabilities are: 
+
+pn(z, x ) := P (Xn+1 = z|Xn = x) = 
+
+( 16 (1 − 15 Ccong μ(x)) , if z̸ = x, 
+
+16 (1 + Ccong μ(x)) , if z = x. (21) Let us set Ccong = 0 .8. However, the reasoning regarding the differences between scenarios in which the central planner optimizes the set of asynchronous stopping times or the set of synchronous stopping times is similar. DA testing and training losses are shown in Fig. 17. DPP testing and training losses are shown in Fig. 18. 0 2000 4000 6000 8000 10000 
+
+> Iterations
+> 2.000
+> 2.500
+> 3.000
+> 3.500
+> Loss
+
+Training Loss      
+
+> 02000 4000 6000 8000 10000
+> Iterations
+> 2.000
+> 2.500
+> 3.000
+> Loss
+
+Testing Loss      
+
+> Testing Loss 02000 4000 6000 8000 10000
+> Iterations
+> 3.200
+> 3.300
+> 3.400
+> 3.500
+> Loss
+
+Training Loss      
+
+> 02000 4000 6000 8000 10000
+> Iterations
+> 3.200
+> 3.250
+> 3.300
+> 3.350
+> 3.400
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+
+Figure 17: Example 3. DA results. Training and testing losses. Top: asynchronous stopping. Bottom: synchronous stopping. 2.000 
+
+> 2.500
+> Time 0
+> Loss
+
+Training Loss 
+
+> 2.000
+> 2.500
+> Loss
+
+Testing Loss         
+
+> Testing Loss
+> 1.000
+> 1.250
+> Time 1
+> Loss
+> 2.600
+> 2.800
+> 3.000
+> Loss
+> 1.000
+> 1.200
+> 1.400
+> Time 2
+> Loss
+> 3.000
+> 3.200
+> Loss
+> 1.250
+> 1.500
+> Time 3
+> Loss
+> 3.200
+> 3.300
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 1.400
+> 1.600
+> 1.800
+> Time 4
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 3.300
+> 3.400
+> Loss 3.200
+> 3.400
+> Time 0
+> Loss
+
+Training Loss 
+
+> 3.200
+> 3.300
+> 3.400
+> Loss
+
+Testing Loss         
+
+> Testing Loss
+> 1.600
+> 1.800
+> Time 1
+> Loss
+> 3.370
+> 3.380
+> 3.390
+> Loss
+> 1.600
+> 1.800
+> Time 2
+> Loss
+> 3.380
+> 3.390
+> Loss
+> 1.600
+> 1.800
+> Time 3
+> Loss
+> 3.375
+> 3.380
+> 3.385
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 1.600
+> 1.800
+> Time 4
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 3.375
+> 3.380
+> 3.385
+> Loss
+
+Figure 18: Example 3. DPP results. Training and testing losses. Left: asynchronous stopping. Right: synchronous stopping. 
+
+E.4. Example 4: Distributional Cost 
+
+DA results are shown in Fig. 19 and 20. DPP results are shown in Fig. 21. 22 Learning to Stop: Deep Learning for MFOS 0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+0.200 
+
+0.250 
+
+0.300 
+
+> Loss
+
+Training Loss 
+
+0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+0.000 
+
+0.100 
+
+0.200 
+
+0.300 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+Figure 19: Example 4. DA results, asynchronous stopping. Training and testing losses. 0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+0.225 
+
+0.250 
+
+0.275 
+
+0.300 
+
+0.325 
+
+> Loss
+
+Training Loss 
+
+0 2000 4000 6000 8000 10000 
+
+Iterations 
+
+0.000 
+
+0.050 
+
+0.100 
+
+0.150 
+
+0.200 
+
+> Loss
+
+Testing Loss       
+
+> Testing Loss
+> Optimal Cost 0123456
+
+X
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+Time 0       
+
+> 0123456
+
+X
+
+Time 1       
+
+> 0123456
+
+X
+
+Time 2       
+
+> 0123456
+
+X
+
+Time 3       
+
+> 0123456
+
+X
+
+Final State 
+
+> Probability Mass
+> Stopped
+> Continuing
+> Target dist.
+
+Figure 20: Example 4. DA results, synchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution after training. 0.200 
+
+> 0.250
+> 0.300
+> Time 0
+> Loss
+
+Training Loss 
+
+> 0.000
+> 0.200
+> Loss
+
+Testing Loss         
+
+> Testing Loss
+> Optimal Cost
+> 0.120
+> 0.140
+> Time 1
+> Loss
+> 0.200
+> 0.250
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.120
+> 0.140
+> Time 2
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.200
+> 0.225
+> 0.250
+> Loss 0.250
+> 0.300
+> Time 0
+> Loss
+
+Training Loss 
+
+> 0.000
+> 0.100
+> 0.200
+> Loss
+
+Testing Loss         
+
+> Testing Loss
+> Optimal Cost
+> 0.120
+> 0.130
+> 0.140
+> Time 1
+> Loss
+> 0.200
+> 0.220
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.120
+> 0.140
+> Time 2
+> Loss
+> 01000 2000 3000 4000
+> Iterations
+> 0.200
+> 0.220
+> 0.240
+> Loss
+
+Figure 21: Example 4. DPP results, asynchronous and synchronous stopping. Training and testing losses. 
+
+E.5. Example 5: Towards the Uniform in 2D 
+
+Asynchronous stopping results, including training losses, testing losses, distribution evolution, and stopping probability are shown in Figs. 22 and 23. Synchronous stopping results are shown in Figs. 24 and 25. 23 Learning to Stop: Deep Learning for MFOS 0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.065 
+
+0.068 
+
+0.070 
+
+0.072 
+
+0.075 
+
+0.077 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.240 
+
+0.260 
+
+0.280 
+
+0.300 
+
+> Loss
+
+Testing Loss                                  
+
+> Testing Loss 01234
+> Stopped Dist.
+> Time: 0 Time: 1 Time: 2 Time: 3 Time: 4 Final State
+> 01234
+> 01234
+> Continuting Dist.
+> 0123401234012340123401234
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+
+0 1 2 3 4
+
+> 01234
+> Time: 0
+
+0 1 2 3 4
+
+> Time: 1
+
+0 1 2 3 4
+
+> Time: 2
+
+0 1 2 3 4
+
+> Time: 3
+
+0.4 
+
+0.6 
+
+0.8 Decision Prob 
+
+Figure 22: Example 5. DA results, asynchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution and stopping probability after training. 24 Learning to Stop: Deep Learning for MFOS 0.066 
+
+0.068 
+
+0.070 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.240 
+
+0.260 
+
+0.280 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+
+0.025 
+
+0.026 
+
+0.027 
+
+> Time 1
+> Loss
+
+0.255 
+
+0.260 
+
+0.265 
+
+> Loss
+
+0.025 
+
+0.026 
+
+0.027 
+
+> Time 2
+> Loss
+
+0.258 
+
+0.260 
+
+0.263 
+
+> Loss
+
+0 2000 4000 6000 8000 
+
+Iterations 
+
+0.026 
+
+0.028 
+
+> Time 3
+> Loss
+
+0 2000 4000 6000 8000 
+
+Iterations 
+
+0.258 
+
+0.260 
+
+0.263 
+
+> Loss 01234
+> Stopped Dist.
+
+Time: 0 Time: 1 Time: 2 Time: 3 Time: 4 Final State 
+
+0 1 2 3 4
+
+> 01234
+> Continuting Dist.
+
+0 1 2 3 4 0 1 2 3 4 0 1 2 3 4 0 1 2 3 4 0 1 2 3 4
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 0 1 2 3 4
+
+> 01234
+
+Time: 0 
+
+0 1 2 3 4
+
+Time: 1 
+
+0 1 2 3 4
+
+Time: 2 
+
+0 1 2 3 4
+
+Time: 3 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 
+
+Figure 23: Example 5. DPP results, asynchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution and stopping probability after training. 25 Learning to Stop: Deep Learning for MFOS 0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.068 
+
+0.070 
+
+0.072 
+
+0.074 
+
+0.076 
+
+0.078 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.240 
+
+0.260 
+
+0.280 
+
+0.300 
+
+0.320 
+
+> Loss
+
+Testing Loss                                  
+
+> Testing Loss 01234
+> Stopped Dist.
+> Time: 0 Time: 1 Time: 2 Time: 3 Time: 4 Final State
+> 01234
+> 01234
+> Continuting Dist.
+> 0123401234012340123401234
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+
+0 1 2 3 4
+
+> 01234
+> Time: 0
+
+0 1 2 3 4
+
+> Time: 1
+
+0 1 2 3 4
+
+> Time: 2
+
+0 1 2 3 4
+
+> Time: 3
+
+0.2 
+
+0.4 
+
+0.6 Decision Prob 
+
+Figure 24: Example 5. DA results, synchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution and stopping probability after training. 26 Learning to Stop: Deep Learning for MFOS 0.070 
+
+0.073 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.250 
+
+0.275 
+
+0.300 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+0.027 
+
+0.028 
+
+0.029 
+
+> Time 1
+> Loss
+
+0.260 
+
+0.270 
+
+> Loss
+
+0.026 
+
+0.028 
+
+> Time 2
+> Loss
+
+0.260 
+
+0.265 
+
+> Loss
+
+0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.027 
+
+0.028 
+
+0.029 
+
+> Time 3
+> Loss
+
+0 1000 2000 3000 4000 5000 
+
+Iterations 
+
+0.258 
+
+0.260 
+
+0.263                                  
+
+> Loss 01234
+> Stopped Dist.
+> Time: 0 Time: 1 Time: 2 Time: 3 Time: 4 Final State
+> 01234
+> 01234
+> Continuting Dist.
+> 0123401234012340123401234
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+
+0 1 2 3 4
+
+> 01234
+
+Time: 0 
+
+0 1 2 3 4
+
+Time: 1 
+
+0 1 2 3 4
+
+Time: 2 
+
+0 1 2 3 4
+
+Time: 3 
+
+0.3 
+
+0.4 Decision Prob 
+
+Figure 25: Example 5. DPP results, synchronous stopping. Top: training and testing losses. Bottom: evolution of the distribution and stopping probability after training. 27 Learning to Stop: Deep Learning for MFOS 
+
+E.6. Example 6: Matching a Target with a Fleet of Drones. 
+
+In this example, we extend our framework by incorporating a terminal cost and common noise. This allows us to consider a richer and more realistic class of MFOS environments. We extend the dynamics defined in (5) in the following way: 
+
+
+
+Xα 
+
+> 0
+
+∼ μ0, Aα 
+
+> 0
+
+= 1 
+
+αn ∼ π(·| Xαn ) = Be (pn(Xαn )) 
+
+Aαn+1 = Aαn · (1 − αn)
+
+Xαn+1 =
+
+(
+
+F (n, X αn , μ αn , ϵ n+1 , ϵ 0
+
+> n+1
+
+), if Aαn · (1 − αn) = 1 
+
+Xαn , otherwise. (22) where ϵ0 
+
+> n
+
+is the common noise that affects the dynamics of all agents equally. Note that with the presence of a common noise, the mean-field distribution ν is not deterministic, but instead it is a random variable that evolves conditionally with respect to the common noise. Furthermore the social cost defined in (9) can be extended by adding a terminal cost: 
+
+J(p) = E0
+
+
+
+> T
+
+X
+
+> n=0
+
+X
+
+> (x,a )∈S
+
+
+
+νpn(x, a )Φ( x, ν pX,n )ap n(x)
+
+
+
++ g(νpX,T )
+
+ , (23) where g : P(X ) → R is the terminal cost and E0 is the expectation with respect the common noise realization. The results for DA for different target distributions are provided in Fig. 26. The results for DPP for different target distributions are provided in Fig. 27. It is evident that, unlike the DPP, the optimal strategy in the DA tends to stop with high probability at the final time steps, as clearly illustrated for the target distributions corresponding to the letters “O” and “S”. 
+
+F. Hyperparameters sweep 
+
+In this section, we show the results of a sweep over the learning rate for Example 1 with the two methods and the two types of stopping times. We consider learning rates 10 −2, 10 −3, and 10 −4 in this order in the plots from top to bottom. Direct method stopping: Figs. 28 and 29 show the losses for the asynchronous and the synchronous stopping times respectively. Direct method stopping: Figs. 30 and 31 show the losses for the asynchronous and the synchronous stopping times respectively. 28 Learning to Stop: Deep Learning for MFOS 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 
+
+Figure 26: Example 6. DA results, asynchronous stopping. Match the Letter “M”, “F”, “O”, “S”, in a 10 × 10 grid with common noise. 29 Learning to Stop: Deep Learning for MFOS 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 
+
+0.05 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 02468
+
+> Stopped Dist.
+
+Time: 0 Time: 5 Time: 10 Time: 15 Time: 20 Time: 25 Time: 30 Time: 35 Time: 40 Time: 45 Final State 
+
+0 2 4 6 8
+
+> 02468
+> Continuting Dist.
+
+0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8 0 2 4 6 8
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04 0 1 2 3 4 5 6 7 8 9
+
+> 0123456789
+
+Time: 0 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 4 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 9 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 14 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 19 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 24 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 29 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 34 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 39 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 44 
+
+0 1 2 3 4 5 6 7 8 9
+
+Time: 49 
+
+0.25 
+
+0.50 
+
+0.75 Decision Prob 
+
+Figure 27: Example 6. DPP results, asynchronous stopping. Match the Letter “M”, “F”, “O”, “S”, in a 10 × 10 grid with common noise 30 Learning to Stop: Deep Learning for MFOS 0 1000 2000 3000 
+
+Iterations 
+
+0.275 
+
+0.300 
+
+0.325 
+
+0.350 
+
+0.375 
+
+0.400 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.700 
+
+0.800 
+
+0.900 
+
+1.000 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(a) Learning rate 10 −20 1000 2000 3000 
+
+Iterations 
+
+0.280 
+
+0.300 
+
+0.320 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.650 
+
+0.700 
+
+0.750 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(b) Learning rate 10 −30 1000 2000 3000 
+
+Iterations 
+
+0.280 
+
+0.300 
+
+0.320 
+
+0.340 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.625 
+
+0.650 
+
+0.675 
+
+0.700 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(c) Learning rate 10 −4
+
+Figure 28: Example 1: Sweep of learning rates. DA results, asynchronous stopping. 31 Learning to Stop: Deep Learning for MFOS 0 1000 2000 3000 
+
+Iterations 
+
+0.300 
+
+0.400 
+
+0.500 
+
+0.600 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.700 
+
+0.800 
+
+0.900 
+
+1.000 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(a) Learning rate 10 −20 1000 2000 3000 
+
+Iterations 
+
+0.300 
+
+0.320 
+
+0.340 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.650 
+
+0.700 
+
+0.750 
+
+0.800 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(b) Learning rate 10 −30 1000 2000 3000 
+
+Iterations 
+
+0.280 
+
+0.290 
+
+0.300 
+
+0.310 
+
+0.320 
+
+0.330 
+
+> Loss
+
+Training Loss 
+
+0 1000 2000 3000 
+
+Iterations 
+
+0.600 
+
+0.650 
+
+0.700 
+
+0.750 
+
+> Loss
+
+Testing Loss 
+
+> Testing Loss
+> Optimal Cost
+
+(c) Learning rate 10 −4
+
+Figure 29: Example 1: Sweep of learning rates. DA results, synchronous stopping. 32 Learning to Stop: Deep Learning for MFOS 0.280 
+
+0.300 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.800 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 1
+> Loss
+
+0.650 
+
+0.700 
+
+> Loss
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 2
+> Loss
+
+0.650 
+
+0.675 
+
+0.700 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.660 
+
+0.680 
+
+0.700 
+
+> Loss
+
+(a) Learning rate 10 −20.280 
+
+0.300 
+
+0.320 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.650 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 1
+> Loss
+
+0.650 
+
+0.675 
+
+0.700 
+
+> Loss
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 2
+> Loss
+
+0.660 
+
+0.680 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.660 
+
+0.680 
+
+> Loss
+
+(b) Learning rate 10 −30.280 
+
+0.300 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.625 
+
+0.650 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 1
+> Loss
+
+0.640 
+
+0.660 
+
+0.680 
+
+> Loss
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 2
+> Loss
+
+0.660 
+
+0.680 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.660 
+
+0.680 
+
+> Loss
+
+(c) Learning rate 10 −4
+
+Figure 30: Example 1: Sweep of learning rates. DPP results, asynchronous stopping. 33 Learning to Stop: Deep Learning for MFOS 0.300 
+
+0.350 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.800 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.120 
+
+0.140 
+
+> Time 1
+> Loss
+
+0.650 
+
+0.700 
+
+> Loss
+
+0.120 
+
+0.140 
+
+> Time 2
+> Loss
+
+0.670 
+
+0.680 
+
+0.690 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.660 
+
+0.670 
+
+0.680 
+
+> Loss
+
+(a) Learning rate 10 −20.300 
+
+0.320 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.700 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 1
+> Loss
+
+0.660 
+
+0.680 
+
+0.700 
+
+> Loss
+
+0.120 
+
+0.130 
+
+> Time 2
+> Loss
+
+0.660 
+
+0.670 
+
+0.680 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.130 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.660 
+
+0.670 
+
+0.680 
+
+> Loss
+
+(b) Learning rate 10 −30.290 
+
+0.300 
+
+0.310 
+
+> Time 0
+> Loss
+
+Training Loss 
+
+0.600 
+
+0.650 
+
+0.700 
+
+> Loss
+
+Testing Loss 
+
+Testing Loss 
+
+Optimal Cost 
+
+0.120 
+
+0.130 
+
+0.140 
+
+> Time 1
+> Loss
+
+0.660 
+
+0.680 
+
+0.700 
+
+> Loss
+
+0.110 
+
+0.120 
+
+0.130 
+
+> Time 2
+> Loss
+
+0.660 
+
+0.680 
+
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.120 
+
+0.130 
+
+0.140 
+
+> Time 3
+> Loss
+
+0 200 400 600 800 1000 
+
+Iterations 
+
+0.670 
+
+0.680 
+
+0.690 
+
+> Loss
+
+(c) Learning rate 10 −4
+
+Figure 31: Example 1: Sweep of learning rates. DPP results, synchronous stopping. 34

@@ -1,0 +1,3463 @@
+Title: Risk Aware Benchmarking of Large Language Models
+
+URL Source: https://openreview.net/pdf?id=Mv8y13wfDm
+
+Number of Pages: 34
+
+Markdown Content:
+## Risk Aware Benchmarking of Large Language Models 
+
+Apoorva Nitsure 1 Youssef Mroueh 1 Mattia Rigotti 1 Kristjan Greenewald 1 2 Brian Belgodere 1
+
+Mikhail Yurochkin 1 2 Jiri Navratil 1 Igor Melnyk 1 Jarret Ross 1
+
+Abstract 
+
+We propose a distributional framework for bench-marking socio-technical risks of foundation mod-els with quantified statistical significance. Our ap-proach hinges on a new statistical relative testing based on first and second order stochastic dom-inance of real random variables. We show that the second order statistics in this test are linked to mean-risk models commonly used in econo-metrics and mathematical finance to balance risk and utility when choosing between alternatives. Using this framework, we formally develop a risk-aware approach for foundation model selection given guardrails quantified by specified metrics. Inspired by portfolio optimization and selection theory in mathematical finance, we define a met-rics portfolio for each model as a means to aggre-gate a collection of metrics, and perform model selection based on the stochastic dominance of these portfolios. The statistical significance of our tests is backed theoretically by an asymptotic analysis via central limit theorems instantiated in practice via a bootstrap variance estimate. We use our framework to compare various large language models regarding risks related to drifting from instructions and outputting toxic content. 
+
+1. Introduction 
+
+Foundation models such as large language models (LLMs) have shown remarkable capabilities redefining the field of ar-tificial intelligence. At the same time, they present pressing and challenging socio-technical risks regarding the trustwor-thiness of their outputs and their alignment with human val-ues and ethics (Bommasani et al., 2021). Evaluating LLMs is therefore a multi-dimensional problem, where those risks      
+
+> 1IBM Research 2MIT-IBM Watson AI Lab. Correspondence to: Apoorva Nitsure <Apoorva.Nitsure@ibm.com >, Youssef Mroueh
+> <mroueh@us.ibm.com >.
+> Proceedings of the 41 st International Conference on Machine Learning , Vienna, Austria. PMLR 235, 2024. Copyright 2024 by the author(s).
+
+are benchmarked across diverse tasks and domains (Chang et al., 2023). In order to quantify these risks, (Liang et al., 2022; Wang et al., 2023; Huang et al., 2023; Sun et al., 2024) proposed benchmarks of automatic metrics for probing the trustwor-thiness of LLMs. These metrics include accuracy, robust-ness, fairness, toxicity of the outputs, etc. Human evaluation benchmarks can be even more nuanced, and are often em-ployed when tasks surpass the scope of standard metrics. Notable benchmarks based on human and automatic evalua-tions include, among others, Chatbot Arena (Zheng et al., 2023), HELM (Bommasani et al., 2023), MosaicML’s Eval, Open LLM Leaderboard (Wolf, 2023), and BIG-bench (Sri-vastava et al., 2022), each catering to specific evaluation areas such as chatbot performance, knowledge assessment, and domain-specific challenges. Traditional metrics, how-ever, sometimes do not correlate well with human judg-ments. Aiming for a better alignment with human judg-ments, some approaches utilize ChatGPT/GPT-4 for natural language generation evaluations (Liu et al., 2023; Zhang et al., 2023; Hada et al., 2023). A comprehensive evaluation of LLMs requires addressing the following critical considerations: 1. Interpretability. Evaluation of foundation models is multi-dimensional in nature and multiple metrics benchmark the models on different socio-technical di-mensions that probe the trustworthiness of their outputs and their adherence to shared values and ethics. It is critical to establish an aggregate-level measure to fa-cilitate the interpretation and effective communication of the evaluation results. 
+
+2. Risk Aware Benchmarking. In natural language (and other) applications, metrics quantify important guardrails such as model’s toxicity, safety, or robust-ness. Therefore, a comprehensive evaluation frame-work must incorporate a risk aware benchmarking. This entails ranking models based on the assessment of failure modes and tail statistics 1, providing a nuanced understanding of potential pitfalls. 
+
+> 1I.e. understanding and quantifying low-probability high-risk events.
+
+1Risk Aware Benchmarking of Large Language Models <latexit sha1_base64="oMYcx8nAFvX5nnYPeedyKOzsjl4=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoMQL2FXgnoMevEY0TwgWcLspDcZMju7zMwKIeQTvHhQxKtf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGtzO/9YRK81g+mnGCfkQHkoecUWOlhzI77xVLbsWdg6wSLyMlyFDvFb+6/ZilEUrDBNW647mJ8SdUGc4ETgvdVGNC2YgOsGOppBFqfzI/dUrOrNInYaxsSUPm6u+JCY20HkeB7YyoGeplbyb+53VSE177Ey6T1KBki0VhKoiJyexv0ucKmRFjSyhT3N5K2JAqyoxNp2BD8JZfXiXNi4p3WaneV0u1myyOPJzAKZTBgyuowR3UoQEMBvAMr/DmCOfFeXc+Fq05J5s5hj9wPn8AjqONVQ==</latexit> 
+
+(c)
+
+0.0 0.2 0.4 0.6 0.8 1.0
+
+Percentile 
+
+0.0
+
+0.2
+
+0.0 0.2 0.4 0.6 0.8 1.0
+
+Percentile 
+
+0.0
+
+0.1
+
+0.2
+
+> T
+
+mpt-7b-instruct  
+
+> <latexit sha1_base64="KWh0RLJ0bw8em/x3PU2+HIlN2FQ=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoMQL2FXgnoMevEY0TwgWcLspDcZMju7zMwKIeQTvHhQxKtf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGtzO/9YRK81g+mnGCfkQHkoecUWOlh3Jw3iuW3Io7B1klXkZKkKHeK351+zFLI5SGCap1x3MT40+oMpwJnBa6qcaEshEdYMdSSSPU/mR+6pScWaVPwljZkobM1d8TExppPY4C2xlRM9TL3kz8z+ukJrz2J1wmqUHJFovCVBATk9nfpM8VMiPGllCmuL2VsCFVlBmbTsGG4C2/vEqaFxXvslK9r5ZqN1kceTiBUyiDB1dQgzuoQwMYDOAZXuHNEc6L8+58LFpzTjZzDH/gfP4AjR6NVA==</latexit>
+
+(b) 
+
+> <latexit sha1_base64="2RRwxLXlY8TROIoM98j2WcOjpro=">AAAB6nicbVDLSgNBEOyNrxhfUY9eBoMQL2FXgnoMevEY0TwgWcLspDcZMju7zMwKIeQTvHhQxKtf5M2/cZLsQRMLGoqqbrq7gkRwbVz328mtrW9sbuW3Czu7e/sHxcOjpo5TxbDBYhGrdkA1Ci6xYbgR2E4U0igQ2ApGtzO/9YRK81g+mnGCfkQHkoecUWOlhzI97xVLbsWdg6wSLyMlyFDvFb+6/ZilEUrDBNW647mJ8SdUGc4ETgvdVGNC2YgOsGOppBFqfzI/dUrOrNInYaxsSUPm6u+JCY20HkeB7YyoGeplbyb+53VSE177Ey6T1KBki0VhKoiJyexv0ucKmRFjSyhT3N5K2JAqyoxNp2BD8JZfXiXNi4p3WaneV0u1myyOPJzAKZTBgyuowR3UoQEMBvAMr/DmCOfFeXc+Fq05J5s5hj9wPn8Ai5mNUw==</latexit>
+
+(a)
+
+Figure 1: (a) Quantiles, (b) Tail Value at Risk (TVAR), of Metrics portfolio of an LLM, showing that TVAR (second-order stochastic dominance) more clearly ranks the models than the quantiles alone (first-order stochastic dominance). (c) Ranking of models using Relative First and Second Stochastic Dominance of Portfolios (R-FSD, R-SSD @P) versus ranking of models using Relative First and Second Stochastic Dominance of chatGPT evaluation scores and ranking by Mean Win Rate (MWR) on the metrics portfolio. The portfolio in this plot uses an independent copula aggregation. Note that (1) the metrics portfolio successfully approximates the chatGPT evaluation, since the @P rankings largely agree with the @chatGPT rankings; (2) the R-SSD rankings outperform MWR baseline. 3. Statistical Significance. Evaluating machine learning models is intimately connected to statistical signifi-cance testing (SST), although this framework is still underutilized: (Dror et al., 2018) reports almost 50% of ACL papers miss SST indicators. With the ever in-creasing parametric complexity of LLMs, obtaining a reliable SST in evaluating foundation models becomes ever more urgent. We propose in this paper an evaluation framework that offers a principled solution and an efficient implementation that addresses each of these challenges. Our main contributions are: 1. Interpretable Metrics-Portfolio (Section 4). Draw-ing inspiration from econometrics and mathematical finance, we define a metrics-portfolio for aggregating metrics. This portfolio uses the notion of copula to normalize and aggregate metrics, yielding a single in-terpretable number assessing each output of a LLM. A higher value of the portfolio is preferable. We illustrate in Figure 1 panels (a) and (b) summary statistics of the metrics portfolio aggregating a total of 8 automatic metrics computed using 5K samples from the Mix-instruct dataset (Jiang et al., 2023). In panel (c) we show that model ranking based on our metrics-portfolio aligns with human evaluation proxies such as chatGPT (Please refer to Appendix B for details of how chatGPT score is computed). 2. Risk Aware Benchmarking via Second Order Stochas-tic Dominance (Section 2). Stochastic orders define partial orders on random variables and play a vital role in econometrics and mathematical finance for com-paring and selecting portfolios. We propose using stochastic order to select LLMs based on their metrics-portfolios. A portfolio dominates in the First Order Stochastic Dominance (FSD) if it has higher quan-tiles for all percentiles. However, in Figure 1 (Panel (a)), the quantiles of the metrics-portfolio of an LLM don’t provide a clear ordering. Instead, we propose the use of Second Stochastic Dominance (SSD), where a portfolio dominates if it has higher Tail Values at Risk (TVAR) for all percentiles (also known as Con-ditional Value at Risk). TVAR, illustrated in Figure 1 (Panel (b)), represents normalized integrated quantiles, assessing the risks of low values in the portfolio. Small TVAR corresponds to fat left tails in the distribution of the portfolio, identifying risky LLMs as those with the lowest TVAR. For example, Flan-T5 emerges as the riskiest model in our running example. 3. Statistical Significance via Dominance Tests. (Section 3) Armed with these notions of stochastic dominance, we define statistics that benchmark the relative domi-nance of a model’s portfolio on another (R-FSD and R-SSD in Panel (c) in Figure 1). We subject these statis-tics to an asymptotic analysis, proving central limit theorems that provide the foundation for hypothesis testing with false discovery rate control. We then per-form stochastic dominance hypothesis testings between all pairs of models. Having adjusted the confidence level of these tests, we aggregate these pairwise rank-ings to a single rank via rank aggregation techniques such as the Borda Algorithm (de Borda, 1781). The resulting ranks, depicted in Panel (c) of Figure 1, high-light that the portfolio of automatic metrics (@P) leads 2Risk Aware Benchmarking of Large Language Models 
+
+to a similar ranking to chatGPT score (@chatGPT) for both first and second stochastic order. To under-score the importance of risk aware benchmarking, we present the ranking of the metrics-portfolio produced by the ubiquitous Min Win Rate (MWR) used in LLM benchmarks (Liang et al., 2022)(last column in Panel (c)). Flan-T5 ranks close to last with all other orders, but ranks 6 with MWR. This highlights that the ubiq-uituous MWR used in LLM benchmarks is risky for ranking LLMs as it does not take into account failure modes of the model, and we caution practitioners of its pitfalls. 
+
+2. Stochastic Dominance 
+
+We first review notions of stochastic dominance and their relation to downside risk measures and risk averse prefer-ence modeling. We use the notation of the seminal paper of (Ogryczak & Ruszczynski, 2002), and assume that the random variables are standardized so that larger outcomes are preferable. Throughout this Section, the reader can think of the random variable X as a metric evaluating the perfor-mance of model A on a specific test set. Likewise, Y rep-resents the evaluation of model B. We defer the definition of metrics portfolio to Section 4. In a multi-metric evalu-ation, as explained in the introduction, X and Y represent portfolios of evaluations of model A and B respectively. 
+
+2.1. First and Second order Dominance and Mean-Risk Models First Order Stochastic Dominance The First-order Stochastic Dominance (FSD) between real-valued random variables uses the right-continuous cumulative distribution (CDF) as a performance function. Specifically, for a real random variable X, define the first performance function 
+
+F (1)  
+
+> X
+
+: R → [0 , 1] as the CDF: F (1)  
+
+> X
+
+(η) = P(X ≤ η), ∀η ∈
+
+R. The FSD of X on Y is defined as follows: 
+
+X ≽
+
+> FSD
+
+Y ⇐⇒ F (1)  
+
+> X
+
+(η) ≤ F (1)  
+
+> Y
+
+(η), ∀η ∈ R, (1) this intuitively means that for all outcomes η, the probability of observing smaller outcomes than η is lower for X than Y .An equivalent definition can be expressed using the quantile 
+
+F (−1)  
+
+> X
+
+(See e.g (Ogryczak & Ruszczynski, 2002)): 
+
+X ≽
+
+> FSD
+
+Y ⇐⇒ F (−1)  
+
+> X
+
+(p) ≥ F (−1)  
+
+> Y
+
+(p), ∀p ∈ (0 , 1] ,
+
+(2) where F (−1)  
+
+> X
+
+: [0 , 1] → R is the left-continuous inverse of 
+
+F (1)  
+
+> X
+
+: F (−1)  
+
+> X
+
+(p) = inf {η : F (1)  
+
+> X
+
+(η) ≥ p} for p ∈ (0 , 1] . We focus on this definition as it is more computationally and notationally friendly since the quantile function is always supported on [0 , 1] .
+
+Second Order Stochastic Dominance The Second-order Stochastic Dominance (SSD) is defined via the second per-formance function F (2)  
+
+> X
+
+: R → [0 , 1] that measures the area under the CDF: F (2)  
+
+> X
+
+(η) = R η 
+
+> −∞
+
+F (1)  
+
+> X
+
+(x)dx, for x ∈ R,
+
+yielding: 
+
+X ≽
+
+> SSD
+
+Y ⇐⇒ F (2)  
+
+> X
+
+(η) ≤ F (2)  
+
+> Y
+
+(η), ∀η ∈ R. (3) Note that FSD implies SSD, hence SSD is a finer notion of dominance. While FSD implies that X is preferred to 
+
+Y by any utility-maximizing agent preferring larger out-comes 2, (Ogryczak & Ruszczynski, 2002) showed that SSD implies that X is preferred to Y by any risk-averse agent preferring larger outcomes. 3 Similarly to FSD, SSD can be measured with quantile functions via introducing the sec-ond quantile function also known as integrated quantiles 
+
+F (−2)  
+
+> X
+
+: (0 , 1] → R
+
+F (−2)  
+
+> X
+
+(p) = 
+
+Z p
+
+> 0
+
+F (−1)  
+
+> X
+
+(t)dt, for t ∈ (0 , 1] . (4) Similarly to the FSD case, an equivalent more computa-tionally friendly definition can be expressed in terms of the second quantile function (a proof of this equivalence can be found in Theorem 3.2 in (Ogryczak & Ruszczynski, 2002)): 
+
+X ≽
+
+> SSD
+
+Y ⇐⇒ F (−2)  
+
+> X
+
+(p) ≥ F (−2)  
+
+> Y
+
+(p), ∀p ∈ (0 , 1] .
+
+(5) This equivalence is not straightforward and is due to Fenchel duality between F (2) and F (−2) . Using p = 1 we see that SSD implies μX ≥ μY , where μX and μY are means of X
+
+and Y .
+
+Mean – Risk Models (MRM) As noted earlier SSD is linked to risk aware benchmarking via the second perfor-mance function F (2) (.) measuring expected shortfall, and the negative second quantile function −F (−2) (p) that is an assessment of expected losses given outcomes lower than the p-quantile. 
+
+Definition 2.1 (Mean – Risk Models) . A mean – risk model of a random variable X consists of the pair (μX , r X ), where 
+
+μX is the mean of X, and rX is a functional that measures the risk of the random outcome X.The consistency of a mean – risk model with SSD is defined as follows:   
+
+> 2I.e. having an increasing utility function.
+> 3I.e. having an increasing and concave utility function.
+
+3Risk Aware Benchmarking of Large Language Models 
+
+Name Risk Measure α− consistency with SSD Standard deviation σX = pE(X − μX )2 not consistent Absolute semi deviation δX = E(μX − X)+ 1− consistent Negative Tail Value at Risk −TVAR X (p) = − F (−2) (p) 
+
+> p
+
+1− consistent for all p ∈ (0 , 1] 
+
+Mean absolute deviation from a quantile hX (p) = μx − F (−2)   
+
+> X(p)
+> p
+
+1− consistent for all p ∈ (0 , 1] 
+
+Gini Tail ΓX = 2 R 10 (μX p − F (−2)  
+
+> X
+
+(p)) dp 1− consistent 
+
+Table 1: Risk models and their α−consistency with SSD. 
+
+Definition 2.2 (SSD consistency of Mean – Risk Models) .
+
+A mean – risk model (μX , r X ) is α−consistent with SSD, if for α > 0 the following is true: 
+
+X ≽
+
+> SSD
+
+Y =⇒ μX − αr x ≥ μY − αr Y . (6) The ubiquitous mean – risk model in machine learning is 
+
+(μX , σ X ), where σX is the standard deviation. Unfortu-nately this model is not consistent with the SSD and has several limitations as it implies Gaussianity of the outcomes or a quadratic utility function. We give in Table 1 risk mea-surements and their α−consistency (proofs in (Ogryczak & Ruszczynski, 2002)). Note that in contrast FSD is only consistent with the Mean-VaR risk model (Mean-Value at Risk) for all p ∈ [0 , 1] . VaR does not provide a refined tail assessment. 
+
+2.2. Relaxations of Stochastic Dominance 
+
+Recalling the definitions of FSD and SSD in Equations (2) and (5) , in the finite-sample regime it is hard to test for these relations as one needs to show the infinite-sample quantile or second quantile properties hold uniformly over all p ∈
+
+(0 , 1] . This difficulty motivated the relaxation of stochastic dominance to an almost stochastic dominance pioneered by (Leshno & Levy, 2002). These relaxations were revisited for the first order by (Alvarez-Esteban et al., 2014) who later proposed an optimal transportation approach to assess almost first stochastic order (Del Barrio et al., 2018). 
+
+Almost FSD ( ε-FSD) Following (Leshno & Levy, 2002), (Del Barrio et al., 2018) relaxed FSD (Equation (2) ) via the violation ratio of FSD. X ≽
+
+> ε−FSD
+
+Y if and only if: 
+
+εW2 (FX , F Y ) = 
+
+R 10 (F (−1)  
+
+> Y
+
+(t) − F (−1)  
+
+> X
+
+(t)) 2+dt 
+
+W22(FX , F Y ) ≤ ε, 
+
+(7) where W2 is the Wasserstein -2 distance between FX and 
+
+FY .This ratio corresponds to a measure of the “area” of violation of the FSD dominance of X on Y . Note that 
+
+0 ≤ εW2 (FX , F Y ) ≤ 1, with value 0 if X ≻ 
+
+> FSD
+
+Y and 1
+
+if Y ≻ 
+
+> FSD
+
+X. For ε ∈ (0 , 12 ], Figure 4a in Appendix G illustrates ε-FSD, dashed areas represent the violation set. 
+
+Almost SSD ( ε-SSD) We define ε-SSD, for ε ∈ (0 , 12 ), by relaxing Equation (5) as follows: X ≽
+
+> ε−SSD
+
+Y if and only if 
+
+εIQ (FX , F Y ) = 
+
+R 10 (F (−2)  
+
+> Y
+
+(t) − F (−2)  
+
+> X
+
+(t)) 2+dt d2
+
+> IQ
+
+(FX , F Y ) ≤ ε, 
+
+(8) where dIQ is the L2 distance between the Integrated Quan-tiles (F (−2) ). This ratio corresponds to a measure of the “area” of violation of the SSD dominance of X on Y . Fig-ure 4b in Appendix G illustrates the second order, dashed areas represent the violation set of SSD of X on Y . Ap-pendix D gives a more detailed account on almost stochastic dominance. 
+
+2.3. Relative Stochastic Dominance 
+
+In the remainder of the paper, we refer to the FSD violation ratio as εW2 (FX , F Y ) ≡ ε(1) (FX , F Y ) and to the SSD vi-olation ratio as εIQ (FX , F Y ) ≡ ε(2) (FX , F Y ). One of the shortcomings of almost stochastic dominance is the need to fix a threshold ε on the violation ratio. When compar-ing two random variables, setting a threshold is a viable option. Nevertheless, when one needs to rank multiple vari-ables X1, . . . , X k (considering all pairwise comparisons), setting a single threshold that would lead to a consistent rel-ative stochastic dominance among the k variables becomes challenging. To alleviate this issue, we draw inspiration from relative similarity and dependence tests (Bounliphone et al., 2016a;b) that circumvent the need for a threshold via relative pairwise testings. For ℓ ∈ { 1, 2} (i.e for FSD or SSD) we consider all pairs of violations ratios: 
+
+ε(ℓ) 
+
+> ij
+
+= ε(ℓ)(FXi , F Xj ) for i, j ∈ { 1 . . . k }, i ̸ = j, 
+
+noting that ε(ℓ) 
+
+> ij
+
++ ε(ℓ) 
+
+> ji
+
+= 1 . Let F = ( FX1 , . . . F Xk ). We define the one-versus-all violation ratio of the dominance of 4Risk Aware Benchmarking of Large Language Models 
+
+Xi on all other variables Xj , j ̸ = i :
+
+ε(ℓ) 
+
+> i
+
+(F ) = 1
+
+k − 1
+
+X 
+
+> j̸=i
+
+ε(ℓ) 
+
+> ij
+
+.
+
+We then define relative stochastic dominance for both orders, R-FSD an R-SSD respectively: 
+
+Xi1 ≽
+
+> R−FSD
+
+Xi2 . . . ≽
+
+> R−FSD
+
+Xik
+
+⇐⇒ ε(1)  
+
+> i1
+
+(F ) ≤ · · · ≤ ε(1)  
+
+> ik
+
+(F ) and, 
+
+Xi1 ≽
+
+> R−SSD
+
+Xi2 . . . ≽
+
+> R−SSD
+
+Xik
+
+⇐⇒ ε(2)  
+
+> i1
+
+(F ) ≤ · · · ≤ ε(2)  
+
+> ik
+
+(F )
+
+In this definition of relative stochastic dominance, the most dominating model is the one with the lowest one-versus-all violation ratio and to test for relative dominance of Xi on 
+
+Xj we can look at the following statistics: 
+
+∆ε(ℓ) 
+
+> ij
+
+(F ) = ε(ℓ) 
+
+> i
+
+(F ) − ε(ℓ) 
+
+> j
+
+(F ), (9) and we have the following threshold-free test for relative order: 4
+
+Xi ≽
+
+> R−FSD
+
+Xj ⇐⇒ ∆ε(1)  
+
+> ij
+
+(F ) ≤ 0 (10) 
+
+Xi ≽
+
+> R−SSD
+
+Xj ⇐⇒ ∆ε(2)  
+
+> ij
+
+(F ) ≤ 0 (11) 
+
+3. Testing For Almost and Relative Stochastic Dominance 
+
+Given empirical samples from FX and FY we perform statis-tical testing of the almost and relative stochastic dominance of X on Y given empirical estimates of the statistics given in Sections 2.2 and 2.3. A key ingredient for quantifying the statistical significance of such tests is a central limit theorem that guarantees that the centered empirical statistics is asymptotically Gaussian at the limit of infinite sample size. Given n samples from FX (m from FY respectively), we denote F nX and F mY the corresponding empirical distri-butions. For ε0− FSD, (Del Barrio et al., 2018) studied the following hypothesis testing H0 : X  ≽
+
+> ε0−SSD
+
+Y versus the alternative Ha : X ≽
+
+> ε0−SSD
+
+Y . Using (2) , this amounts to the following null hypothesis : H0 : εW2 (F nX , F mY ) > ε 0.
+
+(Del Barrio et al., 2018) showed the asymptotic normality of the empirical statistics: (Del Barrio et al., 2018; Ulmer 
+
+> 4
+
+For comparing k = 2 random variables, these r-FSD and 
+
+r-SSD tests reduce to 0.5-FSD and 0.5-SSD absolute tests, respec-tively. 
+
+et al., 2022) propose to reject H0 with a confidence level 
+
+1 − α if: 
+
+εW2 (F nX , F mY ) ≤ ε0 +
+
+r m + nmn σ2(FX , F Y )Φ −1(α),
+
+(12) where Φ−1 is the quantile function of a standard normal. For the tests we propose below, we assume the following structure on the underlying CDFs to derive the correspond-ing central limit theorems (CLTs). 
+
+Assumption 1 (Regularity) . Let the CDF F be supported on the interval [−M, M ] for some constant M , and have pdf 
+
+f such that f ′(p)  
+
+> f3(p)
+
+is bounded for almost every p for which 
+
+f (p) > 0 (i.e. all p in the support of f ). 
+
+ε-SSD Testing Similar to ε-FSD, using the definition in (5) we propose to test using the following null hypothesis for testing for ε0-SSD: 
+
+H0 : εIQ (F nX , F mY ) > ε 0
+
+Supposing Assumption 1 holds for FX , FY and assuming  
+
+> nn+m
+
+→ λ for some λ, we state a Central Limit Theorem for the second order statistics (Theorem 3.1, proved in Ap-pendix J.1). 
+
+Theorem 3.1 (Central Limit Theorem for ε-SSD) . Assume that FX , FY are supported on intervals 5 in [−M, M ],and have pdfs fx, f y such that f ′   
+
+> x(p)
+> f3
+> x(p)
+
+, f ′    
+
+> y(p)
+> f3
+> y(p)
+
+are bounded almost everywhere on the support of fx and fy respectively. Assume we have n samples from FX and m samples from FY , with n, m → ∞ such that nn+m → λ for some 
+
+λ. Then 
+
+q mn m+n (εIQ (F nX , F mY ) − εIQ (FX , F Y )) →N (0 , σ 2
+
+> λ
+
+(FX , F Y )) where σ2
+
+> λ
+
+(FX , F Y ) =   
+
+> 1
+> d8
+> IQ (FX,F Y)
+
+[(1 − λ)Var( vX (U )) + λVar( vY (U ))] ,
+
+for U ∼ Unif[0 , 1] , vY (t) =2
+
+ 1   
+
+> fy(F−1
+> Y(t))
+
+  R 1 
+
+> t
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) +dp 
+
+
+
+, and 
+
+vX (t) = 2 
+
+ 1  
+
+> fx(F−1
+> X(t))
+
+  R 1 
+
+> t
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) −dp 
+
+
+
+.
+
+Similarly to (12) , Theorem 3.1 suggests to reject H0 with a confidence 1 − α if : 
+
+εIQ (F nX , F mY ) ≤ ε0+
+
+r m + nmn σ2
+
+> λ
+
+(FX , F Y )Φ −1(α),
+
+(13) where (for the same reasons as the FSD case) σ2 
+
+> λ
+
+is given by the central limit theorem. 
+
+Relative Stochastic Dominance Testing We turn now to relative stochastic dominance that we introduced in (10) 
+
+> 5
+
+The interval for FX and for FY need not coincide. 
+
+5Risk Aware Benchmarking of Large Language Models 
+
+and (11) for first and second orders. Given n samples from 
+
+k random variables (X1 . . . X k), let F = ( F1, . . . , F k) be the marginals of Xi and Fn = ( F1n, . . . , F kn ) denote the empirical marginals. To test for R-FSD (resp R-SSD) of Xi1
+
+on Xi2 we propose to test the following null hypothesis: 
+
+H0 : ∆ ε(ℓ) 
+
+> ij
+
+(Fn) > 0, ℓ = 1 or 2
+
+Assuming that each Fi satisfies Assumption 1, we state in Appendix H a central limit theorem for the relative second order statistics (Theorem H.3 proved in in Appendix J.2). A similar result holds for the relative first order statistics that we omit for brevity. Theorem H.3 suggests to reject H0
+
+with a confidence 1 − α if: 
+
+∆ε(2)  
+
+> i1,i 2
+
+(Fn) ≤
+
+r 1
+
+n σ2
+
+> relative
+
+(FX , F Y )Φ −1(α)
+
+(14) where σ2
+
+> relative
+
+(FX , F Y ) is given by the central limit theo-rem (similar test exists for R-FSD). 
+
+Bootstrapping Heuristic While the CLT above provides an asymptotic value for the variance, in practice (as in the ASO framework of (Ulmer et al., 2022)) we estimate the variance with a bootstrapping heuristic (Efron & Tibshirani, 1993). This estimate is nonasymptotic and hence should often be more accurate than the asymptotic value. Proving the consistency of the bootstrap for functions of quantiles is generally nontrivial (Shao & Tu, 2012), but recall that the stochastic ordering can be defined in terms of either quantiles or CDFs. In Appendix K we provide a bootstrap consistency proof for the absolute statistics based on the CDF, leaving the quantile based proof for future work. 
+
+Multi-Testing Algorithm Algorithm 1 given in Appendix C summarizes the multi-testing setup for both relative and almost (absolute) FSD and SSD. The main idea behind Algorithm 1 is to turn multi-testing to pairwise testings i.e testing for stochastic dominance between all pairs of models using relative (or absolute) FSD or SSD. In order to ensure that this multi-testing has a confidence level 1 − α, we correct the individual test’s confidence level by dividing α
+
+by the number of all pairs (Bonferroni, 1936). Then in order to combine the pairwise rankings to a single rank, we use a simple Borda count (de Borda, 1781) rank aggregation algorithm. 
+
+4. Distributional Risk Aware Benchmarking of Foundation Models 
+
+Setup In this section we consider the multi-metric eval-uation setup of a foundation model A : X → O , using 
+
+N metrics mi : O → R, i = 1 . . . N , where mi are real valued functions evaluated on a test set D.Without loss of generality, assume that each of the metrics are standard-ized such that higher values of mi correspond to more desirable model performance. We model observed val-ues for each metric mi as a continuous random variable 
+
+Mi with unknown CDF FMi . For a model A : X → O 
+
+and a data sample X ∼ D, we describe the evaluation of model A with mi with the following random variable 
+
+Mi: Mi|A, X := mi(A(X)) , X ∼ D, i = 1 . . . N, where the randomness arises from the data sampling procedure 
+
+X ∼ D, and (if applicable) the stochasticity of the model 
+
+A, for example if the model uses sampling. 
+
+Metrics Portfolio Aggregation and Selection using Stochastic Dominance Let λ = ( λ1, . . . , λ N ) be a proba-bility vector that represents the importance of the mi metrics to the model’s end user. Inspired by the portfolio optimiza-tion literature, we model the user return from a model as a 
+
+portfolio of metrics mi evaluated on a test set D. Following (Ulan et al., 2021; Belgodere et al., 2023), we define this portfolio as an Independent copula, which forms a weighted geometric mean of the CDFs: 
+
+RA(X) = exp 
+
+> N
+
+X
+
+> i=1
+
+λi log FMi (mi(A(X))) 
+
+!
+
+(15) Note that (15) normalizes the metrics using the CDF of the metric Mi, eliminating the issue of differing dynamic ranges. This CDF should be formed by pooling together the evaluations on all samples and from all models being com-pared, to ensure that the various RA are comparable. The CDF normalization is monotonic and hence it preserves the order of each metrics and allow us to aggregate in the prob-ability space the metrics using a simple weighted geometric mean. Computing RA(X) for all test samples X, we can therefore characterize the distribution of the metric portfolio of the model A. To compare two models it is enough to compare their corresponding portfolios, specifically, Model 
+
+A is preferred to Model B using ε- or R-SSD: 
+
+RA(X) ≽  
+
+> ε−or R−SSD
+
+RB (X). (16) Similar tests can be performed for FSD. Note that the portfolio aggregation in (15) does not take into account the dependencies and correlations between the met-rics. To alleviate this, we explore using also the empirical copula (Ruschendorf, 1976) as a means of aggregation of the metrics as follows 
+
+RcA(X) = ˆC (FM1 (m1(A(X))) , . . . F MN (mN (A(X)))) ,
+
+(17) where ˆC is the empirical copula . Given N samples Xℓ, ℓ =1 . . . n , the empirical copula is given by ˆC(u1, . . . u n) = 
+
+> 1
+> n
+
+Pnj=1 ΠNi=1 1FMi (mi(A(Xj ))) <u i . The empirical copula 6Risk Aware Benchmarking of Large Language Models 
+
+can be understood as an average mean win rate (with an “and” operation on all metrics), that is computed on the CDF transformed scores of each evaluated sample. The main advantage of the independent copula (IC) in (15) versus the empirical copula (EC) in (17) is its computational efficiency (O(nN ) for IC versus O(n2N ) for EC). 
+
+Multiple Models Comparison Given k models Aℓ, ℓ =1 . . . k and their evaluations mi(Aℓ(X)) , X ∼ D, i =1 . . . N , we pool all model evaluations for a metric to esti-mate the CDF of each metric FMi and construct a portfolio for each model RAℓ (X). We use our Relative Stochastic Dominance testing introduced in Section 3 and in Algorithm 1 to rank the models by their metrics portfolio in relative SSD or FSD with a confidence level 1 − α.
+
+Per Metric Stochastic Dominance and Rank Aggrega-tion We also explore another approach for multi-testing, by considering the stochastic dominance of the models on per-metric basis. This amounts to computing N relative stochas-tic orders for each Mi = ( mi(A1(X)) , . . . , m i(Aℓ(X))) ,
+
+i = 1 . . . N . This amounts to producing via Algorithm 1 a relative ranking πi of the models based on Mi. A single rank π is then obtained via rank aggregation with uniform weighting on the per-metric rankings πi, i = 1 . . . N . We use for rank aggregation the R package of (Pihur et al., 2009). For more details on rank aggregation, the reader is referred to Appendix F.3. 
+
+5. Experiments 
+
+5.1. Validation of Statistical Significance 
+
+We examine the statistical properties of our tests as a func-tion of sample size. We purposely design synthetic score distributions to represent challenging problems comprising large overlap between the distributions and considerable violation ratio, but where one would still like to have an ordering among the variables. For this we consider the two Gaussian variables X ∼ N (0 , 1) and and Y ∼ N (0 .5, 2) .Figure 5 in Appendix L.1 shows that our tests have desirable statistical properties. We perform synthetic experiment on fat tailed distribution such as log normal (Fig. 6 App. L.1). 
+
+5.2. LLM evaluation with Stochastic Dominance 
+
+We showcase LLM evaluation with stochastic dominance to benchmark two risks: drifting from instructions and out-putting toxic content. The following datasets correspond to each risk we benchmark. 
+
+Mix-Instruct Evaluation Data We use the data from (Jiang et al., 2023), that consists of an instruction, an input sentence and an expected output from the user, as well as the output of a set of different LLMs. The dataset consists of a training set of 100K samples and a test set of 5K samples. (Jiang et al., 2023) used automatic metrics such as BARTscore and BLEU score comparing the LLM generation to the expected output in order to evaluate if each LLM followed the instruction. (Jiang et al., 2023) used also chatGPT to evaluate the generations (See Appendix B for ChatGPT evaluation). The number of automatic metrics N is 8, the total number of evaluated models k is 12. Metrics are unified so that larger values are preferred. 
+
+Toxicity Evaluation We use the real toxicity prompts dataset of Gehman et al. (2020), and generate prompts com-pletions from the Llama 2 7b , Llama 2 13b, Llama 2 70b , MosaicML MPT 30b and Tiiuae Falcon 40b models avail-able in Opensource ( k = 5 models). We select two sets of prompts: toxic prompts (toxicity > 0.8, that gives ∼10 Kprompts ) and non-toxic prompts (toxicity < 0.2, from which we randomly sample 10K). We sample from each model, 10 completions per prompt using nucleus sampling (top-p sampling with p = 0 .9 and a temperature of 1). This procedure yields a dataset of ∼200 K sentence completions per model. We evaluate the toxicity of these generations using the Perspective API, on the following toxicity metrics (N = 6 metrics): Toxicity, Severe toxicity, Identity Attack, Insult, Profanity and Threat. Following Liang et al. (2022), we evaluate the toxicity of generated completions only and refer to this as Gen Only evaluation. In order to also give the context of the completion, we prepend the model generation with the prompt and evaluate the full sentence using Per-spective API. We refer to this as Prompt+Gen . The polarity of all toxicity metrics is unified so that high values refer to non toxic content (we use −log probabilities of Perspective API outputs). 
+
+Evaluation Protocol and Baselines We evaluate each of the use cases (instruction following and toxicity) using the following absolute stochastic dominance tests: (1) ε-FSD (corresponds to the ASO evaluation of (Ulmer et al., 2022)) for ε = 0 .08 , 0, 25 , 0.4. (2) our proposed ε-SSD using the same values for ε, (3) our relative stochastic dominance R-FSD and R-SSD tests, (4) the Mean – Risk models de-scribed in Table 3, and (5) the ranking produced by the Mean Win Rate ( MWR ) used by LLM leaderboards such as HELM (Liang et al., 2022). As noted in Section 4, we either perform these tests on a metrics portfolio – we refer to this as test @P(IC) when using the independent copula given in Equation (15) and test @P(EC) when using the empirical copula given in Equation (17) ; or on a per metric basis leading to N rankings of the models that we reduce to a single ranking via Rank Aggregation (RA) (Pihur et al., 2009) – we refer to this as RA(test @ M) . In this naming convention, test takes values in {MWR, ε-FSD, ε-SSD, R-FSD, R-SSD, Mean – Risk Model ( μX − rX )} where rX
+
+is a chosen risk from Table 3. We perform all our statisti-cal tests with a significance level α = 0 .05 , and use 1000 
+
+7Risk Aware Benchmarking of Large Language Models 100 500 1000 2000 3000 4000 
+
+> Sample Size
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> Kendall Tau Similarity
+> Kendall Tau Similarity to Asymptotic Ranks Eval Type
+> Mean Win Rate w/ P(IC) Mean Risk Models w/ P(IC) Relative Testing SSD w/ P(IC) Mean Win Rate w/ P(EC) Mean Risk Models w/ P(EC) Relative Testing SSD w/ P(EC)
+
+(a) Asymptotic Rank Stability 100 500 1000 2000 3000 4000 5000  
+
+> Sample Size
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Kendall Tau Similarity
+> Sample dependent Portfolio based Model Ranking Comparison with ChatGPT SSD Eval Type
+> Mean Win Rate w/ P(IC) Mean Risk Models w/ P(IC) Relative Testing w/ P(IC) Mean Win Rate w/ P(EC) Mean Risk Models w/ P(EC) Relative Testing w/ P(EC)
+
+(b) Rank Similarity to R-SSD @chatGPT Rank. 
+
+Figure 2: (a) On the Mix-instruct dataset, we compute the ranking resulting from each ranking method using varying sample sizes from 100 to 5K. We repeat each experiment 5 times. We report for each method, the Kendall-Tau similarity between resulting ranks at each sample to the corresponding asymptotic rank at 5K samples. We see that Relative SSD on independent copula portfolio P(IC) is more stable in sample size than rank aggregation of all Mean Risk Models and more stable than MWR on the portfolio. The empirical dependent copula portfolio P(EC) does not have favorable asymptotics w.r.t to P(IC) since it suffers from the curse of dimension. (b) We use the same setup as in (a) but instead of Kendall-Tau similarity to the asymptotic rank of each method, we plot the similarity to R-SSD @ChatGPT rank at 5K samples. We see that MWR is inconsistent with chatGPT rank while both R-SSD @P(IC) and (EC) and RA(MRM @P(IC)) have a Kendall-Tau similarity between 0.7 and 0.75. Interestingly, the dependent copula (EC) captures better chatGPT rank than independent copula (IC), hinting at the favorable role of the metric dependencies. bootstrap iterations. 
+
+Efficient Implementation We compare the computational complexity of our implementation for computing all stochas-tic orders to that of the Deep-Significance package (deepsig, 2022) which implements ε-FSD in the ASO frame-work (Ulmer et al., 2022), on the task of comparing models on the Mix-Instruct dataset (sample size 5K, k = 12 mod-els). Using the Deep-Significance implementation of MULTI -ASO in (Ulmer et al., 2022) for ε = 0 .25 with just 3 bootstrap iterations 6, the test completes in 15min50s (averaged over 7 runs). Our code for relative and absolute testing performs all tests at once and relies on caching vec-torization and multi-threading of the operations. Our code completes all tests in an average of just 17.7 s with 1000 bootstraps. Experiments were run on a CPU machine with 128 AMD cores, of which 2 were used. 
+
+Mix-Instruct Results and Analysis In Figure 2 we depict the asymptotics of the ranks resulting from our tests as func-tion of the sample size. In Figure 2 (a), we see that R-SSD with the portfolio aggregation with Independent Copula P(IC) has favorable asymptotics compared to R-SSD with dependent Empirical Copula P(EC). Indeed the empirical copula estimation suffers from the curse of dimension. On the other hand, we see in Figure 2 (b) that R-SSD with P(EC) captures better than P(IC) the ranks resulting from 
+
+> 6
+
+Limited to 3 for computational reasons. 
+
+R-SSD with ChatGPT score. In other words, the dependent copula agrees more with the human evaluation proxy that is chatGPT. Note that the EC is expensive to compute and requires on average 1.5 hours on 5K samples, whereas IC requires only 0.87 seconds. When compared with Mean Win Rate (MWR) used in LLM leaderboards such as HELM (Liang et al., 2022), we see that it does not have good asymptotics nor agree with Chat-GPT rankings, regardless of the aggregation technique used. This is due to the fact that MWR only counts wins and does not take into account how fat is the left tail of the distribu-tion of the metric being benchmarked, possibly leading to overevaluation of risky models. Remarkably, the R-SSD ordering agrees with the rank ag-gregation of all (consistent) mean – risk models, confirming the theoretical link between second order dominance and risk averse decision making. The dependent copula EC with R-SSD leads to a better agreement with chatGPT R-SSD ranking than MRM models. Finally Tables 4 and Table 5 in Appendix L give additional results on R-FSD and the rank aggregation of all metrics, and how it compares to ε− FSD and SSD. 
+
+Toxicity Results and Analysis Table 2 shows the results of our tests on the combined set of toxic and non toxic prompts. Ablation studies on individual sets are given in Table 6 in Appendix L.4. We make a few observations: First, overall 8Risk Aware Benchmarking of Large Language Models                                              
+
+> Scenario Llama 2 7b Llama 2 13b Llama 2 70b MosaicML MPT 30b Tiiuae Falcon 40b
+> All Combined (Toxic + Non-Toxic Prompts)
+> RA(R-FSD @M) (Gen Only) 23514R-FSD @P(IC) (Gen Only) 23514RA(R-SSD @M) (Gen Only) 23514R-SSD @P(IC) (Gen Only) 23514RA(R-FSD @M) (Prompt + Gen) 34512
+> RA(R-FSD @M) (Prompt + Gen) 34512
+> R-SSD @P(IC) (Prompt + Gen) 34512
+> R-SSD @P(IC) (Prompt + Gen) 34512
+
+Table 2: Toxicity Ranking using an Independent Copula portfolio aggregation of Perspective API metrics. the portfolio with independent copula approach agrees well with the rank aggregation of per-metric rankings. The port-folio is more computationally efficient as it needs to run the stochastic dominance test only on the portfolio, rather than running N tests and aggregating them via rank aggregation. An ablation study on empirical copula in Appendix L shows that it leads to a similar ranking as the Independent Cop-ula. Secondly, on this dataset the R-FSD and R-SSD agree, with a few exceptions. Interestingly, when comparing mod-els on model generation only, on toxic prompts MosaicML MPT stands out, while on non toxic prompts Llama2 7B stands out and on the combined set Mosaic ML MPT stands out. On the combined set, we see for the llama family that increased model size increases the toxicity of generations. This is in line with findings in the recent TrustLLM bench-mark (Sun et al., 2024). 
+
+6. Conclusion 
+
+In this paper we introduced a distributional framework for risk aware benchmarking and comparison of foundation models based on multi-metric evaluations. Our framework has potential beyond the current applications presented here, being applicable wherever statistical significance while rank-ing assets for decision making is needed. We believe our tools for training models to be risk averse can be of sig-nificant use to practitioners and serve as a stepping stone towards solving the AI alignment problem. 
+
+Impact Statement 
+
+This paper presents a risk aware framework for benchmark-ing LLMs. In benchmarking LLM the stochastic nature of their generation and in presence of multiple metrics to be evaluated, our work offers a solution that gives raise to 1) a sound aggregation of the metrics via the copula method 2) a risk aware evaluation that takes into account tail events of misalignment and not only the average behaviors thanks to the use of stochastic orders 3) quantifies the uncertainty of the evaluation via statistical significance testings. The potential societal consequences of our work falls under AI governance as it allows a rigorous certification of compli-ance of LLMs with multitude of safeguards and dimensions. 
+
+References 
+
+Pedro C Alvarez-Esteban, E del Barrio, JA Cuesta-Albertos, and C Matr ´an. A contamination model for approxi-mate stochastic order: extended version. arXiv preprint arXiv:1412.1920 , 2014. Brian Belgodere, Pierre Dognin, Adam Ivankay, Igor Melnyk, Youssef Mroueh, Aleksandra Mojsilovic, Jiri Navratil, Apoorva Nitsure, Inkit Padhi, Mattia Rigotti, Jer-ret Ross, Yair Schiff, Radhika Vedpathak, and Richard A. Young. Auditing and generating synthetic data with con-trollable trust trade-offs, 2023. Rishi Bommasani, Drew A Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S Bern-stein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, et al. On the opportunities and risks of foundation models. 
+
+arXiv preprint arXiv:2108.07258 , 2021. Rishi Bommasani, Percy Liang, and Tony Lee. Holistic evaluation of language models. Annals of the New York Academy of Sciences , 2023. C.E. Bonferroni. Teoria statistica delle classi e calcolo delle probabilit `a. Pubblicazioni del R. Istituto superiore di scienze economiche e commerciali di Firenze. See-ber, 1936. URL https://books.google.com/ books?id=3CY-HQAACAAJ .Wacha Bounliphone, Eugene Belilovsky, Matthew Blaschko, Ioannis Antonoglou, and Arthur Gretton. A test of rela-tive similarity for model selection in generative models. 
+
+Proceedings ICLR 2016 , 2016a. 9Risk Aware Benchmarking of Large Language Models 
+
+Wacha Bounliphone, Eugene Belilovsky, Arthur Tenenhaus, Ioannis Antonoglou, Arthur Gretton, and Matthew B Blashcko. Fast non-parametric tests of relative depen-dency and similarity. arXiv preprint arXiv:1611.05740 ,2016b. Yupeng Chang, Xu Wang, Jindong Wang, Yuan Wu, Kaijie Zhu, Hao Chen, Linyi Yang, Xiaoyuan Yi, Cunxiang Wang, Yidong Wang, et al. A survey on evaluation of large language models. arXiv preprint arXiv:2307.03109 ,2023. Jean-Charles de Borda. M ´emoire sur les ´elections au scrutin. 
+
+Histoire de l’Acad´ emie Royale des Sciences , 1781. deepsig. Deepsignificance. https://github.com/ Kaleidophon/deep-significance , 2022. Eustasio Del Barrio, Juan A Cuesta-Albertos, and Carlos Matr ´an. An optimal transportation approach for assessing almost stochastic order. The Mathematics of the Uncer-tain: A Tribute to Pedro Gil , pp. 33–44, 2018. Rotem Dror, Gili Baumer, Segev Shlomov, and Roi Reichart. The hitchhiker’s guide to testing statistical significance in natural language processing. In Proceedings of the 56th annual meeting of the association for computational lin-guistics (volume 1: Long papers) , pp. 1383–1392, 2018. Rotem Dror, Segev Shlomov, and Roi Reichart. Deep dominance-how to properly compare deep neural models. In Proceedings of the 57th Annual Meeting of the Asso-ciation for Computational Linguistics , pp. 2773–2785, 2019. B. Efron and R. Tibshirani. An Introduction to the Bootstrap, 1993. Samuel Gehman, Suchin Gururangan, Maarten Sap, Yejin Choi, and Noah A. Smith. Realtoxici-typrompts: Evaluating neural toxic degeneration in language models. In Findings , 2020. URL https: //api.semanticscholar.org/CorpusID: 221878771 .Alexander A Gushchin and Dmitriy A Borzykh. Integrated quantile functions: properties and applications. Mod-ern Stochastics: Theory and Applications , 4(4):285–314, 2017. Rishav Hada, Varun Gumma, Adrian de Wynter, Harshita Diddee, Mohamed Ahmed, Monojit Choudhury, Kalika Bali, and Sunayana Sitaram. Are large language model-based evaluators the solution to scaling up multilingual evaluation? arXiv preprint arXiv:2309.07462 , 2023. Yue Huang, Qihui Zhang, Lichao Sun, et al. Trustgpt: A benchmark for trustworthy and responsible large lan-guage models. arXiv preprint arXiv:2306.11507 , 2023. Dongfu Jiang, Xiang Ren, and Bill Yuchen Lin. Llm-blender: Ensembling large language models with pair-wise ranking and generative fusion. arXiv preprint arXiv:2306.02561 , 2023. Moshe Leshno and Haim Levy. Preferred by “all” and preferred by “most” decision makers: Almost stochas-tic dominance. Management Science , 48(8):1074–1085, 2002. Percy Liang, Rishi Bommasani, Tony Lee, Dimitris Tsipras, Dilara Soylu, Michihiro Yasunaga, Yian Zhang, Deepak Narayanan, Yuhuai Wu, Ananya Kumar, Benjamin New-man, Binhang Yuan, Bobby Yan, Ce Zhang, Christian Cosgrove, Christopher D. Manning, Christopher R ´e, Di-ana Acosta-Navas, Drew A. Hudson, Eric Zelikman, Esin Durmus, Faisal Ladhak, Frieda Rong, Hongyu Ren, Huaxiu Yao, Jue Wang, Keshav Santhanam, Lau-rel Orr, Lucia Zheng, Mert Yuksekgonul, Mirac Suz-gun, Nathan Kim, Neel Guha, Niladri Chatterji, Omar Khattab, Peter Henderson, Qian Huang, Ryan Chi, Sang Michael Xie, Shibani Santurkar, Surya Ganguli, Tat-sunori Hashimoto, Thomas Icard, Tianyi Zhang, Vishrav Chaudhary, William Wang, Xuechen Li, Yifan Mai, Yuhui Zhang, and Yuta Koreeda. Holistic evaluation of language models, 2022. Yang Liu, Dan Iter, Yichong Xu, Shuohang Wang, Ruochen Xu, and Chenguang Zhu. Gpteval: Nlg evaluation us-ing gpt-4 with better human alignment. arXiv preprint arXiv:2303.16634 , 2023. Wlodzimierz Ogryczak and Andrzej Ruszczynski. Dual stochastic dominance and related mean-risk models. 
+
+SIAM Journal on Optimization , 13(1):60–78, 2002. Vasyl Pihur, Susmita Datta, and Somnath Datta. Rankaggreg, an r package for weighted rank ag-gregation. BMC Bioinformatics , 10:62 – 62, 2009. URL https://api.semanticscholar. org/CorpusID:206970248 .Ludger Ruschendorf. Asymptotic Distributions of Multi-variate Rank Order Statistics. The Annals of Statistics , 4 (5):912 – 923, 1976. Jun Shao and Dongsheng Tu. The jackknife and bootstrap .Springer Science & Business Media, 2012. Edwin D Simpson. Statistical significance testing for natural language processing, 2021. Aarohi Srivastava, Abhinav Rastogi, Abhishek Rao, Abu Awal Md Shoeb, Abubakar Abid, Adam Fisch, Adam R Brown, Adam Santoro, Aditya Gupta, Adri `a Garriga-Alonso, et al. Beyond the imitation game: Quantifying and extrapolating the capabilities of language models. 
+
+arXiv preprint arXiv:2206.04615 , 2022. 10 Risk Aware Benchmarking of Large Language Models 
+
+Lichao Sun, Yue Huang, Haoran Wang, Siyuan Wu, Qihui Zhang, Chujie Gao, Yixin Huang, Wenhan Lyu, Yix-uan Zhang, Xiner Li, Zhengliang Liu, Yixin Liu, Yijue Wang, Zhikun Zhang, Bhavya Kailkhura, Caiming Xiong, Chaowei Xiao, Chunyuan Li, Eric Xing, Furong Huang, Hao Liu, Heng Ji, Hongyi Wang, Huan Zhang, Huaxiu Yao, Manolis Kellis, Marinka Zitnik, Meng Jiang, Mo-hit Bansal, James Zou, Jian Pei, Jian Liu, Jianfeng Gao, Jiawei Han, Jieyu Zhao, Jiliang Tang, Jindong Wang, John Mitchell, Kai Shu, Kaidi Xu, Kai-Wei Chang, Li-fang He, Lifu Huang, Michael Backes, Neil Zhenqiang Gong, Philip S. Yu, Pin-Yu Chen, Quanquan Gu, Ran Xu, Rex Ying, Shuiwang Ji, Suman Jana, Tianlong Chen, Tianming Liu, Tianyi Zhou, William Wang, Xiang Li, Xi-angliang Zhang, Xiao Wang, Xing Xie, Xun Chen, Xuyu Wang, Yan Liu, Yanfang Ye, Yinzhi Cao, Yong Chen, and Yue Zhao. Trustllm: Trustworthiness in large language models, 2024. L.Y. Tzeng, Rachel Huang, and P.T. Shih. Revisiting almost second-degree stochastic dominance. Management Sci-ence , 59:1250–1254, 05 2013. doi: 10.2307/23443939. Maria Ulan, Welf L ¨owe, Morgan Ericsson, and Anna Wingkvist. Copula-based software metrics ag-gregation. Software Quality Journal , 29(4):863– 899, 2021. URL https://doi.org/10.1007/ s11219-021-09568-9 .Dennis Ulmer, Christian Hardmeier, and Jes Frellsen. deep-significance-easy and meaningful statistical significance testing in the age of neural networks. arXiv preprint arXiv:2204.06815 , 2022. Boxin Wang, Weixin Chen, Hengzhi Pei, Chulin Xie, Mintong Kang, Chenhui Zhang, Chejian Xu, Zidi Xiong, Ritik Dutta, Rylan Schaeffer, Sang T. Truong, Simran Arora, Mantas Mazeika, Dan Hendrycks, Zinan Lin, Yu Cheng, Sanmi Koyejo, Dawn Song, and Bo Li. Decod-ingtrust: A comprehensive assessment of trustworthiness in gpt models, 2023. Edward Beeching , Cl ´ementine Fourrier , Nathan Habib , Sheon Han, Nathan Lambert, Nazneen Rajani, Omar San-seviero, Lewis Tunstall, Thomas Wolf. Open llm leader-board. https://huggingface.co/spaces/ HuggingFaceH4/open_llm_leaderboard ,2023. Haopeng Zhang, Xiao Liu, and Jiawei Zhang. Summit: Iterative text summarization via chatgpt. arXiv preprint arXiv:2305.14835 , 2023. Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuo-han Li, Dacheng Li, Eric. P Xing, Hao Zhang, Joseph E. Gonzalez, and Ion Stoica. Judging llm-as-a-judge with mt-bench and chatbot arena, 2023. 11 Risk Aware Benchmarking of Large Language Models 
+
+Supplementary Material A. Ablation Studies 
+
+Metrics Aggregation Versus Portfolio For portoflio, computing ranking using FSD and SSD including the portfolio computation on 5K samples for 5 bootstrap samples , we have mean execution time of 32 .01 ± 4.51 s. For FSd and SSD ranking computation for all metrics, followed by rank using pearson distance the execution time is of 254 .99 ± 16 .76 s. On the other hand, we observe on the mix-instruct dataset a consistency of ranks between these two approaches (FSD or SDD on portfolio & FSD or SSD on all metrics followed by rank aggregation) as quantified by the kendall-tau similarity between the ranks: 1. Kendall Tau(R-SSD@P(IC), RA(R-SSD@M)) = 0.848 2. Kendall Tau(R-FSD@P(IC), RA(R-FSD@M)) = 0.878 3. Kendall Tau(R-SSD@P(EC), RA(R-SSD@M)) = 0.848 4. Kendall Tau(R-FSD@P(EC), RA(R-SSD@M)) = 0.848 We see that these two approaches lead to similar ranks while portfolio approach leads to 7x speedups when using IC portfolios. 
+
+B. Transforming Discrete Relative ChatGPT Scores to Absolute Real Valued Scores 
+
+We follow (Jiang et al., 2023) in mapping discrete chatGPT scores to real valued ones. Note that chatGPT scores for comparing models A and B are discrete and are one of these 4 options: A is better, B is better, Both are equally good, Both are equally bad. Given m models we construct for each prompt sample ℓ = 1 . . . N a m × m comparison matrix with chatGPT: 
+
+Xℓ,ij = +1 , X ℓ,ji = −1 if model i is better 
+
+Xℓ,ij = −1, X ℓ,ji = +1 if model j is better 
+
+Xℓ,ij = Xℓ,ji = +0 .5 if model i and j equally good 
+
+Xℓ,ij = Xℓ,ji = −0.5 if model i and j equally bad Then each model will define the following scalar score at each sample ℓ:
+
+sℓ,i := 
+
+> m
+
+X
+
+> j=1
+
+(Xℓ,ij − Xℓ,ji ).
+
+hence we have a distribution of chatGPT score for each model : 
+
+pi = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+δsℓ,i , i = 1 . . . m. 
+
+Note that the scores sℓ,i take on even integer values between −2m and 2m inclusive, we treat the support as continuous and consider the following kernel density estimator with Gaussian kernel of width σ:
+
+ˆp(σ) 
+
+> i
+
+(t) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+φ
+
+ t − sℓ,i 
+
+σ
+
+
+
+, t ∈ R, i = 1 . . . m, 
+
+where φ is the standard normal density. In Figure 3 below we plot chatGPT scores kernel density estimates for two models, openassistant and flan-t5: 12 Risk Aware Benchmarking of Large Language Models 
+
+Figure 3: ChatGPT density scores for two models, open-assistant has clearly higher scores than the Flan-t5 models. 
+
+C. Multi-Testing Algorithm for Relative and Almost Stochastic Dominance 
+
+Our multi-testing algorithm for relative and almost stochastic dominance is detailed in Algorithm 1. In a nutshell our multi-testing consists of the following steps: 1. For evaluation of each model compute summary statistics , i.e quantiles and integrated quantiles. 2. For all pairs of models, compute statistics of absolute and relative tests by computing violation ratios. 3. Compute the variance of these statistics via bootstrapping. 4. Perform the hypothesis testing for all pairs models with a corrected confidence level taking into account the number of all pairs 5. Aggregate pairwise rankings to a rank using the Borda algorithm, that ranks the model by their number of wins in the stochastic dominance tests performed above. 
+
+D. Absolute or Almost Stochastic Dominance 
+
+Almost FSD ( ε-FSD) Following (Leshno & Levy, 2002), (Del Barrio et al., 2018) relaxed FSD via the violation ratio of FSD: 
+
+Definition D.1 (FSD Violation Ratio (Del Barrio et al., 2018) ) . For FX̸ = FY define the violation ratio: 
+
+εW2 (FX , F Y ) = 
+
+R
+
+> A(1) 0
+
+(F (−1)  
+
+> X
+
+(t) − F (−1)  
+
+> Y
+
+(t)) 2dt 
+
+R 10 (F (−1)  
+
+> X
+
+(t) − F (−1)  
+
+> Y
+
+(t)) 2dt =
+
+R 10 (F (−1)  
+
+> Y
+
+(t) − F (−1)  
+
+> X
+
+(t)) 2+dt 
+
+W22(FX , F Y ) ,
+
+where A(1) 0 =
+
+n
+
+t ∈ (0 , 1) : F (−1)  
+
+> Y
+
+(t) > F (−1)  
+
+> X
+
+(t)
+
+o
+
+is the violation set the relation X ≽
+
+> FSD
+
+Y , and W2 is the Wasserstein −2 distance. 13 Risk Aware Benchmarking of Large Language Models 
+
+Algorithm 1 Stochastic Order Multi-testing (relative and absolute )
+
+1: Input: F1, ..., F k, k models we want to rank corresponding to empirical measure p1 = 1
+
+> n
+
+Pni=1 δx1 
+
+> i
+
+, . . . pk =
+
+> 1
+> n
+
+Pni=1 δxki , Threshold: τ .
+
+2: Input: Desired stochastic order ∈ { 1, 2}, B number of bootstraps, m = K2 number of comparisons, significance level 
+
+α.
+
+3: Cache the bootstraps samples and their statistics 
+
+4: for j = 1 to k do 
+
+5: p0 
+
+> j
+
+← pj
+
+6: Get Quantiles and Integrated Quantiles 
+
+7: Q0,j ← GET QUANTILES (pj )
+
+8: IQ 0,j ← GET INTEGRATED QUANTILES (pj )
+
+9: for b = 1 to B do 
+
+10: Get Quantiles and Integrated Quantiles 
+
+11: pbj ← RESAMPLE WITH REPLACEMENT (pj , n ) {using quantiles and uniform }
+
+12: Qb,j ← GET QUANTILES (pbj )
+
+13: IQ b,j ← GET INTEGRATED QUANTILES (pbj )
+
+14: end for 
+
+15: end for 
+
+16: Compute all violation ratios 
+
+17: εb,i,j ← COMPUTE VIOLATION RATIOS (F bi , F bj , order) for b = 0 . . . B , i, j = 1 . . . k, i ̸ = j {ratio of Q or IQ of 
+
+j > i by total area }
+
+18: εb,i,i = 0 , ∀ b, i 
+
+19: Compute the sum statistics 
+
+20: for b = 0 to B do 
+
+21: for i = 1 to k do 
+
+22: εib ← 1
+
+> k−1
+
+P 
+
+> j
+
+εb,i,j 
+
+23: end for 
+
+24: end for 
+
+25: Compute the relative statistics 
+
+26: ∆εi,j b = εib − εjb, ∀b, i, j 
+
+27: Compute the Bootstrap Variance 
+
+28: for i = 1 to k do 
+
+29: for j = 1 to k do 
+
+30: σij =
+
+q 1
+
+> B−1
+
+PBb=1 (∆ εi,j b − MEAN (∆ εi,j b , b )) 2
+
+31: σabs  
+
+> ij
+
+=
+
+q 1
+
+> B−1
+
+PBb=1 (εb,i,j − MEAN (εb,i,j , b )) 2
+
+32: end for 
+
+33: end for 
+
+34: Compute the test 
+
+35: Win ij = Win abs  
+
+> ij
+
+= 0 
+
+36: for i = 1 to k do 
+
+37: for j = 1 to k do 
+
+38: if i̸ = j and ∆εi,j  
+
+> 0
+
+− 1√n σij Φ−1(α/k 2) ≤ 0 then 
+
+39: Win ij = 1 {with confidence level 1 − α/k 2}
+
+40: end if 
+
+41: if i̸ = j and ε0.i,j − 1√n σabs  
+
+> ij
+
+Φ−1(α/k 2) ≤ τ then 
+
+42: Win abs  
+
+> ij
+
+= 1 {with confidence level 1 − α/k 2}
+
+43: end if 
+
+44: end for 
+
+45: end for 
+
+rank = BORDA (Win) {with confidence level 1 − α}
+
+rank abs = BORDA (Win abs ) {with confidence level 1 − α}
+
+46: Return rank , rank abs 
+
+14 Risk Aware Benchmarking of Large Language Models 
+
+Algorithm 2 COMPUTE VIOLATION RATIOS (Fa,Fb,order) 
+
+if order =1 then Return εW2 (Fa, F b) in Definition D.1 
+
+else if order=2 then Return εIQ (Fa, F b) in Definition D.2 
+
+end if 
+
+Note that 0 ≤ εW2 (FX , F Y ) ≤ 1, with value 0 if X ≻ 
+
+> FSD
+
+Y and 1 if Y ≻ 
+
+> FSD
+
+X. For ε ∈ (0 , 12 ], the relaxed FSD can be therefore defined as follows 
+
+X ≽
+
+> ε−FSD
+
+Y ⇐⇒ εW2 (FX , F Y ) ≤ ε. (18) Figure 4a in Appendix G illustrates ε-FSD, dashed areas represent the violation set. 
+
+Almost SSD ( ε-SSD) Note that the original definition of ε-FSD of X on Y in (Leshno & Levy, 2002) is an L1 definition and uses the CDF rather than quantiles: R ∞−∞ (FX (x) − FY (x)) +dx ≤ ε R ∞∞ |FX (x) − FY (x)|dx. (Tzeng et al., 2013) gave a similar L1 definition for ε-SSD using the second performance function F (2) (.). According to (Tzeng et al., 2013), 
+
+X dominates Y in the ε-SSD if R ∞−∞ (F (2)  
+
+> X
+
+(x) − F (2)  
+
+> Y
+
+(x)) +dt ≤ ε R +∞−∞ |F (2)  
+
+> X
+
+(x) − F (2)  
+
+> Y
+
+(x)|dx. Following (Del Barrio et al., 2018), we redefine ε-SSD using second quantiles and with a L2 definition, this eases the analysis and practically the integration is on (0 , 1] rather than (−∞ , ∞).We define the SSD violation ratio as follows: 
+
+Definition D.2 (SSD Violation Ratio ) . For FX̸ = FY define the violation ratio: 
+
+εIQ (FX , F Y ) = 
+
+R
+
+> A(2) 0
+
+(F (−2)  
+
+> X
+
+(t) − F (−2)  
+
+> Y
+
+(t)) 2dt 
+
+R 10 (F (−2)  
+
+> X
+
+(t) − F (−2)  
+
+> Y
+
+(t)) 2dt =
+
+R 10 (F (−2)  
+
+> Y
+
+(t) − F (−2)  
+
+> X
+
+(t)) 2+dt d2
+
+> IQ
+
+(FX , F Y ) ,
+
+where A(2) 0 =
+
+n
+
+t ∈ (0 , 1) : F (−2)  
+
+> Y
+
+(t) > F (−2)  
+
+> X
+
+(t)
+
+o
+
+is the violation set the relation X ≽
+
+> SSD
+
+Y , and dIQ is the L2
+
+distance between the Integrated Quantiles (F (−2) ).We are now ready to define ε-SSD, for ε ∈ (0 , 12 ):
+
+X ≽
+
+> ε−SSD
+
+Y ⇐⇒ εIQ (FX , F Y ) ≤ ε (19) Figure 4b in Appendix G illustrates the second order, dashed areas represent the violation set of SSD of X on Y . Integrated quantiles fully characterize one dimensional distributions as can be seen from the Theorem I.1 stated and proved in Appendix I: 
+
+E. Related Works on Stochastic Dominance 
+
+Stochastic Dominance In (Dror et al., 2018; 2019; Ulmer et al., 2022; Simpson, 2021) a distributional assessment of the models based on stochastic dominance was proposed to overcome the limitations of the ubiquitous Mean-Variance Risk model used in machine learning. (Ulmer et al., 2022) used first order almost stochastic dominance and advocated for selecting a model A over B based on a metric mi if: Mi|A, X ≽
+
+> ε−FSD
+
+Mi|B, X. We expand this to the Relative-FSD. In natural language (and other) applications, it is often crucial to mitigate the risk of outputs with low metrics, especially when those metrics quantify important socio-technical guardrails such as model’s toxicity, safety, or robustness. Unfortunately, the first stochastic ordering does 15 Risk Aware Benchmarking of Large Language Models 
+
+not capture an assessment of the left tail behavior of Mi|A, X and Mi|B, X and hence does not provide a risk-aware benchmarking (Ogryczak & Ruszczynski, 2002). To alleviate this issue, we instead consider the second order stochastic ordering and use our second order almost or relative stochastic dominance tests introduced in Section 3 for selecting a model A if: Mi|A, X ≽  
+
+> εor R−SSD
+
+Mi|B, X. 
+
+F. Supplement Discussions 
+
+F.1. Mean Risk Models 
+
+Name Risk Measure α− consistency with SSD Standard deviation σX = pE(X − μX )2 not consistent Absolute semi deviation δX = E(μX − X)+ 1− consistent Negative Tail Value at Risk −TVAR X (p) = − F (−2) (p) 
+
+> p
+
+1− consistent for all p ∈ (0 , 1] 
+
+Mean absolute deviation from a quantile hX (p) = μx − F (−2)   
+
+> X(p)
+> p
+
+1− consistent for all p ∈ (0 , 1] 
+
+Gini Tail ΓX = 2 R 10 (μX p − F (−2)  
+
+> X
+
+(p)) dp 1− consistent 
+
+Table 3: Risk models and their α−consistency with SSD. Note that several risks in Table 3 use the second quantile function as part of a benchmarking of the left tails of the outcomes. 
+
+F.2. δ− Consistency of Gini-Risk Models with ε-SSD 
+
+δ− Consistency of Gini-Risk Models with ε-SSD We relax the definition of α− consistency of mean-risk models with SSD to (α, δ ) consistency with ε-SSD as follows: 
+
+Definition F.1 ((α, δ ) consistency of MRM with ε-SSD) . A mean-risk model (μX , r X ) is (α, δ ) consistent with ε-SSD, if there exists α, δ > 0 such that X ≽
+
+> ε-SSD
+
+Y =⇒ μX − αr x + δ ≥ μY − αr Y
+
+It is easy to see that the Mean-Gini tail MRM of X and Y is consistent with their ε-SSD: 
+
+Proposition F.2. The Mean-Gini Tail MRM is (1 , 2ε 12 dIQ (FX , F Y )) consistent with ε-SSD. Proof of Proposition F.2. 
+
+μX − ΓX = μX − 2
+
+Z 10
+
+(μX p − F (−2)  
+
+> X
+
+(p)) dp = 2 
+
+Z 10
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p) + F (−2)  
+
+> Y
+
+(p)) dp 
+
+= 2 
+
+Z 10
+
+F (−2)  
+
+> Y
+
+(p) + 2 
+
+Z
+
+> A(2) 0
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) dp + 2 
+
+Z
+
+> [0 ,1] /A (2) 0
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) dp 
+
+| {z }
+
+> ≥0
+
+≥ 2
+
+Z 10
+
+F (−2)  
+
+> Y
+
+(p) − 2
+
+Z
+
+> A(2) 0
+
+|F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) |dp 
+
+= μY − ΓY − 2
+
+Z 10
+
+(F (−2)  
+
+> Y
+
+(p) − F (−2)  
+
+> X
+
+(p)) +dp 
+
+≥ μY − ΓY − 2
+
+Z 10
+
+dp 
+
+ 12 Z 10
+
+(F (−2)  
+
+> Y
+
+(p) − F (−2)  
+
+> X
+
+(p)) 2+dp 
+
+ 12
+
+(Cauchy-Schwartz )
+
+≥ μY − ΓY − 2ε 12 dIQ (FX , F Y )( By assumption X ≽
+
+> ε−SSD
+
+Y )
+
+16 Risk Aware Benchmarking of Large Language Models 
+
+F.3. Rank Aggregation 
+
+Given N ranks πi, i = 1 . . . N represented as permutations in Sk, the rank aggregation in (Pihur et al., 2009) solves the following problem : 
+
+min 
+
+> π∈Sk
+> N
+
+X
+
+> i=1
+
+αid(π, π i),
+
+where αi ≥ 0, PNi=1 αi = 1 represent importance of each ranking and d is a distance between permutations. (Pihur et al., 2009) have multiple choices of distance such as Pearson or Kendall’s-Tau. We fixed through out our experiments the distance to Pearson. 
+
+F.4. Mean Win Rate and CDF normalizers in portfolio 
+
+To unpack the notations in (15) , consider a distribution A on models space. For a sample X ∼ Di and a model A ∼ A , the metric mi() normalization through its CDF can be written as follows: 
+
+FMi (mi(A(X)) = EB∼A EY ∼Di 1mi(B(Y )≤mi(A(X)) . (20) Hence for a model A on each evaluated sample the CDF normalizer computes a soft ranking of the evaluation of the model 
+
+A with a metric mi on the sample X with respect to all models and all samples. 
+
+Remark F.3 (Mean Win Rate ) . Note that in LLM leaderborads such as HELM and Hugging face, the performance of a model A evaluated with a metric mi, is summarized via a Mean Win Rate (MWR) aggregated on models level looking on expected metrics 
+
+MWR A,M i = EB∼A 1EX∼Di [mi(B(X))] ≤EX∼Di [mi(A(X))] , (21) or aggregated on sample level marginalizing on models with a max :
+
+MWR A,M i = EX∼Di 1max B̸ =A mi(B(X)) ≤mi(A(X)) , (22) Contrasting (20) , (21) and (22) we see that instead of looking at the MWR summary statistics that does not allow to consider all order statistics and relative ordering as well the risks of tails events, we consider a full distributional benchmarking in the metrics portfolio approach. 
+
+G. Figures 
+
+0 0.2 0.4 0.6 0.8 1
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+F (−1) 
+
+> U
+
+F (−1) 
+
+> V
+
+p
+
+> Quantile
+
+(a) ε- FSD (first order): U ≽
+
+> ε−FSD
+
+V
+
+0 0.2 0.4 0.6 0.8 1
+
+0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1 μX
+
+μY
+
+F (−2) 
+
+> X
+
+F (−2) 
+
+> Y
+
+p
+
+> Integrated Quantile
+
+(b) ε-SSD (second order): X ≽
+
+> ε−SSD
+
+Y
+
+Figure 4: (a) An Example of Almost First Order Stochastic Dominance: Plots of quantile functions of U and V . Dashed areas is the violation set of first order stochastic dominance of U on V . (b) An Example of Almost Second Order Stochastic Dominance: Plots of integrated quantile functions; dashed area is the violation set for the second order stochastic dominance of X on Y .17 Risk Aware Benchmarking of Large Language Models 
+
+H. Central Limit Theorems 
+
+H.1. CLT for ε-SSD Theorem H.1 (Central Limit Theorem for ε-SSD) . Assume that FX , FY are supported on intervals a in [−M, M ],and have pdfs fx, f y such that f ′   
+
+> x(p)
+> f3
+> x(p)
+
+, f ′    
+
+> y(p)
+> f3
+> y(p)
+
+are bounded almost everywhere on the support of fx and fy respectively. Assume we have n samples from FX and m samples from FY , with n, m → ∞ such that nn+m → λ for some λ.Then 
+
+r mn m + n (εIQ (F nX , F mY ) − εIQ (FX , F Y )) → N (0 , σ 2
+
+> λ
+
+(FX , F Y )) 
+
+where 
+
+σ2
+
+> λ
+
+(FX , F Y ) = 1
+
+d8
+
+> IQ
+
+(FX , F Y ) [(1 − λ)Var( vX (U )) + λVar( vY (U ))] ,
+
+for U ∼ Unif[0 , 1] , vY (t) = 2
+
+ 1   
+
+> fy(F−1
+> Y(t))
+
+  R 1 
+
+> t
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) +dp 
+
+
+
+, and vX (t) =2
+
+ 1  
+
+> fx(F−1
+> X(t))
+
+  R 1 
+
+> t
+
+(F (−2)  
+
+> X
+
+(p) − F (−2)  
+
+> Y
+
+(p)) −dp 
+
+
+
+.
+
+> a
+
+The interval for FX and for FY need not coincide. 
+
+Remark H.2 (Non-independent samples) . Theorem H.1 assumes that the n-sample from FX is independent of the m-sample for FY . Consider instead the setting where there are n samples from FX and FY that are dependent (e.g. X, Y are evaluations of different models applied to the same data). We can describe general dependence structure as the following. Suppose (X, Y ) has marginals X ∼ FX , Y ∼ FY , with some unknown dependence structure (optionally described by the copula CXY (ux, u y ) = Pr( FX (X) ≤ ux, F Y (Y ) ≤ uy )). Let 
+
+(Ux, U y ) = ( FX (X), F Y (Y )) ∼ CXY .
+
+Note that Ux and Uy have marginals equal to Unif([0 , 1]) , but Ux and Uy may be dependent. Hence the variances in each term of the decomposition (24) in the appendix cannot be added. Instead, one should modify the result of Theorem H.1 to use 
+
+¯σ2
+
+> λ
+
+(FX , F Y ) = 1
+
+d8
+
+> IQ
+
+(FX , F Y ) Var [ vX (Ux) + vY (Uy )] .
+
+H.2. CLT for Relative Statistics 
+
+We focus here on presenting the Central Limit Theorem for SSD. The relative FSD has a similar form and we omit its statement here. 18 Risk Aware Benchmarking of Large Language Models 
+
+Theorem H.3 (Central limit Theorem for Relative SSD) . Assume F1n, . . . , F kn are available and independent, and each Fi satisfies the conditions of Theorem H.1. Then 
+
+√n
+
+
+
+∆ε(2)  
+
+> i1,i 2
+
+(Fn) − ∆ε(2)  
+
+> i1,i 2
+
+(F )
+
+
+
+→w N 0, 1(k − 1) 2
+
+> k
+
+X
+
+> i=1
+
+σ2 
+
+> i
+
+(i1, i 2)
+
+!
+
+.
+
+where 
+
+σ2 
+
+> i
+
+(i1, i 2) = 
+
+
+
+Var 
+
+ 2v(1) −    
+
+> i1i2(Ui)
+> d4
+> IQ (Fi1,F i2)
+
++ P    
+
+> j̸=i1,i 2
+> v(1) −
+> i1j(Ui)
+> d4
+> IQ (Fi1,F j)
+
+
+
+i = i1
+
+Var 
+
+ 2v(2)+     
+
+> i1i2(Ui)
+> d4
+> IQ (Fi1,F i2)
+
+− P    
+
+> j̸=i1,i 2
+> v(1) −
+> i2j(Ui)
+> d4
+> IQ (Fi2,F j)
+
+
+
+i = i2
+
+Var 
+
+ v(2)+     
+
+> i1j(Ui)
+> d4
+> IQ (Fi1,F j)
+
+− v(2)+    
+
+> i2j(Ui)
+> d4
+> IQ (Fi2,F j)
+
+
+
+i̸ = i1, i 2
+
+for Ui ∼ Unif([0 , 1]) all independent, and v(1) ,− 
+
+> ij
+
+(t) = 2 
+
+ dF −1 
+
+> i(t)
+> dt
+
+  R 1 
+
+> t
+
+(F (−2)  
+
+> i
+
+(p) − F (−2)  
+
+> j
+
+(p)) −dp 
+
+
+
+, v (2) ,+ 
+
+> ij
+
+(t) = 2
+
+ dF −1 
+
+> j(t)
+> dt
+
+ R 1 
+
+> t
+
+(F (−2)  
+
+> i
+
+(p) − F (−2)  
+
+> j
+
+(p)) +dp 
+
+
+
+.
+
+Remark H.4 (Dependent samples) . If the Fin are dependent, a similar expression to that shown in Remark H.2 for the absolute testing case also holds here. The statement is omitted. 
+
+I. Proof of Theorem I.1 
+
+Theorem I.1 (dIQ is a metric) . dIQ is a metric on the space of univariate distributions with continuous CDF, moreover, it metrizes the weak topology. 
+
+First, we show that dIQ (F, G ) = 0 if and only if F = G. The forward direction is obvious. For the reverse direction, if dIQ (F, G ) = 0 , then F (−2) (t) = G(−2) (t) a.e. By the continuity of integrated quantiles, this implies F (−2) = G(−2) 
+
+everywhere. Then, since F (−1) (t) is simply the derivative of F (−2) (t) with respect to t7, F (−1) = G(−1) everywhere by differentiating both sides of F (−2) (t) = G(−2) (t). Hence F = G since distributions are uniquely determined by their quantile functions. The triangle inequality follows from the triangle inequality of the L2 norm, since 
+
+qR 10 (F (−2) (t) − G(−2) (t)) 2dt =
+
+∥F (−2) (t) − G(−2) (t)∥L2([0 ,1]) . Hence dIQ is a metric. By Theorem 10 in (Gushchin & Borzykh, 2017), we know that random variable X(i) →w X (with cdf F(i)) if and only if F (−2) (i) converges uniformly to F (−2) . Hence dIQ must metrize weak convergence. 
+
+J. Proofs of Central Limit Theorems 
+
+J.1. Absolute Testing: Proof of Theorem H.1 
+
+Note that for Ui and Vi an n-sample and an m-sample respectively from Unif([0 , 1]) , we can get Xi, Yi as Xi = F −1(Ui),
+
+Yi = G−1(Vi). Let Hn, 1 and Hm, 2 be the empirical d.f.s of the Ui and Vi respectively. We have 
+
+F −1 
+
+> n
+
+(t) = F −1(H−1
+
+> n, 1
+
+(t)) ,
+
+hence 
+
+F (−2)  
+
+> n
+
+(t) = 
+
+Z t
+
+> 0
+
+F −1 
+
+> n
+
+(p)dp =
+
+Z t
+
+> 0
+
+F −1(H−1
+
+> n, 1
+
+(p)) dp. 
+
+> 7
+
+This follows because F −2 is the integral of the finite-valued quantile function F −1(t).
+
+19 Risk Aware Benchmarking of Large Language Models 
+
+We are interested in 
+
+εIQ (Fn, G m) = 
+
+R 
+
+> A0
+
+(F (−2)  
+
+> n
+
+(t) − G(−2)  
+
+> m
+
+(t)) 2dt d2
+
+> IQ
+
+(Fn, G m) ,
+
+where 
+
+A0 =
+
+n
+
+t ∈ (0 , 1) : G(−2)  
+
+> m
+
+(t) > F (−2)  
+
+> n
+
+(t)
+
+o
+
+,
+
+is the violation set. It is shown in (Gushchin & Borzykh, 2017) (Theorem 10 therein) that integrated quantiles converge uniformly, i.e. 
+
+F (−2)  
+
+> n
+
+(t) → F (−2) (t) pointwise. As an immediate consequence, we have 
+
+εIQ (Fn, G m) →a.s. εIQ (F, G ).
+
+We apply the following decomposition and bound the two terms separately: 
+
+εIQ (Fn, G m) − εIQ (F, G ) = ( εIQ (Fn, G m) − εIQ (F, G m)) + ( εIQ (F, G m) − εIQ (F, G )) . (23) We derive asymptotic normality of these terms for Gm, the proof for Fn is identical by symmetry. We introduce the statistics 
+
+Sm =
+
+Z 10
+
+(F (−2) (t) − G(−2)  
+
+> m
+
+(t)) 2dt S+ 
+
+> m
+
+=
+
+Z 10
+
+(F (−2) (t) − G(−2)  
+
+> m
+
+(t)) 2+dt S− 
+
+> m
+
+=
+
+Z 10
+
+(F (−2) (t) − G(−2)  
+
+> m
+
+(t)) 2
+
+> −
+
+dt 
+
+The nonrandom S, S +, S − are defined similarly with G instead of Gm.Next, set 
+
+Tm = √m(Sm − S)
+
+T + 
+
+> m
+
+= √m(S+ 
+
+> m
+
+− S+)
+
+T − 
+
+> m
+
+= √m(S− 
+
+> m
+
+− S−).
+
+Theorem J.1. Assume that G is supported on an interval that is a subset of [−M, M ], and has pdf g such that g′(p) 
+
+> g3(p)
+
+is bounded almost everywhere on the support of g. Then 
+
+Tm = αm, 2(v) + oP (1) 
+
+T + 
+
+> m
+
+= αm, 2(v+) + oP (1) 
+
+T − 
+
+> m
+
+= αm, 2(v−) + oP (1) 
+
+where we define αm, 2(t) = √m(t − H−1
+
+> m, 1
+
+(t)) and αm, 2(v) = R 10 v(t)αm, 2(t)dt , and 
+
+v(t) = 2 
+
+ 1
+
+g(G−1(t)) 
+
+ Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+
+
+.v+(t) = 2 
+
+ 1
+
+g(G−1(t)) 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) +dp 
+
+
+
+,v−(t) = 2 
+
+ 1
+
+g(G−1(t)) 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) −dp 
+
+
+
+.
+
+20 Risk Aware Benchmarking of Large Language Models 
+
+Proof. We begin with Tm. Note that 8
+
+Tm = √m(Sm − S)= √m
+
+Z 10
+
+(F (−2) (t) − G(−2)  
+
+> m
+
+(t)) 2 − (F (−2) (t) − G(−2) (t)) 2dt 
+
+= √m
+
+Z 10
+
+h
+
+2F (−2) (t) − G(−2)  
+
+> m
+
+(t) − G(−2) (t)
+
+i
+
+(G(−2) (t) − G(−2)  
+
+> m
+
+(t)) dt 
+
+→ 2√m
+
+Z 10
+
+h
+
+F (−2) (t) − G(−2) (t)
+
+i
+
+(G(−2) (t) − G(−2)  
+
+> m
+
+(t)) dt 
+
+= 2 √m
+
+Z 10
+
+h
+
+F (−2) (t) − G(−2) (t)
+
+i Z t
+
+> 0
+
+G(−1) (p) − G(−1) (H−1
+
+> m, 1
+
+(p))) dp 
+
+
+
+dt 
+
+Let us do integration by parts: 
+
+2√m
+
+Z 10
+
+h
+
+F (−2) (t) − G(−2) (t)
+
+i Z t
+
+> 0
+
+G(−1) (p) − G(−1) (H−1
+
+> m, 1
+
+(p))) dp 
+
+
+
+dt == 2 √m
+
+Z 10
+
+F (−2) (t) − G(−2) (t)dt 
+
+ Z 10
+
+G(−1) (t) − G(−1) (H−1
+
+> m, 1
+
+(t))) dt 
+
+
+
+−
+
+Z 10
+
+Z t
+
+> 0
+
+F (−2) (p) − G(−2) (p)dp 
+
+ h
+
+G(−1) (t) − G(−1) (H−1
+
+> m, 1
+
+(t))) 
+
+i
+
+dt 
+
+
+
+= 2 √m
+
+Z 10
+
+Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+ h
+
+G(−1) (t) − G(−1) (H−1
+
+> m, 1
+
+(t))) 
+
+i
+
+dt 
+
+= 2 √m
+
+Z 10
+
+ dG −1(t)
+
+dt 
+
+ Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+
+
+(t − H−1
+
+> m, 1
+
+(t)) dt 
+
++ O
+
+√m
+
+Z 10
+
+Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp )( t − H−1
+
+> m, 1
+
+(t)) 2dt 
+
+
+
+= 2 √m
+
+Z 10
+
+ dG −1(t)
+
+dt 
+
+ Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+
+
+(t − H−1
+
+> m, 1
+
+(t)) dt + oP (1) .
+
+In the penultimate step we have used a first-order Taylor series on G−1(t) via the assumption that d2G−1(t) 
+
+> dt 2
+
+= − g′(G−1(t)) 
+
+> g3(G−1(t))
+
+is bounded almost everywhere, and in the final step we have noted that 
+
+√m
+
+Z 10
+
+Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+
+
+(t − H−1
+
+> m, 1
+
+(t)) 2dt ≤ 2√m
+
+Z 10
+
+(t − H−1
+
+> m, 1
+
+(t)) 2dt 
+
+= oP (1) ,
+
+since the support of F and G lie in [−M, M ] and R 10 (t − H−1
+
+> m, 1
+
+(t)) 2dt = Op(1 /m ).We then have 
+
+Tm = αm, 2(v) + oP (1) ,
+
+where αm, 2(t) = √m(t − H−1
+
+> m, 1
+
+(t)) , and αm, 2(v) = R 10 v(t)αm, 2(t)dt where 
+
+v(t) = 2 
+
+ dG −1(t)
+
+dt 
+
+ Z 1
+
+> t
+
+F (−2) (p) − G(−2) (p)dp 
+
+
+
+.
+
+Similarly, 
+
+T + 
+
+> m
+
+= αm, 2(v+) + oP (1) , T − 
+
+> m
+
+= αm, 2(v−) + oP (1) 
+
+> 8
+
+Convergence here is uniform convergence of the integrated quantiles. 
+
+21 Risk Aware Benchmarking of Large Language Models 
+
+where 
+
+v+(t) = 2 
+
+ dG −1(t)
+
+dt 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) +dp 
+
+
+
+,v−(t) = 2 
+
+ dG −1(t)
+
+dt 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) −dp 
+
+
+
+.
+
+Corollary J.2. Assume that G is supported on an interval in [−M, M ], and has pdf g such that g′(p) 
+
+> g3(p)
+
+is bounded almost everywhere on the support of g. Then as m → ∞ √m(ϵIQ (F, G m) − ϵIQ (F, G )) →w N (0 , σ 2)
+
+and if additionally n → ∞ √m(ϵIQ (Fn, G m) − ϵIQ (Fn, G )) →w N (0 , σ 2),
+
+if for U ∼ Unif([0 , 1]) 
+
+σ2 = Var( v+(U )) 
+
+d8
+
+> IQ
+
+(F, G )
+
+is finite. Proof. Note that by Theorem J.1 
+
+√m(ϵIQ (F, G m) − ϵIQ (F, G )) = √m
+
+ S−
+
+> m
+
+Sm
+
+− S−
+
+S
+
+
+
+=
+
+√mSS m
+
+(T − 
+
+> m
+
+− Tm) → − αm, 2(v+)
+
+S2
+
+since Sm → S a.s. Recalling the definition of αm, 2 yields asymptotic normality with zero mean as in (Del Barrio et al., 2018), and variance as calculated in the corollary statement. The case of √m(ϵIQ (Fn, G m)−ϵIQ (Fn, G )) follows similarly since integrated quantiles weakly converge as Fn → F .Continuing with the main proof, recalling (23) and using Corollary J.2 along with the asymptotic independence of the two terms and the fact that nn+m → λ, we have 
+
+r mn m + n (εIQ (Fn, G m) − εIQ (F, G )) = p(1 − λ)n(εIQ (Fn, G m) − εIQ (F, G m)) + √λn (εIQ (F, G m) − εIQ (F, G )) (24) 
+
+→ N (0 , σ 2
+
+> λ
+
+(F, G )) 
+
+where 
+
+σ2
+
+> λ
+
+(F, G ) = 1
+
+d8
+
+> IQ
+
+(F, G ) [(1 − λ)Var( vF (U )) + λVar( vG(U ))] .
+
+Here, we have defined 
+
+vG(t) = 2 
+
+ 1
+
+g(G−1(t)) 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) +dp 
+
+
+
+,
+
+and 
+
+vF (t) = 2 
+
+ 1
+
+f (F −1(t)) 
+
+ Z 1
+
+> t
+
+(F (−2) (p) − G(−2) (p)) −dp 
+
+
+
+.
+
+22 Risk Aware Benchmarking of Large Language Models 
+
+J.2. Relative Testing: Proof of Theorem H.3 
+
+Note that 
+
+∆εi1,i 2 
+
+> IQ
+
+(F ) = ϵi1
+
+> IQ
+
+(F ) − ϵi2
+
+> IQ
+
+(F )= 1
+
+k − 1
+
+ X 
+
+> j̸=i1
+
+ϵi1jIQ − X 
+
+> j̸=i2
+
+ϵi2jIQ 
+
+
+
+= 1
+
+k − 1
+
+2ϵi1i2 
+
+> IQ
+
+− 1 + X 
+
+> j̸=i1,i 2
+
+(ϵi1jIQ − ϵi2jIQ )
+
+ .
+
+For compactness, let us introduce the differencing notation ϕ(·)|Fn 
+
+> F
+
+= ϕ(Fn) − ϕ(F ). We seek a CLT on 
+
+√n(∆ [εi1,i 2 
+
+> IQ
+
+(Fn) − ∆εi1,i 2 
+
+> IQ
+
+(F )) = 
+
+√nk − 1
+
+2ϵIQ (·, F i2,n ) + X 
+
+> j̸=i1,i 2
+
+ϵIQ (·, F j,n )
+
+
+
+> Fi1,n
+> Fi1
+
++
+
+√nk − 1
+
+2ϵIQ (Fi1 , ·) − X 
+
+> j̸=i1,i 2
+
+ϵIQ (·, F j,n )
+
+
+
+> Fi2,n
+> Fi2
+
++
+
+√nk − 1
+
+X 
+
+> j̸=i1,i 2
+
+(ϵIQ (Fi1 , ·) − ϵIQ (Fi2 , ·)) |Fj,n 
+
+> Fj
+
+→w
+
+√nk − 1
+
+2ϵIQ (·, F i2 ) + X 
+
+> j̸=i1,i 2
+
+ϵIQ (·, F j )
+
+
+
+> Fi1,n
+> Fi1
+
+| {z }
+
+> I
+
++
+
+√nk − 1
+
+2ϵIQ (Fi1 , ·) − X 
+
+> j̸=i1,i 2
+
+ϵIQ (·, F j )
+
+
+
+> Fi2,n
+> Fi2
+
+| {z }
+
+> II
+
++
+
+√nk − 1
+
+X 
+
+> j̸=i1,i 2
+
+(ϵIQ (Fi1 , ·) − ϵIQ (Fi2 , ·)) |Fj,n 
+
+> Fj
+
+| {z }
+
+> III
+
+where we have used the uniform convergence of integrated quantiles. Note that I, II , and each term in the sum in III are all independent. Define 
+
+v(1)  
+
+> ij
+
+(t) = 2 
+
+ dF −1 
+
+> i
+
+(t)
+
+dt 
+
+ Z 1
+
+> t
+
+F (−2)  
+
+> i
+
+(p) − F (−2)  
+
+> j
+
+(p)dp 
+
+
+
+,v(2)  
+
+> ij
+
+(t) = 2 dF −1 
+
+> j
+
+(t)
+
+dt 
+
+! Z 1
+
+> t
+
+F (−2)  
+
+> i
+
+(p) − F (−2)  
+
+> j
+
+(p)dp 
+
+
+
+,
+
+and v(1)+  
+
+> ij
+
+, v(2)+  
+
+> ij
+
+similarly. Then by the proof of Corollary J.2, each term in III converges to 
+
+√nk − 1 (ϵIQ (Fi1 , ·) − ϵIQ (Fi2 , ·)) |Fj,n  
+
+> Fj
+
+→ − αm,j (v(2)+  
+
+> i1j
+
+)(k − 1) d4
+
+> IQ
+
+(Fi1 , F j ) + αm,j (v(2)+  
+
+> i2j
+
+)(k − 1) d4
+
+> IQ
+
+(Fi2 , F j )= 1
+
+k − 1 αm,j − v(2)+ 
+
+> i1j
+
+d4
+
+> IQ
+
+(Fi1 , F j ) + v(2)+ 
+
+> i2j
+
+d4
+
+> IQ
+
+(Fi2 , F j )
+
+!
+
+→w N
+
+
+
+0, 1(k − 1) 2 σ2 
+
+> j
+
+(i1, i 2)
+
+
+
+, ∀j̸ = i1, i 2.
+
+where 
+
+σ2 
+
+> j
+
+(i1, i 2) = 1(k − 1) 2 Var v(2)+  
+
+> i1j
+
+(U )
+
+d4
+
+> IQ
+
+(Fi1 , F j ) − v(2)+  
+
+> i2j
+
+(U )
+
+d4
+
+> IQ
+
+(Fi2 , F j )
+
+!
+
+, ∀j̸ = i1, i 2,
+
+23 Risk Aware Benchmarking of Large Language Models 
+
+and U ∼ Unif([0 , 1]) . Similarly for I and II ,
+
+I →w N
+
+
+
+0, 1(k − 1) 2 σ2 
+
+> i1
+
+(i1, i 2)
+
+
+
+II →w N
+
+
+
+0, 1(k − 1) 2 σ2 
+
+> i2
+
+(i1, i 2)
+
+
+
+where 9
+
+σ2 
+
+> i1
+
+(i1, i 2) = Var 
+
+ 2v(1) − 
+
+> i1i2
+
+(U )
+
+d4
+
+> IQ
+
+(Fi1 , F i2 ) + X 
+
+> j̸=i1,i 2
+
+v(1) − 
+
+> i1j
+
+(U )
+
+d4
+
+> IQ
+
+(Fi1 , F j )
+
+ ,σ2 
+
+> i2
+
+(i1, i 2) = Var 
+
+ 2v(2)+  
+
+> i1i2
+
+(U )
+
+d4
+
+> IQ
+
+(Fi1 , F i2 ) − X 
+
+> j̸=i1,i 2
+
+v(1) − 
+
+> i2j
+
+(U )
+
+d4
+
+> IQ
+
+(Fi2 , F j )
+
+ .
+
+Putting everything together via independence, 
+
+√n
+
+
+
+∆ [εi1,i 2 
+
+> IQ
+
+(Fn) − ∆εi1,i 2 
+
+> IQ
+
+(F )
+
+
+
+→w N 0, 1(k − 1) 2
+
+> k
+
+X
+
+> i=1
+
+σ2 
+
+> i
+
+(i1, i 2)
+
+!
+
+.
+
+K. Consistency of Bootstrapping 
+
+In this section, we consider the relaxation measure using the CDFs 10 :
+
+˜ϵℓ(FX , F Y ) = 
+
+R ∞−∞ (F (ℓ) 
+
+> Y
+
+(t) − F (ℓ) 
+
+> X
+
+(t)) 2+dt 
+
+R ∞−∞ (F (ℓ) 
+
+> Y
+
+(t) − F (ℓ) 
+
+> X
+
+(t)) 2dt .
+
+Note that we can relax FSD as follows: 
+
+Y ≽
+
+> ε−FSD
+
+X ⇐⇒ ˜ϵ1(FX , F Y ) ≤ ε. (25) Similarly we can relax SSD as follows: 
+
+Y ≽
+
+> ε−SSD
+
+X ⇐⇒ ˜ϵ2(FX , F Y ) ≤ ε. (26) We will prove bootstrap consistency for ℓ = 1 (approximate first order dominance), the proof for ℓ = 2 (approximate second order dominance) is similar. We seek to show that the bootstrapped variance Var (˜ ϵ1(F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)) is an asymptotically consistent estimator of 
+
+Var (˜ ϵ1(F nX , F mY ), i.e. their ratio goes to 1: 
+
+Var (˜ ϵ1(F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)) 
+
+Var (˜ ϵ1(F nX , F mY )) →p 1.
+
+Note we can write this as Var (˜ ϵ1(F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)
+
+Var (˜ ϵ1(F nX , F mY )) →p
+
+Var (T (F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)) 
+
+Var (T (F nX , F mY )) ,
+
+where 
+
+T (FX , F Y ) = 
+
+R ∞−∞ (FY (t) − FX (t)) 2+dt 
+
+R ∞−∞ (FY (t) − FX (t)) 2dt .
+
+> 9
+
+This U ∼ Unif([0 , 1]) is drawn simply for this variance calculation and is not dependent on anything outside of this equation. 
+
+> 10
+
+The result using quantiles as described in the main text is less straightforward and if left for future work. 
+
+24 Risk Aware Benchmarking of Large Language Models 
+
+Consider the metric created by the sup norm 
+
+ρ∞(F, G ) = ∥F − G∥∞ = sup 
+
+> x
+
+|F (x) − G(x)|.
+
+Note that T is continuously ρ∞-Frechet differentiable in both arguments due to the differentiability of the function (·)2+ and integration. Specifically, 
+
+D1,(FX ,F Y )(GX ) = 1(R ∞−∞ (FY (t) − FX (t)) 2dt )2 ·
+
+h Z ∞−∞ 
+
+(FY (t) − FX (t)) 2dt 
+
+ Z ∞−∞ 
+
+2( FY (t) − FX (t)) +GX dt 
+
+
+
+−
+
+Z ∞−∞ 
+
+(FY (t) − FX (t)) 2+dt 
+
+ Z ∞−∞ 
+
+2( FY (t) − FX (t)) GX dt 
+
+ i
+
+.
+
+and similarly for D2,(FX ,F Y )(GY ). Since T is continuously differentiable, by the definition of continuous Frechet differen-tiability we can write (see Chapter 2 in (Shao & Tu, 2012)) the following: 
+
+T (F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+) − T (F nX , F mY )= D1,(F nX ,F mY )(F n∗ 
+
+> X
+
+− F nX ) + D2,(F nX ,F mY )(F m∗ 
+
+> Y
+
+− F mY ) + ( ρ∞(F n∗ 
+
+> X
+
+, F nX ) + ρ∞(F m∗ 
+
+> Y
+
+, F mY )) ϵ∗
+
+> n,m
+
+T (F n∗ 
+
+> X
+
+, F mY ) − T (F nX , F mY ) = D1,(F nX ,F mY )(F n∗ 
+
+> X
+
+− F nX ) + ( ρ∞(F n∗ 
+
+> X
+
+, F nX )) ϵ∗
+
+> n
+
+T (F nX , F m∗ 
+
+> Y
+
+) − T (F nX , F mY ) = D2,(F nX ,F mY )(F m∗ 
+
+> Y
+
+− F mY ) + ( ρ∞(F m∗ 
+
+> Y
+
+, F mY )) ϵ∗
+
+> m
+
+and 
+
+T (F nX , F mY ) − T (FX , F Y )= D1,(FX ,F Y )(F nX − FX ) + D2,(FX ,F Y )(F mY − FY ) + ( ρ∞(F nX , F X ) + ρ∞(F mY , F Y )) ϵn,m 
+
+T (F nX , F Y ) − T (FX , F Y ) = D1,(FX ,F Y )(F nX − FX ) + ( ρ∞(F nX , F X )) ϵn
+
+T (FX , F mY ) − T (FX , F Y ) = D2,(FX ,F Y )(F mY − FY ) + ( ρ∞(F mY , F Y )) ϵm
+
+where ϵ∗
+
+> n,m
+
+, ϵ ∗
+
+> n
+
+, ϵ ∗
+
+> m
+
+, ϵ n,m , ϵ n, ϵ m → 0 as n, m → ∞ .Hence, combining terms, 
+
+T (F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+) − T (F nX , F mY ) = ( T (F n∗ 
+
+> X
+
+, F mY ) − T (F nX , F mY )) + ( T (F nX , F m∗ 
+
+> Y
+
+) − T (F nX , F mY )) + op(n−1/2 + m−1/2),
+
+and 
+
+T (F nX , F mY ) − T (FX , F Y ) = ( T (F nX , F Y ) − T (FX , F Y )) + ( T (FX , F mY ) − T (FX , F Y )) + op(n−1/2 + m−1/2).
+
+Hence, assuming independence of the n-sample and m-sample and respective bootstrap resamplings, 
+
+Var (T (F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)) 
+
+Var (T (F nX , F mY )) →a.s. 
+
+Var (T (F nX , F m∗ 
+
+> Y
+
+)) + Var (T (F n∗ 
+
+> X
+
+, F mY )) 
+
+Var (T (FX , F mY )) + Var (T (F nX , F Y )) ,
+
+i.e. we add the variances. We have now divided the task to the one-sided setting where the bootstrap is only done in one argument of T . Hence we can apply Theorem 3.10 of (Shao & Tu, 2012) which states that for ρ∞-Frechet differentiable functions of a CDF, the bootstrap variance estimator is asymptotically consistent if the support is bounded (more general results can be stated but are omitted for simplicity). Applying separately to each of the two variances we have the following. 
+
+Proposition K.1. Suppose FX , FY , have support contained in [−M, M ] for some M > 0, and F nX , F mY arise from independent samples. Then 
+
+Var (˜ ϵ1(F n∗ 
+
+> X
+
+, F m∗ 
+
+> Y
+
+)) 
+
+Var (˜ ϵ1(F nX , F mY )) →a.s. 1.
+
+25 Risk Aware Benchmarking of Large Language Models 
+
+L. Additional Experimental Results 
+
+L.1. Statistical Significance on Synthetic Data 
+
+We examine the statistical properties of our tests as a function of sample size. We purposely design synthetic score distributions to represent challenging problems with large overlap between the distributions and a considerable violation ratio, but where one would still like to have an ordering among the variables. For this we consider the two Gaussian distributions with mean μ = 0 and standard deviation σ = 1 , and with mean μ = 0 .5 and standard deviation σ = 2 ,respectively. In the top panels of Figure 5 we show the PDF, CDF and integrated quantile function of these two Gaussians, illustrating the large violation ratio. The orange distribution can be calculated to be 0.2-FSD and 0.45-SSD over the blue distribution. Note that these ε values are not comparable, due to the differences in definitions. In Figure 5, we conduct experiments illustrating the power of our tests for the absolute tests of the hypotheses H0,F SD = 0 .45 -FSD and 
+
+H0,SSD = 0 .45 -SSD. We also use our relative tests, which in this 2-variable case (as noted in the main text) are equivalent to testing H0,F SD = 0 .5-FSD and H0,SSD = 0 .5-SSD. The bottom left panel in Figure 5 show the True Positive Rate for the different types of tests that we developed: relative test with quantile function, relative test with Integrated Quantile Function, absolute test with quantile function, and absolute test with Integrated Quantile Function. As expected, all tests quickly converge towards True Positive Rate of 1.0 for growing sample sizes. 0.0 0.5 1.0 1.5 2.0 2.5 3.0 
+
+> X
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> density
+
+PDF         
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0
+> X
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> prob
+
+CDF        
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> prob
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+
+Integrated quantile function        
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 01000 2000 3000 4000 5000
+> sample size
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> true positive rate
+
+True Positive Rate 
+
+> relative test Q
+> relative test IQ
+> absolute test Q
+> absolute test IQ
+
+Figure 5: True Positive Rate vs sample size for Gaussian distributions . We compute the True Positive Rate of our stochastic dominance methods on the test distributions in the top panels for different sample sizes. Decisions are made using a confidence threshold of α = 0 .05 and τ = 0 .45 (for the absolute tests) and rates are computed over 1000 repetitions of the tests. Note that the FSD and SSD curves should not be compared due to differences in the underlying hypotheses. 26 Risk Aware Benchmarking of Large Language Models 0.0 0.5 1.0 1.5 2.0 2.5 3.0 
+
+> X
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> density
+
+PDF         
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0
+> X
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> prob
+
+CDF        
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> prob
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+
+Integrated quantile function        
+
+> = 0, 0, = 0.5
+> = 0.0, = 1.0
+> 0500 1000 1500 2000 2500
+> sample size
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> true positive rate
+
+True Positive Rate 
+
+> relative test Q
+> relative test IQ
+> absolute test Q
+> absolute test IQ
+
+Figure 6: True Positive Rate vs sample size for Lognormal distributions generated as X = eμ+σZ , where Z is a standard Gaussian variable. We compute the True Positive Rate of our stochastic dominance as in Fig. 5, but in this case we examine True Positive Rate for heavy-tailed distributions examplified by Lognormal distributions. 
+
+L.2. Mix-Instruct 
+
+Results for the Mix-Instruct data are shown in Figures 7 and 8, as well as Table 5. 
+
+L.3. Toxicity 
+
+Toxicity results are in Table 6. 
+
+L.4. Ablation Study on toxicity Independent Versus Empirical Copula Portfolio 
+
+When Comparing EC and IC portfolio aggregation using R-SSD to rank the LLM we see in Figures 9 and 10 that the two aggregation approaches lead to same ranking. While IC computational complexity is linear in the number of points , EC is quadratic. Given the correspondence in ranking IC is a more efficient aggregation technique. 
+
+L.5. Fat Left Tails of Metrics and Inconsistency of Mean-Variance with SSD 
+
+When metrics evaluated have fat tails, the Mean-Variance ranking can be inconsistent with the SSD. See Table 7. 27 Risk Aware Benchmarking of Large Language Models 
+
+Open koala alpaca llama flan-t5 stablelm Vicuna Dolly Moss ChatGLM mpt-7b mpt-7b assistant 7b (v2) 6b instruct 
+
+Mean Win Rates 
+
+RA(MWR @ M) 1 6 2 8 5 7 3 10 9 4 11 12 MWR @P(IC) 1 5 2 7 6 8 3 9 10 4 11 12 
+
+Relative FSD 
+
+RA(R-FSD @ M) 1 6 2 5 8 11 4 10 7 3 9 12 R-FSD @P(IC) 1 6 2 5 11 10 4 8 7 3 9 12 R-FSD @ChatGPT 1 7 3 4 12 11 2 8 5 6 9 10 
+
+Relative SSD 
+
+RA(R-SSD @ M) 1 7 2 5 12 10 4 9 6 3 8 11 R-SSD @P(IC) 1 6 3 5 12 11 4 7 8 2 9 10 R-SSD @ChatGPT 1 8 3 4 11 12 2 7 5 6 9 10 
+
+Mean-Risk Models 
+
+RA( μX − ΓX ) @ M 1 7 2 5 12 11 4 9 6 3 8 10 RA( μX − rX ) @P(IC) 1 6 3 5 12 11 4 7 8 2 9 10 
+
+Table 4: Rankings of models on following instructions according to all tests, with the top 3 ranks highlighted. We see that SSD and Mean – Risk models are consistent. Note that RA( μX − rX ) @P(IC) denotes the aggregation of rankings produced by ( μX − rX ) @P(IC) for each rX in Table 3. 
+
+Figure 7: Radar plot of mean – risk models of the portfolio on Mix-Instruct data. Note that the outer models are indeed the ones preferred by SSD in Table 5. 28 Risk Aware Benchmarking of Large Language Models 
+
+Figure 8: Empirical CDF and TvaR for portfolio on Mix-Instruct data IC Copula Portfolio EC Copula Portfolio   
+
+> Prompt + gen Prompt + gen
+> gen gen
+> 40 K
+> samples
+
+Figure 9: IC versus EC Portfolio Aggregation on Toxicity. Ranking of models using 40 K samples, with independent and Empirical Copula portfolio with R-SSD. We see that the two aggregation methods lead to similar results. 29 Risk Aware Benchmarking of Large Language Models 
+
+Open koala alpaca llama flan-t5 stablelm Vicuna Dolly Moss ChatGLM mpt-7b mpt-7b assistant 7b (v2) 6b instruct 
+
+Mean Win Rates 
+
+RA(MWR @ M) 1 6 2 8 5 7 3 10 9 4 11 12 MWR @P(IC) 1 5 2 7 6 8 3 9 10 4 11 12 
+
+Relative FSD 
+
+RA(R-FSD @ M) 1 6 2 5 8 11 4 10 7 3 9 12 R-FSD @P(IC) 1 6 2 5 11 10 4 8 7 3 9 12 
+
+Relative SSD 
+
+RA(R-SSD @ M) 1 7 2 5 12 10 4 9 6 3 8 11 R-SSD @P(IC) 1 6 3 5 12 11 4 7 8 2 9 10 R-SSD @ChatGPT 1 8 3 4 11 12 2 7 5 6 9 10 
+
+Absolute FSD 
+
+ε-FSD @P(IC) ε=0.08 1 6 2 5 10 11 4 7 8 3 9 12 
+
+ε-FSD @P(IC) ε=0.25 1 6 2 5 12 10 4 7 8 3 9 11 
+
+ε-FSD @P(IC) ε=0.4 1 6 2 5 12 10 4 8 7 3 9 11 
+
+Absolute SSD 
+
+ε-SSD @P(IC) ε = 0 .08 1 6 3 5 12 11 4 7 8 2 9 10 
+
+ε-SSD @P(IC) ε = 0 .25 1 6 3 5 12 11 4 8 7 2 9 10 
+
+ε-SSD @P(IC) ε=0.4 1 6 3 5 12 11 4 7 8 2 9 10 
+
+Mean-Risk Models 
+
+RA( μX − rX ) @P(IC) 1 6 3 5 12 11 4 7 8 2 9 10 
+
+Table 5: Mix instruct Extended Results. 30 Risk Aware Benchmarking of Large Language Models 
+
+Scenario Llama 2 7b Llama 2 13b Llama 2 70b MosaicML MPT 30b Tiiuae Falcon 40b 
+
+Toxic Prompts 
+
+RA(R-FSD @M ) (Gen Only) 3 2 4 1 5R-FSD @P(IC)(IC)(Gen Only) 2 3 4 1 5RA(R-SSD @M ) (Gen Only) 3 2 4 1 5R-SSD@P(IC)(IC) (Gen Only) 3 2 4 1 5RA(R-FSD @M) (Prompt + Gen) 2 3 1 4 5R-FSD @P(IC)(IC)(Prompt + Gen) 2 3 1 4 5RA(R-SSD @M) (Prompt + Gen) 2 3 1 4 5R-SSD @P(IC)(IC) (Prompt + Gen) 2 3 1 4 5
+
+Non-Toxic Prompts 
+
+RA(R-FSD @M) (Gen Only) 1 2 4 3 5R-FSD @P(IC)(IC) (Gen Only) 1 2 3 4 5RA(R-SSD @M) (Gen Only) 1 2 3 4 5R-SSD @P(IC)(IC) (Gen Only) 1 2 3 4 5RA( R-FSD @M) (Prompt + Gen) 3 2 4 1 5R-FSD @P(IC) (Prompt + Gen) 1 2 4 3 5RA(R-SSD @M) (Prompt + Gen) 1 2 3 4 5R-SSD @P(IC) (Prompt + Gen) 1 2 4 3 5
+
+All Combined (Toxic + Non-Toxic Prompts) 
+
+RA(R-FSD @M) (Gen Only) 2 3 5 1 4R-FSD @P(IC) (Gen Only) 2 3 5 1 4RA(R-SSD @M) (Gen Only) 2 3 5 1 4R-SSD @P(IC) (Gen Only) 2 3 5 1 4RA(R-FSD @M) (Prompt + Gen) 3 4 5 1 2
+
+RA(R-FSD @M) (Prompt + Gen) 3 4 5 1 2
+
+R-SSD @P(IC) (Prompt + Gen) 3 4 5 1 2
+
+R-SSD @P(IC) (Prompt + Gen) 3 4 5 1 2
+
+Table 6: Toxicity Ranking Extended Results 31 Risk Aware Benchmarking of Large Language Models IC Copula Portfolio EC Copula Portfolio   
+
+> Prompt + gen Prompt + gen
+> gen gen
+> 20 K
+> samples
+
+Figure 10: IC versus EC Portfolio Aggregation on Toxicity. Ranking of models using 20 K samples, with independent and Empirical Copula portfolio with R-SSD. We see that the two aggregation methods lead to similar results. 
+
+Figure 11: Identity Attack Metric distribution computed on Prompt+Generation output of Highly Toxic Prompts 32 Risk Aware Benchmarking of Large Language Models 
+
+Scenario Llama 2 7b Llama 2 13b Llama 2 70b MosaicML MPT 30b Tiiuae Falcon 40b 
+
+Non Toxic Prompts 
+
+Identity Attack Metric Gen evaluation Mean - Sigma 1 3 4 2 5Mean - Gamma 2 3 4 1 5Mean - nTvAR 2 3 4 1 5SSD 2 3 4 1 5Threat Metric Prompt + Gen evaluation Mean - Sigma 1 3 2 4 5Mean - Gamma 1 2 3 5 4Mean - nTvAR 1 2 3 5 4SSD 1 2 3 5 4
+
+Table 7: Inconsistency of Mean - Sigma on Toxicity Metrics with SSD and other mean-risk models. This is a due to the fact the metric evaluated may a have a fat left tail see Figures 11 and 13. 
+
+Figure 12: Threat Metric distribution computed on Prompt+Generation output of Less Toxic Prompts 33 Risk Aware Benchmarking of Large Language Models 
+
+Figure 13: Identity Attack Metric distribution computed on Generation output of Less Toxic Prompts 34

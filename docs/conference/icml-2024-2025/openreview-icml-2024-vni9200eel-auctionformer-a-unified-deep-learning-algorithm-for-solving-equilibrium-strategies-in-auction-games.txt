@@ -1,0 +1,1851 @@
+Title: Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games
+
+URL Source: https://openreview.net/pdf?id=VnI9200eeL
+
+Number of Pages: 25
+
+Markdown Content:
+# Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+Kexin Huang † 1 Ziqian Chen 2 Xue Wang 2 Chongming Gao 1 Jinyang Gao 2 Bolin Ding 2 Xiang Wang ‡ 1 
+
+## Abstract 
+
+Auction games have been widely used in plenty of trading environments such as online advertis-ing and real estate. The complexity of real-world scenarios, characterized by diverse auction mech-anisms and bidder asymmetries, poses significant challenges in efficiently solving for equilibria. Traditional learning approaches often face lim-itations due to their specificity to certain settings and high resource demands. Addressing this, we introduce Auctionformer , an efficient transformer-based method to solve equilibria of diverse auc-tions in a unified framework. Leveraging the flex-ible tokenization schemes, Auctionformer trans-lates varying auction games into a standard token series, making use of renowned Transformer ar-chitectures. Moreover, we employ Nash error as the loss term, sidestepping the need for underly-ing equilibrium solutions and enabling efficient training and inference. Furthermore, a few-shot framework supports adaptability to new mecha-nisms, reinforced by a self-supervised fine-tuning approach. Extensive experimental results affirm the superior performance of Auctionformer over contemporary methods, heralding its potential for broad real-world applications. 
+
+## 1. Introduction 
+
+Auctions serve as a cornerstone in various trading environ-ments including art acquisitions (Louargand & McDaniel, 1991), radio spectrum allocations (Chen et al., 2010), real estate sales (Mayer, 1998), and online advertising (Bigler,        
+
+> †Work done at Alibaba ‡Xiang Wang is also affiliated with Insti-tute of Dataspace, Hefei Comprehensive National Science Center
+> 1University of Science and Technology of China, Hefei, China
+> 2Alibaba Group, Hangzhou, China. Correspondence to: Ziqian Chen <eric.czq@alibaba-inc.com >, Xue Wang <xue.w@alibaba-inc.com >.
+> Proceedings of the 41 st International Conference on Machine Learning , Vienna, Austria. PMLR 235, 2024. Copyright 2024 by the author(s).
+
+2008; Chen, 2017). Notably, online advertising has wit-nessed an exponential surge in trading volume, amounting to an astonishing 209.7 billion in recent decades, facilitated by sophisticated auction mechanisms (Interactive Advertis-ing Bureau & PwC, 2023). A typical auction includes two components, the bidders and the mechanism. Illustratively, consider a classic single-item auction where bidders are availed information related to the underlying value of the item on offer. Based on this revelation, each bidder is tasked with setting a price he/she is willing to pay for the item. After collecting all bid prices, the highest bidder wins the item at the price by predetermined mechanisms. While researchers achieved theoretical equilibria in certain specific auction environments (Vickrey & William, 1961; Jackson & Swinkels, 2005; Athey & Haile, 2002), the field underwent a paradigm shift with the adoption of learning approaches. These methods, including no-regret learn-ing (Feng et al., 2021; Bichler et al., 2021; Kohring et al., 2023; Deng et al., 2022) and multi-agent reinforcement learning (Kolumbus & Nisan, 2022; Banchio & Skrzypacz, 2022), have fostered the development of (approximate) equilibrium strategies by leveraging learning approaches to either mitigate regret or augment expected rewards (Bichler et al., 2022; Badanidiyuru et al., 2021; Nedelec et al., 2021). Nonetheless, these approaches are mainly specifically designed to solve a unique auction setting, such as a fixed number of bidders and/or fixed distributions, and are both time and resource-intensive. In a related domain, the area of auction design has witnessed the successful application of deep learning techniques (D ¨utting et al., 2021; 2024), notably attention-based architectures, showcasing their potential for flexible input handling and generalizability (Ivanov et al., 2022). This raises a pivotal question: 
+
+Can a trained deep learning model efficiently compute ap-proximate equilibria for any mechanism only with fine-tuning? 
+
+Motivated by this question and drawing inspiration from the remarkable successes of Transformer models (Vaswani et al., 2017; Ivanov et al., 2022), we introduce Auctionformer, a Transformer model to solve general auction games. Auction-1Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games !-BNE Bidding Strategy {"!                          
+
+> "}
+> Unified auction model Auctions with different settings Bidding strategy solution for all
+> bidder valuations
+> Bid distributions for bidders
+> !"(price)
+> #
+> σ!
+> !|#!
+> …
+> %!
+> "
+> σ!
+> #|##
+> #
+> "
+> "
+> "
+> σ#
+> !|#!
+> %#
+> "
+> σ#
+> #|##
+> …
+> !
+> !!
+> Bidders Value Distribution
+> Mechanism $"
+
++  
+
+> !
+> (possibility)
+> !
+> ##
+> (value)
+> Mechanism $#
+
++    
+
+> Bidders Value Distribution
+> !!
+> ##
+> MLP
+> Attention
+> Decoder -
+> V
+> Decoder -
+> K
+> Add &
+> Norm
+> Pretrain Language Model
+> Embed
+> M2
+> Embed
+> F
+> Embed
+> Q
+> Embed
+> M1
+> …
+> ……
+> …
+
+!-BNE Bidding Strategy {"!            
+
+> #}
+> …"
+> #
+> "
+> "
+> "#
+> σ!
+> !|#!
+> $!
+> "
+> σ!
+> #|##
+> Bid distributions for bidders
+> σ#
+> !|#!
+> $#
+> "
+> σ#
+> #|##
+> …
+> …
+> !
+> !
+> !!
+> …
+> !
+
+Figure 1. The pipeline of the Auctionformer framework. 
+
+former uses the pretrained Transformers (e.g., BERT (De-vlin et al., 2018) and GPT (Radford et al., 2019; OpenAI, 2023)) as the backbone. We design a flexible tokenization procedure that is able to translate diverse auction games into a standardized series of tokens, thereby encoding the mechanism and its intricate details (e.g., entrance fee) suc-cinctly. Furthermore, we propose to use Nash error which is also known as Nikaid ¨o and Isoda function (Nikaid ˆo & Isoda, 1955) as the loss term instead of the commonly used mean squared error (MSE) and cross-entropy error (CE). Nash error loss relaxes the necessity of underlying equilib-rium solutions whose acquisition can be time-consuming (Filos-Ratsikas et al., 2021; Chen & Peng, 2023), thereby circumventing the steep demands of constructing auction equilibria datasets with ground truth. When using Nash er-ror, we only need to engage cheap local solutions during the training stage, and the estimated equilibrium is computed with just one forward path when switching to the inference stage. To adapt the model to the auction settings different from the training stage, we provide a few-shot framework. By training a new mechanism identifier token with just a few samples, Auctionformer can be adapted to approximate equilibrium bidding strategies for all cases within the new mechanism. Our contributions can be summarized as fol-lows: • We propose Auctionformer, a Transformer model, to solve general auction game equilibria. To our knowl-edge, Auctionformer is the first machine-learning model that is able to solve multiple auction games si-multaneously, which enhances efficiency and broadens the scope of learning-based auction solvers. • We introduce flexible tokenization procedures that fa-cilitate the conversion of a wide array of existing auc-tion games into a unified series of tokens, and then an encoder-decoder architecture is used to solve bid-ders’ strategies. We also use the Nash error as the loss function instead of conventional MSE or CE loss. 
+
+Table 1. The equilibrium solving ability in auction games. The scalability of different games are leveraged on player number (Num.), mechanism. 
+
+Ability Classic No-regret MLPs Ours Solver (MARL) Vary Player Num. ✓ ✓ ✗ ✓
+
+Vary Mechanisms ✗ ✓ ✗ ✓
+
+Without Retrain ✓ ✗ ✓ ✓
+
+Few-shot - ✗ ✗ ✓
+
+The underlying equilibrium solution is not required throughout the whole training procedure. • Our approach is tested through extensive experi-ments encompassing end-to-end training, pretraining-finetuning, and few-shot learning methodologies. These experimentations underscore the remarkable ef-ficacy of our proposed model, which outperforms exist-ing methods by a significant margin, thereby attesting to its superiority and potential for real-world applica-tions. 
+
+## 2. Preliminary 
+
+We consider the classical single-item auction problem, which is characterized by a set of bidders N and a mecha-nism M. The i-th bidder in N is featured by his or her value distribution Fi, and bidding strategy σi that is associated with mechanism M and number of bidders n = |N | . When entering the auction game, the i-th bidder will receive the (interim) value vi of the target item which is independently sampled from the (ex-ante) value distribution Fi, and the vi
+
+is unknown to other bidders. Once a bidder acquires vi, he or she would submit a bid price according to their bidding strategies bi based on σi. where σi is formed with a distribu-tion P (Fi, M, n, v i) and bi is sampled accordingly. We use 
+
+σi(vi) as a short-hand notation of P (Fi, M, n, v i). More-over, we denote σi as the set of the i-th bidder’s bidding 2Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+strategies of all value realization: 
+
+σi := {σi(vi)|vi ∼ Fi} ∈ D , (1) where D is the whole strategy space. We denote the set of the strategies of bidders excluding bidder i as 
+
+σ−i = ( σ1, · · · σi−1, σi+1 · · · σn). In this work, we as-sume {F1, · · · , F n} is known to all bidders but vi is private information for bidder i. This Bayesian setting(Kagel & Levin, 2015) is widely adopted in auction games (Bichler et al., 2022; Banchio & Skrzypacz, 2022; Kohring et al., 2023; Duan et al., 2023a; Wang et al., 2020). An auction mechanism M = {p, g, ϕ} normally includes a payment rule p and an allocation rule g, with other mech-anism configurations ϕ such as entrance-fee or reserve price (D ¨utting et al., 2021). We use pi and gi to repre-sent the payment and allocation functions for bidder i. The utility function ui of the i-th bidder is defined as follows: 
+
+ui(vi, b i, B −i|M ) = vigi(bi, B −i) − pi(bi, B −i),
+
+where B−i = {bj |j̸ = i} denotes the opponents’ bidding price. The bidder’s best response σ∗ 
+
+> i
+
+(vi) solves the follow-ing optimization problem 1 formulated as: 
+
+σ∗ 
+
+> i
+
+(vi) = arg max 
+
+> ωi
+
+EB−i∼σ−i
+
+ui(vi, ω i, B −i|M ).
+
+For all the bidders, a strategy profile σ∗ = {σ∗
+
+> 1
+
+, · · · , σ∗
+
+> n
+
+}
+
+reaches (ex-ante) Bayesian Nash Equilibrium 2 if and only if every bidder’s strategy is the best response of others’ strategies σ∗−i, denoted as 
+
+ui(σi, σ∗−i) ≤ ui(σ∗ 
+
+> i
+
+, σ∗−i) ∀i ∈ N, σi ∈ D , (2) where the expected utility ui is computed as 
+
+ui(σi, σ−i) = E(vi,b i,B −i)∼(Fi,σ i,σ−i)
+
+ui(vi, b i, B −i|M ).
+
+In this work, we are interested in the solution to the approx-imated problem of (2) as follows: 
+
+ui(σi, σ∗−i) ≤ ui(σ∗ 
+
+> i
+
+, σ∗−i) + ϵ ∀i ∈ N, σi ∈ D . (3) where ϵ is a positive tolerance term. The solution to (3) is known as ϵ-approximate (Bayesian) Nash Equilibrium ( ϵ-NE or ϵ-BNE) which demonstrates that the maximal utility gain i.e., the exploitability (Lanctot et al., 2017), is no more than ϵ for all players in the strategy profile σ.Existing learning approaches, as summarized in Table 1, have certain limitations when addressing multiple auc-tion game scenarios. Specialized numerical solvers like 
+
+> 1There may exist multiple best responses that lead to the same utility, which forms a mixed strategy (Duan et al., 2023a).
+> 2In the complete information game, the definition is equivalent to the NE (Kohring et al., 2023).
+
+backward-shooting (Wang et al., 2020; Marshall et al., 1994; Bajari, 2001; Gayle & Richard, 2008) are tailor-made for specific mechanisms. The no-regret learning ap-proach (Feng et al., 2021; Kolumbus & Nisan, 2022; Ban-chio & Skrzypacz, 2022) treats each bidder as an indepen-dent agent. While each agent refines their bidding strategy for a specific mechanism, adapting to new scenarios may re-quire intensive retraining to achieve newly converged strate-gies. Traditional neural network models, such as MLP, have shown promise in addressing auction games. For example, RegretNet (D ¨utting et al., 2021; 2024) is built for mecha-nism optimization problems, and deep Q-learning (Banchio & Skrzypacz, 2022; Feng et al., 2021) is applied to find equilibrium bidding strategies. Inspired by the Transformer architecture’s success (Vaswani et al., 2017) in efficiently handling flexible sequences and the efficiency of a workload-agnostic learned estimator (Wu et al., 2021), we introduce the Auctionformer. This model provides remarkable flexibility in addressing auction games and showcases superior scalability in equilibrium-solving abilities, as emphasized in Table 1. We use the notation X = ( M, n, {F1, · · · , F n}) to denote a game with the mechanism M and n bidders with associated value distributions {F1, · · · , F n} . Presuming a function F
+
+that maps input data, such as the mechanism, bidder’s value distributions, and realizations, to output strategies, this is the function the Auctionformer seeks to execute. The function’s output, F(X) , yields the (approximate) equilibrium strate-gies ˆσ . For each auction game Xj in auction games space 
+
+X , the resultant bidding strategies ˆσj = ( ˆ σj
+
+> 1
+
+, · · · , ˆσjnj )
+
+allow each bidder in the game to adopt varying bidding strategies ˆσji (vji ), as described in (1). In order to further highlight the potential of the proposed model, let’s consider the following examples 3 with dis-crete value realization from value distribution (Uniform and Gaussian distribution) and limit the bidding price upto 
+
+bmax = 20 .
+
+Example 1. First price auction : Bidder 1’s value distribu-tion F1 = G(10 , 10 3 ) and Bidder 2 and 3 ’s value distribution is F2 = F3 = G(5 , 53 )
+
+Example 2. First price auction + Entry Fee=3 : Bidder 1’s value distribution F1 = G(10 , 10 3 ) , and Bidder 2-4’s value distribution is F2 = F3 = F4 = G(10 , 53 )
+
+We benchmark no-regret solver MWU algorithm (Feng et al., 2021), MLP deep model solver MLPNet 4 and the proposed model with the underlying solution from numerical solver backward-shooting (Wang et al., 2020). From the results  
+
+> 3More example analysis can be found in appendix C.5
+> 4We build a MLP network inspired by D ¨utting et al. (2021; 2024).The model structure and learning details can be found in appendix C.3.
+
+3Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games Embed-     
+
+> M1
+> Embed-
+> M2
+> TokM1
+> TokM2
+> Tok1
+> ...
+> TokN
+> Pretr ain
+> Language
+> Model
+> Decoder -V
+> Decoder -K
+> Add & Norm
+> Attention MLP
+> ...
+> Vmin 2,... ,Vmax 2
+> ...
+> F2(0), F 2(1), ...
+> F1(0), F 1(1), ...
+> Mechanism
+> {fp , sp , ...}
+> Mechanism
+> Configur ation
+> ...
+> σ2(Vmin 2),... ,σ 2(V max 2)
+> σ1(Vmin 1),... ,σ 1(Vmax 1)
+> Predicted Str ategy
+> Value
+> Distribution
+> {F 1,... ,F n}
+> Value Query
+> {V 1,... ,V n}
+> Vmin 1,... ,Vmax 1
+> Embed-F
+> Embed-Q
+> Str ategies Decoder
+> Identifiers
+> 𝜙
+> {𝝈 !,…,𝝈 "}
+
+Figure 2. The illustration of the Auctionformer architecture. The input value distribution and mechanism names with configuration are firstly tokenized with a mechanism encoder and valuation histogram. The predicted strategies are delivered by an attention-based module that facilitates with decoded language model outputs and an extra value query vector of each bidder. 
+
+shown in Figure 7, all of the learning approaches generate a near-optimal solution that is highly close to the numerical solution. Though the MWU algorithm can solve all example games with multi-agent learning, we have to retrain agents for different settings, which is time-consuming. The pre-trained MLPNet can directly output the solution of every bidder’s bidding strategies within 1 special pretrained mech-anism and specific bidder number (e.g., N = 3 ), which has flexibility on any value distribution but not on mechanisms and bidder number. Our proposed (pretrained) Auction-former, however, has the ability to solve all three examples within 1 forward pass and without re-train. 
+
+## 3. Auctionformer Model 
+
+The proposed Auctionformer is illustrated in Figure 2. De-tails on tokenization, encoding, decoding, loss calculation, and few-shot methodology are further discussed in subse-quent subsections. For the sake of brevity and to maintain the flow of discussion, we have deferred all proofs and technical derivations to the Appendix. 
+
+3.1. Tokenization Mechanism The mechanism is characterized by one iden-tifier (e.g., ”first price”) possibly with extra configurations (e.g., entrance fees, reserve prices), which are mapped to specific tokens via a predefined table and can be easily updated. In practice, identifiers and configurations are pro-cessed through an embedding layer to generate their em-beddings. This leverages language models’ capability to process scalable tokens, where similar tokens yield compa-rable results. 
+
+Value Distribution To incorporate bidders’ value distribu-tions into the model, we adopt a straightforward approach by inputting the probability distribution function (pdf) and applying a minimal value interpretation for value space discretization, paralleling the setup in Feng et al. (2021). Here, bidder values are allocated within a 1/H -equally-discretized space, denoted as V = {0, 1/H, 2/H, · · · , 1},with H = Vmax representing the highest granularity of the value space in our learning scenarios. This allows us to trans-form the pdf of a bidder’s value into discrete histograms and create normalized value distribution embeddings for each bidder. 
+
+Discretization Approximation. The usage of discrete value distributions is common and practical in the auction game field (e.g., Feng et al. 2021; Deng et al. 2022; Kolumbus & Nisan 2022), aligning with typical auctions in real life where bidders bid in monetary units (dollars or cents) rather than float numbers. For simplicity, we only consider a piecewise constant function with equal spacing to approximate the real density or mass function. The estimation error can be characterized via the following theorem. 
+
+Theorem 3.1. Let F(v) be the cumulative distribution func-tion (cdf) of the value distribution of a given bidder. There exists a piecewise constant function ˆF(v) with at most n
+
+change points such that 
+
+sup 
+
+> v
+
+ˆF(v) − F (v) ≤ C
+
+√n
+
+holds for some constant C > 0.
+
+In modern large language model settings, the embedding dimension is commonly on the order of O(2 10 ). If we use the token to store the change points information of the piece-wise constant function to approximate the density function, it is possible that the difference between the corresponding cdf and real underlying cdf with error up bounded O(0 .03) ,which is quite small. The efficiency of our method is compa-rable to the existing literature on continuous games such as RegretNet (D ¨utting et al., 2021; 2024) and pseudo-gradient approach (Bichler et al., 2021; Kohring et al., 2023), which use piecewise constant empirical distribution as an approxi-mation. Moreover, there are several direct ways to further reduce this error, such as linear or high-order spline approxi-mation, polynomial approximation, and Fourier/Wavelet ap-proximation. All those methods would generate function(s) that can be characterized with a finite number of coefficients and we could directly use them as token embedding. We then discuss the approximation ability of the discretized bid strategy. A classic single-item auction is composed of the bidders N featured by their value distributions F and 4Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+the auction mechanism M = {p, g, ϕ }. In our setting, the value and bid are in the discrete set V = {0, 1/H, 2/H, . . . }
+
+and the value distribution F is then discretized to F d :
+
+V → R≥0, formulating a discrete auction game Gd =
+
+{N, F d, V, M} . While the corresponding continuous auc-tion game can be represented as Gc = {N, F c, R≥0, M} ,with the value and bid belonging to R≥0.
+
+A strategy σdi (vdi ) solved for the discrete game Gd can be mapped to a strategy of the continuous game Gc, formu-latted as: σci (vci ) := σdi (arg min vdi ∈V |vdi − vci |). Hence, by resolving the discrete strategy profile σd, we can directly approximate the continuous game with σc. Using the fol-lowing theorem (adapted from Bichler et al. (2022)), the approximation quality can be precisely measured. 
+
+Theorem 3.2. Let σd be an ϵ-BNE of the discrete game Gd,then the corresponding strategy σc is an ϵ + O( 1 
+
+> H
+
+)-BNE of the continuous game Gc.
+
+Intuitively, a more accurately resolved equilibrium (char-acterized by a lower ϵ) in the discrete game, and a finer discretization grid will result in a better approximation to the continuous game. 
+
+3.2. Encoder with Pretrained Transformers 
+
+The encoder uses pre-trained Transformers, such as BERT (Devlin et al., 2018) and GPT (Radford et al., 2019) 5
+
+to generate a representation of the joint bidding policy. The mechanism tokens and all bidders’ value distribution to-kens are fed into the trainable Transformer based language model. Considering the varied input token length, we utilize the model to generate a representation of the joint bidding policy rather than directly output every bidder’s bidding strategy, which will be decoded later by the strategies de-coder module. 
+
+3.3. Strategies Decoder Attention-based Design. In Auctionformer, the output joint bidding distribution for a given game is influenced by the valuation distribution of bidders as well as the value real-izations. Bidder i’s current value vi and distribution Fi are merged via the value query module, with layer normaliza-tion applied post-merger. Utilizing the language model’s embedding layer enables a shortcut in the architecture (Fig-ure 2) for faster calculations across the value space V′ and potential strategies via multi-head attention. This setup, pro-cessing value histograms, and mechanism encodings, allows for efficient strategy computation based on value queries and distributions to calculate equilibrium strategies. An illustration example is shown in Figure 3. 
+
+> 5
+
+The GPT in the NLP area is mentioned as a decoder-only Transformer. Here we consider GPT as a Transformer with causal masking and use it to generate the representation of a joint bidding policy. Since we have another module to further use its output to decode the final output, GPT is referred to as an encoder module. ValueEmb n(v' n)      
+
+> ...
+> ValueEmb 1(v' 1)
+> ValueEmb n(v n)
+> Stacked Value
+> Realizations
+> Value
+> Query
+> Add
+> & Norm
+> Projection-Q σn(v' n)
+> Sta
+> Stacked Value
+> Embedding
+> Distribution Value Query
+> Decoder-V Decoder-K
+> Attention
+> Stacked Strategy
+> MLP Predicted Strategy
+> Language Model Output
+> σn(Vmax n)
+> ...
+> σn(Vmin n)
+> ...
+> σ1(Vmax 1)
+> ...
+> σ1(Vmin 1)
+> Bidder nEmb(Vmax n)
+> ...
+> Bidder nEmb(Vmin n)
+> ...
+> Bidder 1Emb(Vmax 1)
+> ...
+> Bidder 1Emb(Vmin 1)
+> Embed-Q Embed-F
+> Add
+> &Norm
+> EmbK n
+> ...
+> EmbK 1
+> EmbV n
+> ...
+> EmbV 1
+> Predicted Strategy
+> VKQ
+
+Figure 3. The strategies decoder module in Auctionformer, where the predicted strategy is computed through attention layer based on queried value and bidder’s distribution. 
+
+The decoder ensures the privacy of bidders’ value realiza-tions by separating the query ( Q) from the joint bidding policy’s key/value ( K/V ) pairs during decoding. Cross-attention acts as a secure retrieval method to access bidding policy details without disclosing individual valuations, main-taining the confidentiality of value realizations throughout the computation. It is possible to compute a partial bidding strategy by selecting a smaller subset of value queries (e.g., 
+
+2, 3) and setting the values of other opponents to zero. Auc-tionformer aims to derive each bidder’s strategy based on their current value realization, independent of others’ cur-rent values but conditional on their own value distribution. Finally, we employ a Multilayer Perceptron (MLP) to gen-erate the final bidding policy. The MLP input, of dimension 
+
+RN ×D , is transformed into a final bidding strategy dimen-sion of RN ×Bmax , where the MLP functions as a D × B
+
+matrix coupled with a nonlinear operation, with B repre-senting the bidding range. This ensures that there is no data leakage and that each bidder’s strategy is not predicated on the current value distributions of their opponents. 
+
+3.4. Nash Error Loss Function 
+
+Our learning objective aims to minimize ϵ-BNE (Chen & Peng, 2023) and we functional Nash error (Enrich et al., 2020) to build the below loss function: 
+
+min  
+
+> F
+
+LNash (F, X )= 1
+
+|X|
+
+X 
+
+> Xj∈X
+
+max 
+
+> σi∈D ,i ∈N
+
+uji (σji , ˆσj
+
+> −i
+
+) − uji (ˆσji , ˆσj
+
+> −i
+
+)
+
+(4) s.t. [ ˆ σj
+
+> 1
+
+, · · · , ˆσjN ] = F(Xj ),
+
+where uji (σji , ˆσj
+
+> −i
+
+) is the sampled version of Eq. (3) with fixed vi:
+
+uji (σji , ˆσj
+
+> −i
+
+) = E(bi,B −i)∼(σji (vji ), ˆσj
+
+> −i)
+
+ui(vji , b i, B −i|M j ).
+
+Functional Nash error has two advantages over commonly 5Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games Prior Data  Auctionformer  Preserv ation   
+
+> Loss
+> Nash
+> Loss
+> Auctionformer
+> Few -shot D ata
+> Embed-
+> M1
+> Embed-
+> M2
+> Pretr ain
+> Language
+> Model
+> Decoder -V
+> Decoder -K
+> Add &
+> Norm
+> Atten-
+> tion MLP
+> Embed-
+> F
+> Embed-
+> Q
+> Embed-
+> M1
+> Embed-
+> M2
+> Pretr ain
+> Language
+> Model
+> Decoder -V
+> Decoder -K
+> Add &
+> Norm
+> Atten-
+> tion MLP
+> Embed-
+> F
+> Embed-
+> Q
+> ℱ!
+> ℱ"#
+> ℱ!(𝑋 !)
+> ℱ"# (𝑋 !)
+> ℱ"# (𝑋 "# )
+> 𝑋 !
+> 𝑋 !
+> 𝑋 "#
+
+Figure 4. The illustration of the proposed few-shot method where the few-shot model is trained both on the Nash loss and a preser-vation loss between the results of the pre-trained Auctionformer model and the few-shot model on prior data. 
+
+used MSE or CE loss. First, this objective directly describes the max exploitability (Lanctot et al., 2017), which measures the distance between predicted approximate equilibrium strategy profile ˆσ and BNE status. On the other hand, no ground truth or optimal solution is required which facilitates us to address the situation when the optimal solution is hard to obtain. One may note that maximization over all possible strategies is required in the Nash loss and we may need to solve a possible combinatorial optimization problem. We next show that for standard auction formats, such as first-price and second-price auctions, the closed-form solution exists in Proposition 3.3. 
+
+Proposition 3.3. In the context of first-price and second-price auctions, the maximal utility can be directly deter-mined by the following expression: 
+
+max  
+
+> σi∼D
+
+uji (σji , ˆσj
+
+> −i
+
+) = max 
+
+> bi
+
+X
+
+> x<b i
+
+(vji − mj ) · Pr(max   
+
+> k̸=i
+
+bk = x| ˆσj
+
+> −i
+
+).
+
+Here mj is equivalent to bi for first-price auction and x
+
+for second-price auction, and Pr(max k̸ =i bk = x| ˆσj
+
+> −i
+
+) = 
+
+Q 
+
+> k̸=i
+
+P  
+
+> bk≤x
+
+Pr( bk| ˆσjk)−Q 
+
+> k̸=i
+
+P  
+
+> bk≤x−1
+
+Pr( bk| ˆσjk). Ad-ditionally, this computational approach can be readily adapted to auctions that include an entry fee by simply deducting the entry fee from the utility function. Conse-quently, by directly computing the maximal utility, the Nash loss can be efficiently calculated and applied to update the model without the need for labeled solutions. 
+
+3.5. Few-shot Learning 
+
+An interesting ability to use the pretrained Transformer is the generalization ability to unseen domains with very few instances, i.e., few-shot learning ability. It allows Auction-Former to handle various auction settings using a single model, requiring only a few examples for fine-tuning with-out detailed payment or allocation rules. Inspired by Dream-booth (Ruiz et al., 2023), AuctionFormer uses Nash loss for unsupervised learning and calculates preservation loss with the pretrained model to address the challenge of limited ground-truth in auctions. The process for applying few-shot learning is outlined in Figure 4. The detailed loss function is described below. The fine-tuned model, denoted as Ff s , is derived from the pretrained AuctionFormer model, F0. The few-shot samples Xf s are external to the training domain. Due to the lack of assurance in locating identical value distributions in the pretraining set, we reuse a subset from the pretraining set, X0, most correlated with the few-shot scenarios. For instance, when addressing cases with N = 15 bidders, data with similar value distributions and N = 10 bidders are utilized. 
+
+min  
+
+> F
+
+LNash (Ff s , X f s ) + λL p(F0(X0), Ff s (X0)) , (5) where λ > 0 and Lp represent the preservation loss, ensur-ing the model F retains its original dataset performance. The preservation loss Lp can be implemented as the discrep-ancy between the few-shot model’s predictions Ff s (X0)
+
+and the original model’s predictions F0(X0). In our study, we employ the L1 norm to assess this discrepancy, formu-lated as: Lp(F0(X0), Ff s (X0)) = ∥F 0(X0)−F f s (X0)∥1.
+
+## 4. Experiment 
+
+4.1. Implement details Datasets. We evaluate Auctionformer across four standard mechanisms: First Price single item auction (FP), Second Price single item auction (SP), First Price single item auction with a minimum entry fee (FP+Ent), and Second Price single item auction with a minimum entry fee (SP+Ent). These mechanisms are translated into integer codes, as detailed in Sec 4.2. The entry fee is within the range (0 , 3] .We do not restrict the value distribution to be symmetric. The potential asymmetric bidder’s value distribution is ei-ther drawn from the Uniform U or Gaussian distribution G
+
+sets, with the maximum value set at Vmax = 20 . For clarity, we differentiate between two distribution scenarios: distribu-tions starting with 0 (e.g., U [0 , 8] ) are labeled as U0 or G0.Distributions that start non-zero (e.g., U [3 , 5] ) are denoted as U−0 or G−0. The total number of bidders in the training set varies between [2 , 10] , and results for bidder numbers greater than 10 are assessed in the zero-shot and few-shot capability tests. Given these settings, we randomly generate 
+
+100 , 000 samples for each distribution. Every set of 500 
+
+distinct value distribution samples forms the validation set, with the remainder designated for training. The optimal 6Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+Table 2. The LNash of Auctionformer’s solutions on the auction games among different value distributions, mechanisms, and asym-metric player numbers (”Ent” refers to entry fee). The LNash of random strategy across mechanisms is 1.59e-1 for comparison. 
+
+FP SP FP+Ent SP+Ent Player Number = 2 ∼4U+G 7.99e-05 6.19e-05 2.78e-04 9.60e-06 
+
+U0 5.15e-05 1.31e-05 6.28e-05 5.27e-07 
+
+G0 4.59e-05 6.10e-08 6.64e-05 1.15e-06 
+
+U−0 1.39e-04 2.18e-04 4.07e-04 1.46e-05 
+
+G−0 8.32e-05 1.68e-05 5.77e-04 2.22e-05 
+
+Player Number = 5 ∼7U+G 5.79e-05 2.15e-04 3.09e-04 2.00e-05 
+
+U0 5.69e-05 3.73e-05 1.17e-04 1.27e-06 
+
+G0 4.31e-05 1.77e-07 1.23e-04 2.62e-06 
+
+U−0 9.26e-05 7.14e-04 3.69e-04 3.08e-05 
+
+G−0 3.91e-05 1.06e-04 6.28e-04 4.53e-05 
+
+Player Number = 8 ∼10 U+G 4.49e-05 3.68e-04 3.26e-04 2.55e-05 
+
+U0 5.22e-05 8.00e-05 1.41e-04 3.96e-06 
+
+G0 3.59e-05 4.11e-07 1.65e-04 6.58e-06 
+
+U−0 7.01e-05 1.18e-03 3.56e-04 3.74e-05 
+
+G−0 2.16e-05 2.15e-04 6.42e-04 5.41e-05 
+
+model from the validation set is retained. For testing, we create an additional 2, 000 samples for each value distribu-tion, distinct from those in the training and validation sets, and adjust the sample mechanism codes and configurations for the various mechanisms. More detailed information is summarized in Section C.2 in Appendix. For the few-shot capability assessment, the model undergoes updates with a learning rate of 10 −5. The sizes for the training and validation datasets are set at 1,500 and 500, respectively, for every configuration. The testing dataset is consistent with the earlier configuration, providing 2,000 samples for each value distribution. 
+
+Evaulation Metrics. For results with an existing theoretical solution, we assess the quality of the generated solution by calculating its L2 distance with the theoretical counter-parts (Kohring et al., 2023; Bichler et al., 2022). In scenarios lacking a theoretical solution, we employ the metric of max exploitability. This metric gauges how one’s strategy devi-ates when altered to the best response, essentially measuring the distance of a strategy profile ˆσ from the BNE. To evalu-ate Auctionformer’s performance across the entire test set, we use the averaged Nash error which is also termed max exploitability, i.e., LNash in (4). It’s noteworthy that in benchmark comparisons, all refer-enced works (Bichler et al., 2022; 2021; Kohring et al., 2023) undergo validation in multiple games constrained within the [0 , 1] value space. Consistently, our approach also adheres to this format. We project our value space onto 2 3 4 5 6 7 8 9 10    
+
+> Player Number
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> Runtime (s)
+> Auctionformer-GPU
+> Auctionformer-CPU
+> MWU
+
+Figure 5. The running-time of MWU and Auctionformers in GPU and CPU. The time of MWU is greatly increased with bidder number while Auctionformer shows similar running times across numbers. 
+
+a 1/H -evenly-discretized space (Feng et al., 2021) with 
+
+H = Vmax = 20 .
+
+Implementation details. The model is implemented in Pytorch 6. The embedding module includes a linear layer and a 2-layer MLP with hidden dimension 512 and keeps the decoder layer’s input dimension the same as the language model output dimension. We use the pretrained BERT as our default language model and train Auctionformer for all parameters (including BERT) with 10 −4 learning rate 7 and batch size 1024 using Adam optimizer. During 300 training epochs, we half the learning rate every 50 epochs. 
+
+4.2. Main Results Special Case of Two Symmetric Bidders. To our best knowledge, no existing literature demonstrates a capacity to directly solve multiple auction games with the general asymmetric bidder value distribution and different numbers of bidders at the same time. As such, we position our results against two distinct solutions: the no-regret learning ap-proach MWU, and learning-based solvers like NPGA (Bich-ler et al., 2021), SODA (Bichler et al., 2022), and the more recent SM (Kohring et al., 2023). For a balanced compar-ison, we present results for the FP auction involving two bidders with a uniform distribution, as shown in Table 5. It’s notable that the results from these cited works are de-rived from a highly discretized space, typically leading to a reported lower max exploitability (Kohring et al., 2023; Bichler et al., 2022). 
+
+Comparison with No-Regret Algorithms. No-regret algo-rithms are prevalent in the auction games domain, with estab-lished works confirming their convergence properties (Feng et al., 2021; Kolumbus & Nisan, 2022; Banchio & Skrzy-pacz, 2022; Feng et al., 2021). These algorithms are par-ticularly prominent in classical asymmetric cases, where theoretical bidding strategies are absent, rendering no-regret 
+
+> 6
+
+Codes are available at https://github.com/ Hesse73/Auctionformer_codes 
+
+> 7
+
+Extended results of fixed BERT are available in Appendix F.3 
+
+7Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+Table 3. Few-shot learning results on new 2000 sample on player number 15 and 20 and test on U + G of different player num-ber games where ”Pre.” denotes the preservation loss. Few-shot approach manages to transfer equilibrium solving ability on new cases while maintaining the model ability.                           
+
+> Few-shot on 15 Few-shot on 20 Player Number N≤10 N= 15 N≤10 N= 20
+> Train on N≤10 1.56e-04 5.67e-02 1.56e-04 7.25e-02 +Nash loss 1.90e-02 2.01e-03 6.15e-02 4.01e-03 + Ours (Nash+Pre.) 4.01e-04 2.94e-03 4.96e-04 6.82e-03
+
+algorithms with learning agents a go-to solution. In contrast, we employ the BERT-based Auctionformer, a model capable of resolving auction games efficiently with a single forward pass, eliminating the need for an extensive agent learning process. Our approach not only mirrors the equilibrium bidding strategies akin to no-regret algorithms but also addresses the limitations in 0-near cases as depicted in Figure 7. Furthermore, in simpler symmetric instances, where theoret-ical solutions are accessible (e.g., Uniform distribution cases showcased in Figure 12 in Appendix F.5), Auctionformer consistently yields bidding strategies that align closely with theoretical predictions and outperforms no-regret based so-lutions, even those involving prolonged agent learning peri-ods. 
+
+Scalability. We executed experiments on asymmetric bid-ders and summarized the results in Table 2. Approximation errors from typical games indicate that the max exploitabil-ity of Nash solutions ranges between 1e-3 and 1e-6, depend-ing on task complexity (Duan et al., 2023a). Despite the inherent complexity of auction games, Auctionformer has shown the ability to produce approximate equilibrium bid-ding strategies with max exploitability consistently around 1e-4 across different mechanisms and value distributions for bidder numbers within [2 , 10] . These findings are based on experiments excluding all test samples from the training and validation phases, with each bidder’s value distribution following a uniform model. Compared to random strategies, Auctionformer’s Nash error is significantly lower (about 
+
+10 3 times), demonstrating its scalability and effectiveness in handling diverse auction games without the error necessarily increasing with more players. 
+
+Few-Shot Learning. We assess Auctionformer’s few-shot learning ability, aiming to extend its application to out-of-domain cases. Specifically, we evaluate its transfer capabil-ity to scenarios not encompassed within the training data, such as auctions involving 15 and 20 asymmetric bidders. Aggregate results across all mechanisms and value distri-butions are showcased in Table 3, where the equilibrium solver’s performance is examined both pre and post few-shot 29M 109M 124M 335M 7B  
+
+> Pretrained Language Model Parameters
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Required Training Epochs  81
+> 51
+> 19
+> 75
+> BERT-small
+> BERT
+> GPT2
+> BERT-large
+> LLaMA2-7B
+
+Figure 6. The Auctionformer training epochs of diverse pretrained language model until converged to LNash ≤ 10 −3 in the validation set, where a larger pretrained model requires less training epochs in the same degree of convergence. 
+
+learning. As observed from Table 3, while direct fine-tuning on novel auction games can indeed enhance performance, as indicated by the Nash loss, it may compromise Auc-tionformer’s competence in its pre-trained domain. Con-trastingly, our proposed few-shot method adeptly navigates novel game domains utilizing limited data, all the while retaining previously acquired knowledge. More detailed few-shot results of mechanism transformation are summa-rized in Appendix F.6. 
+
+4.3. Ablation Studies Running-time with Increasing Bidder Number. In the classical equilibrium solvers, the running time is increasing greatly or even exponentially (Bichler et al., 2022) in the growth of the bidder number. We conduct similar experi-ments from Bichler et al. (2022) to validate whether Auc-tionformer will face such a limitation. The experiments are run on Intel(R) Xeon(R) Platinum 8163 CPU(s) @ 2.50GHz or a single Nvidia Tesla V100-SXM2 with 16GB memory. From Figure 5, the MWU algorithm runs on CPU and con-sumes significantly more time on 10 bidders compared to 2
+
+bidders, while Auctionformer performs the same magnitude running time on both CPU and GPU. As a result, our pro-posed Auctionformer is able to solve auction games with similar time complexity regardless of the magnitude of the bidder number. 
+
+Language model structure. We also explore the influence of the base language model structure in solving auction games, where BERT-small (Bhargava et al., 2021), BERT, BERT-large, GPT2 (Radford et al., 2019) and LLaMA2-7B (Touvron et al., 2023) are considered. The model parameters along with the training epoch to the convergences are plotted in Figure 6, and a larger model turns to require fewer epochs in the same degree of convergence, which proves the great potential of the large language model in solving equilibria. 
+
+## 5. Conclusions 
+
+In this study, we introduce Auctionformer, a unified method tailored to address general auction games. We propose a 8Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+novel tokenization procedure that makes hyper-parameters agnostic to bidder count and auction mechanisms. With its versatile valuation histogram, Auctionformer makes re-markable scalability. We demonstrate Auctionformer can efficiently handle various auction scenarios including those with diverse bidder counts, mechanisms, and value distri-butions without the need for retraining. Empirical results indicate Auctionformer’s superior performance over tradi-tional no-regret learning algorithms, particularly in cases involving a multitude of players and intricate asymmetric bidder value distributions. Notably, its computational effi-ciency remains constant, irrespective of bidder count, and its adaptability is further validated through few-shot tests. 
+
+## Acknowledgements 
+
+This research is supported by the National Science and Tech-nology Major Project (2023ZD0121102), National Natural Science Foundation of China (92270114). This work is also supported by Alibaba Group through Alibaba Innovative Research (AIR) Program. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+## References 
+
+Arora, S., Hazan, E., and Kale, S. The multiplicative weights update method: a meta-algorithm and applica-tions. Theory of Computing , 8(6):121–164, 2012. doi: 10.4086/toc.2012.v008a006. Athey, S. and Haile, P. A. Identification of standard auction models. Econometrica , 70(6):2107–2140, 2002. doi: https://doi.org/10.1111/j.1468-0262.2002.00435.x. Auer, P., Cesa-Bianchi, N., Freund, Y., and Schapire, R. Gambling in a rigged casino: The adversarial multi-armed bandit problem. In Proceedings of IEEE 36th Annual Foundations of Computer Science , pp. 322–331, 1995. doi: 10.1109/SFCS.1995.492488. Badanidiyuru, A., Feng, Z., and Guruganesh, G. Learning to bid in contextual first price auctions, 2021. Bajari, P. Comparing competition and collusion: a numeri-cal approach. Economic Theory , 18:187–205, 2001. Banchio, M. and Skrzypacz, A. Artificial intelligence and auction design. In Proceedings of the 23rd ACM Conference on Economics and Computation , EC ’22, pp. 30–31, New York, NY, USA, 2022. Association for Computing Machinery. ISBN 9781450391504. doi: 10.1145/3490486.3538244. Bhargava, P., Drozd, A., and Rogers, A. Generalization in nli: Ways (not) to go beyond simple heuristics, 2021. Bichler, M., Fichtl, M., Heidekr ¨uger, S., Kohring, N., and Sutterer, P. Learning equilibria in symmetric auction games using artificial neural networks. Nature machine intelligence , 3(8):687–695, 2021. Bichler, M., Fichtl, M., and Oberlechner, M. Comput-ing bayes nash equilibrium strategies in auction games via simultaneous online dual averaging. arXiv preprint arXiv:2208.02036 , 2022. Bigler, J. Rolling out first price auctions to google ad manager partners. https://blog.google/ products/admanager/rolling-out-first-price-auctions-google-ad-manager-partners , 2008. Accessed 2020.01.27. Cai, Y. and Papadimitriou, C. Simultaneous bayesian auc-tions and computational complexity. In Proceedings of the Fifteenth ACM Conference on Economics and Com-putation , EC ’14, pp. 895–910, New York, NY, USA, 2014. Association for Computing Machinery. ISBN 9781450325653. doi: 10.1145/2600057.2602877. Cesa-Bianchi, N. and Lugosi, G. Prediction, learning, and games . Cambridge university press, 2006. Chen, L., Iellamo, S., Coupechoux, M., and Godlewski, P. An auction framework for spectrum allocation with interference constraint in cognitive radio networks. In 
+
+2010 Proceedings IEEE INFOCOM , pp. 1–9. IEEE, 2010. Chen, X. and Peng, B. Complexity of equilibria in first-price auctions under general tie-breaking rules. In Proceed-ings of the 55th Annual ACM Symposium on Theory of Computing , STOC 2023, pp. 698–709, New York, NY, USA, 2023. Association for Computing Machinery. ISBN 9781450399135. doi: 10.1145/3564246.3585195. Chen, X., Deng, X., and Teng, S.-H. Settling the complexity of computing two-player nash equilibria. J. ACM , 56 (3), may 2009. ISSN 0004-5411. doi: 10.1145/1516512. 1516516. Chen, Y. Programmatic advertising is preparing for the first-price auction era. https://digiday.com/ marketing/programmatic-advertising-readying-first-price-auction-era/ ,2017. Accessed 2020.1.29. Deng, X., Hu, X., Lin, T., and Zheng, W. Nash convergence of mean-based learning algorithms in first price auctions. In Proceedings of the ACM Web Conference 2022 , WWW 9Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+’22, pp. 141–150, New York, NY, USA, 2022. Association for Computing Machinery. ISBN 9781450390965. doi: 10.1145/3485447.3512059. Devlin, J., Chang, M., Lee, K., and Toutanova, K. BERT: pre-training of deep bidirectional transformers for lan-guage understanding. CoRR , abs/1810.04805, 2018. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., and Houlsby, N. An image is worth 16x16 words: Transformers for image recognition at scale. ICLR , 2021. Duan, Z., Huang, W., Zhang, D., Du, Y., Wang, J., Yang, Y., and Deng, X. Is nash equilibrium approximator learnable? In Proceedings of the 2023 International Conference on Autonomous Agents and Multiagent Systems , AAMAS ’23, pp. 233–241, Richland, SC, 2023a. International Foundation for Autonomous Agents and Multiagent Sys-tems. ISBN 9781450394321. Duan, Z., Tang, J., Yin, Y., Feng, Z., Yan, X., Zaheer, M., and Deng, X. A context-integrated transformer-based neural network for auction design, 2023b. D ¨utting, P., Feng, Z., Narasimhan, H., Parkes, D. C., and Ravindranath, S. S. Optimal auctions through deep learn-ing. Commun. ACM , 64(8):109–116, jul 2021. ISSN 0001-0782. doi: 10.1145/3470442. D ¨utting, P., Feng, Z., Narasimhan, H., Parkes, D. C., and Ravindranath, S. S. Optimal auctions through deep learn-ing: Advances in differentiable economics. J. ACM , 71 (1), feb 2024. ISSN 0004-5411. doi: 10.1145/3630749. URL https://doi.org/10.1145/3630749 .Enrich, C. D., Jelassi, S., Domingo-Enrich, C., Scieur, D., Mensch, A., and Bruna, J. Extragradient with player sampling for faster nash equilibrium finding, 2020. Feng, Z., Guruganesh, G., Liaw, C., Mehta, A., and Sethi, A. Convergence analysis of no-regret bidding algorithms in repeated auctions. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 35, pp. 5399–5406, 2021. Filos-Ratsikas, A., Giannakopoulos, Y., Hollender, A., La-zos, P., and Po c¸ as, D. On the complexity of equilibrium computation in first-price auctions. In Proceedings of the 22nd ACM Conference on Economics and Computation ,EC ’21, pp. 454–476, New York, NY, USA, 2021. Associ-ation for Computing Machinery. ISBN 9781450385541. doi: 10.1145/3465456.3467627. Gayle, W.-R. and Richard, J. F. Numerical solutions of asymmetric, first-price, independent private values auc-tions. Computational Economics , 32:245–278, 2008. Guo, Y., Shi, H., Kumar, A., Grauman, K., Rosing, T., and Feris, R. Spottune: transfer learning through adaptive fine-tuning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 4805– 4814, 2019. Hartline, J., Syrgkanis, V., and Tardos, E. No-regret learning in bayesian games. In Cortes, C., Lawrence, N., Lee, D., Sugiyama, M., and Garnett, R. (eds.), Advances in Neu-ral Information Processing Systems , volume 28. Curran Associates, Inc., 2015. Interactive Advertising Bureau and PwC. Internet adver-tising revenue report. https://www.iab.com/wp-content/uploads/2023/04/IAB_PwC_ Internet_Advertising_Revenue_Report_ 2022.pdf , April 2023. Ivanov, D., Safiulin, I., Filippov, I., and Balabaeva, K. Optimal-er auctions through attention. In Oh, A. H., Agarwal, A., Belgrave, D., and Cho, K. (eds.), 
+
+Advances in Neural Information Processing Systems ,2022. URL https://openreview.net/forum? id=Xa1T165JEhB .Jackson, M. O. and Swinkels, J. M. Existence of equilibrium in single and double private value auctions1. Economet-rica , 73(1), 2005. Kagel, J. H. and Levin, D. Auctions: A Survey of Experimen-tal Research . 2015. ISBN 0691139997;9780691139999;. Kalai, A. and Vempala, S. Efficient algorithms for online decision problems. Journal of Computer and System Sciences , 71(3):291–307, 2005. ISSN 0022-0000. doi: https://doi.org/10.1016/j.jcss.2004.10.016. Learning The-ory 2003. Kohring, N., Pieroth, F. R., and Bichler, M. Enabling first-order gradient-based learning for equilibrium computa-tion in markets. In International Conference on Machine Learning , pp. 17327–17342. PMLR, 2023. Kolumbus, Y. and Nisan, N. Auctions between regret-minimizing agents. In Proceedings of the ACM Web Conference 2022 , WWW ’22, pp. 100–111, New York, NY, USA, 2022. Association for Computing Machinery. ISBN 9781450390965. doi: 10.1145/3485447.3512055. Krishna, V. Auction theory . Academic press, 2009. Lanctot, M., Zambaldi, V., Gruslys, A., Lazaridou, A., Tuyls, K., Perolat, J., Silver, D., and Graepel, T. A uni-fied game-theoretic approach to multiagent reinforcement learning. In Guyon, I., Luxburg, U. V., Bengio, S., Wal-lach, H., Fergus, R., Vishwanathan, S., and Garnett, R. (eds.), Advances in Neural Information Processing Sys-tems , volume 30. Curran Associates, Inc., 2017. 10 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+Lei, Q., Ganesh Nagarajan, S., Panageas, I., and wang, x. Last iterate convergence in no-regret learning: con-strained min-max optimization for convex-concave land-scapes. In Banerjee, A. and Fukumizu, K. (eds.), Proceed-ings of The 24th International Conference on Artificial Intelligence and Statistics , volume 130 of Proceedings of Machine Learning Research , pp. 1441–1449. PMLR, 13–15 Apr 2021. Louargand, M. A. and McDaniel, J. Price efficiency in the art auction market. Journal of Cultural Economics , pp. 53–65, 1991. Marris, L., Gemp, I., Anthony, T., Tacchetti, A., Liu, S., and Tuyls, K. Turbocharging solution concepts: Solving nes, ces and cces with neural equilibrium solvers. Advances in Neural Information Processing Systems , 35:5586–5600, 2022. Marshall, R. C., Meurer, M. J., Richard, J.-F., and Stromquist, W. Numerical analysis of asymmetric first price auctions. Games and Economic behavior , 7(2): 193–220, 1994. Mayer, C. J. Assessing the performance of real estate auc-tions. Real Estate Economics , 26(1):41–66, 1998. Milgrom, P. R. and Weber, R. J. A theory of auctions and competitive bidding. Econometrica , 50(5):1089–1122, 1982. ISSN 00129682, 14680262. Motiian, S., Jones, Q., Iranmanesh, S., and Doretto, G. Few-shot adversarial domain adaptation. Advances in neural information processing systems , 30, 2017. Myerson, R. B. Optimal auction design. Mathematics of Operations Research , 6(1):58–73, 1981. doi: 10.1287/ moor.6.1.58. Nedelec, T., Baudet, J., Perchet, V., and El Karoui, N. Ad-versarial learning in revenue-maximizing auctions. In 
+
+Proceedings of the 20th International Conference on Au-tonomous Agents and MultiAgent Systems , AAMAS ’21, pp. 955–963, Richland, SC, 2021. International Founda-tion for Autonomous Agents and Multiagent Systems. ISBN 9781450383073. Nikaid ˆo, H. and Isoda, K. Note on non-cooperative convex games. 1955. OpenAI. Gpt-4 technical report, 2023. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Reny, P. J. and Zamir, S. On the existence of pure strategy monotone equilibria in asymmetric first-price auctions. 
+
+Econometrica , 72(4):1105–1125, 2004. doi: https://doi. org/10.1111/j.1468-0262.2004.00527.x. Ruiz, N., Li, Y., Jampani, V., Pritch, Y., Rubinstein, M., and Aberman, K. Dreambooth: Fine tuning text-to-image dif-fusion models for subject-driven generation. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 22500–22510, 2023. Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bashlykov, N., Batra, S., Bhargava, P., Bhosale, S., Bikel, D., Blecher, L., Ferrer, C. C., Chen, M., Cucurull, G., Esiobu, D., Fernandes, J., Fu, J., Fu, W., Fuller, B., Gao, C., Goswami, V., Goyal, N., Hartshorn, A., Hosseini, S., Hou, R., Inan, H., Kardas, M., Kerkez, V., Khabsa, M., Kloumann, I., Korenev, A., Koura, P. S., Lachaux, M.-A., Lavril, T., Lee, J., Liskovich, D., Lu, Y., Mao, Y., Martinet, X., Mihaylov, T., Mishra, P., Molybog, I., Nie, Y., Poulton, A., Reizenstein, J., Rungta, R., Saladi, K., Schelten, A., Silva, R., Smith, E. M., Subramanian, R., Tan, X. E., Tang, B., Taylor, R., Williams, A., Kuan, J. X., Xu, P., Yan, Z., Zarov, I., Zhang, Y., Fan, A., Kambadur, M., Narang, S., Rodriguez, A., Stojnic, R., Edunov, S., and Scialom, T. Llama 2: Open foundation and fine-tuned chat models, 2023. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. At-tention is all you need. Advances in neural information processing systems , 30, 2017. Vickrey and William. Counterspeculation, auctions, and competitive sealed tenders. Journal of Finance , 16(1), 1961. Wang, Z., Shen, W., and Zuo, S. Bayesian nash equilibrium in first-price auction with discrete value distributions. In 
+
+Proceedings of the 19th International Conference on Au-tonomous Agents and MultiAgent Systems , AAMAS ’20, pp. 1458–1466, Richland, SC, 2020. International Foun-dation for Autonomous Agents and Multiagent Systems. ISBN 9781450375184. Wu, R., Ding, B., Chu, X., Wei, Z., Dai, X., Guan, T., and Zhou, J. Learning to be a statistician: Learned estimator for number of distinct values. Proc. VLDB Endow. , 15 (2):272–284, oct 2021. ISSN 2150-8097. doi: 10.14778/ 3489496.3489508. 11 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+## A. Related Work 
+
+Our work lies in a wide field of research including equilibrium solvers, learning in auction games as well as deep language models, among which we point out a few of the works. 
+
+Equilibrium solver: Solving Nash Equilibrium (NE) is a challenging task, which is well-known for its high computational complexity. Even finding NE in a 2-player game is considered PPAD-complete (Chen et al., 2009). In auction games, solving NE or Bayesian Nash Equilibrium (BNE) remains PPAD-complete (Filos-Ratsikas et al., 2021; Chen & Peng, 2023) or even PP-hard in certain scenarios (Cai & Papadimitriou, 2014). But for BNE, there has been promising progress on numerical analysis for solving equilibrium in some special auction cases. For asymmetric auction, the backward-shooting solver (Marshall et al., 1994) is proposed to compute BNE, which is widely adopted by subsequent works with enhanced precision (Bajari, 2001; Gayle & Richard, 2008). More recently, Wang et al. (2020) extended it to the discrete setting of the first-price auction. 
+
+Learning in auction: Learning-based auction algorithms have also shown great potential in equilibrium solving. No-regret learning, as discussed in Cesa-Bianchi & Lugosi (2006), has established its convergence towards a looser approximation of NE (Hartline et al., 2015). Feng et al. (2021) analyzes the convergence of no-regret algorithms to BNE in some auction game formats including second price or two-bidder first price auction with a uniform prior, but such convergence may fail in some cases such as the first-price auction with fixed values (Deng et al., 2022). Typical no-regret algorithms include Follow-The-Perturbed-Leader (Kalai & Vempala, 2005), Hedge (Auer et al., 1995), and Multiplicative Weights Update (MWU) (Arora et al., 2012), which has been extended in repeated auctions with reinforcement learning agents (Feng et al., 2021; Kolumbus & Nisan, 2022; Banchio & Skrzypacz, 2022). Similar to multi-agent reinforcement learning (MARL), other gradient-based methods such as NPGA (Bichler et al., 2021) and SM (Kohring et al., 2023) are both capable of approximating BNE in various types of auctions, and SODA (Bichler et al., 2022) utilizes dual averaging algorithms to solve discrete auction games with approximate solutions. 
+
+Deep model and few-shot Previous algorithms focus on solving individual games, and recent advancements have been made to solve games in batches (Duan et al., 2023a; Marris et al., 2022) with data-driven algorithms. In the auction game field, some works use data-driven algorithms with deep model (D ¨utting et al., 2021; 2024) to tackle the mechanism design problems and the latest work replaces the MLP with Transformer (Duan et al., 2023b) in mechanism design. Yet, no existing work turns to solving multiple auction game equilibria, especially on different mechanisms, with deep models in batches. The latest huge success on large language models such as GPT-4 (OpenAI, 2023) enlightens the huge potential in natural language model. The notable progress in deep language model is the convention of Transformer (Vaswani et al., 2017), which has been implemented to BERT (Devlin et al., 2018), GPT (Radford et al., 2019; OpenAI, 2023) and even computer vision models (e.g., Dosovitskiy et al. (2021)). The common utilization of these pre-trained models in one specific domain can be transferred to other domains through fine-tuning or few-shot learning (Guo et al., 2019; Motiian et al., 2017), where much fewer samples are accessible in the few-shot tasks. In this work, we apply a pretrained BERT model as a starting point and prove the great potential to combine deep language model in the auction game-solving field, which can be extended to other auction game mechanisms with the proposed few-shot methodology as well as the utilization of large language model (LLM) in the future work. 
+
+Comparison with Auction Design: Auction design, while a related field, primarily seeks to create auction mechanisms that optimize objectives like revenue or social welfare. Pioneering this domain, D ¨utting et al. (2021; 2024) introduced RegretNet, a neural network model designed to predict the optimal auction mechanism (i.e. allocation and payment strategies) for maximizing seller revenue. Subsequent studies, such as those by Ivanov et al. (2022); Duan et al. (2023b), have employed attention-based or transformer architectures in auction design, enhancing model input flexibility and generalization capability. However, it’s crucial to differentiate this research area from equilibrium solving, the focal point of our study. Our research aims to calculate various equilibrium profiles based on provided auction mechanisms and bidder specifics. In contrast, auction design tries to derive optimal mechanisms to achieve specific goals. Essentially, our work is committed to solving various predetermined games, while auction design is concerned with designing better rules for the game. 
+
+## B. Illustration on solution scheme for Example 1 and 2 
+
+See in Fig.7. 12 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games Numerical continuous solution      
+
+> Bidder 1: Gaussian(10, !"
+> #)
+> Bidder 2: Gaussian(10, $
+> #)
+> Bidder value distribution
+
+F    
+
+> Solve equilibrium:
+> Bidder 1’s optimal strategies
+> Example 2:
+
+F + <first price + E=3 >         
+
+> Discretized predictions
+> Bidder 3,4: Gaussian(10, $
+> #)
+> …
+> Unable to Solve
+> Numerical
+> continuous solution
+> Bidder 1: Gaussian(10, !"
+> #)
+> Bidder 2: Gaussian(5, $
+> #)
+> Bidder value distribution
+
+F    
+
+> Solve equilibrium:
+> Bidder 1’s optimal strategies
+> Example 1:
+
+F + <first price> mechanism      
+
+> Discretized predictions
+> …
+> Bidder 3: Gaussian(5, $
+> #)
+> value
+> possibility  possibility
+> value
+> bid
+> value realization
+> MLPNet Auctionformer No -regret(MWU)
+> value realization
+> bid
+> bid
+> bid
+> value realization value realization
+> Unable to Solve
+> MLPNet Auctionformer No -regret(MWU)
+> value realization
+> bid
+> bid
+> value realization
+> possibility
+> value
+> possibility
+> value
+
+Figure 7. The solved bidding strategies of Example 1 & 2 with asymmetric bidders from numerical solver and learning-based algorithms. In Example 1, all algorithms are able to deliver the solution, while in Example 2 are not. All three algorithms deliver a near-optimal solution and MWU disappoints near zero value in Example 1. (Test codes are provided in Appendix.C.1) 
+
+## C. Example codes and details 
+
+C.1. Codes 
+
+The example codes are attached in the https://github.com/Hesse73/Auctionformer_example , which generates examples and validates auction game results with different algorithms. The solved bidding strategies can be derived by running a simple command, where you can easily move to other auction game settings. The trained Auctionformer model checkpoint as well as the MLPNet model checkpoint are both included, and the training codes of MLPNet are also provided. Noted that training codes of Auctionformer have already been provided in the link of Sec.4.1. 
+
+C.2. Dataset Details 
+
+Given a specific auction game, characterized by its mechanism and valuation distribution, the Auctionformer model can directly predict a solution. Subsequently, the predicted solution is utilized to guide parameter updates through the Nash error loss function. Therefore, no explicit label is required during the whole training process and we construct the dataset with the auction game information (i.e. auction mechanism and value distribution) without theoretical solutions. To elaborate, we generate different value realization ranges for each asymmetric bidder, denoted as [a, b ], where a < b < Vmax , to represent their respective value distributions. The game mechanism can be simply iterated during the training process with its mechanism names. The detailed payment rule and allocation rule are applied during the utility function computation. For the uniform distribution dataset, we can simply generate the value realization via U [a, b ], while for the Gaussian 13 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+distribution dataset, we use a discretized version of Gaussian distribution: 
+
+P (x) = 
+
+
+
+Φ( g(x + 0 .5)) ,x = a
+
+Φ( g(x + 0 .5)) − Φ( g(x − 0.5)) ,a < x < b 
+
+1 − Φ( g(x − 0.5)) ,x = b
+
+Where Φ is the cumulative density function of standard Gaussian distribution, and g(x) is defined as: 
+
+g(x) = 6
+
+b − 1 · (x − a + b
+
+2 ),
+
+which can transform a Gaussian (normal) distribution N ( a+b 
+
+> 2
+
+, b−a 
+
+> 2
+
+) to N (0 , 1) .In our main results, we set the value range in [a, b ] for the Gaussian distribution and Uniform distribution, where the minimal value realization a and maximal value realization b is selected from [0 , V max ] and Vmax is set to 20 . We trained our model with 4 datasets: U0, G0, U−0, and G−0 introduced in Section 4.1. Each dataset contains 100,000 samples. For the fine-tuning experiments, we cut datasets into only 2,000 samples of each distribution. 
+
+C.3. MLPNet 
+
+Aside from Auctionformer, we also develop the MLPNet to train in scenarios where the number of bidders is fixed. The learning procedures are described as follows: 
+
+Input: Each input sample Xj = ( Mj , F j ) ∈ X from the dataset X covers the mechanism of the auction game Mj and each bidder i ∈ { 1..N }’s valuation distribution F ji ranged in [Vmin ji , V max ji ], where ∀i, j, 0 ≤ Vmin ji ≤ Vmax ji ≤ Vmax 
+
+and F j = ( F j 
+
+> 1
+
+, F j 
+
+> 2
+
+, . . . , F jN ).
+
+Output: The output of the model F is the approximate equilibrium strategies ˆσj = ( ˆ σj
+
+> 1
+
+, . . . , ˆσjnj ) for all bidders in the game, from which each bidder can adopt different bidding strategies ˆσji (vji ) according to their valuation as defined in Eq. (1) .
+
+Objective: The learning objective aims to minimize the Nash loss as described in Eq. (4). From the perspective of the model architecture, the MLPNet is much simpler compared to the Auctionformer. The illustration of MLPNet architecture is described in Figure 8, where MLPNet only contains 2 embedding layers and one MLP module that transforms the concatenated game information (i.e. embedded mechanism information and value distribution) to the predicted strategy. The mechanism identifiers and the mechanism configuration are utilized to distinguish different auction games and the MLPNet may fail to converge on auction games with diverse mechanisms. Therefore, in the latter section, we train MLPNet on one mechanism and leave the mixed train in the future works. The input/output dimension is strictly determined by the number of bidders. For example, with max value Vmax = 20 and bidder number N = 3 , the input size of the MLP will be 2 · embed + Vmax · N (where embed is the embedding dimension). With a fixed input dimension, it cannot be adapted to games with a different number of players N ′.Embed- 
+
+> M1
+> Embed-
+> M2
+> ...
+> F2(0), F 2(1), ...
+> F1(0), F 1(1), ...
+> Identifiers
+> Mechanism
+> {fp, sp, ...}
+> Mechanism
+> Configuration
+> Value
+> Distribution
+> {F 1,...,F n}
+> Concat MLP
+> ...
+> σ2(Vmin 2),...,σ 2(V max 2)
+> σ1(Vmin 1),...,σ 1(Vmax 1)
+> Predicted Strategy
+> {σ1,..., σn}
+> ɸ
+
+Figure 8. The illustration of MLPNet architecture, where the concatenated game information is transformed by 2 embedding layers, and an MLP module is applied to predict bidding strategies with a fixed bidder number. 
+
+The MLPNet is trained using three asymmetric bidder scenarios ( N = 3 ) across uniform and Gaussian distributions. We generated a comprehensive set of discrete distributions where the minimal value realization is zero and the maximal 14 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+value realization varies from 1 to 20. This process resulted in a dataset of 8,000 distinct auction games for the 3-player configuration. Additionally, we created another set of 8,000 distributions where the minimal value realization exceeds zero. The datasets were randomly shuffled and partitioned into a training set with 7,500 games for each type of distribution, and a validation set composed of the remaining games. For simplicity, we only consider the first price mechanism when training this MLPNet model. We set the embedding size embed = 128 and the MLP module is constructed of 4 hidden layers, each with 1024 nodes. ReLU activation and batch normalization are applied after each layer. The training process was configured with a learning rate of 1 × 10 −4, a batch size of 1,024, and was run over 300 epochs and we halved the learning rate every 50 epochs. 0 50 100 150 200 250 300       
+
+> Training Epochs
+> 0.000
+> 0.001
+> 0.002
+> 0.003
+> 0.004
+> 0.005
+> 0.006
+> 0.007
+> Nash Loss on Validation Set
+> Auctionformer
+> Auctionformer
+> 050 100 150 200 250 300
+> Training Epochs
+> 0.000
+> 0.001
+> 0.002
+> 0.003
+> 0.004
+> 0.005
+> 0.006
+> 0.007
+> Nash Loss on Validation Set
+> MLPNet
+> MLPNet
+
+Figure 9. The Nash loss on validation set during the whole training process of Auctionformer (on hybrid dataset described in Sec.4.1) and MLPNet (on first price auction games with 3 bidders). 
+
+C.4. MWU and Auctionformer MWU Multiplicative Weights Update(MWU) is a classical no-regret learning algorithm for solving auction games. We implement the MWU algorithm based onArora et al. (2012), where wti (b, v ) is regarded as the weight of player i’s bidding b
+
+at value v and round t. In each round t, every player receives a private value vti and bids bti by sampling according to the weight Pr( bti = b) ∝ wti (b, v ti ), and then update their weights based on the auction outcome. The update rule is described below: 
+
+wt+1  
+
+> i
+
+(b, v ) = 
+
+(wti (b, v ) · (1 − ϵ)−uti (b,v )/ρ ,u ti(b, v ) < 0
+
+wti (b, v ) · (1 + ϵ)uti (b,v )/ρ ,u ti(b, v ) ≥ 0
+
+where uti(b, v ) is the utility of player i at round t. In our implements, we set ϵ = 0 .1 and ρ = 1 , and the iteration rounds=100,000. 
+
+Auctionformer The Auctionformer model is trained on the 4 mechanisms with asymmetric bidders via Nash loss, whose base BERT model is adopted with the first 6 layers, and performances have been depicted in Table 2. We also attach the whole training processing in Figure 9 along with the MLPNet, where the Nash loss is reported on the validation set. In our implementation, the pretraiend BERT model 8 used as Auctionformer’s backbone, along with other pretrained language models (i.e., BERT-small 9, BERT-large 10 , GPT2 11 and LLaMA2-7B 12 ) depicted in Fig. 6, are employed from the HuggingFace Model Hub. All of these models are publicly available through the Hugging Face community. Furthermore, the training process of the Auctionformer model leverages the hybrid dataset outlined in Section 4.1. This dataset encompasses a range of auction mechanisms, such as first price and second price auctions, along with varying entrance fees. To effectively integrate these diverse mechanisms into the Auctionformer model, as detailed in Section 3.1, we assign unique identifiers and configurations, denoted as ϕ, to each mechanism. These identifiers and configurations are 
+
+> 8
+
+https://huggingface.co/bert-base-uncased 
+
+> 9
+
+https://huggingface.co/prajjwal1/bert-small 
+
+> 10
+
+https://huggingface.co/bert-large-uncased 
+
+> 11
+
+https://huggingface.co/gpt2 
+
+> 12
+
+https://huggingface.co/meta-llama 
+
+15 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+then transformed into token embeddings, which are subsequently inputted into the transformer model. The specifics of this mapping process are illustrated in Table 4.  
+
+> Table 4. The mapped values of different mechanisms
+
+Mechanism identifier configuration ϕ
+
+First price 0 ϕ = 0 
+
+Second price 1 ϕ = 0 
+
+First price with entrance fee e 2 ϕ = e
+
+Second price with entrance fee e 3 ϕ = e
+
+C.5. The Analysis to 3 Example Results 
+
+In the previous Sec.2, we use the following examples with various mechanisms and distributions to illustrate different auction games and to compare different methods: 
+
+Example 1. First price auction : Bidder 1’s value distribution F1 = G(10 , 10 3 ) and Bidder 2 and 3 ’s value distribution is 
+
+F2 = F3 = G(5 , 53 )
+
+Example 2. First price auction + Entry Fee=3 : Bidder 1’s value distribution F1 = G(10 , 10 3 ) , and Bidder 2-4’s value distribution is F2 = F3 = F4 = G(10 , 53 )
+
+Example 3. First price auction : Bidder 1’s value distribution is F1 = U [0 , 20] and Bidder 2,3’s value distribution is 
+
+F2 = U [0 , 10] 
+
+We employed several solution methods, including the numerical BNE solver proposed in Wang et al. (2020), the MWU algorithm (Arora et al., 2012), MLPNet, and Auctionformer, to solve these examples. Note that in example 2, the game involves 4 players, making the application of the 3-player MLPNet infeasible. Additionally, the BNE solver (Wang et al., 2020) is designed for solving first-price auctions without an entry fee, rendering it inadequate for this problem. Consequently, we can only utilize the MWU algorithm (Arora et al., 2012) and our model, Auctionformer, to solve Example 3. The results are depicted in Figure. 10. In example 1, it’s noteworthy that the heatmap of MWU’s prediction strategy becomes vague in the lower value range (v ∈ [1 , 3] ). This is due to the bidder’s winning probability being considerably small when their value is low, and this phenomenon gets exacerbated when the rival bidder has a low likelihood of a small value. Consequently, the algorithm struggles to receive sufficient positive feedback to update the weights of different bidding values. As a result, the bidding strategy becomes random and remains unchanged from its initial state. On the other hand, the predicted strategy by MLPNet appears counterintuitive, as there is a discernible possibility of placing a bid of 0 when the value realization is 2. This behavior not only seems irrational but also violates the monotonic bidding rule, a common assumption in auction theory (Myerson, 1981; Reny & Zamir, 2004; Milgrom & Weber, 1982), as it bids 1 for a value of 1 but could bid 0 for a value of 2. In contrast, Auctionformer’s prediction maintains alignment with the continuous solution well. In example 2, the MWU algorithm’s solution manifests as a step function. Conversely, Auctionformer’s solution adopts mixed strategies and transitions smoothly as the value increases, which provides a better approximation of the equilibrium strategies. In example 3, although the outlines of the solutions for all four approaches are consistent—ranging from bids of 0 to 8 with values increasing to 20, the solution obtained through MWU suddenly jumps from bid 6 at value 11, and to bid 8 at value 12. In contrast, the results predicted by Auctionformer and MLPNet show better continuity, aligning well with the numerical solution. However, if the bidder number is larger than 3, MLPNet cannot solve these auction games and has to reconstruct its MLP layer dimensions with re-training. Therefore, from these 3 simple examples, we show the scalability and ability to solve auction equilibria by our proposed Auctionformer. 16 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games Bidder 1: Uniform[0,20] 
+
+Bidder 2: Uniform[0,10] 
+
+Bidder value distribution 
+
+F
+
+Solve equilibrium: 
+
+Bidder 1’s optimal strategies 
+
+Example 3: 
+
+F + <first price> mechanism 
+
+…
+
+Bidder 3: Uniform[0,10] 
+
+Numerical continuous solution 
+
+Bidder 1: Gaussian(10, !"  
+
+> #
+
+)
+
+Bidder 2: Gaussian(10, $
+
+> #
+
+)
+
+Bidder value distribution 
+
+F
+
+Solve equilibrium: 
+
+Bidder 1’s optimal strategies 
+
+Example 2: 
+
+F + <first price + E=3 > 
+
+Discretized predictions 
+
+Bidder 3,4: Gaussian(10, $
+
+> #
+
+)
+
+…
+
+Unable to Solve 
+
+Numerical 
+
+continuous solution 
+
+Bidder 1: Gaussian(10, !"  
+
+> #
+
+)
+
+Bidder 2: Gaussian(5, $
+
+> #
+
+)
+
+Bidder value distribution 
+
+F
+
+Solve equilibrium: 
+
+Bidder 1’s optimal strategies 
+
+Example 1: 
+
+F + <first price> mechanism 
+
+Discretized predictions 
+
+…
+
+Bidder 3: Gaussian(5, $
+
+> #
+
+)
+
+> value
+> possibility  possibility
+> value
+
+MLPNet Auctionformer No -regret(MWU)  
+
+> value realization
+> bid
+> bid
+> bid
+> value realization value realization
+
+Unable to Solve 
+
+MLPNet Auctionformer No -regret(MWU) 
+
+> value realization
+> bid
+> bid
+> value realization
+> possibility
+> value
+> possibility
+> value
+
+Numerical 
+
+continuous solution 
+
+Discretized predictions 
+
+> bid
+> value realization
+
+MLPNet Auctionformer No -regret(MWU)  
+
+> value realization
+> bid
+> bid
+> bid
+> value realization value realization
+> possibility
+> value
+> possibility
+> value
+> bid
+> value realization
+
+Figure 10. The 3 example results are displayed where the left part is the input value distributions of bidders and the right part is the corresponding results of each methodology. Given that the bidding strategy of the BNE-solver (Wang et al., 2020) is continuous, we present the mean bid value for ease of comparison. On the other hand, for the remaining three methods, we illustrate the heatmap demonstrating the bidding strategy at every value realization. 
+
+17 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+C.6. Comparison with Other Learning-based Algorithms 
+
+As observed in Table 5, Auctionformer outperforms MWU, SODA-32, and SM-1024 in a classical two-bidder auction game scenario. Although NPGA and SM indicate a lower L2 distance as reported in Kohring et al. (2023), necessitating 
+
+218 valuation samples, Auctionformer emerges superior in efficiency, clocking a faster time consumption of 0.006 s while offering strategy approximation results comparable to NPGA.         
+
+> Table 5. The results for FP of 2 bidders in U[0 ,1] . Both L2and Time spent t(both smaller is better) are validated by our implement or the reported results extracted from SODA(Bichler et al., 2022) and SM(Kohring et al., 2023). The time spent by the Auctionformer is the inference time. MWU runs 100,000 iterations until converge (Kolumbus & Nisan, 2022) and NPGA/SM runs 2000 iterations .
+
+Random MWU-32 MWU-64 SODA-32 SM-1024 NPGA-218 SM-218 Auctionformer-20 
+
+L2 0.418 0.021 0.019 0.018 0.018 0.011 0.005 0.017 Time spent t - 27.97s 31.22s 0.29s - ≈310s ≈18s 0.006s 
+
+## D. Extra illustration on Strategies Decoder 
+
+We also append more details on the strategies decoder with extra illustrations. As described in Sec.3.3, the vector Q
+
+represents the value query embedding vector with dimensions RN ×D . Both vectors K and V are outputs of the model, where K = V ∈ RN ×D . Here, N symbolizes the maximum number of current bidders, and D is the dimensionality related to the embedding layer and model feature. When leveraging the multi-head attention module to decode bidders’ strategies, we must address an important question: Is there any risk of data (or value) leakage? In essence, we need to ensure that during the entire attention-based decoding computation, no bidder can discern the value realizations of others. We firstly focus on the traditional attention computation, where the multiplication QK ⊤ is executed on the bidders’ query tensor Q, and we break it down into independent computations for each of the N bidders: 
+
+QK T =[ Q1, . . . , Q N ]T · [KT 
+
+> 1
+
+, . . . , K TD ] = 
+
+ Q1KT 
+
+> 1
+
+. . . Q1KTD
+
+. . . . . . . . . QN KT 
+
+> 1
+
+. . . QN KTD
+
+
+
+=[ S1, S 2, . . . , S N ]T
+
+(6) For each bidder i, his private value realization forms the weight matrix Si, where none of the weight matrix Si appears cross-computed according to Eq.6. The attention layer output is 
+
+f (QK T )V =[ f (S1), . . . , f (SN )] T · [V T 
+
+> 1
+
+, . . . , V TD ]=
+
+
+
+f (S1)V T 
+
+> 1
+
+. . . f (S1)V TD
+
+. . . . . . . . . f (SN )V T 
+
+> 1
+
+. . . f (SN )V TD
+
+ (7) where the softmax ( QK T
+
+> √dk
+
+)V = f (QK T )V and V = [ V1, ..V D ] is the output of language model described before. Each bidder i independently computes his strategies based on the attention module output [f (Si)V T 
+
+> 1
+
+, ..f (Si)V TD ] with dimension 
+
+D to the final bidding range B through an MLP, as illustrated in Figure 3. We then switch to the computation of multi-head attention(Devlin et al., 2018), which is similar to the split of matrix 
+
+W = KV and combining the result of each split, where bidder’s value realization embedding vector Q is computed attention with the same approach in normal attention without cross computation in Eq.8. Multi-head (Q, K, V ) = Concat (Head 1, .. Head H )W O
+
+Head h =Attention (Qh, K h, V h)
+
+Qh =Q ∗ W h
+
+(8) 18 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+After the check of no-cross computation in the attention module, we also explain why we should add the bidder’s value distribution into the decoder module. If we do not add the bidder i’s value distribution Fi into vector Q, then the same output SA = SB is derived if bidder A’s current value realization equals bidder B’s value. This may lead to a wrong answer and low performance due to the two bidder can obey completely different value distributions and coincidentally have the same value realization, and their bidding strategies can be completely different intuitively. 
+
+## E. Proof 
+
+E.1. Discrete Approximation 
+
+Proof of Theorem 3.1. As ˆF is a piecewise constant function, we can construct ˆF as one empirical distribution of F. Via Dvoretzky–Kiefer–Wolfowitz inequality, with high probability, the empirical distribution function of n samples would ensure sup v | ˆF(v) − F (v)| ≤ O (p1/n ) in approximating the cumulative distribution function. Since we have nonzero probability, there must exist ˆF satisfies Theorem 3.1. 
+
+Proof of Theorem 3.2. We use the Theorem 1 in Bichler et al. (2022). As described in Sec. 3.1, we equally discretize both the value and bid space into V = {0, 1/H, 2/H, . . . }, and we map continuous value vci to the discrete one via 
+
+arg min vdi ∈V |vdi − vci |. Without loss of generality, we assume the value and bid range is normalized to [0 , 1] , so the coarseness of value space is δτ = max i sup vci |vci − vdi | = 12H . For the mapping of bid, with α+(bci ) being the minimal discrete bid in V not smaller than bci and α−(bci ) being the maximal bid in V not greater than bci , we have the coarseness of bidding space: δα = max s∈{ +,−} max i sup bci |bci − αs(bci )| = 1 
+
+> H
+
+.
+
+By incorporating δτ = 12H , δ α = 1 
+
+> H
+
+into Theorem 1 of Bichler et al. (2022), we immediately have the approximation bound 
+
+ϵ + O(δτ + δα) = ϵ + O( 1 
+
+> H
+
+) in Theorem 3.2. 
+
+E.2. Loss Function and Computation Details 
+
+As described previously, the Nash error loss function we use defined in Eq. 4 enables efficient learning without ground-truth solutions to train our model: 
+
+LNash (F, X ) = 1
+
+|X|
+
+X 
+
+> Xj∈X
+
+
+
+max 
+
+> σi∈D ,i ∈N
+
+uji (σji , ˆσj
+
+> −i
+
+) − uji (ˆσji , ˆσj
+
+> −i
+
+)
+
+s.t. [ ˆ σj
+
+> 1
+
+, · · · , ˆσjN ] = F(Xj ).
+
+With ˆσji being the model’s output and uji (·) defined by the mechanism and value distribution from model’s input Xj ,the main cost of the Nash error comes with the maximization of each bidder i’s utility uji (σji , ˆσj
+
+> −i
+
+), or equivalently, the computation of best-response strategy of bidder i.We have demonstrated that the maximal utility can be computed explicitly and directly in Proposition 3.3, obviating the need for supplementary optimization tools. This facilitates a more efficient and streamlined analysis of the model’s performance in predicting Nash equilibria, and the proof is as follows: 
+
+Proof of Proposition 3.3. As defined in Section 2, the utility function given mechanism M’s payment and allocation rule 
+
+p, g is 
+
+ui(vi, b i, B −i) = vigi(bi, B −i) − pi(bi, B −i).
+
+Based on the model’s prediction ˆσji and mechanism Mj in auction game Xj , we can explicitly compute the expected utility for each bidder i, uji (σji , ˆσj
+
+> −i
+
+), given value vji by Eq.(5) as follows: 
+
+max  
+
+> σi∼D
+
+uji (σji , ˆσj
+
+> −i
+
+) = max  
+
+> σi∼D
+
+Ebi∼σji (vji )
+
+h
+
+EB−i∼ ˆσj
+
+> −i
+
+h
+
+ui(vji , b i, B −i|M j )
+
+ii 
+
+= max 
+
+> σi∼D
+
+X
+
+> bi
+
+Pr( bi|σji (vji )) · X
+
+> p,g
+
+(vji g − p) · Pr( pji (bi, B −i) = p, g ji (bi, B −i) = g|ˆσj
+
+> −i
+
+)= max 
+
+> bi
+
+X
+
+> p,g
+
+(vji g − p) · Pr( pji (bi, B −i) = p, g ji (bi, B −i) = g|ˆσj
+
+> −i
+
+),
+
+19 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+where pji (bi, B −i), g ji (bi, B −i) are the payment and allocation functions associated with the mechanism Mj .For the first-price auction mechanism, the allocation rule and payment rule become: 
+
+gji (bi, B −i) = I(bi > max   
+
+> k̸=i
+
+bk)
+
+pji (bi, B −i) = bi · I(bi > max   
+
+> k̸=i
+
+bk).
+
+which implies 
+
+Pr( pji (bi, B −i) = p, g ji (bi, B −i) = g|ˆσj
+
+> −i
+
+)=Pr( I(bi > max   
+
+> k̸=i
+
+bk) = g, I(bi > max   
+
+> k̸=i
+
+bk)bi = p| ˆσj
+
+> −i
+
+)= X
+
+> x
+
+Pr( I(bi > x ) = g, I(bi > x )bi = p| ˆσj
+
+> −i
+
+) · Pr(max   
+
+> k̸=i
+
+bk = x| ˆσj
+
+> −i
+
+)= X
+
+> x
+
+Pr( I(bi > x ) = g, I(bi > x )bi = p) ·
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+ ,
+
+where last equality uses the facts that Pr(max k̸ =i bk ≤ x|ˆσj
+
+> −i
+
+) = Q 
+
+> k̸=i
+
+P  
+
+> bk≤x
+
+Pr( bk| ˆσjk) and I(bi > x ) = g, I(bi >x)bi = p being independent on ˆσi
+
+> −i
+
+.Therefore the exact expression of max σi∼D uji (σji , ˆσj
+
+> −i
+
+) becomes: 
+
+max  
+
+> σi∼D
+
+uji (σji , ˆσj
+
+> −i
+
+) = max 
+
+> bi
+
+X
+
+> p,g
+
+(vji g − p)· X
+
+> x≤H
+
+Pr( I(bi > x ) = g, b i · I(bi > x ) = p)
+
+·
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+ .
+
+Since g ∈ { 0, 1}, p ≤ H, the equation further simplifies into: 
+
+max  
+
+> σi∼D
+
+uji (σji , ˆσj
+
+> −i
+
+) = max 
+
+> bi
+
+X
+
+> p≤H,g =0
+
+(0 − p) · X
+
+> x≤H
+
+Pr( I(bi > x ) = 0 , b i · 0 = p)
+
+·
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+
+
++ X
+
+> p≤H,g =1
+
+(vji − p) · X
+
+> x≤H
+
+Pr( I(bi > x ) = 1 , b i · 1 = p)
+
+·
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+
+
+= max 
+
+> bi
+
+0 + (vji − bi) · X
+
+> x<b i
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+ .
+
+For the second price auction mechanism, the allocation rule and payment rule are defined as: 
+
+gji (bi, B −i) = I(bi > max   
+
+> k̸=i
+
+bk)
+
+pji (bi, B −i) = max   
+
+> k̸=i
+
+bk · I(bi > max   
+
+> k̸=i
+
+bk).
+
+Similarly, we have the maximal utility simplified into: 
+
+max  
+
+> σi∼D
+
+uji (σji , ˆσj
+
+> −i
+
+) = max 
+
+> bi
+
+X
+
+> x<b i
+
+(vji − x) ·
+
+Y 
+
+> k̸=i
+
+X 
+
+> bk≤x
+
+Pr( bk| ˆσjk) − Y 
+
+> k̸=i
+
+X 
+
+> bk≤x−1
+
+Pr( bk| ˆσjk)
+
+ .
+
+20 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+The best-response b∗ 
+
+> i
+
+in RHS can be calculated directly from the model’s inputs and outputs, thus the entire computation of the Nash error can be carried out without the need for labeled equilibrium strategies data. It’s also noteworthy that with discretization, scenarios may arise where multiple bidders place the same maximum bid, leading to a tie. In such cases, a tie-breaking mechanism is necessary for the discretized game. Following Bichler et al. (2022), we simply set that no bidder is declared the winner in the event of a tie, i.e. gi(bi, B −i) = I(bi > max k̸ =i bk).
+
+Though the efficient calculation above is derived using this tie-breaking rule, it has been shown that with alternative tie-breaking rules, such as uniform tie-breaking, the computation of best-response remains tractable (Filos-Ratsikas et al., 2021). 
+
+## F. Additional Ablation Experiments 
+
+F.1. Compare with Other No-Regret Learning Methods 
+
+In Table. 5, we compared a list of algorithms’ abilities to solve a 2-player symmetric first price auction game, including a series of NN-based algorithms and MWU as the no-regret learning algorithm. While it has been established in Feng et al. (2021) that mean-based algorithms—which encompass a broad range of no-regret learning methods—can converge to a Nash equilibrium in symmetric first-price auction settings, the same context as our benchmark in Table 5, it is still crucial to investigate other no-regret learning methods beyond MWU to provide a more comprehensive evaluation. With regards to this, we also report experiment outcomes for two additional no-regret learning algorithms: Follow The Perturbed Leader (FTPL) and Optimistic Multiplicative Weights Update (OMWU). FTPL is a popular no-regret learning algorithm employed across a variety of applications (Kalai & Vempala, 2005), While OMWU is a modification of MWU noted for its last-iterate convergence characteristic in zero-sum games (Lei et al., 2021). We implement FTPL by each bidder i bidding according to bti = arg max b ˜uti(v, b ) + p(b), where ˜uti(v, b ) is the total utility of bidding b at value v before round t, and p(b) is a random noise sampled from an exponential distribution 
+
+f (x) = εe −εx , x ≥ 0. As for OMWU, we maintain similar weights to MWU, where wti (b, v ) is the weight at round t
+
+of bidding b at value v, but the update rule is modified as: wti (b, v ) ∝ wt−1 
+
+> i
+
+(b, v )e−η·(Pt−2   
+
+> t′=1 ut′
+> i(b,v )+2 ut−1
+> i(b,v ))
+
+. We set 
+
+ε = 0 .1, η = 0 .1 and all no-regret algorithms runs 100,000 rounds.        
+
+> Table 6. The L2distance between computed strategies by different methods and the analytic solution, and the running time t(both smaller is better). We set the discretization grid Hto either 32 or 64 for no-regret learning algorithms, and maintain a size of 20 for Auctionformer.
+
+Method L2 Time spent t
+
+Random 0.418 -MWU-32 0.021 27.97 MWU-64 0.019 31.22 FTPL-32 0.026 21.08 FTPL-64 0.024 22.26 OMWU-32 0.023 32.62 OMWU-64 0.017 33.33 Auctionformer-20 (ours) 0.017 0.006s The empirical results are included in Table. 6. Despite setting a finer discretization for the no-regret learning algorithms (i.e., 
+
+H = 32 , 64 ), which theoretically enhances the approximation quality to the continuous analytical solution, the resulting 
+
+L2 distances for these methods still can not surpass the solution quality of Auctionformer. Additionally, each no-regret algorithm requires retraining to evolve toward the Nash equilibrium, whereas Auctionformer necessitates only a single inference step once trained. 
+
+F.2. Auctionformer v.s. MLPNet 
+
+As outlined in Section C.3, we’ve developed an MLPNet model specially trained for 3-player FP auction games. Although MLPNet is only capable of solving auction games with a fixed number of bidders, we can still compare the predicted 21 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+strategies of MLPNet for this particular setting with the results of Auctionformer. To facilitate this comparison, we extract all the 3-player auction games described in Table. 2 and benchmark these 2 models’ predicted equilibrium strategies via Nash loss. The results are presented in Table. 7. 
+
+Table 7. The LNash of Auctionformer’s and MLPNet’s solutions on the 3-player FP auction games among different value distributions 
+
+LNash on: U + G U0 G0 U−0 G−0
+
+Auctionformer 7.63e-05 4.58e-05 4.29e-05 1.47e-04 9.06e-05 
+
+MLPNet 1.30e-03 7.18e-04 7.09e-04 1.87e-03 2.31e-03 Despite MLPNet’s specialization for three-player first-price auction scenarios, it still yields a higher Nash error (1.3e-03) compared to Auctionformer (7.6e-05). This contrast underscores the superior performance of our method. 
+
+F.3. Disable Parameter Update on Bert 
+
+In the previous experiment, we train Auctionformer with the pretrained BERT as the default base language model and train Auctionformer for all parameters, where the ability to solve vast auction games is reported in Table 2. One may raise another question, what if we avoid fine-tuning the language model and train Auctionformer with the rest part of it? In order to answer the following question, we also report the results where we fixed the pretrain language model Bert and train the Auctionformer in the same way denoted in Sec.4.1. Similarly, we train such Auctionformer in the same 4 mixed mechanism and asymmetric training set and display the results with the same test set in Table 2. The results are displayed in Table. 8 
+
+Table 8. The LNash of a special trained Auctionformer’s solutions on the auction games among different value distributions, mechanisms, and asymmetric player numbers (”Ent” refers to entry fee). The Auctionformer is trained with fixed BERT’s parameters where we disable the parameter updating on BERT during the whole training process. The LNash of random strategy is 1.59e-1 for comparison.                                                                                   
+
+> Player Number = 2 ∼4Player Number = 5 ∼7Player Number = 8 ∼10 Overall Sample: 2000/distribution Sample: 2000/distribution Sample: 2000/distribution
+> Hybrid FP SP FP+Ent SP+Ent FP SP FP+Ent SP+Ent FP SP FP+Ent SP+Ent U+G 3.17e-04 1.71e-04 6.50e-05 6.46e-04 2.89e-05 1.14e-04 2.32e-04 6.51e-04 5.00e-05 9.20e-05 4.07e-04 7.19e-04 7.97e-05
+> U01.40e-04 1.30e-04 1.33e-05 2.78e-04 1.98e-05 1.09e-04 3.82e-05 3.12e-04 3.14e-05 9.35e-05 8.34e-05 2.73e-04 4.61e-05
+> G01.70e-04 9.89e-05 6.10e-08 3.16e-04 1.55e-05 9.24e-05 1.77e-07 4.34e-04 2.62e-05 6.65e-05 4.10e-07 4.34e-04 4.64e-05
+> U−04.48e-04 2.89e-04 2.28e-04 8.70e-04 4.69e-05 1.63e-04 7.62e-04 7.08e-04 8.06e-05 1.42e-04 1.28e-03 7.89e-04 1.39e-04
+> G−05.10e-04 1.68e-04 1.91e-05 1.12e-03 3.33e-05 9.26e-05 1.26e-04 1.15e-03 6.19e-05 6.54e-05 2.65e-04 1.38e-03 8.76e-05
+
+From the Table. 8, we found that the overall Loss in hybrid cases is 2× larger than the Auctionformer with BERT trainable (which is 1.56e-04 averaged over all mechanisms). However, the magnitude of solved auction games approximation is still satisfying, which is similar to other works such as Duan et al. (2023a). Therefore, the scalability of the proposed Auctionformer is also maintained to a degree even if we directly utilize fixed pretrained language model parameters. This inspires us to apply other language models (i.e. GPT4(OpenAI, 2023)) as a feature extractor or interface in the proposed Auctionformer structure to solve complex auction games in the future works, which may avoid huge computation resources on fine-tuning LLM. 
+
+F.4. Pretrained LM v.s. Training from Scratch 
+
+While our previous experiments mainly utilized pretrained language models (PLMs) such as BERT, GPT, or LLaMA, the architecture of Auctionformer is indeed compatible with transformers that are not pretrained. Our preference for PLMs is grounded in the presumption that these models may already encapsulate useful knowledge that could benefit the training process for auction equilibrium solving, e.g. better performance or faster convergence. In light of this, we conducted another ablation study to explore the advantages of using a pretrained language model over initiating training from scratch. For this study, we selected the pretrained LLaMA2-7B model to serve as the LM backbone for the Auctionformer, chosen for its demonstrated rapid convergence, as evidenced in Fig.6. We contrasted the pretrained model’s performance with an Auctionformer variant built upon a randomly initialized transformer possessing the same 22 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+structural specifications as LLaMA2-7B. Our investigation employed two distinct sets of training hyperparameters, featuring varying learning rate decay schedules–‘arg1’ halves the rate every two epochs, whereas ‘arg2’ does so every four epochs. In Fig.11, we present the Nash loss recorded for both models under the two different hyperparameter setups on the validation set. 1 2 3 4 5 6 7 8 9 
+
+> Epoch
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> Nash Loss on Validation Set
+> 1e 3
+> pretrained:arg1
+> pretrained:arg2
+> from-scratch:arg1
+> from-scratch:arg2
+
+Figure 11. Nash loss comparison between the Auctionformer models employing a pretrained LLaMA2-7B model (‘pretrained’) and a randomly initialized transformer network (‘from-scratch’), across two hyperparameter settings (‘arg1’ and ‘arg2’) on the validation set. 
+
+As depicted in the figure, the Auctionformer powered by the pretrained LLaMA2-7B model showcases a significantly faster convergence rate compared to its from-scratch counterpart, requiring only half the epochs to reduce the validation loss to below 1.5e-3. This obeservation supports our hypothesis that the pretrained language model may possess inherent knowledge that could benefit the training process and validates the rationale of utilizing the pretrained language model in our previous experiments. 
+
+F.5. Zero-shot on Symmetric Cases 
+
+We have displayed the Auctionformer performances on vast mechanisms and distributions in Table 3 and find disappointing results in N = 15 , which the zero-shot ability on the out-of-the-domain cases, including several auction games without explicit solutions. However, when it comes to symmetric cases such as Uniform distribution in the first price or second price, the Auctionformer also adopts a certain ability on the zero-shot scenarios. We turn to the zero-shot experiments on two classical mechanisms FP and SP with our trained Auctionformer, where the symmetric bidders with Uniform distribution U0 among different bidder numbers. In the symmetric cases, there exist theoretical results on these two special cases(Krishna, 2009) as below. 
+
+Lemma F.1. In a first price auction with n players, where each bidder’s value vi is drawn i.i.d. from the uniform distribution 
+
+U [0 , V ], bidding bi = n−1 
+
+> n
+
+vi constitutes a Bayesian Nash equilibrium. 
+
+Lemma F.2. In a second price auction with n players, where each bidder’s value vi is drawn i.i.d. from the uniform distribution U [0 , V ], truthful bidding bi = vi constitutes a Bayesian Nash equilibrium. 
+
+In the in-domain cases with the maximal bidder number is 10 , the averaged bidding strategies of bidders are displayed in Figure 12 compared to MWU. As there exists a theoretical ratio between the bidding price and value realization, we can estimate the averaged bidding strategies of the derived solution from Auctionformer and MWU. The complexity or the difficulty is intuitively increased with the growth of bidder number in auction games and both algorithms are validated in a 1/H -evenly-discretized space (Feng et al., 2021) ( H = 20 ), which may lead to an approximation decay in large bidder number in FP. However, Auctionformer still outperforms MWU in most in domain cases with closer distances to the theoretical results. In the SP, Auctionformer can derive the truthful bidding for every bidder while MWU fails to deliver such optimal bidding strategies. Then we turn to the out-of-domain cases and the results are recorded in Figure 13, where the maximally involved bidders are up to 15 . Similarly, in the SP cases, Auctionformer can still derive the equilibrium solution in the symmetric cases, where bidding the same as value realization is the optimal bidding strategy. In the FP out-of-domain cases, our Auctionfomer 23 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 0 1 2 3 4 5 6 7 8 9 10           
+
+> Number of Players
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Bid / Value
+> First Price Auction
+> Theoretic
+> Auctionformer
+> No-Regret
+> 012345678910
+> Number of Players
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Bid / Value
+> Second Price Auction
+> Theoretic
+> Auctionformer
+> No-Regret
+
+Figure 12. Uniform distribution U [0 , 10] of different symmetric bidder numbers where Auctionformer is tested in the same domain of the training set. The no-regret results are predicted by the MWU algorithm(Arora et al., 2012). 
+
+derives much closer approximation solutions compared to a no-regret algorithm. Even if the Auctionformer is trained on the 
+
+N = [2 , 10] , it still manages to deliver an approximate equilibrium solution with the simple symmetric out-of-domain cases and no few-shot learning is required. 11 12 13 14 15     
+
+> Number of Players
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Bid / Value
+> First Price Auction
+> Theoretic
+> Auctionformer
+> No-Regret
+> 11 12 13 14 15
+> Number of Players
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Bid / Value
+> Second Price Auction
+> Theoretic
+> Auctionformer
+> No-Regret
+
+Figure 13. Zero-shot results on uniform distribution U [0 , 10] of different symmetric bidder numbers where Auctionformer is tested out of the domain of the training set. The no-regret results are predicted by the MWU algorithm(Arora et al., 2012). 
+
+F.6. Few-shot on Mechanism Transformation 
+
+We also validate the few-shot ability of mechanism transformation. To assess our model’s ability to transfer to different auction mechanisms, we conduct another few-shot learning experiment in which we employ 3 distinct models trained on the first price mechanism under different distributions: U0, G0, and U0 + G0, and fine-tune them on second price auctions with corresponding distributions. We use the same training settings in the Sec.4.1 for all 3 models. From the Table 9, we can find that the Auctionformer directly trained in FP cannot derive a satisfying approximation solution on SP, with the magnitude of LN ash to 1e-2. The direct few-shot on SP mechanism with only 1500 training samples can enhance the ability of SP with different types of value distributions. However, directly using Nash loss to train on the new mechanism data will decrease the equilibrium solving performances in the previous domain (FP). Our proposed few-shot learning framework with preservation loss can significantly boost the ability of the mechanism transformation from Table 9. Not only the LN ash in trained mechanism FP is preserved to 1e-4 magnitude, but the solution in SP with 1500 samples is approximate to the model with only Nash loss. Noted that no ground-truth or theoretical solution is required and Auctionformer is scalable for any input value distribution. In line with previous few-shot experiments, our proposed self-supervised fine-tuning approach is able to transfer Auctionformer to new auction game domains (including bidder number and mechanism) with a few samples. 24 Auctionformer: A Unified Deep Learning Algorithm for Solving Equilibrium Strategies in Auction Games 
+
+Table 9. Few-shot learning results on the Auctionformer trained on first price (FP) mechanism to second price (SP) mechanism, where the Nash errors are recorded on U0 and G0 and ”Pre” denotes the preservation loss. 
+
+Distribution Approach LN ash on FP LN ash on SP 
+
+U0
+
+Train on FP 4.30e-04 2.42e-02 
+
++ Only Nash loss 2.55e-02 6.67e-03 
+
++ Ours (Nash+Pre.) 5.99e-04 6.92e-03 
+
+G0
+
+Train on FP 1.35e-04 2.06e-02 
+
++ Only Nash loss 2.79e-02 2.70e-03 
+
++ Ours (Nash+Pre.) 2.75e-04 2.81e-03 
+
+U0 + G0
+
+Train on FP 1.71e-04 3.31e-02 
+
++ Only Nash loss 3.10e-02 3.74e-03 
+
++ Ours (Nash+Pre.) 2.64e-04 3.70e-03 25
