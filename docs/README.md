@@ -6,107 +6,85 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-06 ~ 2026-06-04
-- 运行时间：2026-06-04 18:08:54 UTC
+- 最新运行日期：2026-06-04
+- 运行时间：2026-06-04 21:57:07 UTC
 - 运行状态：成功
-- 本次总论文数：29
-- 精读区：18
+- 本次总论文数：21
+- 精读区：10
 - 速读区：11
 
 ### 今日简报（AI）
-今日精读18篇、速读11篇，重点聚焦LLM增强投资决策和交易代理优化。高分论文《Semantic State Abstraction Interfaces》提出多轴新闻分解与RL诊断框架，《Plan Before You Trade》则强调交易前推理优化。建议优先精读这两篇9分论文，并关注RL诊断、金融文档问答与偏见评估方向。
-- 详情：[/20260506-20260604/README](/20260506-20260604/README)
+1) 今日精读了HMM+强化学习的资产配置和LLM组合管理基准PortBench，速读聚焦多模态金融推理与期货日内预测，共21篇论文。  
+2) 最值得关注方向：基于隐马尔可夫模型与强化学习的动态资产配置，以及LLM驱动的全流程组合管理基准测试。  
+3) 建议普通读者优先精读PortBench，理解LLM在组合管理中的评测体系，再探索HMM+RL的实战框架。
+- 详情：[/202606/04/README](/202606/04/README)
 
 ### 精读区论文标签
-1. [Semantic State Abstraction Interfaces for LLM-Augmented Portfolio Decisions: Multi-Axis News Decomposition and RL Diagnostics](/20260506-20260604/2605.06730v1-semantic-state-abstraction-interfaces-for-llm-augmented-portfolio-decisions-multi-axis-news-decomposition-and-rl-diagnostics)  
+1. [Regime-Based Portfolio Allocation Using Hidden Markov Models and Reinforcement Learning](/202606/04/2605.27848v1-regime-based-portfolio-allocation-using-hidden-markov-models-and-reinforcement-learning)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：LLM增强的投资组合决策与新闻分解
-2. [Plan Before You Trade: Inference-Time Optimization for RL Trading Agents](/20260506-20260604/2605.12653v1-plan-before-you-trade-inference-time-optimization-for-rl-trading-agents)  
+   evidence：基于隐马尔可夫模型和强化学习的资产配置
+2. [PortBench: A Correlation-Aware, Full-Pipeline Benchmark for LLM-Driven Portfolio Management](/202606/04/2605.27887v1-portbench-a-correlation-aware-full-pipeline-benchmark-for-llm-driven-portfolio-management)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向投资组合管理的RL交易智能体推理时优化
-3. [FINESSE-Bench: A Hierarchical Benchmark Suite for Financial Domain Knowledge and Technical Analysis in Large Language Models](/20260506-20260604/2605.15482v1-finesse-bench-a-hierarchical-benchmark-suite-for-financial-domain-knowledge-and-technical-analysis-in-large-language-models)  
+   evidence：LLM驱动的投资组合管理基准，考虑相关性，完整流程
+3. [Benchmarking Large Vision-Language Models on CFMME: A Comprehensive Chinese Financial Multimodal Evaluation Dataset](/202606/04/2605.29462v1-benchmarking-large-vision-language-models-on-cfmme-a-comprehensive-chinese-financial-multimodal-evaluation-dataset)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向LLM金融领域知识与技术分析的分层基准
-4. [Deep Reinforcement Learning Framework for Diversified Portfolio Management Across Global Equity Markets](/20260506-20260604/2605.17307v1-deep-reinforcement-learning-framework-for-diversified-portfolio-management-across-global-equity-markets)  
+   evidence：面向大型视觉-语言模型的中文金融多模态评估基准，涵盖视觉和文本模态
+4. [Fighting Numerical Hallucinations via Data-centric Compilation for Online Financial QA](/202606/04/2605.31064v1-fighting-numerical-hallucinations-via-data-centric-compilation-for-online-financial-qa)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：深度强化学习用于全球多元化投资组合管理
-5. [The Statistical Significance of the Inclusion of Graph Neural Networks in the Financial Time Series Forecasting Problem](/20260506-20260604/2605.21192v1-the-statistical-significance-of-the-inclusion-of-graph-neural-networks-in-the-financial-time-series-forecasting-problem)  
+   evidence：采用数据为中心的方法减少金融问答中的数值幻觉，属于NLP在金融分析中的应用
+5. [Learning Whom to Trust: Market-Feedback Adaptive Retrieval for Frozen LLMs in Event-Driven Financial RAG](/202606/04/2605.31201v1-learning-whom-to-trust-market-feedback-adaptive-retrieval-for-frozen-llms-in-event-driven-financial-rag)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：图神经网络用于金融时间序列预测
-6. [Reasoning through Verifiable Forecast Actions: Consistency-Grounded RL for Financial LLMs](/20260506-20260604/2605.21975v1-reasoning-through-verifiable-forecast-actions-consistency-grounded-rl-for-financial-llms)  
+   evidence：金融检索增强生成用于事件驱动预测
+6. [Effects of analyst sentiment on volatility dynamics in financial market](/202606/04/2606.01077v1-effects-of-analyst-sentiment-on-volatility-dynamics-in-financial-market)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：StockR1模型结合股票预测与金融推理，使用可验证预测行动
-7. [MadEvolve: Evolutionary Optimization of Trading Systems with Large Language Models](/20260506-20260604/2605.23007v1-madevolve-evolutionary-optimization-of-trading-systems-with-large-language-models)  
+   evidence：利用自然语言处理提取分析师报告情绪并分析其与市场波动的关系
+7. [Boom, Bubble, or Buildout? A Multi-Method Evaluation of Whether Artificial Intelligence Is in an Ongoing Financial Bubble](/202606/04/2606.01575v1-boom-bubble-or-buildout-a-multi-method-evaluation-of-whether-artificial-intelligence-is-in-an-ongoing-financial-bubble)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用大语言模型优化交易系统
-8. [Volatility Surface Reconstruction using Deep Learning under No-Arbitrage Constraints](/20260506-20260604/2605.24031v1-volatility-surface-reconstruction-using-deep-learning-under-no-arbitrage-constraints)  
+   evidence：使用多方法评估AI金融泡沫
+8. [Dynamic Objective Selection with Safeguards and LLM Oversight for Financial Decision-Making](/202606/04/2606.03704v1-dynamic-objective-selection-with-safeguards-and-llm-oversight-for-financial-decision-making)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：深度学习在金融波动率曲面重建中的应用
-9. [DeepSeekMath Meets Order Book: Group-Aware Policy Optimization for High-Frequency Directional Trading](/20260506-20260604/2605.25527v1-deepseekmath-meets-order-book-group-aware-policy-optimization-for-high-frequency-directional-trading)  
+   evidence：利用LLM监督动态选择投资组合分配和股票推荐的目标函数
+9. [Hedge-Bench: Benchmarking Agents on Hard, Realistic Tasks Pertaining to Financial Reasoning](/202606/04/2606.03918v1-hedge-bench-benchmarking-agents-on-hard-realistic-tasks-pertaining-to-financial-reasoning)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：订单簿上高频方向交易的强化学习
-10. [Predicting Stock Price Direction on Earnings Announcement Days using Multi-modal Deep Learning](/20260506-20260604/2605.25894v1-predicting-stock-price-direction-on-earnings-announcement-days-using-multi-modal-deep-learning)  
+   evidence：基于对冲基金分析师实际工作任务的AI智能体金融推理基准
+10. [Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets with Deep Reinforcement Learning](/202606/04/2606.04574v1-dynamic-multi-pair-trading-strategy-in-cryptocurrency-markets-with-deep-reinforcement-learning)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：深度学习模型预测股票价格方向
-11. [FundaPod: A Multi-Persona Agent Pod Platform with Knowledge Graph Memory for AI-Assisted Fundamental Investment Research](/20260506-20260604/2605.27864v1-fundapod-a-multi-persona-agent-pod-platform-with-knowledge-graph-memory-for-ai-assisted-fundamental-investment-research)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：使用多角色智能体进行AI辅助基础投资研究
-12. [FundaPod: A Multi-Persona Agent Pod Platform with Knowledge Graph Memory for AI-Assisted Fundamental Investment Research](/20260506-20260604/2605.27864v2-fundapod-a-multi-persona-agent-pod-platform-with-knowledge-graph-memory-for-ai-assisted-fundamental-investment-research)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：AI辅助的基本面投资研究
-13. [From Knowing to Doing: A Memory-Controlled Benchmark for LLM Trading Agents on Stock Markets](/20260506-20260604/2605.28359v1-from-knowing-to-doing-a-memory-controlled-benchmark-for-llm-trading-agents-on-stock-markets)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：LLM股票交易基准
-14. [When AI Meets Wall Street: A Survey on Trustworthy AI in Fintech](/20260506-20260604/2605.30650v1-when-ai-meets-wall-street-a-survey-on-trustworthy-ai-in-fintech)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：金融科技中可信AI综述
-15. [Bridging the Gap Between Natural Language and Market Dynamics via High-Dimensional Representation Learning](/20260506-20260604/2605.30652v1-bridging-the-gap-between-natural-language-and-market-dynamics-via-high-dimensional-representation-learning)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：使用FinBERT高维嵌入进行金融新闻情感分析
-16. [BlueFin: Benchmarking LLM Agents on Financial Spreadsheets](/20260506-20260604/2605.30907v1-bluefin-benchmarking-llm-agents-on-financial-spreadsheets)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：评估LLM智能体在金融电子表格上的合成与理解能力
-17. [Regime-Adaptive Continual Learning for Portfolio Management](/20260506-20260604/2606.00143v1-regime-adaptive-continual-learning-for-portfolio-management)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：基于持续学习的制度自适应投资组合管理
-18. [Auditing Asset-Specific Preferences in Financial Large Language Models: Evidence from Bitcoin Representations and Portfolio Allocation](/20260506-20260604/2606.02528v1-auditing-asset-specific-preferences-in-financial-large-language-models-evidence-from-bitcoin-representations-and-portfolio-allocation)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：审计LLM在机器人投顾中的资产偏好
+   evidence：深度强化学习用于加密货币交易
 
 ### 速读区论文标签
-1. [Agentic Retrieval-Augmented Generation for Financial Document Question Answering](/20260506-20260604/2605.05409v1-agentic-retrieval-augmented-generation-for-financial-document-question-answering)  
+1. [FIND: Toward Multimodal Financial Reasoning and Question Answering for Indic Languages](/202606/04/2605.13330v1-find-toward-multimodal-financial-reasoning-and-question-answering-for-indic-languages)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：智能体RAG用于金融文档问答
-2. [SHARP: A Self-Evolving Human-Auditable Rubric Policy for Financial Trading Agents](/20260506-20260604/2605.06822v1-sharp-a-self-evolving-human-auditable-rubric-policy-for-financial-trading-agents)  
+   evidence：面向印度语言的多模态金融推理和问答
+2. [Vector-Quantized Discrete Latent Factors Meet Financial Priors: Dynamic Cross-Sectional Stock Ranking Prediction for Portfolio Construction](/202606/04/2605.13407v1-vector-quantized-discrete-latent-factors-meet-financial-priors-dynamic-cross-sectional-stock-ranking-prediction-for-portfolio-construction)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：自进化LLM交易智能体与结构化策略
-3. [Fin-Bias: Comprehensive Evaluation for LLM Decision-Making under human bias in Finance Domain](/20260506-20260604/2605.09106v1-fin-bias-comprehensive-evaluation-for-llm-decision-making-under-human-bias-in-finance-domain)  
+   evidence：深度学习用于截面股票排序与投资组合
+3. [Sequential Structure in Intraday Futures Data: LSTM vs Gradient Boosting on MNQ](/202606/04/2605.17724v1-sequential-structure-in-intraday-futures-data-lstm-vs-gradient-boosting-on-mnq)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：评估金融领域LLM决策中的人类偏见影响
-4. [Yield Curve Forecasting using Machine Learning and Econometrics: A Comparative Analysis](/20260506-20260604/2605.09842v1-yield-curve-forecasting-using-machine-learning-and-econometrics-a-comparative-analysis)  
+   evidence：LSTM与梯度提升在期货日内预测中的对比
+4. [Do Better Volatility Forecasts Lead to Better Portfolios? Evidence from Graph Neural Networks](/202606/04/2605.19278v1-do-better-volatility-forecasts-lead-to-better-portfolios-evidence-from-graph-neural-networks)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：机器学习和深度学习用于收益率曲线预测
-5. [Persistent and Conversational Multi-Method Explainability for Trustworthy Financial AI](/20260506-20260604/2605.11687v1-persistent-and-conversational-multi-method-explainability-for-trustworthy-financial-ai)  
+   evidence：图神经网络用于波动率预测与投资组合
+5. [Do Better Volatility Forecasts Lead to Better Portfolios? Evidence from Graph Neural Networks](/202606/04/2605.19278v2-do-better-volatility-forecasts-lead-to-better-portfolios-evidence-from-graph-neural-networks)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：金融情感分析的NLP可解释性
-6. [A deep learning approach for pricing convertible bonds with path-dependent reset and call provisions](/20260506-20260604/2605.12189v1-a-deep-learning-approach-for-pricing-convertible-bonds-with-path-dependent-reset-and-call-provisions)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：深度学习定价含路径依赖条款的可转换债券
-7. [Yield Curves Dynamics Using Variational Autoencoders Under No-arbitrage](/20260506-20260604/2605.12764v1-yield-curves-dynamics-using-variational-autoencoders-under-no-arbitrage)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于变分自编码器的无套利收益率曲线动态建模
-8. [Learning Time-Inhomogeneous Markov Dynamics in Financial Time Series via Neural Parameterization](/20260506-20260604/2605.04690v1-learning-time-inhomogeneous-markov-dynamics-in-financial-time-series-via-neural-parameterization)  
+   evidence：图神经网络用于波动率预测和投资组合表现分析
+6. [Evolutionary Rule Extraction from Corporate Default Prediction Models](/202606/04/2605.29478v1-evolutionary-rule-extraction-from-corporate-default-prediction-models)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：利用神经网络参数化马尔可夫转移矩阵建模金融时间序列
-9. [Herculean: An Agentic Benchmark for Financial Intelligence](/20260506-20260604/2605.14355v1-herculean-an-agentic-benchmark-for-financial-intelligence)  
+   evidence：利用可解释人工智能技术进行中小企业违约预测，是AI在金融中的应用
+7. [Inspectable Neural Markov Models for Non-Stationary Time Series](/202606/04/2605.30943v1-inspectable-neural-markov-models-for-non-stationary-time-series)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：涵盖交易、对冲等金融智能任务的主体基准
-10. [Herculean: An Agentic Benchmark for Financial Intelligence](/20260506-20260604/2605.14355v2-herculean-an-agentic-benchmark-for-financial-intelligence)  
+   evidence：神经马尔可夫模型用于非平稳金融时间序列
+8. [Algorithmic Recourse of In-Context Learning for Tabular Data](/202606/04/2605.31272v1-algorithmic-recourse-of-in-context-learning-for-tabular-data)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：涵盖交易、对冲等金融智能任务的主体基准
-11. [Deep Learning for Solving and Estimating Dynamic Models in Economics and Finance](/20260506-20260604/2605.14493v1-deep-learning-for-solving-and-estimating-dynamic-models-in-economics-and-finance)  
+   evidence：表格数据的算法解释性在信贷审批中的应用
+9. [ProbRes: Volatility Learning for Probabilistic Time-Series Forecasting](/202606/04/2606.02117v1-probres-volatility-learning-for-probabilistic-time-series-forecasting)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：深度学习用于经济和金融动态模型
+   evidence：用于金融概率时间序列预测的波动率学习
+10. [Adversarially Robust Control of Conditional Value-at-Risk via Rockafellar-Uryasev Conformal Inference](/202606/04/2606.00320v1-adversarially-robust-control-of-conditional-value-at-risk-via-rockafellar-uryasev-conformal-inference)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：无分布的CVaR控制具有对抗鲁棒性，与投资组合风险管理相关
+11. [Network Time Series Models for Multivariate Volatility Forecasting](/202606/04/2606.03828v1-network-time-series-models-for-multivariate-volatility-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：网络时间序列模型用于多变量波动率预测
 
 
 <div class="dpr-home-promo-card">
