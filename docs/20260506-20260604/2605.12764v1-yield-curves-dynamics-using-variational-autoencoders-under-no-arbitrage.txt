@@ -1,0 +1,905 @@
+Title: Yield Curves Dynamics Using Variational Autoencoders Under No-arbitrage
+
+URL Source: https://arxiv.org/pdf/2605.12764v1
+
+Published Time: Thu, 14 May 2026 00:24:26 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+# Yield Curves Dynamics Using Variational Autoencoders Under No-arbitrage 
+
+## Fusheng Luo 1 and H´ elyette Geman 21Department of Applied Mathematics and Statistics, Johns Hopkins University, USA 
+
+2Department of Applied Mathematics and Statistics, Johns Hopkins University, USA 2026-05-14 
+
+Abstract 
+
+This paper introduces a physics-informed generative framework that resolves the fundamental conflict between the statistical flexibility of deep learning and the rigorous theoretical constraints of fixed-income modeling. We demonstrate that standard generative models and unconstrained statis-tical extrapolations suffer from ”manifold collapse” and severe arbitrage violations when forecasting term structures across diverse macroeconomic regimes. To overcome this, we propose a two-stage architecture. First, a Student-t Conditional Variational Autoencoder with Dynamic Level Injec-tion (CVAE sT + LS) extracts a robust, heavy-tailed term structure manifold, effectively decoupling macroeconomic shape dynamics from absolute base rates. Second, the latent dynamic evolution is governed by a continuous-time Neural Stochastic Differential Equation (SDE) strictly penalized by a No-Arbitrage Partial Differential Equation (PDE). Empirical results across multiple sovereign cur-rencies (USD, GBP, JPY) confirm that our synergistic approach drastically reduces out-of-sample forecasting errors—achieving an exceptional 6.58 bps Mean Tenor RMSE—and successfully over-comes the massive parallel drift and zero-lower-bound violations exhibited by the classical HJM model in extreme environments. Furthermore, through phase space vector field analysis, we demon-strate the model’s superior capability in unsupervised macroeconomic regime detection and high-quality continuous-time scenario generation. Ultimately, this research provides a highly scalable, mathematically sound evolutionary engine for term structure modeling. 
+
+Keywords Term Structure Modeling, Dynamic Risk Premium, Non-linear State Space Models, Heavy-Tailed Distributions, Yield Curve Regimes, Neural SDEs, Conditional Variational Autoencoders, Mani-fold Learning, Out-of-Distribution Generalization, Arbitrage-Free Dynamics, HJM Framework, Overnight Index Swap (OIS) 
+
+# 1 Introduction 
+
+## 1.1 Classical Reference of Interest Rates Models 
+
+1.1.1 Harrison-Kreps 
+
+[1] define a state-price vector π(ω)ω∈Ω assigns to each terminal state the time-0 price of a security that pays one unit in that state and zero otherwise in discrete time t = 1 , 2, . . . , T and a finite state space Ω, with terminal payoffs function X(ω). Under non-arbitrage, prices of all attainable contingent claims (a financial contract whose future payoff depends entirely on the uncertain future value or state of an underlying asset) are given by the inner product of their terminal payoffs with this strictly positive vector. 
+
+V (X) = X
+
+> ω∈Ω
+
+π(ω)X(ω)1
+
+> arXiv:2605.12764v1 [q-fin.MF] 12 May 2026
+
+1.1.2 Short Rate Models 
+
+Early stochastic interest-rate models such as the ‘spot rate’ models ([2]) and [3]) generate arbitrage-free term structures from low-dimensional Markov dynamics, with the latter model ensuring the non-negativity property of short rates. [4] introduced a deterministically time-dependent drift to achieve an exact calibration to the initial yield curve. [5] unify these approaches within the affine term-structure framework, providing a systematic classification of multi-factor models. While these models remain tractable and widely used, their finite-dimensional structure contrasts with the infinite-dimensional flex-ibility of the Heath–Jarrow–Morton (HJM) framework [6]. 
+
+1.1.3 Deterministic Models 
+
+The modeling of the yield curve often begins with the parsimonious framework proposed by [7]. The traditional Nelson-Siegel (NS) model excels due to its natural and flexible functional forms, effectively capturing the reactions of short-maturity yields and the characteristic flatness of long-maturity yields, which reflects real-world monetary policy transmission. This parametric approach finds strong empirical support in the seminal work of [8], who utilized principal component analysis to demonstrate that the variation in bond returns is driven by three common factors, widely identified as level, slope, and curvature. Their investigation suggests that these three main influences explain the vast majority of returns in various Treasury securities, providing a theoretical and empirical basis for the three-component structure of the NS model. However, the original 4-parameter NS model occasionally fails to explain complex curvature patterns and poorly captures long-end behavior. To address these limitations, [9] introduced the Nelson-Siegel-Svensson (NSS) model, a low-dimensional (6 parameters) extension that adds a second curvature term to better fit cross-sectional U.S. Treasury yields. To this day, NSS remains a benchmark for central banks. in this framework, the zero-coupon yield curve y(τ ) is defined as: 
+
+y(τ ) = β0 + β1
+
+ 1 − e−τ /λ 1
+
+τ /λ 1
+
+
+
++ β2
+
+ 1 − e−τ /λ 1
+
+τ /λ 1
+
+− e−τ /λ 1
+
+
+
++ β3
+
+ 1 − e−τ /λ 2
+
+τ /λ 2
+
+− e−τ /λ 2
+
+
+
+(1) Similarly, the instantaneous forward rate f (τ ) follows: 
+
+f (τ ) = β0 + β1e−τ /λ 1 + β2
+
+τλ1
+
+e−τ /λ 1 + β3
+
+τλ2
+
+e−τ /λ 2 (2) In these expressions, β0 represents the long-run forward rate level; β1e−τ /λ 1 captures the short-end slope decay; β2 τλ1 e−τ /λ 1 represents the medium-term hump; and β3 τλ2 e−τ /λ 2 is responsible for the additional long-term hump. This approach allows for the transformation of yield curve data into instantaneous forward rates that account for the curve’s shape in a more granular way. This forward rate f (τ ) is a critical determinant for our subsequent derivation of the manifold and the construction of a non-arbitrage framework, following the methodology of Lyashenko et [10] The HJM framework, as introduced by [6], characterizes the evolution of the entire instantaneous forward rate curve f (t, T ). They define f (t, T ) as the limit of the forward rate f (t, T, h ) as h → 0 and establish its relationship with the price of zero-coupon bond through the following integral: 
+
+B(t, T ) = exp −
+
+Z Tt
+
+f (t, s )ds 
+
+!
+
+In this setting, the spot rate r(t) is identified as f (t, t ), and the money-market account M (t) acts as the numeraire—the baseline unit of value used to discount future cash flows back to the present. Specifically, M (t) represents the value at time t of $1 invested at time 0, continuously compounding at the instantaneous risk-free short rate rs. Mathematically, it is defined as: 
+
+M (t) = exp 
+
+Z t
+
+> 0
+
+r(s)ds 
+
+
+
+where r(s) is the instantaneous short rate. For a fixed maturity T , the forward rate dynamics are driven by n independent Brownian motions according to an Itˆ o-type integral equation: 
+
+f (t, T ) − f (0 , T ) = 
+
+Z t
+
+> 0
+
+a(v, T )dv +
+
+> n
+
+X
+
+> i=1
+
+Z t
+
+> 0
+
+σi(v, T )dW i(v)2Assuming frictionless markets and the existence of a unique equivalent martingale measure (EMM) Q for zero-coupon bonds, the no-arbitrage condition dictates a strict relationship between the drift αQ(t, T )and the volatility structure σi(t, T ): 
+
+αQ(t, T ) = 
+
+> n
+
+X
+
+> i=1
+
+σi(t, T )
+
+Z Tt
+
+σi(t, u )du 
+
+This fundamental HJM restriction implies that the drift is fully determined by the volatility term.To enhance the model’s suitability for simulations and control, [11] introduced a re-parameterization using time-to-maturity coordinates, denoted as x = T − t. By defining the forward rate in terms of this relative maturity, r(t, x ) ≡ f (t, t + x), the forward curve evolves as an infinite-dimensional Stochastic Partial Differential Equation (SPDE): 
+
+dr (t, x ) = μ(t, x )dt + σ(t, x )dW t
+
+Known today as the “Musiela equation”, this formulation requires r(t, x ) to be differentiable with respect to x and the volatility functions to be square-integrable. The arbitrage-free drift condition in this framework is expressed as: 
+
+μ(t, x ) = ∂xr(t, x ) + 
+
+> n
+
+X
+
+> i=1
+
+σi(t, x )
+
+Z x
+
+> 0
+
+σi(t, u )du 
+
+While the HJM framework remains conceptually foundational for pricing theory due to its use of calendar maturity, the Musiela formulation is often considered superior for practical applications. Its autonomous state-space structure and Markovian property provide a more robust framework for modern interest rate modeling. 
+
+## 1.2 Interest Rates 
+
+Let (Ω , F, F, Q) be a filtered probability space, where F = {F t}t≥0 denotes the market filtration (infor-mation flow), Q is the risk-neutral measure, and P is the physical (real-world) measure. Throughout, all price processes are assumed to be F-adapted. In fixed-income markets, an “interest rate” is not a single object but a family of closely related quantities used to quote, value, or model the cost of funding across maturities. Depending on the underlying contract and reference index, one encounters (i) short rates (instantaneous funding rates in continuous-time models), (ii) zero-coupon yields and forward rates derived from discount factors, and (iii) swap rates quoted in the interest rate swap (IRS) market. A key point for empirical modeling is that different market conventions lead to different swap-rate families: for example, IBOR-linked swap rates (e.g., LIBOR/EURIBOR tenors) versus OIS swap rates (e.g., SOFR/SONIA/ €STR), which may embed different credit and liquidity components. 
+
+Swap rates. A (par) swap rate is the fixed rate that sets the present value of a fixed–floating interest rate swap to zero, effectively averaging expectations of future short rates over a period. Consider a standard IRS with effective date T0, maturity Tn, payment dates {T1, . . . , T n}, and accrual year fractions 
+
+τi = Ti − Ti−1. Denote by S(t) the par fixed rate observed at time t ≤ T0. Under the single-curve setup, 
+
+S(t) can be expressed in terms of discount bond prices P (t, T ); the corresponding relation is summarized by the third equation in Table 1. More generally, in a multi-curve setting the par swap rate depends on both a discounting curve (often OIS) and a forwarding curve tied to the floating index, so that OIS swap rates and IBOR swap rates are no longer interchangeable even for the same maturity. 
+
+Zero-coupon yields and forward rates. Let P (t, T ) be the time-t price of a zero-coupon bond maturing at T . The continuously compounded zero-coupon yield y(t, T ) is defined by 
+
+P (t, T ) = exp  −(T − t) y(t, T ),
+
+and the instantaneous forward rate f (t, T ) is the rate contracted at time t for an infinitesimal borrowing over [ T, T + dT ], given by the negative maturity derivative of the log-discount factor, 
+
+f (t, T ) = −∂T log P (t, T ),
+
+as listed in Table 1. Finally, the short rate rt can be viewed as the limiting case rt = f (t, t ) in continuous-time term-structure models: it is typically model-implied rather than directly quoted, yet it links back to traded instruments through discount factors, yields, forwards, and swap rates. 31.3 Main Consideration: OIS Rates 
+
+Alignment with market consideration Using swap rates as model inputs/outputs aligns the model with data that traders and risk managers actually see and use. In contrast, instantaneous forward rates are a theoretical construct – the continuously compounded forward rate at a point in time – which are not quoted directly but are derived from the yield curve. Forward curves must be bootstrapped or inferred from market prices of bonds or swaps. Many autoencoder-based term structure models (including [12]) therefore choose to work with swap rates or zero-coupon yields as the input data, since these are readily available and incorporate the market’s expectation in a single number per maturity . This makes the model’s representation intuitively linked to market instruments (each swap rate corresponds to a tradable swap contract). By modeling swap rates, the autoencoder essentially learns the manifold of historically observed yield curve shapes in terms of these market rates, ensuring the latent representation is grounded in observable quantities. 
+
+Differences in Volatility Structure A key theoretical difference between using swap rates and instantaneous forwards is how each handles the volatility term structure . Instantaneous forward rates at different maturities can move somewhat independently and often exhibit a hump-shaped volatility pattern (with intermediate-term forwards sometimes more volatile than long or very short maturities). In classical term structure models, this is captured by frameworks like Heath–Jarrow–Morton (HJM) from [4], where each forward rate f (t, T ) can have its own volatility function. Swap rates, on the other hand, are averages of these forward rates over a maturity window. A long-term swap rate tends to be more stable, since it aggregates many forward rates (ups and downs in the forward curve partially cancel out). Thus, modeling directly in terms of swap rates inherently produces a smoother term structure with less granular volatility. This can be advantageous for dimensionality reduction. Academics, like [9] and [13], have historically believed that yield curves are well-described by a few global factors (level, slope, curvature) that move broad segments of the curve. Using swap rates capitalizes on this, since each swap rate already encapsulates an average effect (making the data lower-dimensional in essence). Indeed, it’s well-known that yield curves have low effective dimensionality (often 3–4 principal components explain most variation). Autoencoders trained on swap or yield data leverage this, finding a compact latent representation. By contrast, an instantaneous forward curve is conceptually infinite-dimensional; capturing every wiggle in the forward rates could require many factors. In practice, forward-rate models impose a parametric form or factor structure to make the problem tractable. To summarize, swap rates align with a global, smoothed description of the term structure (closer to how humans describe curves in terms of levels and slopes), whereas instantaneous forwards provide a local, detailed description that can capture volatility at specific horizons but with higher complexity. 
+
+Theoretical Framework Considerations In risk-neutral modeling, instantaneous forward rates have a natural advantage: they fit directly into arbitrage-free pricing theory. The [6]’s HJM framework specifies that if one models the entire forward-rate curve f (t, T ), there is a consistency condition (HJM drift condition) ensuring no-arbitrage. This condition ties the drift of each forward rate to the covariance of forward rate shocks . Classical HJM models therefore use instantaneous forwards as state variables and guarantee that any initial forward curve will evolve arbitrage-free (provided the drift condition is satisfied). On the other hand, classical Libor market models (LMM) or swap market models use discrete forward rates (like LIBOR forward rates for future periods) or swap rates as state variables. These are designed to match market quotes of caps/floors or swaptions, but they achieve no-arbitrage by working under a sequence of forward measures or terminal measures for each forward/swap rate. This can become theoretically cumbersome when multiple rates are modeled together, since each swap rate would strictly require its own pricing measure for perfect arbitrage-free consistency. In an autoencoder context, if we choose swap rates as the reconstruction targets, we implicitly follow a “market model” style representation: the autoencoder learns to generate a finite set of swap rates. The trade-off is that while this matches observable quantities, it doesn’t inherently satisfy the continuous no-arbitrage relations between all points on the curve – it needs an interpolation or further mechanism to produce a full forward curve from those points . By contrast, an autoencoder that directly produces an instantaneous forward curve (or a very fine-gridded forward curve) can be embedded in a framework that enforces the HJM condition, thus respecting no-arbitrage across the entire curve by design. However, if we try to feed the forward curve to the model, we need derivations to transfer from the raw yield data (or raw bond price data), and this would bring errors even with a high-precision finite difference methods. From this perspective, there is a tradeoff: if we want to introduce the error before the model fitting, but could 4be helpful for the arbitrage smoothing problem, or if we prefer to fit the model first, then apply diligent interpolation techniques, which bring noise. 
+
+Robustness to Noise In real-world data, yield curves are observed with measurement noise and day-to- day fluctuations, especially at the short end or for less liquid maturities. Swap rates, being market quotes, are relatively robust and smooth – each par rate is determined by liquid instruments (e.g. IRS or futures) and reflects a broad average of expectations. Instantaneous forward rates, by contrast, must be derived (e.g. by bootstrapping and differentiating the discount curve). This derivation can amplify noise: small inconsistencies or fitting errors can lead to jagged forward curves that oscillate if not carefully regularized. An autoencoder trained on raw forward-rate curves might then have to learn to ignore or smooth out these noisy wiggles. Using swap rates as inputs avoids this issue to a large degree – it presents the autoencoder with a smoother target. Indeed, one benefit of autoencoders is their ability to filter out noise by compressing data into a few latent factors. [10] note that their VAE-based model captures the essential shape of yield curves “while discarding noise” . In practical terms, training on swap rates leverages the fact that much of the idiosyncratic noise has already been averaged out. Historical swap curve datasets (e.g. daily LIBOR/OIS swap rates) are typically smoothed and arbitrage-free by construction, making them well-suited for learning. In summary, from a conceptual standpoint, swap rates are appealing as model inputs because they are what the market trades and sees (ensuring the model’s factors have intuitive meaning and direct calibration targets), whereas instantaneous forward rates are appealing for their direct connection to arbitrage-free modeling and rich volatility structure – albeit at the cost of handling a more complex, high-dimensional object. We try to utilize the swap rates with careful interpolation for reconstruction in this paper due to all the considerations above. 
+
+## 1.4 Arbitrage 
+
+A financial market is said to be arbitrage-free if there exists no self-financing trading strategy with zero initial cost whose terminal payoff is almost surely non-negative and strictly positive with positive probability. The definition originates in [1] and underlies the martingale pricing approach adopted in modern term-structure models, including [6]. A brief introduction regarding this will be revealed in the following contents. Any yield curve model must produce arbitrage-free curves, meaning the discount factor P (t, T ) should be a decreasing, convex function of maturity T . Equivalently, [14] states that forward rates should never drop below the level that would make P (t, T ) increase at any point. Swap rates, being broad averages, tend to produce smooth discount curves, but it is still possible for an autoencoder to output a set of swap rates that imply a slight violation (e.g. an unexpected dip in the implied forward between two outputs). Ensuring monotonic P (t, T ) (or non-negative instantaneous forwards) can be tricky when the model outputs are limited. [12] approach dealt with this by applying “minimal corrections” to the autoencoder-generated curve shapes to enforce no-arbitrage . In practice, this could mean a minor adjustment to one of the output rates or a tiny twist to the curve so that any inferred negative forward is eliminated. Because the VAE’s latent space was trained on real market curves, which are arbitrage-free, such corrections were typically small – the autoencoder preemptively avoids most problematic shapes by never producing them in the first place . This is a subtle but important benefit of using historical data and a well-constrained autoencoder: implausible shapes (e.g. a curve with a dip and then a rise in forwards) simply don’t appear in the training data, so the network learns to ignore them. In effect, the autoencoder’s latent manifold contains only valid curve shapes. A central concern in using Nelson–Siegel (NS) and Nelson–Siegel–Svensson (NSS) ([9]) specifications as empirical benchmarks is that, once embedded in a dynamic setting, these curve families are not automatically consistent with the absence of arbitrage across maturities. [15] formalize this point in the context of the widely used Svensson generalization: they show that the Svensson factor-loading structure cannot, in general, be obtained from a standard affine, arbitrage-free term-structure representation, and hence its dynamic implementation does not guarantee intertemporal no-arbitrage restrictions. To address this gap, they introduce an arbitrage-free generalized Nelson–Siegel (AFGNS) model—a closely related specification for which the no-arbitrage condition can be imposed within an affine term-structure framework—while retaining the interpretability and flexibility that make NS/NSS attractive in practice. They further demonstrate that the resulting model is tractable and delivers competitive in-sample fit. In our empirical evaluation, this provides a particularly appropriate comparison class: it allows us to benchmark learned curve representations and latent-dynamics pipelines against a parametric 5family that (i) mirrors the NS/NSS shape restrictions used by practitioners, yet (ii) enforces cross-maturity consistency implied by arbitrage-free pricing. 
+
+# 2 Dataset 
+
+We consider a panel of daily interest-rate (Over Night Swap rate) curves across multiple currencies: USD, JPY, GBP(Great British Pound), CHF(Swiss Franc), AUD (Australian dollar), NZD(New Zealand dollar), THB (Thai), SGD (Singapore Dollar). For each currency c, the raw dataset consists of observed swap/OIS (or analogous) rates quoted on a discrete set of maturities (tenors), indexed by calendar date. A key empirical feature of multi-currency rate datasets is that missingness is often structural and time-localized: many currencies have limited instrument coverage in early history and become dense only after market conventions mature or data coverage improves. As a result, naive alignment over the full historical range introduces large blocks of missing values that do not reflect intrinsic curve properties but rather the availability of quotes. Our pipeline explicitly corrects for this by identifying and restricting each currency to its stable coverage regime. To model curve shape at a meaningful resolution while retaining cross-market comparability, we select a canonical set of maturities 
+
+τ = {1M, 2M, 3M, 6M, 1Y, 2Y, 5Y, 7Y, 10 Y, 15 Y, 20 Y, 30 Y }
+
+This grid captures the short-end slope, intermediate hump/curvature, and long-end behavior with suf-ficient granularity for representation learning in low latent dimensions (2–3). The choice also avoids non-standard maturities that are consistently absent in some markets. Regarding the details of how we deal with the null values can be found in our Appendix 7.1.4. Figure 3 visualizes cross-sectional term-structure shapes by plotting 20 randomly sampled daily curves for each currency on the common tenor grid. The overlaid lines illustrate the diversity of curve regimes (level and slope) within each market, including both upward- and downward-sloping configurations. This diagnostic is used to validate data coverage and to assess whether the selected tenor set captures meaningful variation in curve shape prior to the model training. Figure 4 plots the time series of the 1-year swap rate (used as the level script (LS) factor) for each currency over its available post-truncation sample. The panels highlight distinct monetary-policy regimes and structural level shifts across markets—e.g., prolonged low/negative-rate environments (JPY, CHF) and the synchronized global tightening episode around 2022–2023. This visualization motivates separating each curve into a level component (1Y) and a shape component (rates relative to 1Y) before training. Although VAEs are effective at capturing non-linear relationships in representational learning, our ablation study shows that manually distilling the level slope significantly improves the model’s ability to learn both macroeconomic levels and patterns. Because term-structure levels differ substantially across currencies and regimes, feeding raw rates would cause a latent model to allocate capacity primarily to explaining cross-market level differences, rather than learning shape dynamics. To ensure interpretability and stable learning, we construct a level script mechanism . Let the level factor be defined as the 1-year rate 
+
+l(c) 
+
+> t
+
+= r(c) 
+
+> t
+
+(1Y) We define the shape vector as the curve expressed relative to this anchor: 
+
+s(c) 
+
+> t
+
+= r(c) 
+
+> t
+
+(τ ) − l(c) 
+
+> t
+
+, for τ ∈ T
+
+By construction, s(c) 
+
+> t
+
+(1Y) and the remaining dimensions represent relative slope and curvature fea-tures independent of level. The final model input concatenates a scaled shape vector and a scaled level scalar x(c) 
+
+> t
+
+= [˜ s(c) 
+
+> t
+
+, ˜l(c) 
+
+> t
+
+] yielding a fixed-dimensional input suitable for a single VAE. To avoid undue influence from outliers or regime shifts, we apply robust scaling separately to the shape coordinates and the level coordinate. For a generic variable y, robust scaling is performed using the median and interquartile range (IQR): ˜y = y − median (y)
+
+IQR (y)This normalization is computed on the pooled (cross-currency) post-truncation dataset, producing dimension-wise comparable inputs while preserving the statistical structure of the panel. 6Figure 5 visualizes the dominant modes of variation in the shape component of the yield-curve panel (i.e., rates expressed relative to the 1Y anchor and then robustly scaled). We project all curve observations onto the first two principal components (PC1–PC2) to assess the intrinsic dimensionality of shape dynamics. The reported explained-variance ratios indicate that PC1 and PC2 capture the vast majority of shape variation (about 61.7% and 35.6%, respectively), supporting the statements of [16], [12] and [10]: the use of a low-dimensional latent representation (2–3 factors) in the subsequent VAE. 
+
+# 3 Variational Autoencoders And Its Variants 
+
+Variational Autoencoders (VAEs), introduced by [17], are generative models that learn a low-dimensional latent space representation of complex data. Unlike traditional autoencoders, which map input to a single fixed point, VAEs map input to a probability distribution. The goal of a VAE is to maximize the likelihood of the observed data x by learning a set of latent variables z. Because the true posterior p(z|x)is usually intractable, VAEs use an inference network (encoder) to approximate it with qϕ(z|x).+1The objective function, known as the Evidence Lower Bound (ELBO), is derived as: 
+
+L(θ, ϕ ; x) = Eqϕ(z|x)[log pθ (x|z)] − DKL (qϕ(z|x)|| p(z)) (3) 
+
+DKL (qϕ(z|x)|| p(z)) = Ez∼qϕ
+
+
+
+log qϕ(z|x)
+
+p(z)
+
+
+
+= Ez∼qϕ [log qϕ(z|x) − log p(z)] (4) With the prior and posterior defined as 1. Prior: 
+
+p(z) = N (z; 0, I)log p(z) = − J
+
+2 log(2 π) − 12
+
+> J
+
+X
+
+> j=1
+
+z2
+
+> j
+
+2. Approximate Posterior: 
+
+qϕ(z|x) = N (z; μ, σ2I)log qϕ(z|x) = − J
+
+2 log(2 π) − 12
+
+> J
+
+X
+
+> j=1
+
+log( σ2 
+
+> j
+
+) − 12
+
+> J
+
+X
+
+> j=1
+
+(zj − μj )2
+
+σ2
+
+> j
+
+(5) The Kullback-Leibler (KL) divergence term, DKL (qϕ(z|x)|| p(z)) in equation 3 and 4, serves as a crit-ical topological constraint on the latent manifold. By penalizing deviations of the approximate posterior from the isotropic Gaussian prior 5, the KL divergence enforces a dense and continuous latent space, and is essential for end-to-end training via backpropagation. In the context of yield curve modeling, this regularization is paramount; it ensures that the learned latent factors vary smoothly, thereby facilitat-ing robust interpolation and preventing the generation of degenerate or economically implausible term structures. However, as the field has matured, the academic consensus has increasingly identified this ”normality assumption” as a significant bottleneck, particularly when modeling complex manifolds, discrete struc-tures, or financial time series characterized by extreme volatility and non-Gaussian ”stylized facts”. In the early years of VAE research, this assumption was rarely challenged because it provided stable training dynamics and competitive results on benchmark image datasets like MNIST and CIFAR-10 as stated in [17]. However, the use of a fixed, uninformative Gaussian prior implicitly assumes that the underlying data manifold is Euclidean and that the latent factors follow a unimodal, symmetric distribution. This assumption has been proven inadequate for capturing the structural nuances of real-world data, leading to several well-documented failure models. We implement a Conditional Variational Autoencoders (CVAEs) to address the inherent non-stationarity and cross-sectional heterogeneity in the multi-currency OIS swap dataset. Luckily, [12] have talked about this model, compared to traditional VAEs in training with a dataset of multiple currencies. According 7to their statement, the performance of VAEs and CVAEs have subtle differences from each other in terms of the precision of yield curve reconstruction. We have validated their statement in the subsequent section and expand to the level that the decoupling effect can be introduced by incorporating the cur-rency information independently, which makes the model learn a low-dimensional manifold z with less differentiation on the micro-level, i.e., the currency characteristics; but more on the global pattern of the OIS swap rates (the global risk-free rate pattern) . By concatenating a Currency-Specific Embedding to both the encoder and decoder inputs, the architecture achieves a decoupling of global latent factors from idiosyncratic market levels.In our implementation, the encoder q(z|X, C ) processes the full yield curve (tenors from 1M to 30Y) alongside a currency-id vector. This formulation ensures that the latent space z captures invariant structural components—such as level, slope, and curvature—that are shared across global markets, while the conditional decoder p(X|z, C ) reintroduces currency-specific structural biases during the reconstruction phase. This approach significantly enhances the model’s Out-of-Sample (OOS) robustness, as shown in Figure 4, by allowing the latent representation to remain stable even as individual currencies enter new interest rate regimes. As [18] and [19] have pointed out, a significant limitation of using Gaussian prior is the prior hole problem . Ideally, the aggregated posterior—the average of all qϕ(z|x) over the data distribution—should match the prior p(z). In practice, the Gaussian prior often fails to align with the complex, multimodal distribution of the encoded data, especially to our multi-currency dataset. This creates regions in the latent space that have high probability under the prior but zero density under the aggregated posterior. When sampling from these ”holes” during the generative process, the decoder is forced to interpret latent codes it never encountered during training, resulting in inconsistent, blurry, or unrealistic samples. [20] proves that a hyperspherical latent space (hyperspherical VAEs) is more suitable for specific data types and avoids the ”origin gravity” of Gaussian priors. They tries to use the von Mises-Fisher (vMF) distribution to replace the standard Gaussian for both prior and posterior, leading to a hyperspherical latent space. Using the uniform distribution on the hypersphere as an uninformative prior, which is a special case of vMF where concentration κ = 0 ( κ is determinant to the special focus on the dataset). However, they have shown a high computational requirements to implement the method, and that the surface area of a hypersphere vanishes as dimensionality increases (the ”soap bubble effect”), potentially causing numerical issues. Additioanlly, in very high dimensions, their N -VAE might be more expressive due to having more variance parameters compared to vMF. [21] brings up a novel architecture consisting of a pipeline of cascading Variational Autoencoders (VAEs) with multi-resolution analysis and latent space quantization. He decomposes market objects into a base shape and multiple residual layers ( L0, L 1, . . . , L n), and invents a non-learned optimization process that snaps latent vectors to locations ensuring the decoder is calibrated to specific market anchor points. This results in an anchor calibration term in the loss function, which help the VAEs to better capture the market conditions and avoid the ”spiky” or ”jagged” outputs that high-capacity neural networks ofen produce when trying to fit noisy data. By feeding the model with swap rates of high liquidity, the arbitrage is genuinely eliminated due to the high-frequency market participants. His method allows for user-specified constraints like trading views or market liquidity to guide the model, and is proven to be effective across seven use cases including scenario generation, outlier detection, and relative value analysis. However, the selection of anchor points and layers is user-defined and configurable rather than fully automated. Besides, whether the approach of calibrating to the real market data would truly eliminate the chances of arbitrage remains questionable in less liquid markets. [22] identify that standard Gaussian VAEs often become unstable during training, particularly when dealing with biased datasets that contain dense clusters of data. That is, when the neural network estimates a variance ( σ2) that is almost zero, the Gaussian log-likelihood becomes hypersensitive. Because 
+
+σ2 is in the denominator of the Gaussian probability density function, even a microscopic error between the true data point ( x) and the model’s predicted mean ( μ) causes the objective function to return an extremely large penalty, causing the loss to jump drastically. To deal with this issue, they come up with a Bayesian marginalization framework. They place a Gamma prior distribution on the precision parameter (which is the inverse of the variance). To make the model flexible, they allow the shape and rate parameters of this Gamma prior to depend directly on the latent variable z. After marginalization, the loss function follows a student-t distribution. The explicit reconstruction term (the log-likelihood of the Student-t distribution for a single dimension), which replaces the standard Mean Squared Error, is analytically derived in the paper as: ln pθ (x|z) = ln Γ 
+
+ νθ (z) + 1 2
+
+
+
+−ln Γ 
+
+ νθ (z)2
+
+
+
++ 12 ln 
+
+ λθ (z)
+
+πν θ (z)
+
+
+
+− νθ (z) + 1 2 ln 
+
+
+
+1 + λθ (z)( x − μθ (z)) 2
+
+νθ (z)
+
+
+
+8(6) where Γ() is the gamma function, vθ (z) is the degree of freedom of the latent space z that can be updated in the neural network. The location ( μθ ) is the expected swap rates. And the scale ( σθ ) is a proxy for the precision λ−1/2 
+
+> θ
+
+. Figure 1 shows the differences in the model architecture between VAEs and Student-t
+
+VAEs. Their work has proven to be robust to outliers, and the characteristics of the student-t distribution bring heavier tails that suit our training datasets due to different volatile terms across currencies. 
+
+# 4 Methodology 
+
+## 4.1 Non-arbitrage imposition pipeline 
+
+As illustrated in the architecture diagram 2, our framework consists of two deeply integrated components: Manifold Learning and Shape Decoupling (Stage A), and Physics-Constrained Continuous-Time Dynam-ics (Stage B). The primary objective of Stage A is to construct a robust, low-dimensional continuous manifold that captures pure macroeconomic shape dynamics. Given the differentiable latent manifold established in Stage A, Stage B governs the temporal evolution of zt by enforcing strict financial laws. We deploy a continuous-time Neural SDE (ParamNet) to learn the physical drift ( μP) and volatility (Σ), while simultaneously extracting the dynamic market price of risk ( λ). Subsequent sections explain the full picture of our pipeline. 
+
+Stage A: Dimensionality Reduction via Swap-to-Bond Autoencoder Let xt ∈ Rm denote the observed market data vector at time t. In this work, xt represents the vector of market swap rates for a fixed grid of tenors {τ1, . . . , τ m}.We learn an encoder–decoder pair where the decoder outputs the Zero-Coupon Bond (ZCB) price curve rather than reconstructing the inputs directly. The architecture is defined as: 
+
+zt = Eψ (xt), ˆP (t, T ) = D(P ) 
+
+> ψ
+
+(zt, τ ), (7) where zt ∈ Rd is the low-dimensional latent state ( d ≪ m), τ = T − t is the time-to-maturity, and 
+
+D(P ) 
+
+> ψ
+
+: Rd × R+ → (0 , 1] is the bond-price decoder. To train Stage A, the decoded bond prices ˆP (t, T )are mapped back to par swap rates ˆ xt using the standard swap pricing formula: ˆS(t, T n) = 1 − ˆP (t, T n)
+
+Pni=1 δi ˆP (t, T i) , (8) where δi represents the accrual period. The parameters ψ are optimized to minimize the reconstruction error ∥xt − ˆxt∥2. After Stage A, the decoder D(P ) 
+
+> ψ
+
+is frozen ( D(P )), serving as a differentiable manifold map from latent states to the arbitrage-free discount curve. 
+
+Stage B: Latent Diffusion and Measure Change We follow similar methods used in the paper of [16], where the no-arbitrage condition is firstly addressed with Neural SDEs. We tweak his method by considering both P and Q measures and introduce a market risk factor λ to facilitate the transition between the two measures μQ(Z) and μP (z). We also find the theoretical foundations to our method in [23] as stated in the Appendix 7.1.4. Given the latent time series {zt} extracted in Stage A, we model its evolution under the physical measure P to capture empirical dynamics, and transform it to the risk-neutral measure Q to enforce pricing consistency. We assume zt follows a stochastic differential equation (SDE): 
+
+dz t = μP 
+
+> θ
+
+(zt)dt + σθ (zt)dW P 
+
+> t
+
+(9) where μP 
+
+> θ
+
+and σθ are parameterized drift and diffusion functions (e.g., neural networks). From Girsanov’s theorem, we introduce a market price of risk (MPR) process λϕ(zt) to define the dynamics used for pricing under the risk neutral dynamics dW Qt :
+
+dW Q 
+
+> t
+
+= dW P 
+
+> t
+
++ λϕ(zt)dt (10) Substituting this into the physical SDE equation (9) yields the risk-neutral dynamics: 
+
+dz t = μQ
+
+> θ,ϕ
+
+(zt)dt + σθ (zt)dW Q 
+
+> t
+
+(11) where the risk-neutral drift is constrained by: 
+
+μQ
+
+> θ,ϕ
+
+(zt)dt = μP 
+
+> θ
+
+(zt) − σθ (zt)λϕ(zt) (12) 94.1.1 Deriving the No-Arbitrage (PDE) Loss 
+
+A fundamental condition of no-arbitrage is that the discounted bond price must be a martingale under 
+
+Q. Let rt = rθ (zt) be the instantaneous short rate, modeled as a function of the latent state (or derived from the decoder gradient at τ → 0). The fundamental pricing equation implies: 
+
+EQ 
+
+> t
+
+[dP (t, T )] = rtP (t, T )dt (13) Since the bond price is given directly by the decoder P (t, T ) = D(P )(zt, τ ), and noting that dτ = −dt ,we apply Multi-dimensional Itˆ o’s Lemma to D(P ):
+
+dD (P ) =
+
+
+
+−∂τ D(P ) + ∇z D(P )μQ 
+
+> θ
+
++ 12 Tr 
+
+
+
+σθ σ⊤ 
+
+> θ
+
+∇2 
+
+> zz
+
+D(P )| {z }
+
+> Drift under Q
+
+dt 
+
++ ∇z D(P )σθ dW Q 
+
+> t
+
+.
+
+Note that the term T r () comes from the application of convexity adjustment. For the discounted bond price to be a martingale, the drift of the bond price must equal the short rate times the price: Drift under Q = rθ (zt)D(P )(zt, τ ) (14) Equating the terms in yields the partial differential equation (PDE) that our decoder and latent dynamics must satisfy: 
+
+Rarb (z, τ ) := −∂τ D(P ) + ∇z D(P )⊤μQ 
+
+> θ,ϕ
+
++ 12 Tr 
+
+
+
+σθ σ⊤ 
+
+> θ
+
+∇2 
+
+> zz
+
+D(P )
+
+− rθ D(P ) = 0 . (15) This equation is significantly simpler than the differential equations required when decoding forward rates, as it avoids the integral term. 
+
+4.1.2 Training Objective 
+
+Stage B is trained to minimize a composite loss function that balances physical data likelihood with the no-arbitrage constraint. To ensure stable gradient descent and take away the measurements effect from different currencies, we use a Sharpe-ratio-style normalization. We scale the raw residual Rarb by the instantaneous volatility of the bond price, ∥∇ z D(P )⊤
+
+σθ ∥Euclidean :
+
+LLN arb = Ez,τ 
+
+ Rarb (z, τ )
+
+q
+
+∥∇ z D(P )⊤σθ ∥2Euclidean + ϵ
+
+
+
+> 2
+
+ . (16) In this way, our target loss function is scale-free, and this prevents the neural network from ”cheating” by optimizing only the short end of the curve while ignoring the long end. In addition, the ϵ term is introduced to avoid the division by zero. We optimize the parameters {θ, ϕ } (dynamics and risk price) to minimize: 
+
+L = Ldata (μP, σ ) + βLLN arb (μQ, σ, r ) + γ|λϕ|2 (17) where Ldata is the negative log-likelihood of the observed latent transitions under P, and the final term regularizes the market price of risk. We build a Multi-Layer Perceptron (MLP), with equation 17 as the loss function. ParamNet( z) 7 →  μP(z), Σ( z), λ (z), μQ(z) = μP(z) − Σ( z)λ(z),
+
+# 5 Advanced Theoretical Benchmarks 
+
+While our empirical analysis evaluates the proposed architecture against classical baselines (e.g., Stan-dard HJM and Unconstrained VAR), it is imperative to acknowledge the emergence of other highly sophisticated generative frameworks in recent literature. Although a full empirical replication of these specialized architectures falls outside the scope of the current study, we formalize two advanced the-oretical benchmarks below. These models represent elegant alternative approaches to combining deep learning with fixed-income pricing and serve as natural and robust comparators for future research. 10 5.1 Benchmark 1: Dynamic Nelson–Siegel (DNS) Refined in Autoencoder Latent Space ( P-measure) 
+
+This benchmark, originally introduced in [24], isolates the effect of a learned curve manifold by keeping the temporal dynamics intentionally simple (linear autoregression), while the representation of admissible curve shapes is data-driven. Let yt ∈ Rm denote the observed term-structure vector at time t (e.g., yields or zero rates sampled on a fixed maturity grid {τj }mj=1 ). In this framework, an autoencoder (such as a standard VAE) is trained to learn a low-dimensional representation: 
+
+E : Rm → Rd, zt = E(yt),D : Rd → Rm, ˆyt = D(zt).
+
+After training, a DNS-style forecasting model is defined by replacing the classical Nelson–Siegel factors with the latent state zt and imposing simple autoregressive dynamics under the real-world measure P:
+
+zt+h = α + Φ zt + εt+h, εt+h ∼ N (0 , Σ) , (18) where h is the forecast horizon, Φ ∈ Rd×d is the transition matrix (diagonal for an AR(1)-per-factor or full for a VAR(1) process), and Σ is the innovation covariance. The predictive distribution of future curves is obtained by sampling zt+h | zt from the latent model and decoding: ˆyt+h = D(zt+h). (19) 
+
+## 5.2 Benchmark 2: Forward-Rate AEMM with Decoder-Jacobian Volatility Basis ( Q-measure) 
+
+An alternative to our Neural SDE penalty approach is brought up by [12], to construct an Arbitrage-Free Energy-Based/Manifold Model (AEMM) that explicitly uses the geometry of the neural network. Let 
+
+ft(τ ) denote the instantaneous forward curve at time t for τ ∈ T . An autoencoder is trained on historical forward curves, obtaining a decoder bf (τ ; z) = D(z)( τ ) and an encoder z(f ) = E(f ). The forward-rate AEMM specifies an HJM-style risk-neutral ( Q) dynamics where the volatility basis is explicitly given by the local geometry of the decoder at the current state. For each latent coordinate 
+
+k = 1 , . . . , d , the state-dependent basis function (a tangent direction ) is defined as: 
+
+bk(τ ; ft) = ∂ bf (τ ; z)
+
+∂z k z=E(ft)
+
+. (20) The forward-curve evolution under Q is then modeled as: 
+
+df t(τ ) = μt(τ ) dt +
+
+> d
+
+X
+
+> k=1
+
+σk(t) bk(τ ; ft) dW Q
+
+> k,t
+
+, (21) where σk(t) controls the time-varying magnitude of factor k, and {W Q 
+
+> k
+
+}dk=1 are independent Brownian motions. The drift μt(τ ) is deterministically set to satisfy the HJM no-arbitrage restriction. To prevent long-horizon drift or discretization errors from pushing trajectories off the learned manifold during simulation, a projection (re-encoding) step is strictly applied at each time increment: ˜ft+∆ t (SDE step) → zt+∆ t = E( ˜ft+∆ t), ft+∆ t = D(zt+∆ t). (22) This benchmark gracefully preserves the classical risk-neutral framework while replacing hand-crafted factor loadings with a data-driven, state-dependent volatility basis derived from the autoencoder’s Jaco-bian. 
+
+# 6 Experimental Results 
+
+## 6.1 Stage A: Yield Curve Learning 
+
+We first evaluate the representation quality of Stage A by reconstruction error on the validation set. Let 
+
+xt ∈ Rm be the scaled forward-rate vector on a dense maturity grid and ˆ xt its reconstruction. We report 11 the daily RMSE 
+
+RMSE daily (t) = 
+
+vuut 1
+
+m
+
+> m
+
+X
+
+> j=1
+
+ xt(τj ) − ˆxt(τj )2, (23) which summarizes reconstruction accuracy across the full curve at each date. A comparative analysis of the Root Mean Square Error (RMSE) across the VAE and CVAE models reveals critical insights into the benefits of conditional modeling for multi-currency yield curve recon-struction. 
+
+In-Sample Stability and Structural Bias Both models exhibit a similar structural error pattern in-sample (Figures 7 and 6). The reconstruction error is minimized at the 1Y tenor, suggesting that the latent space most effectively captures the factors driving the belly of the curve. However, as the duration increases toward 30Y, the RMSE increases across all currencies. Interestingly, the CVAE demonstrates a slightly more uniform error distribution across diverse currency regimes in the daily view, indicating that the Conditioning Embedding helps the model accommodate idiosyncratic volatility without compromising global factor learning. 
+
+Out-of-Sample Generalization: VAE vs. CVAE The most significant distinction emerges in the Out-of-Sample (OOS) performance (Figures 7 and 6). The OOS RMSE for long-term tenors is highly sensitive to the specific currency, with JPY and CAD showing aggressive error spikes exceeding 70 bps. This suggests that the standard VAE’s latent space is ”overfit” to the historical currency-specific levels, failing when those currencies enter new interest rate regimes in 2024–2026. From figure 7, by explicitly decoupling currency identity via the Conditional ID, the CVAE maintains a more robust performance OOS. While errors still increase for longer tenors, the magnitude is tempered for core currencies like USD. This confirms that the CVAE’s decoupling capability—the ability to separate universal macro-dynamics from market-specific levels—leads to superior predictive robustness when facing regime shifts in the global interest rate environment. In addition, we have spotted a specific currency dynamics in JPY (Japanese Yuan). In both OOS eval-uations, JPY continues to pose the greatest challenge, with the error remaining near zero for ultra-short tenors but rising sharply beyond 1Y. This persistent divergence, even in the CVAE, reflects the unique structural characteristics of the Japanese market (long-term near-zero rates followed by recent policy shifts), suggesting that while conditioning improves generalization, extremely idiosyncratic markets still exert significant pressure on universal generative models. 
+
+6.1.1 Ablation Study In Reconstruction Error 
+
+Table 2 and figure 8 presents a comprehensive ablation study, decomposing the out-of-sample RMSE to isolate the incremental efficacy of each structural innovation in our proposed architecture (CVAEsTLS). By comparing the generative models against traditional statistical baselines (PCA) and standard deep learning benchmarks (FinQ, VAEs), several critical insights regarding term structure modeling emerge: 
+
+The Baseline Failure and the Need for Generative Modeling Traditional PCA and FinQ models demonstrate severe limitations in capturing complex, out-of-sample curve dynamics. PCA suffers from massive structural drift (Mean RMSE of 2007.24 bps), while the standard Gaussian VAE and CVAE models, though vastly superior to PCA, still exhibit dangerously high errors during volatile macro regimes (e.g., CVAEs yield 423.37 bps for USD and 410.67 bps for GBP). This baseline failure highlights that relying solely on Gaussian assumptions is fatal when modeling periods of aggressive monetary policy shifts. 
+
+The Heavy-Tail Breakthrough (The Impact of Student-T) The ablation results unequivocally prove the necessity of heavy-tailed likelihoods. When the Student-T distribution is introduced (compar-ing CVAEs to CVAEsT), we observe a staggering reduction in forecasting error. The Mean Currency RMSE plummets from 243.85 bps to just 12.02 bps. Specifically, for highly volatile currencies like USD, the error drops symmetrically from 423.37 bps to 18.31 bps. This confirms that the Student-T dis-tribution effectively absorbs idiosyncratic market shocks and fat-tailed tail risks, preventing the latent manifold from collapsing under extreme macro stress. 12 The Physics Anchor (The Impact of LevelScript) Independently, the introduction of the Lev-elScript module (comparing CVAEs to CVAEs + LS) provides a distinct type of structural improvement, particularly at the highly convex long-end of the curve. By dynamically stripping the absolute rate level and forcing the neural network to exclusively model the shape (spreads), LevelScript acts as a physical anchor. This is evident in the 30-Year tenor, where the error is reduced from 56.56 bps (CVAEs) to 34.26 bps (CVAE sT + LS). 
+
+The Ultimate Synergy: CVAE sT + LS The most significant finding of this ablation study is that the combination of Student-T dynamics and the LevelScript anchor is not merely additive but exhibits a highly synergistic effect. The proposed CVAE sT + LS model distinctly outperforms others in the performance matrix, attaining an exceptionally low Mean Tenor RMSE of 6.58 basis points and a Mean Currency RMSE of 5.36 basis points. While the unconditioned VAEsT model shows marginal overfitting at the extreme short end (1M, 6M), the proposed CVAEsT + LS achieves the most globally optimal curve configuration. It provides exceptional accuracy at the critical belly (1Y at 2.89 basis points) and the highly sensitive long end (15Y at 2.32 basis points, 30Y at 5.13 basis points), demonstrating its compliance with the stringent No-Arbitrage PDE convexity conditions. The superiority of the proposed model is independent of the macroeconomic regime. It seamlessly adapts to both aggressive hiking environments (USD at 7.83 basis points, GBP at 8.13 basis points) and entirely stagnant, yield-curve-controlled environments (JPY at a remarkable 2.42 basis points). 
+
+6.1.2 Latent Dimensional Comparison 
+
+Figure 9 presents a comprehensive visual ablation study that tracks the evolution of latent feature disen-tanglement across four progressive model architectures, ultimately validating the superiority of the fully specified Student-t Conditional VAE (Plot 9d). The baseline unconstrained VAE (Plot 9a) demonstrates a fundamental failure in cross-border generalization; it suffers from naive ”country clustering,” wasting its latent capacity simply to memorize the disparate absolute interest rate levels of distinct sovereign regimes rather than learning shared macroeconomic dynamics. While introducing a conditional archi-tecture (Plot 9c) begins to break down these silos by forcing topological entanglement among economies with synchronized monetary cycles, it still operates on raw absolute yields. Implementing the Dynamic Level Injection mechanism (Plot 9b) completely eradicates this base-rate memorization, as mathemat-ically evidenced by the dimensional collapse into a unified 1D continuous manifold, proving the model successfully factors out static sovereign identities. However, real-world fixed-income markets exhibit complex, idiosyncratic tail risks that a perfectly collapsed 1D spectrum cannot fully capture. This es-tablishes the proposed model in Plot 9d—which combines Level Injection with a heavy-tailed Student-t likelihood function in a higher-dimensional space—as the optimal target state. Unlike the superficial memorization seen in Plot 9a, the sophisticated clustering in Plot 9d is driven entirely by intrinsic struc-tural volatility and unique shape-shock signatures. By organically grouping high-variance, synchronized tightening regimes (such as the USD and GBP) while isolating heavily suppressed, yield-curve-controlled markets (like the JPY), the final architecture achieves the perfect theoretical balance: it successfully eliminates trivial base-rate bias while brilliantly preserving the complex, heavy-tailed macroeconomic risk typologies required for robust global term structure modeling. 
+
+## 6.2 FinQ-VAEs Performance 
+
+The FinQ-VAE baseline provides a fascinating empirical look into the mechanics of hierarchical latent quantization. By forcing the network’s subsequent layers ( L0, L 1, L 2) to explicitly fit the residual errors at designated anchor nodes (from 1Y to 30Y), the cascade architecture successfully forces the long end of the yield curve into mathematical alignment. This is clearly evidenced by the steady decline in error towards the 30Y tenor in figure 10. The quantization acts as a series of structural ”magnets,” preventing the long-end predictions from drifting into mathematically unsound territory. However, this evaluation exposes a critical structural vulnerability that perfectly validates the ne-cessity of explicit level-stripping and conditionality. The model’s errors at the short end (1M to 6M) remain disproportionately high, and its cross-currency performance is drastically inconsistent in figure 11. Because this specific FinQ-VAE implementation lacks a deterministic macroeconomic anchor (such as explicitly injecting the LIBOR or FFR), it attempts to use its quantized latent capacity to memorize absolute baseline heights rather than pure curve shapes. This explains the massive 300+ bps errors for 13 the USD and GBP; the network simply cannot span the vast absolute yield gaps between a high-rate US environment and a low-rate Japanese environment using bounded, quantized latent spaces alone. The model learns to fit the localized ”bumps” of the curve but fundamentally fails to anchor the curve in the correct absolute macroeconomic reality. 
+
+## 6.3 Stage B: No-Arbitrage Training Signal 
+
+The mathematical core of Stage B is the PDE residual, which strictly requires computing both the Jaco-bian ∇z D(P ) and the trace of the Hessian ∇2 
+
+> zz
+
+D(P ). A Gaussian decoder penalizes outliers quadratically. During market shocks, it violently contorts the latent space z to fit the anomaly. This creates ”wrin-kles” and sharp cliffs in the manifold. When Stage B calculates the second derivative (the Hessian) at these cliffs, the convexity adjustment term 12 Tr( σθ σ⊤ 
+
+> θ
+
+∇2 
+
+> zz
+
+D(P )) will produce massive numerical spikes, completely destabilizing the PDE loss. However, The Student-t decoder absorbs market shocks in the observation space using its heavy tails. It does not need to distort zt. As a result, the latent mani-fold remains perfectly smooth and continuous. This guarantees well-behaved, stable derivatives, making the PDE optimizer’s job exponentially easier. We have also confirmed this phenomenon in subsequent sections. Stage B requires fitting a neural network to model the physical drift μP(zt) and the market price of risk λ(zt). A standard VAE forces zt to encode the currency identity, creating isolated ”islands” in the latent space (as seen in earlier t-SNE plots). If you feed this into Stage B, your SDE network has to memorize 8 completely different sets of dynamics depending on which island the vector currently sits on. The transitions become discontinuous. By offloading the baseline yield levels and idiosyncratic traits to the currency embedding c, the CVAE compresses zt into a ”universal yield curve language” representing shared global macro factors (like a global easing or tightening cycle). The SDE can now learn a unified, continuous vector field for μP(zt) that applies globally, making the physical transition likelihood much more robust. 
+
+Evaluating Stage B Dynamics: The Necessity of Heavy-Tailed Physical Constraints To validate the continuous-time dynamic modeling in Stage B, we subject our proposed Student-t Neural SDE to a rigorous comparative analysis against a classical analytical benchmark (Standard 3-Factor HJM), an unconstrained statistical baseline (PCA + VAR), and a Standard Gaussian Neural SDE in Figure 13. The evaluation strictly assesses empirical forecasting stability, latent manifold topology, and the satisfaction of the theoretical No-Arbitrage Partial Differential Equation (PDE). The results definitively prove that combining heavy-tailed likelihoods with physical SDE constraints is not merely an incremental improvement, but a structural necessity for robust term structure modeling. 
+
+The Breakdown of Traditional HJM and Unconstrained Statistics As illustrated in the 30-day forward curve stress tests, traditional and purely statistical baselines exhibit catastrophic structural instability. The classical Standard HJM model (Column a) completely fails to maintain macroeconomic realism out-of-sample. Relying on linear PCA factors without a deterministic physical level anchor, the HJM paths suffer from massive, unrealistic parallel downward drifts in aggressive rate environments (USD and GBP). More critically, bound by Gaussian Brownian motion, the HJM framework completely violates the Yield Curve Control (YCC) regime in Japan, absurdly projecting JPY yields to spike past 150 bps and entirely ignoring the physical reality of the zero-lower-bound. Similarly, the unconstrained VAR(1) baseline (Column b) suffers from severe ”term structure drift.” Lacking a physical pricing anchor, the statistical model amplifies local historical noise, projecting severe, unnatural kinks and massive long-end deviations. 
+
+The Flaw of Gaussian Over-Smoothing While introducing the Standard Gaussian SDE (Column c) completely eliminates the kinks of the VAR model by enforcing PDE smoothness, it introduces a fatal flaw: manifold collapse. The phase space vector fields reveal that the Standard Gaussian penalty is overly rigid, crushing the latent representation into a strict 1D diagonal. This forces the model to over-smooth the curves, aggressively washing out idiosyncratic macroeconomic shapes (such as the persistent USD hump) in favor of a global average. Most critically, the rigid Gaussian assumption completely fails to capture the extreme convexity adjustments required at the long end of the curve. This failure is mathematically exposed in the PDE violation analysis, where the Standard SDE exhibits massive, exponentially growing arbitrage residuals from the 5Y to 30Y tenors. 14 The Triumph of the Student-t Neural SDE The proposed Student-t Neural SDE (Column d) elegantly resolves the conflict between statistical flexibility and physical rigidity. By explicitly decoupling the absolute base rate via the LevelScript anchor, the architecture completely eradicates the massive parallel drifts that plague the classical HJM model. Concurrently, by accommodating heavy-tailed market shocks within its likelihood function, the Student-t SDE prevents manifold collapse. Its latent vector field preserves a rich, multi-dimensional topology where the deterministic drift ( μP) acts as a sophisticated, non-linear ”physical gravity.” Rather than blindly pulling curves to a historical mean or allowing them to drift into negative regimes, this gravity smoothly guides extreme curve shapes back to theoretically sound, arbitrage-free states while perfectly respecting local monetary regimes (e.g., remaining strictly bounded under the JPY yield curve control). Consequently, the Student-t model achieves the optimal balance. It generates flawlessly smooth 30-day forward forecasts that maintain realistic, regime-specific features. Furthermore, it strictly suppresses No-Arbitrage PDE violations across the entire maturity spectrum. By successfully bounding the residuals even at the highly convex 30-year tenor, the proposed architecture proves its paramount capability: it can safely absorb idiosyncratic tail risks without ever sacrificing the fundamental laws of fixed-income physics. 
+
+Macroeconomic Regime Extraction Beyond structural stability, Figures 15 and 16 validate the Neural SDE’s capacity to act as an unsupervised macroeconomic regime detector. By mathematically isolating the physical drift ( μP ) from the risk-neutral drift ( μQ), the model dynamically extracts the market price of risk ( λ) for each latent factor.In both economies, the slope/curvature risk premium ( λ2)tightly hugs the zero-line. This is highly consistent with financial intuition: relative shape distortions across the curve are rapidly arbitraged away by sophisticated fixed-income players, rendering the relative shape nearly risk-neutral.The true diagnostic power of the model is revealed in the level factor risk premium ( λ1). For the USD market (Figure 15), λ1 is highly volatile. This perfectly aligns with the US macroeco-nomic reality of 2024–2025, where bond markets were hyper-sensitive to the Federal Reserve’s rate-cut expectations, inflation prints, and shifting liquidity conditions. The Neural SDE mathematically captures this uncertainty as a fluctuating term premium.In stark contrast, the AUD market (Figure 16) presents a deeply negative ( −0.8) and completely stagnant λ1 trajectory. During this same historical window, the Australian economy suffered from persistent, ”sticky” inflation, forcing the Reserve Bank of Australia to hold rates at a restrictive plateau much longer than its global peers. The Neural SDE blindly ingests the data and correctly outputs a ”stagnant” risk premium—investors demanded a massive, unchanging compensation for holding long-term Australian debt in an immobilized, high-inflation regime. Ultimately, these four figures collectively prove that the Proposed Neural SDE resolves the primary bottleneck of deep generative models in quantitative finance. By enforcing continuous-time no-arbitrage constraints, the model not only eradicates the shape-collapse problem associated with long-horizon fore-casting but also automatically disentangles latent features into highly interpretable, geographically dis-tinct economic signals. 
+
+# 7 Conclusion 
+
+In this study, we have introduced a novel physics-informed generative framework that resolves the long-standing dichotomy between the statistical expressivity of deep learning and the rigorous theoretical constraints of fixed-income mathematics. By integrating a two-stage architecture comprising a Student-t Conditional Variational Autoencoder with LevelScript (CVAE sT + LS) and a No-Arbitrage Neural SDE, we have demonstrated that it is possible to learn complex, non-linear term structure dynamics without sacrificing the fundamental laws of financial physics.The core methodological contribution of this research lies in the synergy of three structural innovations. First, the introduction of the LevelScript (LS) anchor effectively decouples absolute rate levels from macroeconomic shape dynamics, providing a deterministic ”physical anchor” that prevents the catastrophic parallel drifts observed in traditional models. Second, the adoption of a Student-t likelihood within the CVAE architecture ensures that the learned manifold remains robust to heavy-tailed market shocks, thereby preventing ”manifold collapse” during periods of extreme volatility. Third, the formulation of a No-Arbitrage PDE penalty within a continuous-time Neural SDE framework ensures that the latent trajectories remain consistent with the risk-neutral pric-ing measure, providing a data-driven solution to the Filipovi´ c consistency problem.Empirical evaluations across diverse sovereign regimes—including USD, GBP, and JPY—confirm the superior performance of 15 the proposed architecture. Our model achieved an exceptional out-of-sample Mean Tenor RMSE of 6.58 bps, significantly outperforming classical 3-factor HJM models and unconstrained statistical baselines (VAR). Most notably, the model demonstrates remarkable structural resilience: it successfully respects the zero-lower-bound in the JPY regime and maintains realistic curve convexity in aggressive hiking cycles, where traditional models often suffer from structural drift or over-smoothing.Beyond forecast-ing accuracy, this framework establishes a new benchmark for continuous-time scenario generation and unsupervised regime detection. The learned phase-space vector fields reveal a sophisticated ”physical gravity” that guides term structures back to theoretically sound states, providing quantitative strate-gists with a robust engine for stress testing and risk management.In conclusion, our research proves that physics-informed generative models represent the next evolution in interest rate modeling. By replacing rigid parametric assumptions with data-driven manifold learning—while strictly enforcing no-arbitrage principles—this architecture provides a scalable and mathematically rigorous foundation for the next generation of global fixed-income analysis. 
+
+## 7.1 Limitations and Further Study 
+
+Despite its robust performance across multiple sovereign regimes, our framework presents several theo-retical and empirical limitations that offer promising avenues for future research: 
+
+7.1.1 Data Insufficiency 
+
+We utilize Overnight Index Swap rates to construct our model, as these rates are publicly quoted and inherently arbitrage-free due to market liquidity. However, a significant challenge arises because many currencies do not exhibit synchronized exposure timelines, making it difficult to standardize data across different currencies. Our dataset, sourced from Refinitiv, is often limited in the number of data points, requiring us to truncate incomplete datasets using the methodologies outlined in 7.1.4 to prioritize meaningful information. Additionally, we posit that with access to a more extensive and robust dataset, our model’s accuracy would improve, enabling it to better capture global interest rate dynamics across various currencies. 
+
+7.1.2 The Zero-Lower-Bound (ZLB) and Extreme Idiosyncratic Regimes 
+
+As observed in our out-of-sample evaluation, the Japanese Yen (JPY) continues to pose unique challenges. While the proposed model vastly outperforms baselines, the residual errors in JPY indicate that extreme, prolonged Yield Curve Control (YCC) or zero-lower-bound environments strain universal generative models. The symmetrical nature of the Student-t distribution, while excellent for capturing heavy tails, does not explicitly account for the asymmetric boundary condition of near-zero rates. Future studies could explore integrating asymmetric likelihood functions (e.g., Log-Normal or specialized shadow-rate transformations) within the decoder to natively enforce zero or negative lower bounds. 
+
+7.1.3 Integration of Explicit Macroeconomic Covariates 
+
+Currently, the Neural SDE acts as an unsupervised regime detector, inferring the market price of risk (λ) purely from the latent evolution of the yield curve itself. While this data-driven approach is ele-gant, term structure dynamics are fundamentally driven by central bank policies and macroeconomic indicators. Further research could extend the drift networks μP(z) and μQ(z) to incorporate exogenous macroeconomic covariates (e.g., inflation prints, central bank policy rates, or textual sentiment from FOMC meetings). Embedding these structural variables as external forcing terms in the SDE could fur-ther constrain long-horizon forecasting and improve the interpretability of the extracted risk premiums. 
+
+7.1.4 Comprehensive Benchmarking against Advanced AEMM Architectures 
+
+While the empirical evaluation in this study demonstrates the superiority of our framework over classical HJM and unconstrained statistical models, the generative finance literature continues to evolve rapidly. In Section 5, we formalized two advanced theoretical benchmarks: a DNS-style Autoencoder ( P-measure) and a Forward-Rate AEMM utilizing a Decoder-Jacobian Volatility Basis ( Q-measure). The latter model, which forces trajectories onto the manifold via discrete re-encoding projections, represents an elegant alternative to our continuous-time Neural SDE penalty approach. A highly valuable direction for further study would be a large-scale, head-to-head empirical replication and comparison between our Student-t 16 constrained SDE and these Jacobian-basis projection models. Such an analysis would provide deeper insights into the trade-offs between continuous PDE penalization and discrete manifold projection under extreme macroeconomic stress. 
+
+# Figures and Tables 
+
+Table 1: Summary of Mathematical Linkages Between Interest Rate Measures 
+
+Measure Notation Relation to Bond Price P (t, T )Zero-Coupon Yield y(t, T ) P (t, T ) = exp ( −y(t, T ) · (T − t)) Instantaneous Forward Rate f (t, T ) P (t, T ) = exp 
+
+
+
+− R Tt f (t, u ) du 
+
+
+
+Par Swap Rate S(t) S(t) = P (t,T 0)−P (t,T n)Pni=1 τiP (t,T i)
+
+Table 2: Ablation Test: RMSE Comparison Across Models                                                                                                                 
+
+> Error (RMSE in bps) VAEs VAEsT CVAEs CVAEs + LS CVAEsT CVAEsT + LS PCA FinQ
+> 1 Month 112.49 9.13 31.75 37.92 60.16 11.19 2842.43 181.37 6 Month 112.27 4.59 24.31 20.42 5.50 5.90 2859.21 170.32 1 Year 99.09 90.50 24.58 19.33 5.56 2.89 2673.55 160.64 7 Year 69.06 49.26 26.24 19.42 3.30 2.95 1452.28 135.39 15 Year 72.87 47.66 37.04 19.28 2.65 2.32 1302.70 134.49 30 Year 83.53 55.00 56.56 34.26 6.65 5.13 1026.67 132.74 Mean (All Tenors) 89.51 29.04 31.30 23.45 12.02 6.58 2007.24 152.11 USD 397.60 18.42 423.37 37.73 18.31 7.83 4308.95 293.18 JPY 123.76 43.89 74.73 18.04 7.18 2.42 5230.82 44.11 Great British Pound 404.60 22.05 410.67 39.71 18.00 8.13 1669.49 297.45 Swiss Franc 96.02 30.25 58.67 12.77 9.16 3.31 253.84 90.12 Canadian dollar 242.66 41.05 262.74 15.25 10.36 5.94 2068.63 141.22 Mean (All Currencies) 245.05 32.29 243.85 23.44 12.02 5.36 2007.24 152.11
+
+Figure 1: (a) Gaussian decoder architecture : A latent variable z is mapped through a shared hidden representation to predict the mean μθ (z) and variance σθ (z) of the Gaussian likelihood for x;(b) Student-t decoder architecture : A latent variable z is mapped through a shared hidden repre-sentation to predict the location μθ (z) scale/precision-related parameter λθ (z) and degrees-of-freedom parameter vθ (z) of the Student-t likelihood of x
+
+17 Stage A: Manifold Learning (CVAEsT + LevelScript) 
+
+Stage B: Continuous-Time Dynamics & Physical Gravity          
+
+> Raw Swap Xt
+> Currency ID ct
+> 1Y Anchor Lt
+> Spread St=Xt−Lt
+> Embedding R16
+
+⊕ Encoder MLP  
+
+> (256 ×2)
+> μz
+> log σ2
+> z
+
+N Latent zt 
+
+> ∈R3
+> KL Pen.
+
+⊕ Shared Decoder    
+
+> (Frozen in Stage B)
+> Level Re-injection (LevelScript)
+> Currency Conditioning
+> Loc μθ
+> Scale λθ
+> DoF νθ
+
+T Bond P (t, T )                           
+
+> ParamNet (Neural SDE)
+> (256 ×3)
+> Continuous Evolution
+> Conditioning
+> Drift μPVolatility ΣRisk Premium λ
+> Risk-Neutral Drift
+> μQ=μP−Σλ
+> Compute Derivatives
+> ∇zD(P),∇2
+> zz D(P)
+> Differentiable Manifold
+> No-Arbitrage PDE Constraint ( Larb )
+> Rarb =−∂τD+∇zD⊤μQ+12Tr (ΣΣ ⊤∇2
+> zz D)−rD = 0
+
+Figure 2: The Complete Physics-Informed Generative Architecture. Stage A (Top): The CVAEsT+LS isolates macroscopic curve shapes from absolute base rates (LevelScript) and utilizes a Student-t likeli-hood to absorb heavy-tailed anomalies, constructing a robust, low-dimensional continuous manifold zt.
+
+Stage B (Bottom): A Neural SDE governs the temporal evolution of zt. To satisfy theoretical pricing laws, the physical drift μP is translated into the risk-neutral drift μQ via the learned market price of risk 
+
+λ. The entire system is end-to-end penalized by the No-Arbitrage PDE residual evaluated through the analytical derivatives of the frozen Stage A decoder. 
+
+Figure 3: Random samples of daily swap-rate curves across currencies . For each currency (USD, JPY, GBP, CHF, CAD, AUD, THB, SGD), we plot 20 randomly selected daily curves on the standardized 12-tenor grid. Overlaid curves highlight within-currency variability in level, slope, and curvature, serving as a visual sanity check for cross-market comparability and data quality before constructing the VAE training panel. 18 Figure 4: 1-year level dynamics across currencies . The figure shows the 1Y swap-rate time series for each currency in the final panel (USD, JPY, GBP, CHF, CAD, AUD, THB, SGD), plotted over the currency-specific post-start sample window. The 1Y rate serves as the level anchor in our shape–level decomposition and illustrates cross-market regime variation that the VAE is designed to capture jointly with term-structure shape. 
+
+Figure 5: PCA embedding of multi-currency curve shapes (PC 1 vs PC 2). Each point repre-sents one daily curve observation after level removal (anchored at 1Y) and robust scaling. The scat-ter plot shows the projection onto the first two principal components; the explained-variance ratios [0 .617 , 0.356 , 0.018] suggest that curve shape variability is largely two-dimensional, motivating a VAE with a 2–3 dimensional latent space. 19 (Top) VAE In-Sample RMSE Evaluation. Performance of the standard VAE on the training set. The daily RMSE (left) shows significant error spikes during the 2012-2014 volatile period, while the tenor-wise RMSE (right) follows a ”V-shape” with a local minimum at the 1Y tenor, indicating higher reconstruction precision for short-term rates. 
+
+(Bottom) VAE Out-of-Sample (OOS) RMSE Evaluation. Predictive performance of the VAE on unseen data (2024–2026). The model exhibits a sharp increase in error for long-term tenors (¿5Y) across most currencies, with the JPY and CAD errors reaching their peak above 60-70 bps, highlighting a loss of generalization in shifting rate regimes. Figure 6: VAEs Model’s performances on in-sample dataset and out-of-sample dataset 20 (Top) CVAE In-Sample RMSE Evaluation. Training performance of the CVAE incorpo-rating currency conditioning. While maintaining a similar overall error profile to the standard VAE, the conditioning allows for a more nuanced daily error trajectory, particularly in stabi-lizing reconstruction for currencies like USD and SGD during high-volatility windows. 
+
+(Bottom) CVAE Out-of-Sample (OOS) RMSE Evaluation. Generalization performance of the CVAE. Compared to the standard VAE, the CVAE shows improved error stability for several major currencies. Notably, the USD and GBP errors remain significantly lower in the long-term tenor range, suggesting that explicit currency-id conditioning helps the model better navigate the structural differences in OOS market dynamics. Figure 7: CVAEs Model’s performances on in-sample dataset and out-of-sample dataset 21 Figure 8: Comparative analysis of out-of-sample Root Mean Square Error (in bps) across the maturity spectrum (1M to 30Y) for various term structure models. The plot decomposes the performance of the proposed architecture against statistical benchmarks (FinQ) and standard generative models (VAEs, CVAEs). Dashed and dash-dot lines represent the baseline models, which struggle with high overall errors and structural drift. Solid lines represent the ablation components. The proposed model, CVAEs + StudentT + LevelScript (red line with square markers), demonstrates profound synergy, dominating the performance matrix by maintaining a near-zero, flat error trajectory across both the volatile short end and the highly convex long end. 
+
+Figure 10: RMSE by Tenor and Quantization Anchors : Out-of-sample RMSE term structure for the FinQ-VAE model. The red square markers highlight the specific maturity nodes designated as quantization anchors within the cascade architecture. The model exhibits a distinct downward-sloping error curve, reducing reconstruction error from approximately 270 bps at the short end (1M) to 165 bps at the long end (30Y), demonstrating the cascade layer’s ability to pull the long-term structural shape into alignment. 22 (a) t-SNE visualization of the latent manifold generated by a standard, unconstrained Varia-tional Autoencoder (VAE) trained on absolute yield curve data. The plot reveals severe ”country clustering,” where the model maps different currencies to distinct, non-overlapping islands in the latent space (e.g., USD isolates on the left, while JPY and Swiss Franc cluster on the right). This demonstrates a fail-ure in feature disentanglement; rather than learning a unified, global macroeconomic factor model (such as a universal ’curve shape’ dynamic), the unconstrained VAE primarily memorizes the absolute interest rate levels specific to each sovereign regime. 
+
+(b) Direct 2D visualization of the latent space generated by the Conditional VAE with level script mechanism . The perfect mathematical collinearity of the latent factors demonstrates a suc-cessful dimensional collapse into a 1D manifold. This proves that the Dynamic Level Injection effectively stripped the primary source of variance (absolute yield level) prior to encoding, forcing the model to effi-ciently compress the remaining relative shape dynam-ics (slope/curvature) into a single degree of freedom. Furthermore, rather than isolating currencies into dis-jointed clusters, the model projects all sovereign curves onto a unified, continuous macroeconomic spectrum. This confirms the model learns a universal physical law of term structure rather than memorizing categor-ical sovereign identities. 
+
+(c) t-SNE visualization of the latent manifold generated by the proposed Conditional VAE on absolute yield curve data. In stark contrast to the strict, isolated ”country clusters” seen in the standard VAE (a) , the CVAE manifold demonstrates profound topological entanglement and shared tra-jectories across different sovereign curves. Notably, economies with synchronized monetary policy cycles (e.g., USD and Great British Pound) tightly over-lap, while traditionally low-yield or structurally sim-ilar markets (e.g., JPY, Swiss Franc, and Singapore Dollar) share a unified sub-manifold. This confirms that the conditional architecture successfully factors out static sovereign identity, forcing the latent space to encode pure, cross-border macroeconomic shape dy-namics. 
+
+(d) t-SNE visualization of the higher-dimensional (3) latent space generated by the Conditional VAE, incorporating both Dynamic Level Injection and a heavy-tailed Student-t likelihood function. Because the absolute yield level is deterministically stripped prior to encoding, the observed clustering is not an artifact of naive regime memorization. Instead, it represents the model grouping sovereign curves by their intrinsic structural volatility and heavy-tailed risk signatures. The manifold organically orga-nizes into distinct macroeconomic risk topologies: high-variance Western economies with synchronized tightening cycles (USD and GBP) map proximally on the right hemisphere, while heavily suppressed, yield-curve-controlled regimes (JPY) isolate on the left. 
+
+Figure 9: Out-of-sample t-SNE visualization from a higher latent dimensional space into 2-D dimensional space. 23 Figure 11: Cross-Currency Average RMSE : Average out-of-sample reconstruction error grouped by sovereign currency. The architecture demonstrates highly polarized performance. It achieves strong reconstruction accuracy for structurally stable or lower-yield regimes such as Thailand (39.0 bps) and Japan (44.7 bps), while suffering severe performance degradation in higher-magnitude or more volatile regimes, notably the USD (302.5 bps) and GBP (302.6 bps). 
+
+Figure 12: Daily RMSE Trajectory (Rolling 30-Day Average) : Chronological evolution of the out-of-sample RMSE across all currencies from mid-2023 through early 2026. The trajectory reveals a significant structural break and error reduction occurring around mid-2024. Following this regime shift, the model stabilizes its reconstruction performance, steadily trending downward toward the 170 bps range by the end of the out-of-sample period. 24 (a) Panel A - No-Arbitrage PDE Violation by Tenor : Evaluation of physical constraint satis-faction. The Standard SDE exhibits massive arbitrage violations at the mid-to-long tenors (5Y-30Y) due to its inability to accommodate extreme convexity under rigid Gaussian assumptions. In con-trast, the heavy-tailed Student-t SDE strictly bounds the PDE residuals across all tenors, proving it successfully absorbs tail-risk shocks without breaking fundamental no-arbitrage pricing laws. 
+
+(b) Panel B: 30-Day Forward Curve Evolution Stress Test. Out-of-sample projections across diverse macroeconomic regimes (USD, GBP, JPY). (a) Standard HJM exhibits massive parallel drift and violates Japan’s zero-lower-bound. (b) PCA + VAR(1) produces unnatural distortions due to missing physical anchors. (c) Standard Gaussian SDE over-smooths the term structure, indicating manifold collapse. Ultimately, (d) the proposed Student-t Neural SDE uniquely preserves structural resilience. Driven by non-linear physical gravity, it enforces arbitrage-free constraints and local mon-etary bounds without sacrificing idiosyncratic curve convexity. 
+
+(c) Panel C: Latent Phase Space Dynamics and Trajectory Evolution. Top row: learned velocity vector fields; Bottom row: simulated latent trajectories. (a) Unconstrained VAR(1) exhibits chaotic drift and unbounded statistical noise. (b) Standard Gaussian SDE suffers from manifold collapse, forcing trajectories into a rigid 1D diagonal and over-smoothing outputs. (c) The proposed Student-t Neural SDE successfully preserves a 3D manifold topology. It applies a non-linear physical gravity that strictly bounds trajectories to arbitrage-free states without crushing essential idiosyncratic flexibility. 
+
+Figure 13: Comprehensive Stage B Evaluation 
+
+25 Figure 14: Latent space vector fields for the Australian Dollar (AUD) yield curve. Similar to the USD regime, the unconstrained baseline (left) generates chaotic extrapolation trajectories. The Neural SDE (right) maintains strict topological stability under the PDE constraint. This demonstrates that the model’s structural regularization is robust across different sovereign bond markets and is not merely overfitted to the liquidity characteristics of the US Treasury market. 
+
+Figure 15: Time-varying market price of risk ( λ) extracted by the Neural SDE for the USD market. While the slope factor ( λ2) remains heavily anchored near the theoretical risk-neutral baseline (zero), the level factor ( λ1) exhibits significant volatility in the negative domain. This high-frequency oscillation captures the dynamic term premium demanded by investors during the 2024–2025 macroeconomic regime, characterized by intense market speculation regarding the Federal Reserve’s monetary policy pivots. 
+
+Figure 16: Time-varying market price of risk ( λ) extracted by the Neural SDE for the AUD market. In stark contrast to the volatile USD risk premium, the AUD level factor ( λ1) exhibits a deep, persistent, and highly stable negative discount (approximately −0.8). This structural flatness accurately reflects Australia’s unique ”sticky inflation” macroeconomic regime during this period, where the Reserve Bank of Australia (RBA) maintained prolonged high interest rates, resulting in a stagnant but deeply discounted term premium. 26 Appendix 
+
+## Methods for handling null values in the multi-currency dataset 
+
+Stable-coverage truncation via rolling completeness For each currency c, let r(c) 
+
+> t
+
+∈ R |τ | denote the tenor vector on date t, with potentially missing components. We define the row completeness ratio 
+
+ρ(c) 
+
+> t
+
+= 1
+
+|T | 
+
+X 
+
+> τ∈T
+
+1{ r(c)   
+
+> t(τ) is observed }
+
+We then determine a currency-specific stable start date T (c) 
+
+> start
+
+by requiring that completeness remains consistently high over a forward rolling window of length W trading days. Concretely, for thresholds 
+
+ρ0 ∈ (0 , 1) and π0 ∈ (0 , 1), we find the earliest date such that within the subsequent window, 1
+
+W 
+
+> t+W−1
+
+X
+
+> s=t
+
+1
+
+n
+
+ρ(c) 
+
+> s
+
+≥ ρ0
+
+o
+
+≥ π0.
+
+In our implementation, this procedure is chosen to eliminate spurious “starts” caused by isolated bursts of availability; it ensures that the retained period reflects a regime where the tenor grid is struc-turally supported. Finally, each currency is truncated to 
+
+t ≥ T (c)
+
+> start
+
+This step directly addresses the dominant source of sparsity—missing values due to early-history cover-age—without imposing artificial imputation. 
+
+Densification and final quality screening After truncation, we retain only dates whose tenor vector is fully observed on T , i.e., 
+
+r(c) 
+
+> t
+
+is kept ⇐⇒ ρ(c) 
+
+> t
+
+= 1 Equivalently, we apply a strict row-wise filter on the selected tenor columns to drop null values. Because the stable-coverage truncation is performed first, this densification step discards only a small fraction of post-start observations while producing a training table with no missing values. 
+
+## Theoretical Foundation: Consistency with the Filipovi´ c HJM Manifold 
+
+The empirical success of our two-stage architecture can be mathematically grounded in the consistency theory for Heath-Jarrow-Morton (HJM) models, originally formalized by Filipovi´ c (2001) [23]. Filipovi´ cinvestigated the conditions under which the infinite-dimensional stochastic partial differential equation (SPDE) shaping the forward rate curve (the Musiela parameterization) admits a finite-dimensional re-alization. 
+
+The Analytical Consistency Problem Let Hw be a suitably chosen Hilbert space of forward curves (the Filipovi´ c space). The evolution of the forward curve rt(x) in time-to-maturity coordinates x = T − t
+
+is given by the Musiela SPDE: 
+
+dr t(x) = ∂∂x rt(x) + 
+
+> n
+
+X
+
+> i=1
+
+σi(t, x )
+
+Z x
+
+> 0
+
+σi(t, u )du 
+
+!
+
+dt +
+
+> n
+
+X
+
+> i=1
+
+σi(t, x )dW Q
+
+> i,t
+
+Filipovi´ c proved that a finite-dimensional parameterized manifold M = {G(z) | z ∈ Z ⊂ Rd} is invariant (or consistent) with the HJM dynamics if and only if the drift and volatility vector fields of the SPDE are strictly tangent to M at every point. Historically, this condition was overly restrictive for analytical parametric forms. For instance, Filipovi´ c famously proved that the widely used Nelson-Siegel (NS) family does not form a consistent manifold, meaning that a NS curve will almost surely evolve into a non-NS curve under arbitrage-free dynamics. 27 The Neural Manifold as a Data-Driven Solution Our Stage A architecture (CVAEsT + LS) provides a non-linear, data-driven solution to this exact problem. Rather than guessing an analytical family G(z) like exponential-polynomials, we use the frozen, trained decoder D(P )(z, τ ) to define a highly expressive, d-dimensional (3 as the best case in our framework) neural manifold: 
+
+MN eural =
+
+n
+
+D(P )(z, ·) | z ∈ Rdo
+
+Because this manifold is learned from the empirical OIS swap data, it inherently spans the true topological space of observed macroeconomic curve shapes, avoiding the rigidity of analytical parameterizations. 
+
+Stage B as the Filipovi´ c Tangency Penalty In Stage B, we drive the latent state zt using a Neural SDE. For MN eural to be a consistent HJM manifold under Filipovi´ c’s definition, the stochastic evolution of the discounted bond prices generated by D(P ) must be a local martingale under the risk-neutral measure Q.Our No-Arbitrage PDE loss ( Larb ) is the direct empirical translation of Filipovi´ c’s tangency requirement. Recall the PDE residual defined in Section 4.1.1: 
+
+Larb = −∂τ D(P ) + ∇z D(P )⊤μQ + 12 Tr 
+
+
+
+ΣΣ ⊤∇2 
+
+> zz
+
+D(P )
+
+− rtD(P ) = 0 By penalizing this residual, the network continuously adjusts the risk-neutral drift μQ and volatility Σ such that the resulting local dynamics of the bond price lie perfectly within the tangent bundle spanned by the decoder’s Jacobian ∇z D(P ). Therefore, our framework is not merely applying a smoothing penalty; it is computationally solving Filipovi´ c’s consistency problem. While traditional parametric models fail the consistency test (forcing practitioners to introduce continuous recalibration), our model learns a finite-dimensional neural manifold that is both empirically accurate (Stage A) and theoretically invariant under continuous-time no-arbitrage dynamics (Stage B). 
+
+# Acknowledgments References 
+
+[1] J Michael Harrison and David M Kreps. “Martingales and arbitrage in multiperiod securities markets”. In: Journal of Economic theory 20.3 (1979), pp. 381–408. [2] Oldrich Vasicek. “An equilibrium characterization of the term structure”. In: Journal of financial economics 5.2 (1977), pp. 177–188. [3] John C Cox, Jonathan E Ingersoll, Stephen A Ross, et al. “A theory of the term structure of interest rates”. In: Econometrica 53.2 (1985), pp. 385–407. [4] John Hull and Alan White. “Pricing interest-rate-derivative securities”. In: The review of financial studies 3.4 (1990), pp. 573–592. [5] Qiang Dai and Kenneth J Singleton. “Specification analysis of affine term structure models”. In: 
+
+The journal of finance 55.5 (2000), pp. 1943–1978. [6] David Heath, Robert Jarrow, and Andrew Morton. “Bond pricing and the term structure of inter-est rates: A new methodology for contingent claims valuation”. In: Econometrica: Journal of the Econometric Society (1992), pp. 77–105. [7] Charles R Nelson and Andrew F Siegel. “Parsimonious modeling of yield curves”. In: Journal of business (1987), pp. 473–489. [8] Robert B Litterman, Jos´ e Scheinkman, and Laurence Weiss. “Volatility and the yield curve”. In: 
+
+The Journal of Fixed Income 1.1 (1991), pp. 49–53. [9] Lars EO Svensson. Estimating and interpreting forward interest rates: Sweden 1992-1994 . 1994. [10] Andrei Lyashenko, Fabio Mercurio, and Alexander Sokol. “Autoencoder-Based Risk-Neutral Model for Interest Rates”. In: Available at SSRN 4836728 (2024). [11] Marek Musiela, Dieter Sondermann, et al. Different dynamical specifications of the term structure of interest rates and their implications . Rheinische Friedrich-Wilhelms-Universit¨ at Bonn, 1993. [12] Alexander Sokol. “Autoencoder market models for interest rates”. In: Available at SSRN 4300756 
+
+(2022). 28 [13] Refet S G¨ urkaynak, Brian Sack, and Jonathan H Wright. “The US Treasury yield curve: 1961 to the present”. In: Journal of monetary Economics 54.8 (2007), pp. 2291–2304. [14] Philip H Dybvig, Jonathan E Ingersoll Jr, and Stephen A Ross. “Long forward and zero-coupon rates can never fall”. In: Journal of Business (1996), pp. 1–25. [15] Jens HE Christensen, Francis X Diebold, and Glenn D Rudebusch. An arbitrage-free generalized Nelson–Siegel term structure model . 2009. [16] Jesper Andreasen. “Decoding the Autoencoder”. In: Wilmott 2023.127 (2023). doi : 10.54946/ wilm.11166 . url : https://doi.org/10.54946/wilm.11166 .[17] Diederik P Kingma and Max Welling. “Auto-encoding variational bayes”. In: arXiv preprint arXiv:1312.6114 
+
+(2013). [18] Surojit Saha, Sarang Joshi, and Ross Whitaker. “Matching aggregate posteriors in the variational autoencoder”. In: International Conference on Pattern Recognition . Springer. 2025, pp. 428–444. [19] Debottam Dutta et al. “Learning Energy-based Variational Latent Prior for VAEs”. In: arXiv preprint arXiv:2510.00260 (2025). [20] Tim R Davidson et al. “Hyperspherical variational auto-encoders”. In: arXiv preprint arXiv:1804.00891 
+
+(2018). [21] Ioana Boier. “Multiresolution Signal Processing of Financial Market Objects”. In: ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) . IEEE. 2023, pp. 1–5. [22] Hiroshi Takahashi et al. “Student-t Variational Autoencoder for Robust Density Estimation.” In: 
+
+IJCAI . 2018, pp. 2696–2702. [23] Damir Filipovic. Consistency problems for Heath-Jarrow-Morton interest rate models . Springer Science & Business Media, 2001. [24] Francis X Diebold and Canlin Li. “Forecasting the term structure of government bond yields”. In: 
+
+Journal of econometrics 130.2 (2006), pp. 337–364. 29
