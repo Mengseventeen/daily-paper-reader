@@ -6,32 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-07
-- 运行时间：2026-06-07 20:58:21 UTC
+- 最新运行日期：2026-06-08
+- 运行时间：2026-06-08 21:31:41 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
+- 本次总论文数：5
+- 精读区：3
 - 速读区：2
 
 ### 今日简报（AI）
-今日精读两篇高分割文，分别聚焦金融推理与长新闻时序预测，速读两篇侧重时序建模创新。重点推荐《Hedge-Bench》的金融推理基准和《Signed Dual Attention》的正负依赖捕捉方法。可优先阅读高分精读文献对比不同时序预测范式。
-- 详情：[/202606/07/README](/202606/07/README)
+今日精读3篇、速读2篇，聚焦量化金融与因果发现。最值得关注的是《PandaAI》的神经符号数据分析框架和《CausalAlpha》的实时地缘政治风险指数。建议普通读者优先速读《Information Networks of Stock Prices》了解股价信息网络，或阅读《RowNet》的内存Transformer表格回归方法。
+- 详情：[/202606/08/README](/202606/08/README)
 
 ### 精读区论文标签
-1. [Hedge-Bench: Benchmarking Agents on Hard, Realistic Tasks Pertaining to Financial Reasoning](/202606/07/2606.03918v1-hedge-bench-benchmarking-agents-on-hard-realistic-tasks-pertaining-to-financial-reasoning)  
+1. [PandaAI: A Practical Agent CQ2 for Neuro-symbolic Data Analysis And Integrated Decision-Making in Quantitative Finance](/202606/08/2606.06823v1-pandaai-a-practical-agent-cq2-for-neuro-symbolic-data-analysis-and-integrated-decision-making-in-quantitative-finance)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于专业对冲基金分析师推理轨迹的金融推理基准
-2. [From Long News to Accurate Forecast: Importance-Aware Fusion and PRM-Guided Reflection for Time Series Forecasting](/202606/07/2606.03097v1-from-long-news-to-accurate-forecast-importance-aware-fusion-and-prm-guided-reflection-for-time-series-forecasting)  
+   evidence：用于定量金融中神经符号数据分析与决策的LLM智能体
+2. [CausalAlpha: A Real-Time Geopolitical Risk Index from OSINT Channels for Causal Discovery in Financial Markets](/202606/08/2606.07049v1-causalalpha-a-real-time-geopolitical-risk-index-from-osint-channels-for-causal-discovery-in-financial-markets)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：自然语言处理构建地缘政治风险指数并用于金融市场因果发现
+3. [Tree-of-Experience: A Structured Experience-Management Solution for Self-Evolving Agents under Low-Repetition and Implicit-Reward Environments](/202606/08/2606.06960v1-tree-of-experience-a-structured-experience-management-solution-for-self-evolving-agents-under-low-repetition-and-implicit-reward-environments)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：基于LLM的新闻融合时序预测，自然语言处理用于金融分析
+   evidence：金融情感预测基准和代理经验管理
 
 ### 速读区论文标签
-1. [Signed Dual Attention: Capturing Signed Dependencies in Time Series Forecasting](/202606/07/2606.04833v1-signed-dual-attention-capturing-signed-dependencies-in-time-series-forecasting)  
+1. [Information Networks of Stock Prices](/202606/08/2606.07450v1-information-networks-of-stock-prices)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：用于时间序列预测的有符号注意力机制，可应用于股票市场分析
-2. [Stationarity-Aware Retrieval-Augmented Time Series Forecasting](/202606/07/2606.04135v1-stationarity-aware-retrieval-augmented-time-series-forecasting)  
+   evidence：利用互信息和图滤波进行股票价格网络分析
+2. [RowNet: A Memory Transformer for Tabular Regression](/202606/08/2606.04445v1-rownet-a-memory-transformer-for-tabular-regression)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：时间序列预测方法可适用于金融数据，与AI4Finance主题相关
+   evidence：用于房地产估值的表格回归Transformer
 
 
 <div class="dpr-home-promo-card">
