@@ -6,35 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-08
-- 运行时间：2026-06-08 21:31:41 UTC
+- 最新运行日期：2026-06-09
+- 运行时间：2026-06-09 21:47:38 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：3
-- 速读区：2
+- 本次总论文数：11
+- 精读区：6
+- 速读区：5
 
 ### 今日简报（AI）
-今日精读3篇、速读2篇，聚焦量化金融与因果发现。最值得关注的是《PandaAI》的神经符号数据分析框架和《CausalAlpha》的实时地缘政治风险指数。建议普通读者优先速读《Information Networks of Stock Prices》了解股价信息网络，或阅读《RowNet》的内存Transformer表格回归方法。
-- 详情：[/202606/08/README](/202606/08/README)
+1) 今日聚焦11篇推荐，精读6篇，其中两篇高分论文聚焦多智能体LLM商品ETF组合构建与双目标强化学习交易执行。  
+2) 最值得关注方向：多智能体LLM引入宏观经济学逻辑提升商品ETF选股能力，以及强化学习策略平滑机制优化订单执行滑点控制。  
+3) 建议普通读者优先精读两篇9.0分论文，并关注速读中LLM交易系统可复现性讨论，评估实际落地的技术门槛。
+- 详情：[/202606/09/README](/202606/09/README)
 
 ### 精读区论文标签
-1. [PandaAI: A Practical Agent CQ2 for Neuro-symbolic Data Analysis And Integrated Decision-Making in Quantitative Finance](/202606/08/2606.06823v1-pandaai-a-practical-agent-cq2-for-neuro-symbolic-data-analysis-and-integrated-decision-making-in-quantitative-finance)  
+1. [Macro Economists in the Machine: A Multi-Agent LLM Framework for Commodity-Related ETF Portfolio Construction](/202606/09/2606.08283v1-macro-economists-in-the-machine-a-multi-agent-llm-framework-for-commodity-related-etf-portfolio-construction)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：用于定量金融中神经符号数据分析与决策的LLM智能体
-2. [CausalAlpha: A Real-Time Geopolitical Risk Index from OSINT Channels for Causal Discovery in Financial Markets](/202606/08/2606.07049v1-causalalpha-a-real-time-geopolitical-risk-index-from-osint-channels-for-causal-discovery-in-financial-markets)  
+   evidence：基于LLM的多智能体商品ETF组合构建
+2. [TT-DAC-PS: Twin-Target Deterministic Actor-Critic with Policy Smoothing for Optimal Trade Execution](/202606/09/2606.08379v1-tt-dac-ps-twin-target-deterministic-actor-critic-with-policy-smoothing-for-optimal-trade-execution)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：自然语言处理构建地缘政治风险指数并用于金融市场因果发现
-3. [Tree-of-Experience: A Structured Experience-Management Solution for Self-Evolving Agents under Low-Repetition and Implicit-Reward Environments](/202606/08/2606.06960v1-tree-of-experience-a-structured-experience-management-solution-for-self-evolving-agents-under-low-repetition-and-implicit-reward-environments)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融情感预测基准和代理经验管理
+   evidence：用于最优交易执行的深度强化学习
+3. [GIFT: LLM-Guided State-Reward Interface for Financial Reinforcement Learning](/202606/09/2606.08450v1-gift-llm-guided-state-reward-interface-for-financial-reinforcement-learning)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：LLM引导的金融强化学习投资组合交易
+4. [RankGLU: Residual Gated Score Formation for Cross-Sectional Stock Prediction](/202606/09/2606.08930v1-rankglu-residual-gated-score-formation-for-cross-sectional-stock-prediction)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：用于横截面股票预测的残差门控分数生成
+5. [Addressing Market Regime Changes and Heavy-Tailed Returns in Portfolio Optimization via Bayesian VAR and Elliptical Black-Litterman](/202606/09/2606.09104v1-addressing-market-regime-changes-and-heavy-tailed-returns-in-portfolio-optimization-via-bayesian-var-and-elliptical-black-litterman)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：深度强化学习处理体制变化和重尾收益的投资组合优化
+6. [Benchmarking Deep Time Series Models for Equity Portfolios](/202606/09/2606.09420v1-benchmarking-deep-time-series-models-for-equity-portfolios)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：面向股票组合的深度时间序列模型基准测试
 
 ### 速读区论文标签
-1. [Information Networks of Stock Prices](/202606/08/2606.07450v1-information-networks-of-stock-prices)  
+1. [TRUST-SCF: Transformer-based Risk Understanding and Scoring for Transactional Supply Chain Finance](/202606/09/2606.08140v1-trust-scf-transformer-based-risk-understanding-and-scoring-for-transactional-supply-chain-finance)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：基于Transformer的供应链金融信用评分
+2. [How Small Can You Go? LoRA Fine-Tuning 270M-8B Models for Merchant Information Extraction in Financial Transactions](/202606/09/2606.08051v1-how-small-can-you-go-lora-fine-tuning-270m-8b-models-for-merchant-information-extraction-in-financial-transactions)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：利用互信息和图滤波进行股票价格网络分析
-2. [RowNet: A Memory Transformer for Tabular Regression](/202606/08/2606.04445v1-rownet-a-memory-transformer-for-tabular-regression)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：用于房地产估值的表格回归Transformer
+   evidence：使用NLP从金融交易中提取商户信息
+3. [Beyond Agent Architecture: Execution Assumptions and Reproducibility in LLM-Based Trading Systems](/202606/09/2606.08285v1-beyond-agent-architecture-execution-assumptions-and-reproducibility-in-llm-based-trading-systems)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：基于LLM的交易系统可重复性审计
+4. [Cross-sectional topological anomaly scores and intraday return predictability in the S&P 500: A BallMapper, decoder-conditional VAE, and Function-on-Function regression approach](/202606/09/2606.08586v1-cross-sectional-topological-anomaly-scores-and-intraday-return-predictability-in-the-sp-500-a-ballmapper-decoder-conditional-vae-and-function-on-function-regression-approach)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：基于拓扑异常分数的日内股票收益预测
+5. [Volatility Forecasting and Return Prediction under Market Regimes: Evidence from High-Frequency Chinese Equity Data](/202606/09/2606.09478v1-volatility-forecasting-and-return-prediction-under-market-regimes-evidence-from-high-frequency-chinese-equity-data)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：机器学习在股票市场波动率与收益预测中的应用
 
 
 <div class="dpr-home-promo-card">
