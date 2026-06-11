@@ -1,0 +1,409 @@
+Title: Can News Predict the Market? Limits of Zero-Shot Financial NLP and the Role of Explainable AI
+
+URL Source: https://arxiv.org/pdf/2606.12210v1
+
+Published Time: Thu, 11 Jun 2026 01:13:16 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# Can News Predict the Market? Limits of Zero-Shot Financial NLP and the Role of Explainable AI 
+
+## Ali M Karaoglu and Shreyank N Gowda 
+
+*School of Computer Science, University of Nottingham, Nottingham, United Kingdom. *Corresponding author(s). E-mail(s): shreyank.narayanagowda@nottingham.ac.uk; 
+
+Abstract 
+
+Can financial news reliably predict short-term stock movements? Despite advances in large language models, this question remains unresolved. We revisit this problem using a zero-shot natural language processing framework, investigating whether models can extract actionable signals from financial news without domain-specific training. We design a structured pipeline that combines zero-shot natural language inference with temporal aggregation, explicitly modelling recency and event-dependent impact horizons when inte-grating information across articles. To address the need for transparency in high-stakes settings, we introduce a multi-layered explainability framework that links predictions to token-level, article-level, and aggregate evidence, and produces grounded natural lan-guage rationales. Across multiple models and prediction horizons, we find that zero-shot approaches consistently fail to outperform simple baselines, with particularly weak perfor-mance on negative movements, suggesting deeper structural limitations in mapping news sentiment to short-term price dynamics. However, explainability signals reliably distin-guish between trustworthy and unreliable predictions, offering practical value even when accuracy is limited. These findings highlight the limits of zero-shot financial NLP and moti-vate a shift toward decision-support systems that prioritise transparency and uncertainty awareness. Code: https://github.com/alimert05/zero-shot-stock-xai 
+
+Keywords: Zero-shot learning, Financial NLP, Stock market prediction, Explainable AI 
+
+# 1 Introduction 
+
+Financial markets react rapidly to new information, and financial news remains one of the most widely used textual sources for interpreting short-term market sentiment [1, 2]. However, 1
+
+> arXiv:2606.12210v1 [cs.CL] 10 Jun 2026
+
+converting news into reliable stock movement predictions is difficult. Articles are noisy, frequently duplicated across outlets, unevenly relevant to the target company, and often written in cautious or implicit language where sentiment is not stated directly [3–5]. These issues are especially important in short-horizon forecasting, where even small amounts of irrelevant or stale information can distort the aggregate signal. A further challenge is temporal alignment. News publication and market response do not always occur on the same timescale. Articles may be released outside market hours or over weekends, and different event types can produce immediate, delayed, or gradual reactions [6]. For example, earnings announcements may trigger rapid price responses, while regulatory developments, restructuring, or financial distress may unfold over longer periods. Standard pipelines that aggregate all articles within a fixed lookback window risk mixing short-lived and slow-moving signals, reducing their relevance to the chosen prediction horizon. Most existing financial NLP pipelines also depend on supervised or domain-adapted models trained on manually annotated or market-labelled datasets [7–9]. Although these models can perform well on benchmark sentiment tasks, they require labelled data, may need periodic retraining, and can struggle to generalise across changing market conditions [10, 11]. Zero-shot language models offer an attractive alternative because they can classify financial text without task-specific fine-tuning [12]. However, applying zero-shot models directly to stock prediction remains risky, since prompt sensitivity, input noise, and weak temporal structure can turn plausible sentiment outputs into unreliable market signals. This paper investigates whether zero-shot financial NLP can support short-horizon stock movement prediction when embedded within a structured, temporally aware, and explainable pipeline. Rather than treating news sentiment as a direct trading signal, we model each prediction as an evidence aggregation problem. Articles are filtered for company relevance, weighted by recency and estimated event-dependent impact horizon, and then aggregated into a three-way prediction over positive, negative, and neutral movement. Since financial prediction is a high-stakes setting where accuracy alone is insufficient, the pipeline also provides multi-level explanations that connect each prediction to token-level cues, article-level influence, aggregate evidence quality, and natural language rationales [13]. The central research question is: 
+
+> Can an impact-aware, zero-shot approach deliver accurate and trustworthy predictions of short-term stock market movements from financial news, without requiring domain-specific fine-tuning?
+
+We study this question across three dimensions. First, we evaluate whether zero-shot NLI-based prediction with temporal weighting can match or exceed domain-adapted and general-purpose alternatives at the pipeline level. Second, we assess whether a multi-layered explanation framework can provide grounded and stable rationales for each prediction. Third, we examine whether evidence-quality diagnostics can identify trustworthy and unreliable predictions, even when directional accuracy is limited. The contributions of this paper are as follows: 1. We develop an impact-aware zero-shot financial NLP pipeline for short-horizon stock movement prediction, combining company relevance filtering, recency weighting, event-dependent impact-horizon weighting, and three-way abstention-based prediction. 22. We introduce a multi-layered explainability framework that links predictions to token-level attributions, article-level contributions, contrastive evidence, robustness checks, evidence-quality diagnostics, and grounded natural language summaries. 3. We evaluate the approach on a 480-case dataset covering 20 US-listed companies across six prediction horizons, comparing the proposed zero-shot NLI configuration against domain-adapted and general-purpose alternatives. 4. We show that zero-shot financial NLP remains limited for short-horizon directional prediction, particularly for negative movements, but that structured explainability and evidence-quality diagnostics can provide useful decision-support value by distinguishing more reliable predictions from weaker ones. 
+
+# 2 Related Work 
+
+## 2.1 Financial News and Market Prediction 
+
+Financial news has long been recognised as an important source of market information. While the Efficient Market Hypothesis suggests that publicly available information should be rapidly incorporated into prices [1], numerous studies have shown that market reactions are often delayed, incomplete, or dependent on the type of information released [14, 15]. Earnings announcements, product recalls, regulatory actions, and macroeconomic events have all been linked to significant price movements, although the magnitude and duration of these effects vary considerably [16–18]. A recurring challenge is that financial news is not a homogeneous signal. News articles differ in relevance, novelty, publication timing, and expected market impact. Furthermore, media outlets frequently republish similar stories, causing article volume to overestimate genuinely new information [3]. Prior work also shows that market reactions occur on different timescales depending on the event type and the way information is presented [19, 20]. These findings suggest that effective prediction systems should account for both article relevance and temporal dynamics rather than relying solely on aggregated sentiment scores. 
+
+## 2.2 Financial Language Models 
+
+Recent advances in financial NLP have been driven by domain-adapted language models. FinBERT adapts BERT to the financial domain and demonstrates strong performance on financial sentiment benchmarks such as Financial PhraseBank and FiQA [21]. More recently, FinGPT extends this idea using parameter-efficient fine-tuning of generative language models on large collections of financial news [22]. Representative results are shown in Tables 1 and 2. 
+
+Table 1 : FinBERT results on FPB (classification) and FiQA Task 1 (regression). Adapted from Araci [21].          
+
+> Dataset / setting Metric(s) FinBERT result
+> FPB (all data) Accuracy, Macro-F1 0.86, 0.84 FPB (100% agreement) Accuracy, Macro-F1 0.97, 0.95 FiQA Task 1 MSE, 𝑅 20.07, 0.55
+
+3Table 2 : Sentiment classification performance (3-way). Adapted from Yang et al. [22].                               
+
+> Model Acc. Macro-F1 Pos-F1 Neg-F1 Neu-F1
+> ChatGPT (0-shot) 63.4 61.7 64.0 59.1 62.0 Llama3.1-8B (0-shot) 57.9 54.4 56.1 53.2 54.0 FinBERT 71.2 69.9 73.0 69.1 67.5 FinGPT (LoRA-SFT) 78.8 77.3 79.6 76.8 75.4 FinGPT (SFT+RLSP) 82.1 80.9 83.4 81.5 77.8
+
+These approaches demonstrate that financial adaptation can substantially improve senti-ment classification performance. However, both depend on labelled or market-derived training data and may require retraining as market conditions evolve [10, 11]. This motivates interest in zero-shot alternatives. 
+
+## 2.3 Zero-Shot Financial NLP 
+
+Zero-shot methods aim to perform classification without task-specific training [23]. In finance, this is attractive because labelled datasets are costly to construct and may not generalise across market regimes [24, 25]. More broadly, zero-shot learning has demonstrated strong transfer capabilities across vision and multimodal tasks, although performance often depends heavily on the quality of semantic representations and the alignment between training and deployment domains [26–30]. Existing work has explored both prompt-based generative LLMs and NLI-based classifica-tion. Prompt-based approaches can achieve competitive sentiment classification performance under carefully designed prompts, but results are often sensitive to prompt wording and evaluation protocol [12, 31, 32]. Table 3 summarises representative findings. 
+
+Table 3: Representative zero-shot sentiment results reported in the literature.                
+
+> Study Model Setting F1 Fatouros et al. GPT Financial sentiment 0.79 Li et al. GPT-4 Financial PhraseBank 0.96 Shen & Zhang GPT-4o Financial PhraseBank 0.84 Yang et al. ChatGPT Market-labelled sentiment 0.62
+
+An alternative is NLI-based classification, where labels are expressed as hypotheses and the model predicts the degree of entailment between the input text and each candidate hypothesis [33]. Models such as DeBERTa and RoBERTa achieve strong performance on NLI benchmarks and provide deterministic, computationally efficient inference without requiring task-specific training [34, 35]. However, these models are not inherently adapted to financial language and may require supporting mechanisms such as relevance filtering and structured aggregation to handle noisy financial text [5, 36]. 42.4 Explainability in Finance 
+
+The increasing use of AI in finance has led to growing interest in explainability, particularly in applications where model outputs influence investment decisions and risk management [13]. Traditional techniques such as LIME and SHAP provide local feature attributions, but these explanations can be difficult to interpret when predictions are derived from collections of articles rather than single inputs [37, 38]. Recent work has therefore explored broader explanation strategies, including article-level evidence selection, robustness analysis, and natural-language explanation generation using LLMs [39, 40]. While these methods improve interpretability, concerns remain regarding faithfulness and hallucination, particularly when explanations are generated independently of the model’s actual reasoning process [41, 42]. Existing evidence suggests that effective financial explanations should be grounded in the underlying evidence and provide transparency at multiple levels, including token-level, article-level, and prediction-level analysis. 
+
+## 2.5 Research Gap 
+
+The literature highlights three unresolved challenges. First, financial news exhibits complex temporal behaviour, yet many prediction systems treat all articles within a fixed window equally. Second, while zero-shot methods remove the need for labelled training data, they are rarely evaluated as complete prediction pipelines operating over collections of articles and multiple prediction horizons. Third, existing explainability approaches typically focus on either local attribution or narrative explanation, rather than combining multiple forms of evidence into a unified trust assessment. To address these limitations, this work investigates an impact-aware zero-shot predic-tion pipeline that combines temporal weighting, NLI-based classification, and multi-layered explainability. Rather than treating sentiment classification as the end goal, we examine whether zero-shot financial NLP can support transparent and trustworthy decision-making in short-horizon stock prediction. 
+
+# 3 Methodology 
+
+We propose an impact-aware zero-shot prediction pipeline that takes a company name and prediction window as input, retrieves relevant financial news, assigns temporally informed article weights, predicts stock movement direction, and produces an explainability report with a reliability rating. The pipeline has four stages: data acquisition, preprocessing and filtering, prediction, and explainability, as shown in Figure 1. 
+
+Fig. 1 : Overview of the proposed zero-shot financial news prediction and explainability pipeline. 53.1 Problem Formulation 
+
+The task is formulated as three-way classification over positive, negative, and neutral stock movement. We use a three-way formulation rather than binary up/down prediction because many short-horizon price changes fall within normal market noise. An explicit neutral class allows the system to abstain from directional predictions when the evidence is weak or ambiguous. For a company 𝑐 and prediction window 𝑊 , the system retrieves articles published before the prediction start date, filters them for relevance, assigns each retained article a sentiment distribution and temporal weight, and aggregates the weighted evidence into a final prediction. The output is not intended as an automated trading signal, but as a decision-support summary that exposes both the prediction and the evidence behind it. 
+
+## 3.2 Data Acquisition and Temporal Alignment 
+
+The user-provided company name is first resolved to a stock ticker using the Yahoo Finance search API. News articles are then retrieved from Finnhub, which provides structured metadata and article summaries. The lookback period is computed dynamically as: 
+
+backward days = min 
+
+
+
+90 , max 
+
+
+
+7,
+
+l
+
+5√𝑊 
+
+m 
+
+, (1) where 𝑊 is the prediction window in days. This gives short windows enough recent coverage while preventing longer windows from retrieving excessive stale news. The lookback period extends only backwards from the prediction start date, ensuring that no article published during or after the prediction period is used as input. Each article is assigned to a market trading session. Article timestamps are converted from UTC to US Eastern Time, and a 4 PM ET market-close cutoff is applied. Articles published before market close are assigned to that trading day, while articles published after close, on weekends, or on holidays are rolled forward to the next valid trading session using the exchange calendars library. This ensures that recency and impact-horizon calculations reflect when the market could reasonably react to the news. 
+
+## 3.3 Preprocessing and Relevance Filtering 
+
+The retrieved articles are filtered in three stages. First, title-based deduplication removes repeated versions of the same story across outlets, retaining the oldest version or the longer version if timestamps tie. The number of outlets carrying the same headline is preserved as a coverage count for later weighting. Second, article-level entity matching removes articles that do not mention the target company or ticker in the headline or body. This is necessary because ticker-based news APIs can return articles that mention unrelated entities or contain only weak company relevance. Third, sentence-level relevance filtering removes boilerplate, subscription prompts, legal disclaimers, and unrelated content from otherwise relevant articles. This is implemented using DeBERTa in a zero-shot NLI formulation. Each sentence is paired with a company-specific relevance hypothesis:   
+
+> This sentence is relevant/irrelevant to {Company }({Ticker }), including products/brands, financial performance, guidance, operations, lawsuits, regulation, risks, and major announcements.
+
+6Sentences with relevance scores below 0.5 are discarded. If no sentence passes the thresh-old, the highest-scoring sentence is retained as a safeguard against reducing useful articles to headline-only inputs. 
+
+## 3.4 Impact-Aware Article Weighting 
+
+Each retained article receives a final weight that combines recency, event-dependent impact horizon, source coverage, and headline-only discounting. 
+
+3.4.1 Recency Weighting 
+
+The recency weight is defined as: 
+
+𝑤 recency = 𝜆 𝑑 , (2) 
+
+Fig. 2 : Recency decay curves for different prediction horizons. Short-horizon forecasts apply more aggressive temporal discounting, while longer-horizon forecasts retain older articles for longer. where 𝑑 is the number of trading days between the article’s market date and the prediction start date. The decay parameter 𝜆 is interpolated from horizon-specific anchor values tuned on the validation set. Figure 2 illustrates the resulting decay profiles. Short prediction horizons discount older articles aggressively, while longer horizons preserve a broader evidence base. This reflects the intuition that information useful for next-day forecasting becomes stale much more quickly than information relevant to longer prediction windows. 
+
+3.4.2 Impact Horizon Classification 
+
+Different financial events affect markets on different timescales. To model this, each article is classified into one of nine event families using the zero-shot NLI hypothesis: 7The primary firm-specific event in this news article is {} .
+
+Each event family is assigned a primary and secondary impact horizon based on the event-study literature. These horizons are summarised in Table 4. 
+
+Table 4 : Event families and their primary and secondary market reaction horizons.                          
+
+> Event Family Primary Horizon Secondary Horizon Key Reference
+> Earnings, guidance, financial results
+> 1 day 6–10 days [43, 44]
+> Analyst upgrade/downgrade 1 day 2–5 days [45, 46]
+> Product launch, partnership, contract
+> 2–5 days 6–10 days [47]
+> Buyback, dividend, stock offering
+> 2–5 days 11–20 days [48]
+> Lawsuit, regulatory action 2–5 days 11–20 days [49]
+> M&A, restructuring 6–10 days 21–31 days [50]
+> CEO/executive change 2–5 days 6–10 days [51]
+> Market commentary, opinion
+> 1 day 2–5 days [52]
+> Financial distress, credit downgrade
+> 21–31 days 11–20 days [53, 54]
+
+3.4.3 Impact Horizon Weighting 
+
+The horizon weight measures how well an article’s expected impact timing aligns with the prediction window: 
+
+𝑤 horizon = exp 
+
+
+
+− (impact day − 𝜇 )2
+
+2𝜎 2
+
+
+
+, (3) where impact day = horizon days − days ago , 𝜇 = 𝑊 /2, and 𝜎 = max (𝑊 /2, 3.0). The Gaussian form gives highest weight to articles whose expected impact falls near the centre of the prediction window, while still allowing partially aligned articles to contribute. A minimum value of 0.05 is applied so that articles are not completely removed due to possible event-classification uncertainty. Primary and secondary horizon weights are blended using classifier confidence: 
+
+𝑤 combined horizon = 𝑚 · 𝑤 primary + ( 1 − 𝑚 ) · 𝑤 secondary , (4) where 𝑚 = 0.60 + 0.25 · confidence . This gives more influence to the primary horizon when event classification confidence is high, while retaining secondary-horizon information when confidence is lower. 
+
+3.4.4 Final Article Weight 
+
+The final article weight is: 8𝑤 𝑖 = √𝑤 recency · 𝑤 combined horizon · log 2 (1 + coverage count ) · 𝑑 ℎ, (5) where 𝑑 ℎ = 0.5 for headline-only articles and 𝑑 ℎ = 1 otherwise. The geometric mean penalises articles that are strong on only one temporal dimension, while the logarithmic coverage factor gives moderate additional weight to widely syndicated stories without allowing them to dominate the aggregate. 
+
+## 3.5 Zero-Shot Sentiment Prediction and Abstention 
+
+The pipeline uses DeBERTa for relevance filtering and impact-horizon classification, and RoBERTa for final sentiment classification. The final sentiment hypothesis is:  
+
+> The implication of this statement is {} .
+
+with candidate labels bullish , bearish , and neutral . Each article input is prefixed with the target company name to provide explicit entity context. The NLI model is used in multi-label sigmoid mode rather than softmax mode. Sigmoid scoring treats each label independently, avoiding artificial competition between labels when the article is genuinely ambiguous. Article-level label scores are aggregated using the final weights in Equation 5. A directional prediction is issued only when the corresponding score exceeds a tuned threshold: label =
+
+
+
+positive , 𝑠 pos ≥ 𝜏 pos and (𝑠 pos ≥ 𝑠 neg or 𝑠 neg < 𝜏 neg ),
+
+negative , 𝑠 neg ≥ 𝜏 neg and (𝑠 neg ≥ 𝑠 pos or 𝑠 pos < 𝜏 pos ),
+
+neutral , otherwise .
+
+(6) Thresholds are tuned on the validation set to maximise macro-F1. The selected values are 𝜏 pos = 0.56 and 𝜏 neg = 0.26. Table 5 shows that threshold tuning substantially improves macro-F1 by recovering neutral predictions that are lost under simple argmax classification. 
+
+Table 5 : Comparison of performance before and after threshold tuning on the validation set.              
+
+> Configuration Accuracy Macro-F1 Neg-F1 Neu-F1 Pos-F1
+> Argmax, no thresholds
+> 0.2986 0.1870 0.0964 0.0000 0.4646
+> Tuned thresholds
+> 0.3958 0.3353 0.1931 0.5627 0.2500
+
+## 3.6 Explainability and Reliability Assessment 
+
+The explainability framework is designed to answer three questions: what evidence supported the prediction, how robust was the prediction, and how much trust should be placed in it. It combines token-level, article-level, and pipeline-level explanations. Token-level explanations are generated using LIME [37], selected because it is model-agnostic and can explain the black-box NLI classifier without requiring access to internal 9gradients. For each prediction, LIME is applied to a small set of influential supporting and opposing articles. Article-level explanation is provided through contrastive contribution analysis. For each article, the net contribution toward the winning label over the runner-up is: net direction 𝑖 = 𝑤 winner  
+
+> 𝑖
+
+− 𝑤 runner-up 
+
+> 𝑖
+
+Í 𝑗 𝑤 𝑗 
+
+. (7) This identifies which articles most strongly separate the chosen label from its closest alternative. Robustness is assessed using a greedy flip-set analysis: articles supporting the winning label are removed in descending order of influence until the prediction changes, or until no flip is possible. A small flip set indicates fragility, while a larger flip set indicates that the prediction is supported by broader evidence. To make the explanation more readable, articles are also grouped into thematic storylines using TF-IDF vectors and agglomerative clustering. Cluster labels are generated using a locally hosted Llama model, with a keyword-based fallback when generation is unavailable. The same local model is used to produce a grounded natural-language summary from structured evidence, including influential articles, quality flags, and attribution outputs. The prompt is constrained to these inputs to reduce the risk of unsupported explanation generation. Finally, the pipeline computes evidence-quality flags that identify common failure modes. These flags are summarised in Table 6. 
+
+Table 6 : Quality and reliability flags used in the prediction pipeline.                  
+
+> Flag What it checks Threshold
+> Thin evidence Too few articles to form a reliable aggregate. <5 articles
+> Weight concentration Prediction dominated by a small number of articles, measured using the Herfindahl–Hirschman Index. HHI >0.4
+> Label-margin Small gap between the top two sentiment scores. <0.15
+> Source diversity Most articles come from the same editorial source. >60% from one source
+> Flip sensitivity Prediction can be changed by removing a small number of articles.
+> ≤5 articles
+> Horizon coverage Retrieved articles do not adequately span the intended lookback window. Coverage gap detected
+
+Weight concentration is measured using the Herfindahl–Hirschman Index: HHI =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+ 𝑤 𝑖 
+
+Í 𝑗 𝑤 𝑗 
+
+2
+
+. (8) The overall reliability rating is assigned from the number of triggered flags: HIGH for 0 or 1 flags, MEDIUM for 2 flags, and LOW for 3 or more flags. This rating does not replace predictive accuracy, but provides a transparent indication of whether the evidence behind a prediction is broad, stable, and sufficiently diverse. 10 4 Evaluation 
+
+## 4.1 Evaluation Setup 
+
+We evaluate the proposed pipeline across five sentiment models, six prediction horizons, five sectors, and multiple explainability diagnostics. The compared sentiment models are RoBERTa, FinBERT, FinGPT, Llama 3.1 8B, and Mistral 7B. RoBERTa is the proposed NLI-based sentiment component, while the remaining models provide domain-adapted and general-purpose baselines. The evaluation addresses three questions: whether zero-shot news-based prediction can outperform simple baselines, how the proposed pipeline compares with alternative sentiment models, and whether the explainability layer can identify more trustworthy predictions. The dataset contains 480 test cases generated from 20 US-listed companies across five sectors: Technology, Finance, Healthcare, Energy, and Consumer. Each company is evaluated across six prediction windows of 1, 3, 5, 7, 14, and 31 days, using four start dates between April 2025 and January 2026. This gives 20 × 6 × 4 = 480 cases and avoids evaluating the system on a single market period. Ground-truth labels are derived from stock price movements obtained using yfinance ,independently of the news data. For each case, the percentage change between the closing price at the start and end of the prediction window determines the movement direction. To avoid applying a fixed threshold across stocks with different volatility levels, the neutral band is scaled using a point-in-time EWMA volatility estimate: 
+
+𝜏 = 𝑘 · 𝜎 EWMA · √𝑊, (9) where 𝑊 is the prediction window in trading days and 𝑘 = 0.5. Returns within [− 𝜏, 𝜏 ] are labelled neutral, returns above the band are labelled positive, and returns below the band are labelled negative. The volatility estimate is computed using only price data available before the prediction window, preventing future leakage. The 480 cases are split into a 288-case tuning set and a 192-case holdout set at the ticker level, so that all cases for a given company appear in only one split. This reduces leakage from overlapping company-specific news coverage. The split closely preserves the overall class distribution, as shown in Table 7. Performance is reported using accuracy, macro-precision, macro-recall, macro-F1, and per-class F1. Macro-F1 is emphasised because the negative class is smaller but practically important. 
+
+Table 7 : Class distribution across the tuning and holdout splits.                         
+
+> Split Cases Articles Companies Positive Negative Neutral
+> Tune 288 27,568 12 92 (31.9%) 56 (19.4%) 140 (48.6%)
+> Holdout 192 25,200 861 (31.8%) 38 (19.8%) 93 (48.4%)
+> Total 480 52,768 20 153 (31.9%) 94 (19.6%) 233 (48.5%)
+
+11 4.2 Financial PhraseBank Sanity Check 
+
+Before evaluating full pipeline performance, we test all five sentiment models on Financial PhraseBank [7]. This acts as a sentence-level sanity check: if a model cannot identify sentiment in clean financial sentences, poor performance on the noisier multi-article prediction task would be unsurprising. Results across the 50%, 75%, and all-agree subsets are reported in Table 8. 
+
+Table 8 : Financial PhraseBank benchmark results across agreement splits.                                                                                          
+
+> Model Macro-F1 Accuracy Pos-F1 Neg-F1 Neu-F1
+> 50agree (𝑁 =4,846) RoBERTa 0.6405 0.6112 0.5645 0.7572 0.5998 FinBERT 0.8825 0.8896 0.8620 0.8786 0.9071 FinGPT 0.9157 0.9199 0.8771 0.9344 0.9355
+> Llama 3.1 8B 0.7868 0.8040 0.6687 0.8448 0.8470 Mistral 7B 0.7837 0.8044 0.6812 0.8208 0.8491
+> 75agree (𝑁 =3,453) RoBERTa 0.6635 0.6392 0.5618 0.7784 0.6503 FinBERT 0.9365 0.9473 0.9305 0.9178 0.9611 FinGPT 0.9648 0.9676 0.9495 0.9706 0.9743
+> Llama 3.1 8B 0.8647 0.8787 0.7785 0.9078 0.9080 Mistral 7B 0.8623 0.8795 0.7975 0.8800 0.9095
+> allagree (𝑁 =2,264) RoBERTa 0.6968 0.6727 0.5760 0.8265 0.6879 FinBERT 0.9625 0.9717 0.9620 0.9430 0.9825 FinGPT 0.9860 0.9872 0.9815 0.9869 0.9896
+> Llama 3.1 8B 0.9147 0.9205 0.8508 0.9554 0.9381 Mistral 7B 0.9095 0.9196 0.8655 0.9244 0.9387
+
+FinGPT and FinBERT achieve the strongest sentence-level results, confirming the advan-tage of domain adaptation on clean financial sentiment benchmarks. RoBERTa performs worse overall, but it achieves relatively strong negative-class F1 on the all-agree subset. This distinction is central to the later analysis: the model can recognise bearish language in iso-lated financial sentences, but full pipeline prediction requires mapping noisy, aggregated news evidence to future stock movement. 
+
+## 4.3 Model Comparison on the Holdout Set 
+
+Table 9 reports holdout performance for all five sentiment models using the full prediction pipeline. RoBERTa uses the tuned thresholding rule described in Section 3; the other models use argmax classification. No model exceeds the majority-class baseline of 48.4%, indicating that short-horizon stock movement prediction from news sentiment alone remains difficult. RoBERTa achieves the highest macro-F1 despite weaker sentence-level performance on Financial PhraseBank, suggesting that benchmark sentiment accuracy does not directly translate to pipeline-level stock prediction. FinGPT achieves the highest accuracy, but its lower macro-F1 reflects weaker balance across the three classes. 12 Table 9 : Model performance and issue counts on the holdout set.                                     
+
+> Model Accuracy Macro-F1 Neg-F1 Neu-F1 Pos-F1 Issues
+> RoBERTa 0.3750 0.3409 0.1667 0.5193 0.3368 0
+> FinBERT 0.3594 0.2877 0.0364 0.4138 0.4130 0
+> FinGPT 0.3802 0.2708 0.0400 0.5225 0.2500 16
+> Llama 3.1 8B 0.3021 0.2472 0.0323 0.3611 0.3483 15
+> Mistral 7B 0.3594 0.2830 0.0385 0.3649 0.4457 14
+
+The most consistent failure is negative-class detection. The four argmax-based models obtain negative F1 scores between 0.0323 and 0.0400, while RoBERTa improves negative F1 to 0.1667 through asymmetric decision thresholds. This suggests that negative movements are not merely underrepresented, but structurally difficult to identify from the available news evidence. The LLM-based models also produce 14 to 16 invalid or unparsable outputs, whereas the NLI-based models produce no such failures. 
+
+## 4.4 Explainability and Reliability Evaluation 
+
+The explainability layer is evaluated by asking whether it produces meaningful diagnostic variation across cases and whether those diagnostics correspond to prediction reliability. 
+
+4.4.1 Evidence Quality Diagnostics 
+
+Table 10 summarises the evidence-quality flag trigger rates on the 192 holdout cases. 
+
+Table 10 : Flag trigger frequencies on the holdout set.                          
+
+> Flag Triggered Rate
+> Thin evidence ( <5articles) 00.0%
+> Weight concentration ( HHI >0.4)00.0%
+> Label-margin ( <0.15 )22 11.5%
+> Label-margin skipped (N/A) 125 65.1%
+> Source diversity ( >60% one source) 187 97.4%
+> Flip sensitivity ( ≤5articles) 68 35.4%
+> Horizon coverage (lookback gap) 40 20.8%
+
+The most informative diagnostics are flip sensitivity, label margin, and horizon coverage. Thin evidence and weight concentration never trigger, showing that most predictions are not based on too few articles or a single dominant article. Source diversity triggers in almost all cases due to limitations in Finnhub’s free-tier outlet coverage, so it is most useful when interpreted alongside other flags. Figure 3 shows that evidence quality ratings correspond to clear accuracy differences. HIGH-rated cases achieve 49.4% accuracy, slightly exceeding the majority-class baseline, while MEDIUM and LOW cases fall to 28.9% and 26.3%, respectively. This suggests that the 13 diagnostic layer provides practical value by identifying when the prediction is more or less reliable. 
+
+Fig. 3 : Prediction accuracy by evidence quality rating on the holdout set. 
+
+4.4.2 Flip-Set Sensitivity 
+
+The flip-set analysis estimates how many articles must be removed before the prediction changes. Table 11 summarises the results. 
+
+Table 11 : Flip-set statistics on the holdout set.          
+
+> Statistic Value
+> Median flip-set size 10
+> Mean flip-set size 18.3
+> Single-article flips 20 (10.4%)
+> Unflippable cases 0 (0.0%)
+> Cases requiring >10 removals 92 (47.9%)
+
+The median prediction requires removing 10 articles before the label changes, and nearly half of cases require more than 10 removals. This indicates that the weighted aggregation generally distributes influence across multiple articles rather than relying on a single dominant source. However, 10.4% of cases flip after removing one article, identifying fragile predictions that should be treated cautiously. 14 4.4.3 Narrative Consistency 
+
+To assess the stability of generated explanations, the narrative synthesis component is run five times on 30 holdout cases spanning all prediction windows and five sectors. Across 150 runs, the hallucination validation step detects zero violations. Pairwise cosine similarity between outputs for the same case averages 0.963, as shown in Table 12. 
+
+Table 12 : Similarity statistics by sector on the holdout set.                      
+
+> Sector (Company) Cases Avg Similarity Min Similarity
+> Tech (MSFT) 60.992 0.959
+> Finance (BAC) 60.930 0.755
+> Healthcare (UNH) 60.956 0.829
+> Energy (XOM) 60.985 0.931
+> Consumer (KO) 60.952 0.757
+> Overall 30 0.963 0.755
+
+These results indicate that the low-temperature, evidence-grounded generation setup pro-duces stable summaries. Variation is mainly stylistic, while the core evidence and sentiment attribution remain consistent across repeated runs. 
+
+## 4.5 Horizon and Sector Analysis 
+
+4.5.1 Performance Across Prediction Horizons 
+
+Table 13 and Figure 4 show RoBERTa performance across prediction windows. 
+
+Table 13 : Performance across prediction horizons.               
+
+> Window Accuracy Macro-F1
+> 1 day 0.3438 0.3146
+> 3 days 0.4375 0.3961 5 days 0.4062 0.3813
+> 7 days 0.4062 0.3491
+> 14 days 0.3438 0.3043
+> 31 days 0.3125 0.2915
+
+Performance peaks at the 3-day window, followed by the 5-day and 7-day windows. The 1-day window appears too short for stable news aggregation, while 14-day and 31-day windows likely accumulate noise from later events not present in the original article set. The pattern suggests that news sentiment may be most informative over short but not immediate horizons. However, each horizon contains only 32 holdout cases, so these results should be interpreted as indicative rather than statistically conclusive. 15 Fig. 4 : RoBERTa performance across prediction horizons. 
+
+4.5.2 Performance Across Sectors 
+
+Table 14 reports sector-level holdout performance. 
+
+Table 14 : Performance by sector on the holdout set.                         
+
+> Sector Accuracy Macro-F1 Cases Actual Distribution
+> Consumer (KO) 0.6250 0.2564 24 1 pos, 8 neg, 15 neu
+> Energy (XOM) 0.3333 0.2807 24 14 pos, 4 neg, 6 neu
+> Finance (BAC) 0.3333 0.2808 24 7 pos, 3 neg, 14 neu
+> Healthcare (UNH) 0.2083 0.1629 24 5 pos, 4 neg, 15 neu
+> Tech (4 companies) 0.3750 0.3687 96 34 pos, 19 neg, 43 neu
+
+Performance varies substantially across sectors. Consumer obtains the highest accuracy, largely because the model frequently predicts neutral for Coca-Cola. Technology obtains the highest macro-F1 across 96 cases, suggesting more balanced performance. Healthcare performs worst, likely because news sentiment in this sector is mediated by regulatory, legal, and policy factors whose market impact is difficult to infer from linguistic tone alone. Since most sectors are represented by one holdout company, these results should be interpreted cautiously. 16 4.6 Lessons from Zero-Shot Financial Prediction 
+
+The results suggest three main lessons. First, strong sentiment classification does not imply strong stock prediction. FinGPT and FinBERT perform very well on Financial PhraseBank, but this advantage does not carry over to the pipeline-level prediction task. This supports the distinction between recognising sentiment in text and forecasting subsequent market movement. Second, negative stock movements are particularly difficult to predict from news sentiment. The argmax models each correctly identify only one of 38 negative cases, while RoBERTa with decision thresholds identifies 9 of 38. Figure 5 shows the RoBERTa confusion matrix. Although thresholding improves negative recall, most negative cases are still absorbed into neutral. 
+
+Fig. 5 : RoBERTa confusion matrix on the holdout set. This failure is not caused by an inability to recognise negative financial language, since all models perform much better on the negative class in Financial PhraseBank. Instead, it reflects the weaker relationship between article-level sentiment and subsequent price direc-tion. Negative stock returns may be driven by broader market conditions, missed expectations, price corrections, or information not present in the retrieved news. Financial news also often expresses negative developments indirectly, using hedged language rather than explicit negative sentiment [55]. Third, explainability provides value even when accuracy is limited. Evidence quality ratings separate more reliable from less reliable predictions, flip-set analysis exposes fragile cases, and narrative summaries remain stable and grounded. Overall, zero-shot financial NLP does not reliably outperform the majority-class baseline in raw accuracy, but the proposed NLI-based pipeline achieves the best macro-F1 among the tested models and avoids invalid-output failures from generative baselines. These findings suggest that the main value of zero-shot 17 financial NLP in this setting may not be autonomous prediction, but transparent evidence organisation and reliability-aware decision support. 
+
+# 5 Limitations 
+
+This study has several limitations. First, the evaluation depends on the Finnhub free-tier API as the sole news source. Although Finnhub provides structured access to company news, the free tier offers limited historical coverage, restricted outlet diversity, and variable article availability. This affects both the breadth and consistency of the evidence available to the pipeline. In particular, repeated or syndicated articles can dominate the retrieved article set, while relevant company-specific news may be missing from some lookback windows. As a result, some of the observed prediction difficulty may reflect limitations in input coverage rather than only limitations of the models. Second, the evaluation is restricted to English-language news for US-listed companies. The results may not generalise to international markets, non-English news sources, or companies with lower media visibility. These settings may differ substantially in news volume, reporting style, publication timing, and market response dynamics. Third, the pipeline uses only textual evidence from news articles. It does not incorporate complementary market variables such as price momentum, trading volume, volatility, ana-lyst revisions, sector indices, or macroeconomic indicators. The substantial overlap between score distributions across ground-truth classes suggests that news sentiment alone may be insufficient for reliable short-horizon directional prediction. This is especially relevant for negative movements, which may be driven by broader market conditions, missed expectations, or information channels not captured in the retrieved news. Fourth, the evaluation covers a nine-month period and 20 companies. Although the dataset spans multiple sectors and prediction horizons, financial markets are non-stationary, and news-price relationships may change across volatility regimes, earnings cycles, and macroeconomic conditions. Sector-level conclusions should also be interpreted cautiously, since most sectors in the holdout set are represented by a single company. Finally, the ground-truth labelling depends on a volatility-scaled neutral threshold with a fixed scaling constant of 𝑘 = 0.5. This threshold provides a practical way to distinguish meaningful movement from noise, but alternative values would produce different class dis-tributions. Since the threshold defines the prediction task itself, there is no single objective boundary between neutral and directional returns. 
+
+# 6 Conclusion 
+
+This paper investigated whether financial news can support short-horizon stock movement pre-diction using zero-shot financial NLP. We introduced an impact-aware pipeline that combines company relevance filtering, recency weighting, event-dependent impact-horizon weighting, zero-shot NLI classification, and multi-layered explainability, and evaluated it on 480 cases across 20 US-listed companies, six prediction horizons, and five sentiment models. The results show that zero-shot financial NLP remains limited for direct stock movement prediction: none of the tested models exceeded the majority-class baseline on holdout accuracy, and all strug-gled particularly with negative movements. This suggests that the main difficulty is not simply sentiment classification, since the models perform substantially better on clean Financial 18 PhraseBank examples, but the weaker and noisier relationship between article-level sentiment and subsequent price direction. At the same time, the proposed pipeline provides value beyond raw accuracy: the NLI-based configuration achieved the strongest macro-F1 among the tested models, avoided invalid-output failures observed in generative LLM baselines, and produced reliability signals through evidence quality ratings, flip-set analysis, and grounded narrative summaries. Overall, the findings suggest that financial news should not be treated as a stan-dalone source of reliable directional trading signals, but as structured evidence for decision support. By exposing which articles contribute to a prediction, how temporally aligned they are, how robust the aggregated decision is, and whether the evidence base is trustworthy, the proposed framework provides a transparent way to understand when zero-shot financial NLP succeeds, when it fails, and why. 
+
+# 7 Competing Interests 
+
+On behalf of all authors, the corresponding author states that there is no conflict of interest. 
+
+# 8 Funding Information 
+
+This research received no specific grant from any funding agency in the public, commercial, or not-for-profit sectors. 
+
+# 9 Author Contribution 
+
+Hanrui Luo was responsible for writing the code and experiments along with drafting the initial version of the paper. Shreyank N Gowda, was responsible for supervision of the project, along with guiding Hanrui on the direction of the project. 
+
+# 10 Data Availability Statement 
+
+All data used in this paper is from publicly available resources and these have been listed in the paper. We will be releasing the code on acceptance and this would include steps to download and reproduce our results. 
+
+# 11 Research Involving Human and/or Animals 
+
+Not applicable. 
+
+# 12 Informed Consent 
+
+Not applicable. 
+
+# References 
+
+[1] Fama, E.F.: Efficient capital markets: A review of theory and empirical work. The journal of Finance 25 (2), 383–417 (1970) 19 [2] Schumaker, R.P., Chen, H.: Textual analysis of stock market prediction using breaking financial news: The azfin text system. ACM Transactions on Information Systems (TOIS) 
+
+27 (2), 1–19 (2009) [3] Evans, N., Edge, D., Larson, J., White, C.: News provenance: Revealing news text reuse at web-scale in an augmented news search experience. In: Extended Abstracts of the 2020 CHI Conference on Human Factors in Computing Systems, pp. 1–8 (2020) [4] Kauter, M., Breesch, D., Hoste, V.: Fine-grained analysis of explicit and implicit sen-timent in financial news articles. Expert Systems with applications 42 (11), 4999–5010 (2015) [5] Jacobs, G., Hoste, V.: Fine-grained implicit sentiment in financial news: Uncovering hidden bulls and bears. Electronics 10 (20), 2554 (2021) [6] Dakalbab, F., Kumar, A., Talib, M.A., Nasir, Q.: Advancing forex prediction through multimodal text-driven model and attention mechanisms. Intelligent Systems with Applications 26 , 200518 (2025) [7] Malo, P., Sinha, A., Korhonen, P., Wallenius, J., Takala, P.: Good debt or bad debt: Detect-ing semantic orientations in economic texts. Journal of the Association for Information Science and Technology 65 (4), 782–796 (2014) [8] Ashtiani, M.N., Raahemi, B.: News-based intelligent prediction of financial markets using text mining and machine learning: A systematic literature review. Expert Systems with Applications 217 , 119509 (2023) [9] Du, K., Xing, F., Mao, R., Cambria, E.: Financial sentiment analysis: Techniques and applications. ACM Computing Surveys 56 (9), 1–42 (2024) [10] Hinder, F., Vaquet, V., Hammer, B.: One or two things we know about concept drift—a survey on monitoring in evolving environments. part a: detecting concept drift. Frontiers in Artificial Intelligence 7, 1330257 (2024) [11] Bayram, F., Ahmed, B.S.: Towards trustworthy machine learning in production: An overview of the robustness in mlops approach. ACM Computing Surveys 57 (5), 1–35 (2025) [12] Fatouros, G., Soldatos, J., Kouroumali, K., Makridis, G., Kyriazis, D.: Transforming sen-timent analysis in the financial domain with chatgpt. Machine Learning with Applications 
+
+14 , 100508 (2023) [13] Yeo, W.J., Van Der Heever, W., Mao, R., Cambria, E., Satapathy, R., Mengaldo, G.: A comprehensive review on financial explainable ai: A comprehensive review on financial explainable ai: Wj yeo et al. Artificial Intelligence Review 58 (6) (2025) [14] Armstrong, W.J., Cardella, L., Sabah, N.: Information shocks, disagreement, and drift. 20 Journal of Financial Economics 140 (3), 916–940 (2021) [15] Fink, J.: A review of the post-earnings-announcement drift. Journal of Behavioral and Experimental Finance 29 , 100446 (2021) [16] Unsal, O., Hassan, M.K., Zirek, D.: Product recalls and security prices: New evidence from the us market. Journal of Economics and Business 93 , 62–79 (2017) [17] Liu, Y., Shankar, V., Yun, W.: Crisis management strategies and the long-term effects of product recalls on firm value. Journal of Marketing 81 (5), 30–48 (2017) [18] Kawas, S., Dockery, E.: What do we know about the stock markets’ reaction to regulatory announcements regarding financial institutions? evidence from uk financial institutions. Review of Quantitative Finance and Accounting 60 (1), 31–67 (2023) [19] Bri` ere, M., Huynh, K., Laudy, O., Pouget, S.: Stock market reaction to news: Do tense and horizon matter? Finance Research Letters 58 , 104630 (2023) [20] Chen, C.Y.-H., Fengler, M.R., H¨ ardle, W.K., Liu, Y.: Media-expressed tone, option char-acteristics, and stock return predictability. Journal of Economic Dynamics and Control 
+
+134 , 104290 (2022) [21] Araci, D.: Finbert: Financial sentiment analysis with pre-trained language models. arXiv preprint arXiv:1908.10063 (2019) [22] Yang, H., Liu, X.-Y., Wang, C.D.: Fingpt: Open-source financial large language models. arXiv preprint arXiv:2306.06031 (2023) [23] Alhoshan, W., Ferrari, A., Zhao, L.: Zero-shot learning for requirements classification: An exploratory study. Information and Software Technology 159 , 107202 (2023) [24] Zuo, X., Jiang, A.A., Zhou, K.: Reinforcement prompting for financial synthetic data generation. The Journal of Finance and Data Science 10 , 100137 (2024) [25] Bashiri, H., Naderi, H.: Syntapulse: An unsupervised framework for sentiment annotation and semantic topic extraction. Pattern Recognition 164 , 111593 (2025) [26] Ye, Z., Gowda, S., Chen, S., Huang, X., Xu, H., Khan, F., Jin, Y., Huang, K., Jin, X.: Zerodiff: Solidified visual-semantic correlation in zero-shot learning. In: International Conference on Learning Representations, vol. 2025, pp. 60471–60491 (2025) [27] Socher, R., Ganjoo, M., Manning, C.D., Ng, A.: Zero-shot learning through cross-modal transfer. Advances in neural information processing systems 26 (2013) [28] Chen, Z., Huang, Y., Chen, J., Geng, Y., Zhang, W., Fang, Y., Pan, J.Z., Chen, H.: Duet: Cross-modal semantic grounding for contrastive zero-shot learning. In: Proceedings of the AAAI Conference on Artificial Intelligence, vol. 37, pp. 405–413 (2023) 21 [29] Cao, W., Wu, Y., Sun, Y., Zhang, H., Ren, J., Gu, D., Wang, X.: A review on multi-modal zero-shot learning. Wiley Interdisciplinary Reviews: Data Mining and Knowledge Discovery 13 (2), 1488 (2023) [30] Gowda, S.N.: Synthetic sample selection for generalized zero-shot learning. In: Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 58–67 (2023) [31] Li, X., Chan, S., Zhu, X., Pei, Y., Ma, Z., Liu, X., Shah, S.: Are chatgpt and gpt-4 general-purpose solvers for financial text analytics? a study on several typical tasks. In: Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing: Industry Track, pp. 408–422 (2023) [32] Shen, Y., Zhang, P.K.: Financial sentiment analysis on news and reports using large language models and finbert. In: 2024 IEEE 6th International Conference on Power, Intelligent Computing and Systems (ICPICS), pp. 717–721 (2024). IEEE [33] Yin, W., Hay, J., Roth, D.: Benchmarking zero-shot text classification: Datasets, eval-uation and entailment approach. In: Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pp. 3914–3923 (2019) [34] He, P., Gao, J., Chen, W.: Debertav3: Improving deberta using electra-style pre-training with gradient-disentangled embedding sharing. arXiv preprint arXiv:2111.09543 (2021) [35] Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., Levy, O., Lewis, M., Zettlemoyer, L., Stoyanov, V.: Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692 (2019) [36] Laurer, M., Van Atteveldt, W., Casas, A., Welbers, K.: Less annotating, more classifying: Addressing the data scarcity issue of supervised machine learning with deep transfer learning and bert-nli. Political Analysis 32 (1), 84–100 (2024) [37] Ribeiro, M.T., Singh, S., Guestrin, C.: ” why should i trust you?” explaining the pre-dictions of any classifier. In: Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, pp. 1135–1144 (2016) [38] Lundberg, S.M., Lee, S.-I.: A unified approach to interpreting model predictions. Advances in neural information processing systems 30 (2017) [39] Jang, J.: Selective news selection model for explainable stock prediction via cross-attention integration. Finance Research Letters, 108146 (2025) [40] Koa, K.J., Ma, Y., Ng, R., Chua, T.-S.: Learning to generate explainable stock predictions using self-reflective large language models. In: Proceedings of the ACM Web Conference 2024, pp. 4304–4315 (2024) 22 [41] Turpin, M., Michael, J., Perez, E., Bowman, S.: Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems 36 , 74952–74965 (2023) [42] Ji, Z., Lee, N., Frieske, R., Yu, T., Su, D., Xu, Y., Ishii, E., Bang, Y.J., Madotto, A., Fung, P.: Survey of hallucination in natural language generation. ACM computing surveys 
+
+55 (12), 1–38 (2023) [43] Ball, R., Brown, P.: An empirical evaluation of accounting. Journal of Accounting Research 6(2), 159–178 (1968) [44] Bernard, V.L., Thomas, J.K.: Post-earnings-announcement drift: delayed price response or risk premium? Journal of Accounting research 27 , 1–36 (1989) [45] Kim, S.T., Lin, J.-C., Slovin, M.B.: Market structure, informed trading, and analysts’ recommendations. Journal of Financial and Quantitative Analysis 32 (4), 507–524 (1997) [46] Womack, K.L.: Do brokerage analysts’ recommendations have investment value? The journal of finance 51 (1), 137–167 (1996) [47] Warren, N.L., Sorescu, A.: When 1+ 1¿ 2: How investors react to new product releases announced concurrently with other corporate news. Journal of Marketing 81 (2), 64–82 (2017) [48] Vermaelen, T.: Common stock repurchases and market signalling: An empirical study. Journal of financial economics 9(2), 139–183 (1981) [49] Karpoff, J.M., Lott Jr, J.R.: The reputational penalty firms bear from committing criminal fraud. The Journal of Law and Economics 36 (2), 757–802 (1993) [50] Schwert, G.W.: Markup pricing in mergers and acquisitions. Journal of Financial economics 41 (2), 153–192 (1996) [51] Denis, D.J., Denis, D.K.: Performance changes following top management dismissals. The Journal of finance 50 (4), 1029–1057 (1995) [52] Heston, S.L., Sinha, N.R.: News versus sentiment: Predicting stock returns from news stories. Robert H. Smith School Research Paper (2015) [53] Holthausen, R.W., Leftwich, R.W.: The effect of bond rating changes on common stock prices. Journal of Financial Economics 17 (1), 57–89 (1986) [54] Campbell, J.Y., Hilscher, J., Szilagyi, J.: In search of distress risk. The Journal of finance 
+
+63 (6), 2899–2939 (2008) [55] Gurun, U.G., Butler, A.W.: Don’t believe the hype: Local media slant, local advertising, and firm value. The Journal of Finance 67 (2), 561–598 (2012) 23 [56] Ballinari, D., Audrino, F., Sigrist, F.: When does attention matter? the effect of investor attention on stock market volatility around news releases. International Review of Financial Analysis 82 , 102185 (2022) [57] Boyle, A.D., Cheng, F., Zouhar, V., El-Assady, M.: Cafga: Customizing feature attribu-tions to explain language models. In: Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing: System Demonstrations, pp. 461–470 (2025) [58] Chen, B., Zhang, Z., Langren´ e, N., Zhu, S.: Unleashing the potential of prompt engineering for large language models. Patterns 6(6) (2025) [59] Cutler, D.M., Poterba, J.M., Summers, L.H.: What moves stock prices? National Bureau of Economic Research Cambridge, Mass., USA (1988) [60] Ding, R., Zhou, H., Li, Y.: Social media, financial reporting opacity, and return comovement: Evidence from seeking alpha. Journal of Financial Markets 50 , 100511 (2020) [61] Dolatsara, H.A., Kibis, E., Caglar, M., Simsek, S., Dag, A., Dolatsara, G.A., Delen, D.: An interpretable decision-support systems for daily cryptocurrency trading. Expert Systems with Applications 203 , 117409 (2022) [62] Gupta, T., Devji, S., Tripathi, A.K.: Investigating the impact of sentiments on stock market using digital proxies: Current trends, challenges, and future directions. Expert Systems with Applications 285 , 127864 (2025) [63] Hayo, B., Henseler, K., Rapp, M.S., Zahner, J.: Complexity of ecb communication and financial market trading. Journal of International Money and Finance 128 , 102709 (2022) [64] Hull, J.C., Basu, S.: Options, Futures, and Other Derivatives. Pearson Education India, ??? (2016) [65] Huynh, T.H.H., Dang, T.L.: The liquidity effect of media coverage: International evidence. Pacific-Basin Finance Journal 93 , 102852 (2025) [66] Longerstaey, J., Spencer, M.: Riskmetricstm—technical document. Morgan Guaranty Trust Company of New York: New York 51 , 54 (1996) [67] Kroeger, N., Ley, D., Krishna, S., Agarwal, C., Lakkaraju, H.: In-context explainers: Harnessing llms for explaining black box models. arXiv preprint arXiv:2310.05797 (2023) [68] Lewis, M., Liu, Y., Goyal, N., Ghazvininejad, M., Mohamed, A., Levy, O., Stoyanov, V., Zettlemoyer, L.: Bart: Denoising sequence-to-sequence pre-training for natural language generation, translation, and comprehension. In: Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pp. 7871–7880 (2020) [69] Liu, P., Yuan, W., Fu, J., Jiang, Z., Hayashi, H., Neubig, G.: Pre-train, prompt, and 24 predict: A systematic survey of prompting methods in natural language processing. ACM computing surveys 55 (9), 1–35 (2023) [70] Longo, L., Brcic, M., Cabitza, F., Choi, J., Confalonieri, R., Del Ser, J., Guidotti, R., Hayashi, Y., Herrera, F., Holzinger, A., et al. : Explainable artificial intelligence (xai) 2.0: A manifesto of open challenges and interdisciplinary research directions. Information Fusion 106 , 102301 (2024) [71] Lu, Y., Bartolo, M., Moore, A., Riedel, S., Stenetorp, P.: Fantastically ordered prompts and where to find them: Overcoming few-shot prompt order sensitivity. In: Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pp. 8086–8098 (2022) [72] Lyu, Q., Apidianaki, M., Callison-Burch, C.: Towards faithful model explanation in nlp: A survey. Computational Linguistics 50 (2), 657–723 (2024) [73] Ma, T., Yao, J.-G., Lin, C.-Y., Zhao, T.: Issues with entailment-based zero-shot text classification. In: Proceedings of the 59th Annual Meeting of the Association for Com-putational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 2: Short Papers), pp. 786–796 (2021) [74] Miller, G.A.: The magical number seven, plus or minus two: Some limits on our capacity for processing information. Psychological review 63 (2), 81 (1956) [75] Miller, T.: Explanation in artificial intelligence: Insights from the social sciences. Artificial intelligence 267 , 1–38 (2019) [76] Mosca, E., Szigeti, F., Tragianni, S., Gallagher, D., Groh, G.: Shap-based explanation methods: a review for nlp interpretability. In: Proceedings of the 29th International Conference on Computational Linguistics, pp. 4593–4603 (2022) [77] Nauta, M., Trienes, J., Pathak, S., Nguyen, E., Peters, M., Schmitt, Y., Schl¨ otterer, J., Van Keulen, M., Seifert, C.: From anecdotal evidence to quantitative evaluation methods: A systematic review on evaluating explainable ai. ACM Computing Surveys 55 (13s), 1–42 (2023) [78] Nikkinen, J., Omran, M., Sahlstr¨ om, P., ¨ Aij¨ o, J.: Global stock market reactions to sched-uled us macroeconomic news announcements. Global Finance Journal 17 (1), 92–104 (2006) [79] Pan, C., Zhang, W., Wang, W.: Global geopolitical risk and volatility connectedness among china’s sectoral stock markets. Finance Research Letters 58 , 104487 (2023) [80] Sclar, M., Choi, Y., Tsvetkov, Y., Suhr, A.: Quantifying language models’ sensitivity to spurious features in prompt design or: How i learned to start worrying about prompt formatting. In: International Conference on Learning Representations, vol. 2024, pp. 25055–25083 (2024) 25 [81] Slime, B., Hammami, M.: Concentration risk: the comparison of the ad-hoc approach indexes. Journal of Financial Risk Management 5(1), 43–56 (2016) [82] Spitzer, P., Celis, S., Martin, D., K¨ uhl, N., Satzger, G.: Looking through the deep glasses: How large language models enhance explainability of deep learning models. In: Proceedings of Mensch und Computer 2024, pp. 566–570 (2024) [83] Sundararajan, M., Taly, A., Yan, Q.: Axiomatic attribution for deep networks. In: International Conference on Machine Learning, pp. 3319–3328 (2017). PMLR [84] Wachter, S., Mittelstadt, B., Russell, C.: Counterfactual explanations without opening the black box: Automated decisions and the gdpr. Harv. JL & Tech. 31 , 841 (2017) [85] Wang, Y., Wang, W., Chen, Q., Huang, K., Nguyen, A., De, S.: Zero-shot text classifica-tion with knowledge resources under label-fully-unseen setting. Neurocomputing 610 ,128580 (2024) [86] Williams, A., Nangia, N., Bowman, S.: A broad-coverage challenge corpus for sentence understanding through inference. In: Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long Papers), pp. 1112–1122 (2018) [87] Zhang, W., Deng, Y., Liu, B., Pan, S., Bing, L.: Sentiment analysis in the era of large language models: A reality check. In: Findings of the Association for Computational Linguistics: NAACL 2024, pp. 3881–3906 (2024) [88] Zhao, H., Chen, H., Yang, F., Liu, N., Deng, H., Cai, H., Wang, S., Yin, D., Du, M.: Explainability for large language models: A survey. ACM Transactions on Intelligent Systems and Technology 15 (2), 1–38 (2024) [89] Zhao, L., Zhou, J., Cao, J., Zhu, W.: Emsa: Explainable multilingual sentiment analy-sis models providing sentiment analysis across multiple languages. PLoS One 20 (11), 0333508 (2025) 26
