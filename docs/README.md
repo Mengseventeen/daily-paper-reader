@@ -6,40 +6,39 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-11
-- 运行时间：2026-06-11 21:32:28 UTC
+- 最新运行日期：2026-06-12
+- 运行时间：2026-06-12 20:59:43 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：5
+- 精读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日精选6篇，聚焦金融预测与模型创新。  
-高分论文揭示新闻预测市场的局限性及可解释AI的价值；结构化矩阵自回归模型联合刻画量价波动。  
-关注新闻与市场关联性时需谨慎，可参考可解释方法。
-- 详情：[/202606/11/README](/202606/11/README)
+今日聚焦模糊金融市场优化与隐私保护两大前沿，精读《Mean-Variance Optimization in Ambiguous Financial Markets with Learning》（8.0分）。
+
+最值得看的方向包括模糊环境下的均值-方差优化学习，以及结合替代数据的隐私保护信用风险预测。
+
+建议普通读者优先关注金融不确定性建模与隐私计算交叉领域，可快速浏览相关速读文章获取直觉。
+- 详情：[/202606/12/README](/202606/12/README)
 
 ### 精读区论文标签
-1. [Can News Predict the Market? Limits of Zero-Shot Financial NLP and the Role of Explainable AI](/202606/11/2606.12210v1-can-news-predict-the-market-limits-of-zero-shot-financial-nlp-and-the-role-of-explainable-ai)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：自然语言处理和可解释AI用于新闻驱动的市场预测
-2. [A Structural Matrix Autoregressive Model for the Joint Dynamics of Volume, Volatility, and Returns](/202606/11/2606.08141v1-a-structural-matrix-autoregressive-model-for-the-joint-dynamics-of-volume-volatility-and-returns)  
+1. [Mean-Variance Optimization in Ambiguous Financial Markets with Learning](/202606/12/2606.11318v1-mean-variance-optimization-in-ambiguous-financial-markets-with-learning)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：金融时间序列动态的新模型
-3. [MoCA-Agent: A Market-of-Claims Code Agent for Financial and Numerical Reasoning](/202606/11/2606.11537v1-moca-agent-a-market-of-claims-code-agent-for-financial-and-numerical-reasoning)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：采用声明级验证和Python代码生成的金融问答系统
+   evidence：含模糊厌恶和学习的均值-方差投资组合优化
 
 ### 速读区论文标签
-1. [Evaluating AI Investment Strategies](/202606/11/2606.08791v1-evaluating-ai-investment-strategies)  
+1. [Privacy-Preserving Credit Risk Prediction with Alternative Data](/202606/12/2606.10333v1-privacy-preserving-credit-risk-prediction-with-alternative-data)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：使用遗憾分解审计AI投资策略，与金融人工智能相关
-2. [Mitigating Bias in Low-SNR Financial Reinforcement Learning via Quantum Representations](/202606/11/2606.10448v1-mitigating-bias-in-low-snr-financial-reinforcement-learning-via-quantum-representations)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：用量子表示缓解金融强化学习偏差，与金融人工智能相关
-3. [InA-Probe: Instruction-Aware Active Probing for Time Series Forecasting with LLMs](/202606/11/2606.08601v1-ina-probe-instruction-aware-active-probing-for-time-series-forecasting-with-llms)  
+   evidence：使用机器学习进行信用风险预测
+2. [Particle Methods with Deep Learning for Stochastic Control under Partial Observation](/202606/12/2606.09055v1-particle-methods-with-deep-learning-for-stochastic-control-under-partial-observation)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：面向LLM时间序列预测的指令感知主动探测方法
+   evidence：深度学习和粒子方法用于随机控制，可应用于投资组合管理
+3. [Less Context, Better Agents: Efficient Context Engineering for Long-Horizon Tool-Using LLM Agents](/202606/12/2606.10209v1-less-context-better-agents-efficient-context-engineering-for-long-horizon-tool-using-llm-agents)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：大语言模型代理在财务费用归集任务中的高效上下文工程
+4. [FlowBank: Query-Adaptive Agentic Workflows Optimization through Precompute-and-Reuse](/202606/12/2606.11290v1-flowbank-query-adaptive-agentic-workflows-optimization-through-precompute-and-reuse)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：在金融运营中使用大语言模型的智能体工作流优化
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,2513 @@
+Title: Particle Methods with Deep Learning for Stochastic Control under Partial Observation
+
+URL Source: https://arxiv.org/pdf/2606.09055v1
+
+Published Time: Tue, 09 Jun 2026 02:13:58 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# Particle Methods with Deep Learning for Stochastic Control under Partial Observation 
+
+Mathieu Lauri` ere ∗ Xiaolu Tan † Jiefei Yang ‡
+
+Abstract 
+
+Numerical computation of stochastic control problems under partial observation is chal-lenging because the dynamic programming formulation is naturally posed on the conditional distribution of the hidden state. We propose particle-based methods that replace this infinite-dimensional filtering state by a finite-dimensional weighted particle system, building on re-cent limit theory for mean-field control with common-noise-adapted controls. We prove, under suitable assumptions, convergence of the fully discretized particle approximation to the orig-inal continuous-time partially observed control problem. The particle reformulation is high-dimensional but permutation-invariant, a structure that can be exploited by symmetric neural network architectures. We develop two deep learning algorithms: a direct optimization method for feedback controls and a Deep BSDE method for particle problems admitting a backward stochastic differential equation representation. We also extend the computational framework to partially observed mean-field control problems, which have been studied theoretically but remain less developed numerically. Numerical experiments on a linear–quadratic benchmark, a nonlinear partially observed mean-field control problem, and two financial applications, portfolio liquidation and asset allocation, demonstrate the accuracy and practical utility of the approach. 
+
+Key words. Stochastic optimal control; Partial observation; Deep learning; Particle method 
+
+MSC codes. 65C35, 49M25, 93C41 
+
+## 1 Introduction 
+
+Stochastic optimal control provides a mathematical framework for sequential decision-making un-der uncertainty, with applications ranging from engineering and operations research to finance and economics. In many such problems, the controller does not observe the full state of the system. Decisions must instead be made from a noisy signal, while relevant state variables remain hidden: examples include control from imperfect sensor measurements, portfolio optimization under an un-observed drift, and trading problems in which latent market factors must be inferred from prices. This practical feature has motivated a large literature on stochastic control under partial observa-tion, including early work on dynamic programming and measure-valued formulations [10, 14], as well as the monograph [4]; see also [5, 25, 2] for representative theoretical and financial develop-ments. Partial observation also changes the computational nature of the control problem. In the fully observed setting, the dynamic programming principle (DPP) typically leads to a Hamilton–Jacobi– Bellman (HJB) equation whose state variable is the current physical state. Under partial ob-servation, however, the relevant state is the conditional distribution of the hidden state given   
+
+> ∗Shanghai Center for Data Science; NYU-ECNU Institute of Mathematical Science, NYU Shanghai. math-ieu.lauriere@nyu.edu
+> †Department of Mathematics, The Chinese University of Hong Kong. xiaolu.tan@cuhk.edu.hk
+> ‡NYU-ECNU Institute of Mathematical Sciences, NYU Shanghai. jy5595@nyu.edu.
+
+1
+
+> arXiv:2606.09055v1 [math.OC] 8 Jun 2026
+
+the observations. This filtering distribution is measure-valued, so the separated control problem is fully observed but infinite-dimensional. Consequently, classical DPP-based approaches lead to HJB equations on spaces of probability measures or to infinite-dimensional filtering equations [14, 24, 17]. Although this viewpoint is fundamental, it poses a serious obstacle to direct numerical implemen-tation. The relaxed formulation introduced in [13] provides another classical perspective, and a recent discrete-time approximation was studied in [23]. The aim of this paper is to develop particle-based numerical methods for continuous-time stochastic control under partial observation, with convergence guarantees for the standard control problem and implementable deep learning algorithms. Our starting point is the classical reference probability reformulation: after a change of measure, the observation process becomes a Brown-ian common noise and the likelihood process carries the information from the observations. This places the problem in a form closely related to mean-field control (MFC) with controls adapted to common noise. We exploit this connection by using the recent limit theory of [6] to replace the infinite-dimensional filtering state by a finite particle system with likelihood weights. The resulting approximation has two features that are particularly useful for computation. First, after time discretization, the partially observed problem is transformed into a finite-dimensional, fully observed Markov control problem. Second, although the dimension grows with the number of particles, the system is invariant under permutations of the particles. This symmetry is essential for computation: it allows us to use symmetric neural network architectures, such as DeepSets-type architectures [16], to represent feedback controls and BSDE integrands with a parameter count that does not scale as a generic high-dimensional network would. In this way, the particle approximation supplies both a mathematically justified finite-dimensional surrogate and a structure that can be exploited algorithmically. Our contributions can be summarized as follows. 
+
+• Convergence theory. For standard stochastic optimal control under partial observation, we establish convergence from the original continuous-time problem to a fully discretized, fully observed N -particle control problem. The result combines the particle limit from [6] with a time-discretization argument for the controlled particle system. 
+
+• Particle approximation for partially observed MFC. We show how the same particle representation extends naturally to MFC problems under partial observation, a class of prob-lems studied theoretically in [7, 26, 3, 15] but still rarely addressed numerically. We present the algorithm for the MFC extension and numerical examples. 
+
+• Deep particle algorithms. We develop two deep learning algorithms for the particle control problem: a direct method that optimizes a symmetric feedback policy, and a Deep BSDE method for the case where the particle problem admits a BSDE characterization. We also implement a recurrent neural network (RNN) method adapted from [20] as a baseline for path-dependent controls. Numerical experiments show that the particle approach is accurate on a linear–quadratic benchmark with an explicit solution, remains consistent across the direct and Deep BSDE solvers for a nonlinear partially observed MFC example, and is effective on portfolio liquidation and asset allocation problems. 
+
+Related works. Our work is connected to three strands of literature. The first is the classical theory of stochastic control under partial observation and its numerical approximation. As discussed above, this includes dynamic programming and filtering formulations [10, 14, 4], infinite-dimensional HJB equations [24, 17], relaxed formulations [13], financial applications [25, 2], and recent discrete-time approximation schemes [23]. 2The second strand is the recent literature on partially observed MFC and conditional McKean– Vlasov dynamics. Partially observed MFC was introduced in [7], which established wellposedness and a Pontryagin maximum principle. Subsequent developments include discrete-time partially observed MFC [26], continuous-time control with discrete-time observations [3], and hidden Markov switching models [15]. The associated conditional McKean–Vlasov stochastic differential equations and their particle approximations have been studied in [8, 12]. Our particle approximation for the standard control problem relies instead on the common-noise-adapted MFC limit theory of [6]. The third strand concerns deep learning methods for high-dimensional stochastic control and related equations. Direct neural-network approaches for stochastic control were developed in [19]. The Deep BSDE method was introduced in [21], with convergence analysis studied in [22]. In mean-field settings, related methods include direct learning [9], population-dependent architectures [11], and symmetric networks for permutation-invariant problems [16]. General deep learning frameworks for stochastic control are studied in [1]. Our contribution is to combine these computational tools with a particle reformulation tailored to partial observation. 
+
+Organization of the paper. Section 2 formulates the partially observed control problem, presents the particle approximation and time discretization, and states the main convergence theorem. It also describes the extension to partially observed MFC. Section 3 develops the direct and Deep BSDE particle algorithms. Section 4 evaluates these schemes on a linear–quadratic benchmark, a partially observed MFC model, and two financial portfolio optimization problems. Section 5 concludes the paper. 
+
+## 2 Problem formulation and particle approximation 
+
+Let us introduce a general optimal control problem with partial observations in a continuous-time setting with finite horizon T > 0, c.f. [4], and then provide some approximation algorithms based on the particle method. We then also discuss its extension to the MFC problem with partial observation in the spirit of [7]. Throughout the paper, we set X = Rd as state space, A ⊂ Rd the action space, and U = Rd the observation space. 
+
+2.1 An optimal control problem with partial observation 
+
+Let d ≥ 1, we are given the coefficient functions ( b, σ, σ 0, h, f ) : [0 , T ] × Rd × A −→ Rd × Rd×d ×
+
+Rd×d × Rd × R, g : Rd −→ R, and an initial distribution μ0 on Rd. Given a control process α, the controlled (unobservable) state process X is given by 
+
+Xt = X0 +
+
+Z t
+
+> 0
+
+b(s, X s, α s) d s +
+
+Z t
+
+> 0
+
+σ(s, X s, α s)d Ws +
+
+Z t
+
+> 0
+
+σ0(s, X s, α s)d Bs, t ∈ [0 , T ], (2.1) where L(X0) = μ0, W and B are two independent Rd-valued standard Brownian motions in a filtered probability space (Ω , F, F = ( Ft)0≤t≤T , P). While the controlled state process X is unob-servable, one can observe the process U given by 
+
+Ut =
+
+Z t
+
+> 0
+
+h(s, X s, α s) d s + Bt, t ∈ [0 , T ]. (2.2) The control process α is required to be adapted to the observation filtration G generated by the observable process U . We then obtain the following optimal control problem with partial observa-3tion: 
+
+V0 := inf  
+
+> α
+
+is predictable to G
+
+E
+
+Z T
+
+> 0
+
+f (t, X t, α t) d t + g(XT )
+
+
+
+. (2.3) Our main objective is to provide some approximation algorithms. 
+
+Reformulation by reference probability approach. Following the classical reference proba-bility approach, let us introduce an equivalent reformulation of problem by considering the proba-bility measure Q defined by dQ
+
+dP :=  LT
+
+−1, with Lt := exp 
+
+Z t
+
+> 0
+
+h(s, X s, α s) d Us − 12
+
+Z t
+
+> 0
+
+h(s, X s, α s) 2 ds
+
+
+
+, t ∈ [0 , T ]. (2.4) Under the probability measure Q, the process U becomes a standard Brownian motion, independent of the Brownian motion W , the control process α is adapted to the filtration generated by the Brownian motion U .In the probability space (Ω , F, Q), the processes W and U are two independent standard Brow-nian motions, the (unobservable) state process X satisfies LQ(X0) = μ0 and 
+
+Xt = X0 +
+
+Z t
+
+> 0
+
+ b(s, X s, α s) − σ0(s, X s, α s)h(s, X s, α s)ds
+
++
+
+Z t
+
+> 0
+
+σ(s, X s, α s)d Ws +
+
+Z t
+
+> 0
+
+σ0(s, X s, α s)d Us, t ∈ [0 , T ], (2.5) and L is defined in (2.4). Denoting by A the space of all control processes α which are predictable to the filtration G generated by the Brownian motion U , we obtain the equivalent formulation of the initial optimal control problem with partial observation: 
+
+V0 = inf  
+
+> α∈A
+
+EQ
+
+Z T
+
+> 0
+
+Lt f (t, X t, α t) d t + LT g(XT )
+
+
+
+. (2.6) Let us assume the following technical conditions on the coefficient functions. 
+
+Assumption 1. The action space A ⊂ Rd is compact. Further, there exist constants p > q ≥ 1such that μ0 has finite p-moment, i.e. Z
+
+> Rd
+
+|x|pμ0(dx ) < ∞.
+
+The coefficient functions ( b, σ, σ 0, h ) are all bounded continuous, and there exists a constant C > 0such that 
+
+(b, σ, σ 0, h )( t, x, a ) − (b, σ, σ 0, h )( t, y, a ) ≤ C|x − y|,
+
+for all ( t, x, y, a ) ∈ [0 , T ] × Rd × Rd × A. Moreover, the coefficient functions f and g are continuous, and there exists a constant C > 0 such that 
+
+f (t, x, a ) + g(x) ≤ C 1 + |x|q, for all ( t, x, a ) ∈ [0 , T ] × Rd × A. (2.7) 
+
+Remark 2.1 . Under Assumption 1, it is clear that the SDE (2.4)-(2.5) is wellposed. Moreover, it follows by standard analysis that sup 
+
+> α∈A
+
+EP
+
+
+
+sup 
+
+> 0≤t≤T
+
+Xt p
+
+
+
+< ∞,
+
+so that the value function V0 is finite under the growth condition (2.7). 4Remark 2.2 . We assume the compactness of A and the boundedness of coefficients ( b, σ, σ 0) for sim-plicity. One can also assume polynomial growth conditions on the coefficient functions, together with appropriate integrability conditions on the admissible control processes α (without compact-ness of A), see also [6, Assumption 3.1] for similar technical conditions in the setting of standard McKean-Vlasov optimal control problems. 
+
+2.2 Approximation by controlled particle system 
+
+As discussed in [6, Section 5], the reformulation (2.6) of the partially observed control problem can be considered as a special mean-field control problem with common noise adapted control processes, so that one can approximate it by a fully observable N -particle system. We will explore this particle approximation method. 
+
+A continuous-time controlled particle system. Let N ≥ 1, (Ω N , FN , QN ) be a probability space equipped with a Brownian motion U , a sequence of i.i.d. random variables ( ξk)Nk=1 with 
+
+ξk ∼ μ0, and a sequence of Brownian motions ( W k)Nk=1 , all of which are mutually independent. Let us define the filtration FN := ( FNt )t∈[0 ,T ] by FNt := σ(ξ1, . . . , ξ N , W 1 
+
+> s
+
+, . . . , W Ns , U s : s ≤ t), and define the space of all (fully observable) admissible controls by 
+
+AN := {α = ( αt)t≤T : α is an A-valued FN -predictable process }.
+
+Given a control process α ∈ A N , the controlled particle system ( X1,α t , . . . , X N,α t , L 1,α t , . . . , L N,α t ) is defined by, for each k = 1 , · · · , N ,
+
+Xk,α t = ξk +
+
+Z t
+
+> 0
+
+
+
+b(s, X k,α s , α s) − σ0(s, X k,α s , α s)h(s, X k,α s , α s)
+
+
+
+ds
+
++
+
+Z t
+
+> 0
+
+σ(s, X k,α s , α s) d W ks +
+
+Z t
+
+> 0
+
+σ0(s, X k,α s , α s) d Us, (2.8) 
+
+Lk,α t = 1 + 
+
+Z t
+
+> 0
+
+h(s, X k,α s , α s)Lk,α s dUs, (2.9) Under Assumptions 1, it is clear that SDE (2.8)-(2.9) has a unique strong solution. Our continuous-time particle approximation problem is then given by 
+
+V N 
+
+> 0
+
+:= inf 
+
+> α∈A N
+
+JN (α), (2.10) with 
+
+JN (α) := EQN
+
+"Z T
+
+> 0
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk,α t f (t, X k,α t , α t) d t + 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk,α T g(Xk,α T )
+
+#
+
+. (2.11) We then have the following convergence result. 
+
+Proposition 2.3. Let Assumptions 1 hold true with p > q = 2 , and assume that σ0(t, x, a ) and 
+
+h(t, x, a ) are independent of the control variable a ∈ A. Then 
+
+V N 
+
+> 0
+
+−→ V0, as N −→ ∞ .
+
+Proof. The reformulation (2.5)-(2.4)-(2.6) of the partially observed control problem under the prob-ability Q falls in the setting of the common noise adapted mean-field control problem (11) of [6]. In particular, with the compactness condition on A and the Lipschitz conditions on the coefficient functions in Assumption 1, the required convergence result follows directly by [6, Theorem 3.2]. 5BSDE characterization of the particle system when σ is not controlled. The N -particle problem (2.10) is in the form of standard optimal control problems. When the coefficient σ and h
+
+are uncontrolled and non-degenerate (see Assumption 2 for a precise statement), one can obtain a Backward SDE (BSDE) characterization of the value function by following the standard approach, see e.g. [27, Theorem 4.5.3]. First, given the arguments a ∈ A, x = ( x1, · · · , x N ) and ℓ = ( ℓ1, · · · , ℓ N ), let denote bkt := 
+
+b(t, x k, a ), σkt := σ(t, x k), σk 
+
+> 0,t
+
+:= σ0(t, x k), and hkt := h(t, x k). Assume the σ is invertible. One can then identify the following equality for the drift and volatility of the N -particle system: 
+
+
+
+b1 
+
+> t
+
+− σ10,t h1
+
+> t
+
+...
+
+bNt − σN
+
+> 0,t
+
+hNt
+
+0...0
+
+
+
+=
+
+
+
+σ1 
+
+> t
+
+0d×d σ10,t 
+
+. . . ...0d×d σNt σN
+
+> 0,t
+
+01×d · · · 01×d h1 
+
+> t
+
+ℓ1
+
+... ...01×d · · · 01×d hNt ℓN
+
+
+
+(σ1 
+
+> t
+
+)−1(b1 
+
+> t
+
+− σ10,t h1 
+
+> t
+
+)...(σNt )−1(bNt − σN
+
+> 0,t
+
+hNt )0d
+
+ . (2.12) We then define the Hamiltonian H : [0 , T ] × Rd×N × RN × Rd×(N +1) −→ R by 
+
+H(t, x, ℓ, z) := inf 
+
+> a∈A
+
+ 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+ℓkf (t, x k, a ) + z · θ(t, x, ℓ, a )
+
+
+
+,
+
+where 
+
+θ(t, x, ℓ, a ) = 
+
+
+
+(σ1 
+
+> t
+
+)−1(b1 
+
+> t
+
+− σ10,t h1 
+
+> t
+
+)...(σNt )−1(bNt − σN
+
+> 0,t
+
+hNt )0d
+
+ .
+
+Next, Proposition 2.4 provides the BSDE representation of the optimal value for the N -particle problem (2.10) provided that the diffusion σ is uncontrolled and invertible, whose proof can be found in [27, Theorem 4.5.3]. 
+
+Assumption 2. The coefficient function σ, σ0 and h are uncontrolled, so that one can write (σ, σ 0, h )( t, x ) in place of ( σ, σ 0, h )( t, x, a ). Moreover, the function θ is uniformly bounded so that the Hamiltonian H(t, x, ℓ, z) is Lipschitz in z.Let us define, in the filtered probability space (Ω N , FN , FN , PN ) equipped with independent Brownian motions W 1, . . . , W N , U , the uncontrolled process Xt = ( X1 
+
+> t
+
+, . . . , X Nt ), Lt = ( L1 
+
+> t
+
+, . . . , L Nt )by the following SDEs: for k = 1 , · · · , N ,
+
+Xkt = ξk +
+
+Z t
+
+> 0
+
+σ(s, X ks ) d W ks +
+
+Z t
+
+> 0
+
+σ0(s, X ks ) d Us, t ∈ [0 , T ],
+
+and 
+
+Lkt = 1 + 
+
+Z t
+
+> 0
+
+h(s, X ks )Lks dUs, t ∈ [0 , T ].
+
+Let us denote by SN, 2 the space of all FN -optional R-valued process Y = ( Yt)0≤t≤T such that 
+
+E sup 0≤t≤T |Yt|2 < ∞, and by HN, 2 the space of all FN -predictable Rd×(N +1) -valued process 
+
+Z = ( Zt)0≤t≤T such that 
+
+E
+
+h Z T
+
+> 0
+
+Zt 2dt 
+
+i
+
+< ∞.
+
+6Proposition 2.4. Let Assumptions 1 and 2 hold true with parameters p > 2q ≥ 2. Then the following BSDE has a unique solution (Y, Zt = ( Z1 
+
+> t
+
+, . . . , Z Nt , Z N +1  
+
+> t
+
+)) ∈ SN, 2 × HN, 2:
+
+dY Nt = −H (t, Xt, Lt, Zt) d t +
+
+> N
+
+X
+
+> k=1
+
+Zkt dW kt + ZN +1  
+
+> t
+
+dUt, Y NT = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT g(XkT ). (2.13) 
+
+and Yt provides the value process for the N -particle problem (2.10) , in particular, Y0 = V N 
+
+> 0
+
+.Proof. When Assumption 1 holds with p > 2q ≥ 2, it is direct to check that 
+
+E
+
+h Z T
+
+> 0
+
+H(t, Xt, Lt, 0) 2 dt +
+
+> N
+
+X
+
+> k=1
+
+LkT g(XkT ) 2i
+
+< ∞.
+
+Further, under Assumption 2, the Hamiltonian H(t, x, ℓ, z) is Lipschitz in z. Then it is standard that the BSDE (2.13) has a unique solution in SN, 2 × HN, 2 (see e.g. [27, Theorem 4.3.1]). Finally, the fact that Yt coincides with the value function of the control problem (2.10) follows by [27, Theorem 4.5.3]. 
+
+A discrete-time controlled particle system. The numerical implementation of the approxi-mation method relies on the time discretization. We therefore consider the following discrete-time particle system associated with the continuous-time problem (2.10). Let T := {ti = i∆t : ∆ t = 
+
+> TNT
+
+, i = 0 , 1, . . . , N T } be a discrete time grid, we define the discrete-time processes ( Xk, L k)k=1 ,··· ,N 
+
+on T by Euler-Maruyama scheme of SDE (2.8)-(2.9): given a control process ( αi)0≤i≤NT −1 such that αi ∈ F Nti , we denote ∆ W ki+1 := W kti+1 − W kti and ∆ Ui+1 := Uti+1 − Uti , and then define 
+
+Xk, ∆tt0 := ξk, Xk, ∆tti+1 = Xk, ∆tti +
+
+
+
+b(ti, X k, ∆tti , α i) − σ0(ti, X k, ∆tti , α i)h(ti, X k, ∆tti , α i)
+
+
+
+∆t
+
++ σ(ti, X k, ∆tti , α i)∆ W ki+1 + σ0(ti, X k, ∆tti , α i)∆ Ui+1 , (2.14) and 
+
+Lk, ∆tt0 = 1 , Lk, ∆tti+1 = Lk, ∆tti exp 
+
+
+
+− 12 h(ti, X k, ∆tti , α i)2∆t + h(ti, X k, ∆tti , α i)∆ Ui+1 
+
+
+
+, i = 0 , · · · , N T −1.
+
+(2.15) Let us denote by AN, ∆t the space of all such control processes. Then given α = ( α0, · · · , α NT −1) ∈AN, ∆t, the discrete-time cost function associated with (2.11) is given by 
+
+JN, ∆t(α) := E
+
+"NT −1X
+
+> i=0
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk, ∆tti f (ti, X k, ∆tti , α i)∆ t + 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk, ∆tT g(Xk, ∆tT )
+
+#
+
+, (2.16) and the optimal value of the discrete-time controlled particle system is defined by 
+
+V N, ∆t 
+
+> 0
+
+:= inf 
+
+> α∈A N, ∆t
+
+JN, ∆t(α). (2.17) 
+
+Remark 2.5 . We apply the Euler-Maruyama scheme to the SDE satisfied by log( Lkt ) to ensure the positivity of Lkti , and thus the positivity of the weight wkti in the mean-field setting, see (2.27) below. A direct discretization of the dynamics of Lkt can produce negative values of Lkti+1 when the Gaussian noise ∆ Ui is large. 7Remark 2.6 . The Problem (2.17) is time-consistent and thus can be solved by dynamic program-ming. The optimal control then satisfies a feedback form αi = ai(X1 
+
+> ti
+
+, . . . , X Nti , L 1 
+
+> ti
+
+, . . . , L Nti ). We shall approximate the feedback policy ai by neural networks in numerical implementations. The following result shows the convergence of V N, ∆t 
+
+> 0
+
+to the optimal value V0 of the partially observable control problem (2.3) as N −→ ∞ and ∆ t −→ 0. 
+
+Theorem 2.7. Let Assumptions 1 hold true with p > q = 2 , and assume that σ0(t, x, a ) and 
+
+h(t, x, a ) are independent of the control variable a ∈ A. Suppose in addition that f (t, x, a ) and g(x)
+
+are uniformly continuous in (t, x ) with modulus of continuity ϖ(·). Then 
+
+V N, ∆t 
+
+> 0
+
+−→ V0, as N −→ ∞ , ∆t −→ 0.
+
+Proof. First, a discrete-time control α = ( α0, · · · , α NT −1) ∈ A N, ∆t can be considered as a piecewise constant continuous-time control process by extending the definition: 
+
+αt := αti , t ∈ [ti, t i+1 ], i = 0 , 1, · · · , N T − 1.
+
+Similarly, one can consider Xk, ∆t as a continuous-time process by similar extension of definitions. Further, let us denote by A0 the space of all piecewise constant control processes α ∈ A then it follows by [6, Proposition A.5] that 
+
+V0 = inf 
+
+> α∈A 0
+
+EQ
+
+Z T
+
+> 0
+
+Lt f (t, X t, α t) d t + LT g(XT )
+
+
+
+.
+
+In view of this, by considering the discrete-time control α ∈ A N, ∆t as piecewise constant continuous-time control and recalling the definition of JN in (2.11), one can deduce by exactly the same arguments as in the proof of [6, Theorem 3.2] that inf 
+
+> α∈A N, ∆t
+
+JN (α) −→ V0, as N −→ ∞ , ∆t −→ 0. (2.18) At the same time, (2.14)-(2.15) is the Euler scheme for SDE (2.8)-(2.9), one has by standard analysis (see e.g. [18]) that, there exists a constant C > 0 such that, for all NT ≥ 1, ∆ t := T /N T
+
+and all α ∈ A N, ∆t
+
+E
+
+h
+
+sup 
+
+> 0≤t≤T
+
+
+
+Xk, ∆tt − Xkt 
+
+> 2
+
++ Lk, ∆tt − Lkt
+
+> 2
+
+ i 
+
+≤ C∆t. 
+
+Together with uniform continuity condition on f (·) and g(·), it follows that sup 
+
+> α∈A N, ∆t
+
+JN (α) − JN, ∆t(α) ≤ Cϖ (√∆t).
+
+Together with (2.18) and (2.17), it follows that 
+
+V N, ∆t 
+
+> 0
+
+−→ V0, as N −→ ∞ , ∆t −→ 0.
+
+2.3 An extension to the mean-field optimal control with partial observation 
+
+The above particle approximation method can be naturally extended for the mean-field optimal control problem with partial observation, in the spirit of [7]. Recall that X = U = Rd, we denote by P(X ) the space of all Borel probability measures on X . In the mean-field setting, we are given the coefficient functions ( b, σ, σ 0, f ) : [0 , T ] × X × P (X ) × A → Rd × Rd×d × Rd×d × R,
+
+h : [0 , T ] × X × A → U , and g : X × P (X ) → R, together with the initial distribution μ0 ∈ P (X ). 8A mean-field control problem with partial observation. In the mean-field setting, the unobservable state process X is defined by the McKean–Vlasov SDE 
+
+Xt = X0 +
+
+Z t
+
+> 0
+
+b(s, X s, μ s, α s) d s +
+
+Z t
+
+> 0
+
+σ(s, X s, μ s, α s)d Ws +
+
+Z t
+
+> 0
+
+σ0(s, X s, μ s, α s)d Bs, (2.19) where X0 ∼ μ0, W and B are two independent Rd-valued standard Brownian motions in the probability space (Ω , F, P). The observable process U is defined by 
+
+Ut =
+
+Z t
+
+> 0
+
+h(s, X s, α s) d s + Bt, t ∈ [0 , T ]. (2.20) Finally, a control process α is predictable w.r.t. the sub-filtration G = ( Gt)0≤t≤T generated by U ,and 
+
+μt = LP Xt Gt
+
+, t ∈ [0 , T ].
+
+Similarly, we can follow the classical reference probability approach to define the equivalent probability measure Q by dQ
+
+dP :=  LT
+
+−1, with Lt := exp 
+
+Z t
+
+> 0
+
+h(s, X s, α s) d Us − 12
+
+Z t
+
+> 0
+
+h(s, X s, α s) 2 ds
+
+
+
+, t ∈ [0 , T ], (2.21) so that W and U are two independent standard Brownian motions under Q, the processes X satisfy 
+
+LQ(X0) = μ0 and 
+
+Xt = X0 +
+
+Z t
+
+> 0
+
+ b(s, X s, μ s, α s) − σ0(s, X s, μ s, α s)h(s, X s, α s)ds
+
++
+
+Z t
+
+> 0
+
+σ(s, X s, μ s, α s)d Ws +
+
+Z t
+
+> 0
+
+σ0(s, X s, μ s, α s)d Us, t ∈ [0 , T ], (2.22) and L is defined in (2.21), μt satisfies, for any bounded continuous function φ ∈ Cb(Rd), 
+
+μt, φ = EQLtφ(Xt) Gt
+
+
+
+EQLt Gt
+
+ , t ∈ [0 , T ]. (2.23) We then obtain a general mean-field control problem with partial observation: 
+
+V0 := inf  
+
+> α∈A
+
+EQ
+
+Z T
+
+> 0
+
+Lt f (t, X t, μ t, α t) d t + LT g(XT , μ T )
+
+
+
+. (2.24) 
+
+Remark 2.8 . Let us refer to [8] for an existence and uniqueness result of the mean-field SDE (2.21)-(2.22) with interaction term μt defined in (2.23). 
+
+Particle approximation of mean-field control problem with partial observation. For the uncontrolled mean-field SDE (2.21)-(2.23)-(2.22) as studied in [8], a particle approximation method has been studied by [12] with an explicit convergence rate. Combining with approach in Section 2.2, one can naturally obtain a particle approximation method for the mean-field control problem with partial observation. Let N ≥ 1, (Ω N , FN , QN ) be a probability space equipped with a Brownian motion U , a sequence of i.i.d. random variables ( ξk)Nk=1 with ξk ∼ μ0, and a sequence of Brownian motions (W k)Nk=1 , all of which are mutually independent. Let us define the filtration FN := ( FNt )t∈[0 ,T ]
+
+9by FNt := σ(ξ1, . . . , ξ N , W 1 
+
+> s
+
+, . . . , W Ns , U s : s ≤ t), and define the space of all (fully observable) admissible controls by 
+
+AN := {α = ( αt)t≤T : α is an A-valued FN -predictable process }.
+
+Given a control process α ∈ A N , the controlled particle system ( X1,α t , . . . , X N,α t , L 1,α t , . . . , L N,α t ) is defined by, for each k = 1 , · · · , N ,
+
+Xk,α t = ξk +
+
+Z t
+
+> 0
+
+
+
+b(s, X k,α s , μ N,α s , α s) − σ0(s, X k,α s , μ N,α s , α s)h(s, X k,α s , α s)
+
+
+
+ds
+
++
+
+Z t
+
+> 0
+
+σ(s, X k,α s , μ N,α s , α s) d W ks +
+
+Z t
+
+> 0
+
+σ0(s, X k,α s , μ N,α s , α s) d Us, (2.25) 
+
+Lk,α t = 1 + 
+
+Z t
+
+> 0
+
+h(s, X k,α s , α s)Lk,α s dUs, (2.26) where 
+
+μN,α t := 
+
+PNk=1 Lk,α t δXk,α t
+
+PNj=1 Lj,α t
+
+=
+
+> N
+
+X
+
+> k=1
+
+wk,α t δXk,α t
+
+, with the weight wk,α t := Lk,α t
+
+PNj=1 Lj,α t
+
+. (2.27) A continuous-time particle approximation problem is then given by 
+
+V N 
+
+> 0
+
+:= inf 
+
+> α∈A N
+
+JN (α), (2.28) with 
+
+JN (α) := EQN
+
+"Z T
+
+> 0
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk,α t f (t, X k,α t , μ N,α t , α t) d t + 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk,α T g(Xk,α T , μ N,α T )
+
+#
+
+.
+
+Unlike Proposition 2.3, one cannot directly apply the results in [6] to deduce a convergence result, which we would like to study in our future work. 
+
+## 3 Numerical schemes 
+
+In this section, we develop numerical schemes for the N -particle problem (2.28), which includes (2.10) as a special case without mean-field interactions. The resulting problem is a time-consistent stochas-tic control problem in a high-dimensional state space of dimension N (d + 1). To address this chal-lenge, we propose a machine-learning-based framework designed for high-dimensional stochastic control problems. To highlight the main ideas, we illustrate the numerical method in the one-dimensional setting (d = 1) in this section; the extension to general d dimensions is straightforward, and corresponding numerical experiments are provided in Section 4. We employ deep neural networks to solve the resulting 2 N -dimensional stochastic control problem. Moreover, since the problem is invariant under permutations of the particle states ( X1, L 1), . . . , (XN , L N ), we exploit this inherent symmetry to design suitable neural network approximations. 10 Neural network architectures. Deep learning-based methods approximate the unknown quan-tities of the problem, such as the value function, feedback control policies, and the Z component in the solution of the associated BSDEs, using neural networks. Let us denote the collection of single-layer neural networks with activation function σ by 
+
+Lσd1,d 2 := ϕ : Rd1 → Rd2 | ϕ(x) = σ(W x + b), W ∈ Rd2×d1 , b ∈ Rd2 .
+
+For the identity activation σ(x) = x, we write Lid  
+
+> d1,d 2
+
+to represent the collection of affine transfor-mations. A multi-layer feedforward neural network (FNN) is constructed via the composition of these single layers. We define the class of FNNs as 
+
+N σℓ,d 0,d h,d ℓ+1 := Φ : Rd0 → Rdℓ+1 | Φ = ϕℓ ◦ ϕℓ−1 ◦ · · · ◦ ϕ0 with ϕ0 ∈ L σd0,d h ,ϕi ∈ L σdh,d h , i = 1 , . . . , ℓ − 1,ϕℓ ∈ L id  
+
+> dh,d ℓ+1
+
+.
+
+Here, ℓ ∈ N is the number of hidden layers, while d0, d h, and dℓ+1 denote the dimensions of input, hidden, and output layers, respectively. Since any Φ ∈ N σℓ,d 0,d h,d ℓ+1 is uniquely determined by its weights and biases, we explicitly denote this dependence by writing Φ = Φ( x; θ) where 
+
+θ = ( W0, b 0, . . . , W ℓ, b ℓ) collects all trainable parameters across the network. Building on FNNs, for a generic input x = ( x1, . . . , x N ), the symmetric neural network archi-tecture tailored to the N -particle problem is defined as 
+
+v(x; θ) := Φ 2
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Φ1(xk; θ1); θ2
+
+!
+
+, θ = ( θ1, θ 2), (3.1) where the inner network Φ 1 ∈ N σℓ,d 0,d h,d m maps individual states to a latent space of dimension 
+
+dm ∈ N, and the outer network Φ 2 ∈ N σℓ,d m,d h,d out maps the aggregated latent representation to the final output space of dimension dout ∈ N. This specific symmetric architecture, widely known as DeepSets [16], has also been used to approximate population distributions in [11]. Because the input to the outer network Φ 2 is the empirical mean of the individual feature representations Φ1(xk; θ1), the resulting function v(x; θ) is invariant under any permutation of the input sequence (x1, . . . , x N ). 
+
+3.1 A direct approach for the N -particle problem 
+
+We present a direct approach to the numerical solution of the discrete-time problem associated with (2.28), including (2.17) as the special case without mean-field interactions. Although our theoretical framework applies to the partially observable problem without mean-field interactions, we illustrate the algorithm here in the presence of the distribution term and will investigate its numerical performance in Section 4. The direct approach restricts the feedback control policy to a class of neural networks whose parameters are learned by stochastic optimization of the expected total cost. The direct method for stochastic control problems has been developed in [19] and extended to the mean-field problems in [9]. The optimal control αi in the discrete-time N -particle problem (2.17) admits a feedback form (see Remark 2.6) and is invariant under permutations of ( Xk, L k)Nk=1 . We therefore parametrize the control sequence ( αi)NT −1 
+
+> i=0
+
+by a sequence of symmetric neural networks ( ai(·; θi)) NT −1 
+
+> i=0
+
+with trainable parameters θ = ( θ0, . . . , θ NT −1), such that 
+
+αi ≈ αθi := ai
+
+ (X1 
+
+> ti
+
+, L 1 
+
+> ti
+
+), . . . , (XNti , L Nti ); θi .
+
+11 The discrete-time control problem associated with (2.28) is then approximated by minimizing, over 
+
+θ, the expected loss function 
+
+L(θ) := E
+
+"NT −1X
+
+> i=0
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lkti f
+
+
+
+ti, X kti , μ Nti , α θi
+
+
+
+∆t + 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT g(XkT , μ NT )
+
+#
+
+,
+
+under the dynamic constraint: 
+
+Xkt0 = ξk, Xkti+1 = Xkti +
+
+
+
+b(ti, X kti , μ Nti , α θi ) − σ0(ti, X kti , μ Nti , α θi )h(ti, X kti , α θi )
+
+
+
++ σ(ti, X kti , μ Nti , α θi )∆ W ki+1 + σ0(ti, X kti , μ Nti , α θi )∆ Ui+1 ,Lkt0 = 1 , Lkti+1 = Lkti exp 
+
+
+
+− 12 h(ti, X kti , α θi )2∆t + h(ti, X kti , α θi )∆ Ui+1 
+
+
+
+,
+
+(3.2) where μNti = PNk=1 wkti δXkti
+
+with wkti = Lkti 
+
+> PNj=1 Ljti
+
+, and (∆ W 1 
+
+> i
+
+, . . . , ∆W Ni , ∆Ui)NT 
+
+> i=1
+
+are i.i.d. Gaussian with distribution N (0 , ∆t). 
+
+Training method. Since the loss function is written as an expectation, one can rely on stochastic optimization algorithms. We use the Adam optimizer to train the control networks ( ai(·; θi)) NT −1 
+
+> i=0
+
+.The randomness inside the expectation depends on a collection of random variables 
+
+S =
+
+
+
+(ξk)k=1 ,...,N , (∆ W ki )i=1 ,...,N T ,k =1 ,...,N , (∆ Ui)i=1 ,...,N T
+
+
+
+. (3.3) Hence, given a batch of M realizations of S and a choice of trainable parameter θ, the trajectory of (Xk, (m) 
+
+> ti
+
+, L k, (m) 
+
+> ti
+
+)i=0 ,...,N T ,k =1 ,...,N can be sampled by (3.2) for each m ∈ { 1, . . . , M }, and the expected loss is then approximated by 
+
+LM,N (θ) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+ NT −1X
+
+> i=0
+
+1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk, (m) 
+
+> ti
+
+f
+
+
+
+ti, X k, (m) 
+
+> ti
+
+, μ N, (m) 
+
+> ti
+
+, α (m)
+
+> θi
+
+
+
+∆t
+
++ 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk, (m) 
+
+> T
+
+g(Xk, (m) 
+
+> T
+
+, μ N, (m) 
+
+> T
+
+)
+
+
+
+,
+
+(3.4) where we denote α(m) 
+
+> θi
+
+= ai
+
+
+
+(X1,(m) 
+
+> ti
+
+, L 1,(m) 
+
+> ti
+
+), . . . , (XN, (m) 
+
+> ti
+
+, L N, (m) 
+
+> ti
+
+); θi
+
+
+
+and μN, (m) 
+
+> ti
+
+= PNk=1 wk, (m) 
+
+> ti
+
+δXk, (m)
+
+> ti
+
+with wk, (m) 
+
+> ti
+
+= Lk, (m) 
+
+> ti
+> PNj=1 Lj, (m)
+> ti
+
+.The direct approach using Adam is described in Algorithm 1. 
+
+3.2 Deep BSDE approach for the N -particle problem 
+
+When σ, σ0, and h are uncontrolled, the N -particle problem (2.10) (see also (2.28)) admits a BSDE characterization (2.13). In this section, we develop a deep BSDE approach [21], combined with symmetric neural networks (3.1), to solve the associated FBSDE. This provides an independent method for solving the control problem under partial observations, and the resulting numerical solutions can thus be used to assess the accuracy of the direct approach. For generality, we illustrate the algorithm here in the presence of mean-field interactions. 12 Algorithm 1 Direct approach using Adam 
+
+Input: Initial parameter θ(0) ; number of epochs K; sequence (¯ γ(k))k=0 ,...,K −1 of learning rates; Adam hyperparameters. 
+
+Output: Optimized parameter θ(K).
+
+1: for each epoch k do 
+
+2: Generate a batch of M realizations of S, see (3.3) 
+
+3: Compute sample trajectories ( Xk, (m) 
+
+> ti
+
+, L k, (m) 
+
+> ti
+
+)i=0 ,...,N T ,k =1 ,...,N by (3.2) for m = 1 , . . . , M 
+
+4: Compute the batch loss LM,N (θ(k)) and its gradient ∇L M,N (θ(k)), see (3.4) 
+
+5: Set θ(k+1) by one Adam update using ∇L M,N (θ(k))
+
+6: end for 
+
+7: return θ(K)
+
+The deep BSDE method can be interpreted as applying the direct approach to the following stochastic control problem: minimize the cost functional over v0 : R2N → R and z : [0 , T ] × R2N →
+
+RN +1 , given by 1
+
+JBSDE (v0, z ) = E
+
+"
+
+V v0,z T − 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT g(XkT , μ N (XT , LT )) 
+
+> 2
+
+#
+
+,
+
+where ( V v0,z t )t∈[0 ,T ] acts as the controlled state satisfying dV v0,z t = −H (t, Xt, Lt, z t(Xt, Lt)) d t + zt(Xt, Lt) · d( Wt, U t), V v0,z  
+
+> 0
+
+= v0(X0, L0),
+
+and ( Xt, Lt) follows the uncontrolled dynamics in (2.13). Here, ( Wt, U t)t≥0 is a standard ( N + 1)-dimensional Brownian motion with Wt ∈ RN and Ut ∈ R.Consider a uniform time grid T := {ti = i∆t : ∆ t = TNT , i = 0 , 1, . . . , N T }. By discretizing time and parameterizing both v0 and z with neural networks, we obtain the deep BSDE scheme. We minimize the expected loss function over the trainable parameter θ = ( θv, θ 0 
+
+> z
+
+, . . . , θ NT −1 
+
+> z
+
+): 
+
+LBSDE (θ) := E
+
+"
+
+V θT − 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT g(XkT , μ NT )
+
+> 2
+
+#
+
+, (3.5) subject to the following dynamic constraints: 
+
+Xkt0 = ξk, Xkti+1 = Xkti + σ(ti, X kti , μ Nti )∆ W ki+1 + σ0(ti, X kti , μ Nti )∆ Ui+1 ,Lkt0 = 1 , Lkti+1 = Lkti exp 
+
+
+
+− 12 h(ti, X kti )2∆t + h(ti, X kti )∆ Ui+1 
+
+
+
+,V θt0 = v0(( X1 
+
+> t0
+
+, L 1 
+
+> t0
+
+), . . . , (XNt0 , L Nt0 ); θv),V θti+1 = V θti − H (ti, X ti , L ti , z θi ) ∆ t + zθi · (∆ Wi+1 , ∆Ui+1 ),
+
+(3.6) where we denote zθi := zi
+
+ (X1 
+
+> ti
+
+, L 1 
+
+> ti
+
+), . . . , (XNti , L Nti ); θiz
+
+ using the symmetric neural network zi(·; θiz )defined in (3.1), and let ∆ Wi = (∆ W 1 
+
+> i
+
+, · · · ∆W Ni ), μNti = PNk=1 wkti δXkti
+
+with wkti = Lkti 
+
+> PNj=1 Ljti
+
+. Here, all elements in (∆ W 1 
+
+> i
+
+, . . . , ∆W Ni , ∆Ui)NT 
+
+> i=1
+
+are i.i.d. Gaussian with distribution N (0 , ∆t). 
+
+> 1
+
+When X0 is given as a fixed value, V N 
+
+> 0
+
+is also fixed. Thus, we set v0 = θv as a trainable parameter rather than representing it with a neural network. 
+
+13 The training methodology for the deep BSDE loss (3.5) closely follows the direct approach outlined in Section 3.1. The randomness within the expectation of (3.5) stems from the collection 
+
+S of random variables, see (3.3). It is worth noting that the state trajectory of ( Xkti , L kti ) in the deep BSDE scheme differ from that in the direct approach. Specifically, given a batch of M realizations of S and a specific choice of parameter θ, we sample M trajectories ( Xk, (m) 
+
+> ti
+
+, L k, (m) 
+
+> ti
+
+, V θ, (m) 
+
+> ti
+
+) for 
+
+m = 1 , . . . , M using (3.6). The expected loss (3.5) is then approximated by the empirical batch loss 
+
+LM,N 
+
+> BSDE
+
+(θ) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+ V θ, (m) 
+
+> T
+
+− 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lk, (m) 
+
+> T
+
+g(Xk, (m) 
+
+> T
+
+, μ N, (m) 
+
+> T
+
+)
+
+> 2
+
+ , (3.7) where μN, (m) 
+
+> T
+
+= PNk=1 wk, (m) 
+
+> T
+
+δXk, (m)
+
+> T
+
+with wk, (m) 
+
+> T
+
+= Lk, (m) 
+
+> T
+> PNj=1 Lj, (m)
+> T
+
+.Algorithm 2 summarizes the deep BSDE approach for the N -particle problem (2.28) and (2.10) when the diffusion σ is uncontrolled and invertible. 
+
+Algorithm 2 Deep BSDE approach 
+
+Input: Initial parameter θ(0) ; number of epochs K; sequence (¯ γ(k))k=0 ,...,K −1 of learning rates; Adam hyperparameters. 
+
+Output: Optimized parameter θ(K). 
+
+> 1:
+
+for each epoch k do  
+
+> 2:
+
+Generate a batch of M realizations of S, see (3.3)  
+
+> 3:
+
+Compute sample trajectories (Xk, (m) 
+
+> ti
+
+, L k, (m) 
+
+> ti
+
+, V θ, (m) 
+
+> ti
+
+)i=0 ,...,N T ,k =1 ,...,N by (3.6) for m =1, . . . , M  
+
+> 4:
+
+Compute the batch loss LM,N 
+
+> BSDE
+
+(θ(k)) and its gradient ∇L M,N 
+
+> BSDE
+
+(θ(k)), see (3.7)  
+
+> 5:
+
+Set θ(k+1) by one Adam update using ∇L M,N 
+
+> BSDE
+
+(θ(k)) 
+
+> 6:
+
+end for  
+
+> 7:
+
+return θ(K)
+
+## 4 Numerical examples 
+
+In this section, we test the proposed deep particle methods 1 and 2 on several examples. We first consider a linear–quadratic example; the availability of analytical solutions for both the optimal control and the value function allows us to comprehensively assess numerical accuracy and compare our results against the recurrent neural network (RNN)-based method proposed in [20]. Next, we study a partially observable MFC problem, where the drift of the observation process is nonlinear. To cross-validate the results, we solve this problem numerically using both the direct approach and the deep BSDE approach. Finally, we demonstrate the practical utility of our framework in two financial applications: portfolio liquidation and allocation. For the last portfolio allocation problem, the common noise volatility term σ0 is also controlled, so that our theoretical convergence results do not apply directly. Nevertheless, the numerical experiments still produce reasonable results. 
+
+4.1 A linear–quadratic problem without mean-field interactions 
+
+The first example aims to validate the numerical accuracy against the exact analytical solutions. We consider a linear–quadratic problem adapted from [23]. Specifically, we set the coefficient functions 14 as 
+
+b(t, x, α, μ ) = α, σ = 1 , h(t, x ) = x, f (t, x, α, μ ) = α2, g(x, μ ) = x2.
+
+The arguments μ are dummy variables included only to match the general notation. This bench-mark lies outside the bounded-coefficient and compact-control assumptions of Theorem 2.7, but its explicit solution makes it useful for numerical validation. By [4, Theorem 2.4.1], the optimal control admits an explicit solution given by 
+
+α∗ 
+
+> t
+
+= −πt ˆyt,
+
+where the filtered state ˆ yt is governed by the SDE, 
+
+dˆyt = −(πt + pt)ˆ ytdt + ptdU t, ˆy0 = x0,
+
+and ( p, π ) solves the forward and backward ODEs, ˙pt = 1 − p2 
+
+> t
+
+, p0 = 0 ,
+
+˙πt = π2 
+
+> t
+
+, πT = 1 .
+
+Solving this system gives the final explicit form for the optimal control 
+
+α∗ 
+
+> t
+
+= − 1cosh( t)
+
+ x0
+
+1 + T +
+
+Z t
+
+> 0
+
+sinh( s)1 + T − s dU s
+
+
+
+. (4.1) We first evaluate the direct approach described in Section 3.1. For this 1-dimensional problem, we configure the symmetric network parameters with an input dimension d0 = 2, hidden dimension 
+
+dh = 32, latent dimension dm = 10, dout = 1, and number of hidden layers ℓ = 2. The network is initialized using the Xavier uniform method and trained using the Adam optimizer with a learning rate of ¯ γ = 10 −3, a batch size of M = 128, and K = 3000 epochs. 
+
+Approximation of the optimal control. Since the observation process U is a standard Brow-nian motion under the reference measure Q, we simulate three sample paths of U and compute the corresponding optimal controls α∗ 
+
+> t
+
+in (4.1). These explicit paths are compared with the discrete control processes ( ai(·; θi)) NT −1 
+
+> i=0
+
+generated by the trained neural networks. Figure 1 illustrates this comparison for an initial state x0 = 0 and time horizon T = 0 .5. The top panel displays the control trajectories, while the bottom panel compares the resulting optimal state processes Xt.We observe that the discrepancy between the numerical and explicit solutions for α∗ 
+
+> t
+
+is relatively noticeable, whereas the difference in the optimal state process Xt remains small. This can be explained by the structure of the objective functional E[R T 
+
+> 0
+
+(α∗ 
+
+> t
+
+)2 dt + ( XT )2], in which the running cost contributes only a relatively small portion of the total cost. Consequently, during training, the neural network places less emphasis on accurately approximating the control at smaller scales, making the fine-scale approximation of α∗ 
+
+> t
+
+more challenging. We increase the number of particles 
+
+N to 1000 and the number of time steps NT to 200, and report the comparison in Figure 2. As shown in Figure 2, this denser discretization significantly improves the accuracy of the control approximation, which is empirically consistent with the expected effect of refining the particle and time discretizations. For the partially observed control problem, one can also design a recurrent neural network directly to represent the path-dependent control containing the full history of observable processes, and then optimize the cost function over the network parameters. This approach may avoid the need to derive a time-consistent system via particle approximation. To compare it with our direct 15 approach based on the particle system, we implement the RNN-based algorithm adapted from [20], originally designed for stochastic control problems with path-dependent features (both methods were allocated comparable computing time). The numerical results are provided in Figure 1 and 2. One observes that the direct approach in Algorithm 1 with a coarser resolution ( N = 100, NT = 100) produces a control error of comparable magnitude to that of the RNN-based approach, while increasing the discretization to N = 1000 particles and NT = 200 time steps significantly improves its accuracy. Notice that, in the RNN-based method, time t is included as an input to the network, which results in a learned control process that is smoother than the optimal control trajectory. 0.0 0.1 0.2 0.3 0.4 0.5                          
+
+> Time
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> Action  at
+> Simulation 1: Actions
+> a_trained_direct
+> a_trained_RNN
+> a_optimal
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time
+> 0.05
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Action  at
+> Simulation 2: Actions
+> a_trained_direct
+> a_trained_RNN
+> a_optimal
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time
+> 0.20
+> 0.15
+> 0.10
+> 0.05
+> 0.00
+> 0.05
+> Action  at
+> Simulation 3: Actions
+> a_trained_direct
+> a_trained_RNN
+> a_optimal
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> State  Xt
+> Simulation 1: State Paths
+> X_trained_direct
+> X_trained_RNN
+> X_optimal
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> State  Xt
+> Simulation 2: State Paths
+> X_trained_direct
+> X_trained_RNN
+> X_optimal
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time
+> 0.5
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> State  Xt
+> Simulation 3: State Paths
+> X_trained_direct
+> X_trained_RNN
+> X_optimal
+
+Figure 1: Comparison of direct approach solutions, RNN solutions, and explicit solutions in the simulation of optimal control α∗
+
+t and the controlled optimal state Xt using N = 100 particles and 
+
+NT = 100 time steps. To quantify the approximation error of the control process, we compute the L2 error on α
+
+by ( 1
+
+M
+
+PMm=1 
+
+PNT −1
+
+i=0 |ˆα(m)
+
+ti − α(m),∗
+
+ti |2∆t)1/2, where (ˆ α(m)
+
+ti )NT −1
+
+i=0 denotes the m-th control process computed numerically. Figure 3 displays the evolution of the L2 error with respect to the number of training iterations, using M = 1000 testing paths. We observe that the direct method achieves a smaller error than the RNN-based baseline under the same time discretization. 
+
+Approximation of the optimal value. The analytical minimum total cost is given by 
+
+V0 = x20
+
+1 + T +
+
+Z T
+
+0
+
+tanh 2(t)1 + T − t dt + tanh( T ).
+
+Setting x0 = 0, T = 0 .5 and evaluating the integral term numerically, we obtain V0 = 0 .4959, which serves as our reference solution. For the direct approach, the trained neural networks ( ai(·; θi)) NT −1
+
+i=0 provide a sequence of near-optimal feedback controls. We approximate the corresponding optimal value V0 of the partially 16 0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+0.10 
+
+0.08 
+
+0.06 
+
+0.04 
+
+0.02 
+
+0.00 
+
+0.02 
+
+0.04 
+
+0.06 
+
+> Action  at
+
+Simulation 1: Actions 
+
+a_trained_direct 
+
+a_trained_RNN 
+
+a_optimal 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+0.15 
+
+0.10 
+
+0.05 
+
+0.00 
+
+0.05 
+
+> Action  at
+
+Simulation 2: Actions 
+
+a_trained_direct 
+
+a_trained_RNN 
+
+a_optimal 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+0.20 
+
+0.15 
+
+0.10 
+
+0.05 
+
+0.00 
+
+> Action  at
+
+Simulation 3: Actions 
+
+a_trained_direct 
+
+a_trained_RNN 
+
+a_optimal 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+1.0 
+
+0.8 
+
+0.6 
+
+0.4 
+
+0.2 
+
+0.0 
+
+> State  Xt
+
+Simulation 1: State Paths 
+
+X_trained_direct 
+
+X_trained_RNN 
+
+X_optimal 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+0.4 
+
+0.2 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+> State  Xt
+
+Simulation 2: State Paths 
+
+X_trained_direct 
+
+X_trained_RNN 
+
+X_optimal 
+
+0.0 0.1 0.2 0.3 0.4 0.5 
+
+Time 
+
+1.0 
+
+0.8 
+
+0.6 
+
+0.4 
+
+0.2 
+
+0.0 
+
+> State  Xt
+
+Simulation 3: State Paths 
+
+X_trained_direct 
+
+X_trained_RNN 
+
+X_optimal Figure 2: Comparison of direct approach solutions, RNN solutions, and explicit solutions in the simulation of optimal control α∗
+
+t and the controlled optimal state Xt using N = 1000 particles and 
+
+NT = 200 time steps. 0 250 500 750 1000 1250 1500 1750 
+
+Number of Iterations 
+
+10 2
+
+10 1
+
+> L2 Error of Control Process
+
+RNN Method 
+
+Direct Method 
+
+Figure 3: L2 error of control process via the direct approach and the RNN-based method with 
+
+NT = 200 time steps. 17 observable control problem via a Monte Carlo simulation utilizing NM C = 100 , 000 samples, re-porting both the value estimate and standard error in Table 1. The Deep BSDE approach 2 provides an alternative algorithm. When the diffusion coefficient 
+
+σ is uncontrolled and invertible (as in the linear–quadratic case), the N -particle approximation is naturally associated with a FBSDE characterization. Although this problem does not satisfy the Lipschitz condition as required in Proposition 2.4, we nevertheless use the following finite-particle FBSDE as a numerical formulation: dXkt = d W kt , Xk 
+
+> 0
+
+= 0 ,
+
+dLkt = Xkt Lkt dUt, Lk 
+
+> 0
+
+= 1 , for k = 1 , . . . , N, 
+
+dY Nt = (PNk=1 Zkt )2
+
+4( 1
+
+> N
+
+PNk=1 Lkt ) dt +
+
+> N
+
+X
+
+> k=1
+
+Zkt dW kt + ZN +1  
+
+> t
+
+dUt, Y NT = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT (XkT )2.
+
+The corresponding optimal control for the N -particle problem is given by 
+
+αN, ∗ 
+
+> t
+
+= −
+
+PNk=1 Zkt
+
+2( 1
+
+> N
+
+PNk=1 Lkt ) .
+
+Table 1 summarizes the optimal value estimates for both the direct approach ˆV0 and the deep BSDE approach across various particle sizes N and time steps NT . For the deep BSDE approach, we report two distinct quantities: ¯Y N 
+
+> 0
+
+, which is the learned parameter approximating the initial BSDE value Y N 
+
+> 0
+
+, and ˆV0, which is evaluated using the near-optimal control derived from the trained networks for the Z process. For fixed NT = 200, as N increases from 10 to 1000, the relative error of the direct approach decreases from approximately 2 .1% to 0 .04%, which is empirically consistent with convergence of the particle approximation. For fixed N , the direct approach shows stable errors across different NT values at larger N , confirming that the time discretization becomes adequate at fine resolutions. With N = 1000 and NT = 200, the direct approach achieves a relative error of 0 .04%, which is quite accurate for a deep learning-based method. The deep BSDE method shows larger errors at large N , which may be due to the numerical difficulty of approximating the Z network with both high-dimensional input and output spaces. This suggests that the direct approach is more numerically stable for this particular problem. Direct Approach Deep BSDE Approach 
+
+N NT ˆV0 Std. Error ¯Y N 
+
+> 0
+
+ˆV0 Std. Error 10 50 0.4858 0.0009 0.4984 0.4982 0.0010 100 0.4875 0.0009 0.4982 0.4997 0.0010 200 0.4857 0.0009 0.4999 0.5005 0.0010 100 50 0.4956 0.0004 0.4977 0.5003 0.0004 100 0.4956 0.0004 0.4993 0.4998 0.0004 200 0.4957 0.0004 0.4975 0.5006 0.0004 1000 50 0.4961 0.0003 0.4904 0.5074 0.0003 100 0.4961 0.0003 0.4940 0.5098 0.0003 200 0.4961 0.0003 0.4843 0.5114 0.0003 Table 1: Comparison of optimal value estimates using the direct approach and the deep BSDE approach. The exact analytical reference value is V0 = 0 .4959. 18 4.2 A partially observable mean-field control problem 
+
+To show that the proposed particle methods can be naturally extended to the partially observable MFC problem, we consider the following problem with partial observation inf  
+
+> α∈A U
+
+EP
+
+Z T
+
+> 0
+
+ Var( Xt|F Ut ) + |αt|2 dt + Var( XT |F UT )
+
+
+
+,
+
+where the state dynamics and the observation process are governed by dXt = ( Xt − EP[Xt|F Ut ] + αt) d t + σ dWt, X0 = 0 ,
+
+dUt = sin( |Xt|2) d t + d W 0 
+
+> t
+
+, U0 = 0 ,
+
+and we set the parameters to T = 0 .3, σ = 0 .4. Motivated by the setup in [26], we incorporate a nonlinear drift sin( |Xt|2) in the dynamic of U , which removes the problem from the standard linear–quadratic case. Because this configuration lacks a known analytical solution, we shall make a comparison between different numerical schemes to validate the numerical results. By the tower property of conditional expectation, we define the running and terminal cost functions as 
+
+f (t, X t, μ t, α t) = |Xt|2 − (EP[Xt|F Ut ]) 2 + |αt|2, g(XT , μ T ) = |XT |2 − (EP[XT |F UT ]) 2.
+
+We approximate the partially observable problem using an N -particle system. Let ¯XNt =
+
+PNk=1 wkt Xkt denote the empirical weighted mean with weights wkt = Lkt 
+
+> PNj=1 Ljt
+
+. In this mean-field control example, we use the finite-particle Hamiltonian/BSDE formulation as part of the numerical scheme, rather than as a direct application of Proposition 2.4. Since σ0 = 0, the vector θ reduces to 
+
+θ(t, Xt, Lt, α t) = 
+
+
+
+σ−1(X1 
+
+> t
+
+− ¯XNt + αt)...
+
+σ−1(XNt − ¯XNt + αt)0
+
+ .
+
+The pre-minimised Hamiltonian is given by 
+
+H(t, Xt, Lt, Zt, α t) = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lkt
+
+
+
+|Xkt |2 − ( ¯XNt )2 + |αt|2
+
++ 1
+
+σ
+
+> N
+
+X
+
+> k=1
+
+Zkt
+
+
+
+Xkt − ¯XNt + αt
+
+
+
+.
+
+Here the control set is taken to be A = R, so this example is outside the compact-control assump-tions of Theorem 2.7. Since H is strictly convex and quadratic in αt ∈ R, the minimizer is obtained by setting ∂αH = 0, which yields 2
+
+N
+
+ NX
+
+> k=1
+
+Lkt
+
+
+
+α∗ 
+
+> t
+
++ 1
+
+σ
+
+> N
+
+X
+
+> k=1
+
+Zkt = 0 =⇒ α∗ 
+
+> t
+
+= − N
+
+2σ PNk=1 LktNX
+
+> k=1
+
+Zkt .
+
+Substituting α∗ 
+
+> t
+
+back gives the minimised Hamiltonian 
+
+H(t, Xt, Lt, Zt) = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lkt
+
+
+
+|Xkt |2 − ( ¯XNt )2
+
++ 1
+
+σ
+
+> N
+
+X
+
+> k=1
+
+Zkt
+
+
+
+Xkt − ¯XNt
+
+
+
+− N
+
+4σ2 PNk=1 Lkt
+
+ NX
+
+> k=1
+
+Zkt
+
+2
+
+.
+
+Thus, the uncontrolled N -particle forward system reads, for k = 1 , . . . , N ,dXkt = σ dW kt , Xk 
+
+> 0
+
+= 0 ,
+
+dLkt = sin( |Xkt |2)Lkt dUt, Lk 
+
+> 0
+
+= 1 , (4.2) 19 where W 1, . . . , W N and U are independent Brownian motions. The value process Y N satisfies the BSDE dY Nt = −H (t, Xt, Lt, Zt) d t +
+
+> N
+
+X
+
+> k=1
+
+Zkt dW kt + ZN +1  
+
+> t
+
+dUt, (4.3) with the terminal condition 
+
+Y NT = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+LkT
+
+
+
+|XkT |2 − ( ¯XNT )2
+
+.
+
+For numerical stability, we use the following modified FBSDE system: dXkt = ( Xkt − ¯XNt ) d t + σ dW kt , Xk 
+
+> 0
+
+= 0 ,
+
+dLkt = sin( |Xkt |2)Lkt dUt, Lk 
+
+> 0
+
+= 1 ,
+
+dY Nt = −f (t, Xt, Lt, Zt) d t +
+
+> N
+
+X
+
+> k=1
+
+Zkt dW kt + ZN +1  
+
+> t
+
+dUt,
+
+(4.4) with the terminal condition Y NT = 1
+
+> N
+
+PNk=1 LkT
+
+ |XkT |2 − ( ¯XNT )2, where the modified generator is 
+
+f (t, Xt, Lt, Zt) = 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+Lkt
+
+
+
+|Xkt |2 − ( ¯XNt )2
+
+− N
+
+4σ2 PNk=1 Lkt
+
+ NX
+
+> k=1
+
+Zkt
+
+2
+
+.
+
+We solve the FBSDE (4.4) instead of (4.2)-(4.3) to improve numerical stability. This modifica-tion is crucial for mitigating distributional shift, which is common when solving stochastic control problems via deep BSDE methods. If the neural networks are trained using the purely noise-driven forward system (4.2), the simulated state trajectories remain tightly concentrated near the origin. However, under the physical dynamics, due to the individual intrinsic drift Xkt − ¯XNt , the state trajectories expand and occupy a significantly wider spatial domain over time. Evaluating a net-work trained strictly on the narrow distribution of (4.2) against these expanded physical paths will force the model to extrapolate out-of-distribution. Therefore, for the numerical implementation, we incorporate the intrinsic uncontrolled part Xkt − ¯XNt into the forward dynamics. The alignment of training and evaluation distributions improves network convergence and leads to a tight agreement between the learned initial value and the subsequent Monte Carlo estimate using near-optimal controls, see Table 2 below. Here, we configure the symmetric network parameters with an input dimension d0 = 2, hidden dimension dh = 32, latent dimension dm = 10, dout = 1, and number of hidden layers ℓ = 2. The network is initialized using the Xavier uniform method and trained using the Adam optimizer with a learning rate of ¯ γ = 10 −3, a batch size of M = 64, and K = 1500 epochs. To verify the numerical accuracy in the absence of an explicit analytical solution, we compare the proposed direct method against the deep BSDE approach. Both methods utilize symmetric neural networks, but they differ fundamentally in their approximation quantities and loss formulations. The direct approach approximates the control processes and minimizes cost functional directly, while the deep BSDE approach treats the initial value V N 
+
+> 0
+
+and the Z process in the BSDE as learnable parameters to match the target terminal condition. The close agreement between these two independent algorithms serves as strong evidence of numerical accuracy. For the deep BSDE approach, we use symmetric networks with dout = N to represent ( Z1 
+
+> ti
+
+, . . . , Z Nti ), together with additional symmetric networks with dout = 1 for ZN +1  
+
+> ti
+
+. All other hyperparameters are chosen to be the same as those in the direct approach to ensure a fair comparison. 20 Table 2 summarizes the numerical results across various particle sizes N and time steps NT . For the deep BSDE approach, we report two distinct quantities: ¯Y N 
+
+> 0
+
+, which is the learned parameter approximating the initial BSDE value Y N 
+
+> 0
+
+, and ˆV0, which is evaluated using the near-optimal control derived from the trained networks for the Z process. The standard errors for both approaches are computed via Monte Carlo simulations, utilizing these learned controls over 100,000 sample paths. In the absence of an exact analytical benchmark, the close agreement between the direct approach and the deep BSDE method serves to mutually validate the numerical integrity of our solutions. Direct Approach Deep BSDE Approach 
+
+N NT ˆV0 Std. Error ¯Y N 
+
+> 0
+
+ˆV0 Std. Error 10 50 0.0664 0.00010 0.0676 0.0665 0.00010 100 0.0668 0.00010 0.0676 0.0670 0.00010 200 0.0671 0.00010 0.0665 0.0672 0.00010 100 50 0.0732 0.00003 0.0735 0.0732 0.00003 100 0.0736 0.00003 0.0731 0.0736 0.00003 200 0.0738 0.00003 0.0742 0.0737 0.00003 1000 50 0.0739 0.00001 0.0739 0.0739 0.00001 100 0.0742 0.00001 0.0742 0.0742 0.00001 200 0.0744 0.00001 0.0743 0.0744 0.00001 Table 2: Comparison of optimal value estimates between the direct approach and the deep BSDE approach. Table 2 demonstrates several observations. First, for a fixed particle size N , the value estimates stabilize as we refine the time discretization, indicating convergence with respect to the time step. Second, for large N = 1000, the two methods (direct and deep BSDE) produce nearly identical results, with relative differences less than 0 .7%, providing strong mutual validation of accuracy. Third, the estimates improve and stabilize as we increase from N = 10 to N = 1000. This agreement between two fundamentally different algorithms verifies that our numerical solutions are reliable, despite the absence of an analytical benchmark for this nonlinear partially observable mean-field control problem. 
+
+4.3 Portfolio optimization under drift uncertainty 
+
+We consider portfolio optimization problems under drift uncertainty adapted from [2], which can be viewed as partially observable stochastic control problems. In standard portfolio optimization, an investor typically assumes full knowledge of a stock’s expected return (drift) and volatility. In practice, while volatility can be reliably estimated from high-frequency historical data, the expected return remains difficult to observe since it changes dynamically in response to business cycles and other macroeconomic factors. In the following we consider two types of optimization problems in finance. Both examples demonstrate the practical applicability of our numerical methods, but they also go beyond the literal scope of Theorem 2.7: the liquidation model involves unbounded state and control features, while the allocation problem has controlled common-noise volatility. They should therefore be viewed as numerical demonstrations rather than theoretically guaranteed applications of the convergence theorem. 
+
+Portfolio liquidation problem. We consider the problem of an investor who decides to liquidate the portfolio, i.e., sell the asset (considering one stock) and end up holding mostly cash by time T .21 The investor controls the trading rate (or velocity), denoted by αt, at which he/she buys ( αt > 0) or sells ( αt < 0) the stock. Consequently, the inventory qt, representing the number of shares held at time t, evolves according to dqt = αt dt, 
+
+subject to the initial inventory q0. The investor can make decisions by observing the stock price governed by dSt = βtSt dt + σS St dBt, S0 = s0.
+
+Here, the drift process β is partially observable, which can not be observed directly but is assumed to be a mean-reverting stochastic process driven by dβt = κ( ¯β − βt) d t + σβ dWt, β0 = b0,
+
+where W and B are independent Brownian motions. The trader’s objective is to minimize the expected total liquidation cost, formulated as 
+
+J(α) = EP
+
+Z T
+
+> 0
+
+αt(St + γα t) d t + ηq 2
+
+> T
+
+
+
+,
+
+where γα t captures the price impact at time t and ηq 2 
+
+> T
+
+performs as a penalization term ensuring the liquidation is completed by time T .To fit in our framework, we introduce the log-price observation process Ut = ln St 
+
+> σS
+
+for t > 0. By Itˆ o’s lemma, U follows dUt = h(t, β t) d t + d Bt,
+
+where h(t, β t) = βt 
+
+> σS
+
+− σS 
+
+> 2
+
+. Let Xt = ( βt, q t, U t)⊤ be the hidden state process given by d
+
+
+
+βt
+
+qt
+
+Ut
+
+ =
+
+
+
+κ( ¯β − βt)
+
+αt
+
+h(t, β t)
+
+ dt +
+
+
+
+σβ
+
+00
+
+ dWt +
+
+
+
+001
+
+ dBt
+
+Under this transformation, the trader’s optimization problem can be equivalently rewritten as inf  
+
+> α∈A U
+
+EP
+
+Z T
+
+> 0
+
+ αt exp( σS Ut) + γα 2
+
+> t
+
+ dt + ηq 2
+
+> T
+
+
+
+, (4.5) where AU denotes the set of admissible trading strategies adapted to the observation filtration generated by U .We solve the partial observation control problem (4.5) using the direct approach for its N -particle approximation. For numerical experiments, we configure the symmetric network param-eters with an input dimension d0 = 4 (for β, q, U , and L), hidden dimension dh = 32, latent dimension dm = 10, dout = 1, and number of hidden layers ℓ = 2. The network is initialized using the Xavier uniform method and trained using the Adam optimizer with a learning rate of ¯γ = 3 × 10 −5, a batch size of M = 64, and K = 3000 epochs. Set T = 1 .5, κ = 0 .03, ¯β = 0 .1, 
+
+σS = 0 .4, s0 = 6, β0 = 0 .03, q0 = 1, γ = 5, and η = 100. We discretize the problem with N = 1000 particles and NT = 100 time steps. To investigate the sensitivity of the optimal strategy to underlying market dynamics, we train and evaluate the model across a range of values for σβ , the volatility of the unobserved drift. As illustrated in Figure 4, the optimal expected execution cost decreases monotonically as σβ increases. Intuitively, a higher volatility in the unobserved drift implies larger transient trends in the asset 22 price. The trained strategy can take advantage of these fluctuations and opportunistically change the trading rate, thereby exploiting favorable price movements to minimize the overall execution cost. In this problem, we assume the drift β follows an unobserved mean-reverting process. To demonstrate the impact of the partial observation feature, Figure 4 also compares the optimal value of the partially observable problem with a fully observable counterpart, where the investor can observe the drift process β for decision-making. We can see that with more information to the investor, the expected optimal cost is always smaller. 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50  
+
+> Volatility of unobserved drift ( )
+> 3.10
+> 3.05
+> 3.00
+> 2.95
+> 2.90
+> 2.85
+> Optimal value (expected cost)
+> Partially observable (Symmetric NN)
+> Fully observable (FNN)
+
+Figure 4: The optimal expected cost against the volatility of unobserved drift for the liquidation problem. Figure 5 visualizes the inventory trajectories qt under three different volatility settings: σβ = 0 .1, 0.5, and 1 .0. The inventory paths closely track a trivial strategy, which consists of liquidating the inventory at a constant, uniform rate αt = −q0/T . Across various σβ configurations, the trained optimal strategy consistently achieves a lower expected liquidation cost than the trivial strategy. 0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4  
+
+> Time t
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Controlled Inventory  qt
+> = 0.1
+> = 0.5
+> = 1.0
+
+Figure 5: The comparison of the inventory qt between σβ = 0 .1, 0.5, 1.0. 
+
+Portfolio allocation problem. Consider a portfolio consisting of a stock with the price St and a risk-free asset yielding a constant interest rate r. An investor with initial wealth w0 dynamically allocates αt dollars to the risky asset ( αt < 0 corresponds to taking a short position in the stock), 23 keeping the residual wealth in the risk-free account. Consequently, the self-financing wealth process 
+
+wt follows the dynamic dwt = r(wt − αt) d t + αt(βt dt + σS dBt)= ( rw t + αt(βt − r)) d t + σS αt dBt.
+
+The investor’s objective is to maximize the expected utility of the terminal wealth wT :max  
+
+> α
+
+EP[u(wT )] ,
+
+given only the information generated by observing the stock price. Here we use a CARA utility function u as u(w) = − exp( −pw ), p > 0. To cast this into our partial observation framework, we define the observation process as Ut =  
+
+> ln St
+> σS
+
+, which satisfies dUt = h(t, β t) d t + d Bt.
+
+Let Xt = ( βt, w t) be the hidden state process given by d
+
+βt
+
+wt
+
+
+
+=
+
+ κ( ¯β − βt)
+
+rw t + αt(βt − r)
+
+
+
+dt +
+
+σβ
+
+0
+
+
+
+dWt +
+
+ 0
+
+σS αt
+
+
+
+dBt.
+
+Although this problem falls outside our theoretical framework since the volatility σ0 is con-trolled and the allocation and wealth variables are unbounded, we nevertheless apply our proposed particle method with the direct deep learning approach described in Algorithm 1. We configure the symmetric network parameters with an input dimension d0 = 3 (for β, w , and L), hidden dimension 
+
+dh = 32, latent dimension dm = 10, dout = 1, and number of hidden layers ℓ = 2. The network is initialized using the Xavier uniform method and trained using the Adam optimizer with a learning rate of ¯ γ = 10 −3, a batch size of M = 128, and K = 1000 epochs. For the problem coefficients, we set T = 1, p = 1, κ = 0 .5, ¯β = 0 .1, σβ = 0 .6, σS = 0 .4, s0 = 6, β0 = 0 .08, r = 0 .03, and 
+
+w0 = 0. When w0 = 0, the investor can borrow cash at the risk-free rate r to finance the purchase of the stock. Figure 6 illustrates 10 simulated paths of the trained optimal control process and the corresponding wealth process under the physical measure P. These paths provide a qualitative illustration of the learned strategy and wealth dynamics, rather than a separate verification of optimality. 
+
+## 5 Conclusion 
+
+This paper addresses the challenge of numerically solving stochastic control problems under partial observation by proposing particle approximations combined with deep learning. Under the as-sumptions of Theorem 2.7, we establish convergence of the fully discretized N -particle system with time step ∆ t to the original continuous-time partially observable control problem as N → ∞ and ∆t → 0. The particle approximation naturally extends to partially observable mean-field control problems, a class that has been studied theoretically but remains seldom addressed numerically. Comprehensive experiments on a linear–quadratic benchmark with analytical solutions, a nonlin-ear mean field control problem, and financial applications demonstrate the practical utility and accuracy of the proposed approach. We now mention some limitations and possible future directions. The current convergence theory assumes compact controls, bounded coefficients, suitable continuity of the costs, and un-controlled volatility coefficient σ0 and observation drift h. These assumptions exclude some of the numerical examples in their present form, especially the financial applications in Section 4.3. While 24 0.0 0.2 0.4 0.6 0.8 1.0      
+
+> Time
+> 3
+> 2
+> 1
+> 0
+> 1
+> 2
+> 3
+> 4
+> Action  at
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Time
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> Wealth  wt
+
+Figure 6: Simulations of the trained optimal control αt and the controlled wealth process wt.our numerical experiments show that the methods work heuristically in such cases, extending the theoretical framework to cover these settings is an important direction. Additionally, although we present a heuristic extension to mean-field control problems, the rigorous convergence analysis for mean-field control problems remains open and is left for future investigation. 
+
+## Acknowledgements 
+
+This work was supported in part through the NYU Shanghai IT High Performance Computing resources, services, and staff expertise. 
+
+## References 
+
+[1] A. Bachouch, C. Hur´ e, N. Langren´ e, and H. Pham , Deep neural networks algorithms for stochastic control problems on finite horizon: numerical applications , Methodology and Computing in Applied Probability, 24 (2022), pp. 143–178. [2] A. Balata, C. Hur´ e, M. Lauri` ere, H. Pham, and I. Pimentel , A class of finite-dimensional numerically solvable Mckean–Vlasov control problems , ESAIM: Proceedings and Surveys, 65 (2019), pp. 114–144. [3] C. Bayer, B. Djehiche, E. Rezvanova, and R. F. Tempone , Continuous time stochas-tic optimal control under discrete time partial observations , arXiv preprint arXiv:2407.18018, (2024). [4] A. Bensoussan , Stochastic control of partially observable systems , Cambridge University Press, Cambridge, 1992. [5] A. Bensoussan and J. H. van Schuppen , Optimal control of partially observable stochas-tic systems with an exponential-of-integral performance index , SIAM Journal on Control and Optimization, 23 (1985), pp. 599–613. 25 [6] B. Bouchard and X. Tan , Limit theory for mean-field control problems with common noise adapted controls , arXiv preprint arXiv:2509.14734, (2025). [7] R. Buckdahn, J. Li, and J. Ma , A mean-field stochastic control problem with partial ob-servations , The Annals of Applied Probability, (2017). [8] , A general conditional Mckean–Vlasov stochastic differential equation , The Annals of Applied Probability, 33 (2023), pp. 2004–2023. [9] R. Carmona and M. Lauri` ere , Convergence analysis of machine learning algorithms for the numerical solution of mean field control and games , The Annals of Applied Probability, 32 (2022), pp. 4065–4105. [10] M. H. Davis and P. Varaiya , Dynamic programming conditions for partially observable stochastic systems , SIAM Journal on Control, 11 (1973), pp. 226–261. [11] G. Dayanikli, M. Lauri` ere, and J. Zhang , Deep learning for population-dependent con-trols in mean field control problems with common noise , arXiv preprint arXiv:2306.04788, (2023). [12] K. Du, Y. Li, and Y. Ye , Particle approximation for a conditional Mckean–Vlasov stochastic differential equation , arXiv preprint arXiv:2403.17555, (2024). [13] N. El Karoui, D. H. Nguyen, and M. Jeanblanc-Picqu´ e, Existence of an optimal Markovian filter for the control under partial observations , SIAM journal on control and opti-mization, 26 (1988), pp. 1025–1061. [14] W. H. Fleming , Measure-valued processes in the control of partially-observable stochastic systems , Applied Mathematics and Optimization, 6 (1980), pp. 271–285. [15] M. Fuhrman, H. Pham, and S. Ruda , Optimal control of Mckean-Vlasov systems under partial observation and hidden markov switching , arXiv preprint arXiv:2601.09311, (2026). [16] M. Germain, M. Lauri` ere, H. Pham, and X. Warin , Deepsets and their derivative net-works for solving symmetric PDEs , Journal of Scientific Computing, 91 (2022), p. 63. [17] F. Gozzi and A. ´Swiech , Hamilton–Jacobi–Bellman equations for the optimal control of the duncan–mortensen–zakai equation , Journal of Functional Analysis, 172 (2000), pp. 466–510. [18] C. Graham and D. Talay , Stochastic simulation and Monte Carlo methods: mathematical foundations of stochastic simulation , vol. 68, Springer Science & Business Media, 2013. [19] J. Han and W. E , Deep learning approximation for stochastic control problems , Deep Rein-forcement Learning Workshop, NIPS, arXiv preprint arXiv:1611.07422, (2016). [20] J. Han and R. Hu , Recurrent neural networks for stochastic control problems with delay ,Mathematics of Control, Signals, and Systems, 33 (2021), pp. 775–795. [21] J. Han, A. Jentzen, and W. E , Solving high-dimensional partial differential equations using deep learning , Proceedings of the National Academy of Sciences, 115 (2018), pp. 8505–8510. [22] J. Han and J. Long , Convergence of the deep BSDE method for coupled FBSDEs , Proba-bility, Uncertainty and Quantitative Risk, 5 (2020), p. 5. 26 [23] Y. Li, X. Tan, and S. Tang , Discrete-time approximation of stochastic optimal control with partial observation , SIAM Journal on Control and Optimization, 62 (2024), pp. 326–350. [24] P.-L. Lions , Viscosity solutions of fully nonlinear second-order equations and optimal stochas-tic control in infinite dimensions. iii. uniqueness of viscosity solutions for general second-order equations , Journal of Functional Analysis, 86 (1989), pp. 1–18. [25] H. Pham , Portfolio optimization under partial observation: theoretical and numerical aspects ,(2008). [26] H. Wan, G. Wang, and J. Xiong , Discrete–time partially observable stochastic optimal control problems of Mckean–Vlasov type and branching particle system approximations , IEEE Transactions on Automatic Control, (2025). [27] J. Zhang , Backward stochastic differential equations , in Backward Stochastic Differential Equations: From Linear to Fully Nonlinear Theory, Springer, 2017, pp. 79–99. 27
