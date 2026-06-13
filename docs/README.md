@@ -6,39 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-12
-- 运行时间：2026-06-12 20:59:43 UTC
+- 最新运行日期：2026-06-13
+- 运行时间：2026-06-13 20:58:47 UTC
 - 运行状态：成功
-- 本次总论文数：5
+- 本次总论文数：3
 - 精读区：1
-- 速读区：4
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦模糊金融市场优化与隐私保护两大前沿，精读《Mean-Variance Optimization in Ambiguous Financial Markets with Learning》（8.0分）。
-
-最值得看的方向包括模糊环境下的均值-方差优化学习，以及结合替代数据的隐私保护信用风险预测。
-
-建议普通读者优先关注金融不确定性建模与隐私计算交叉领域，可快速浏览相关速读文章获取直觉。
-- 详情：[/202606/12/README](/202606/12/README)
+今日精读一篇条件风险值优化论文（9.0分），速读两篇资源竞争与数据定价研究。最值得关注的是指数平滑与重要性采样结合优化CVaR的方法，理论价值高。建议优先精读该文，其余两篇可作为应用场景参考。
+- 详情：[/202606/13/README](/202606/13/README)
 
 ### 精读区论文标签
-1. [Mean-Variance Optimization in Ambiguous Financial Markets with Learning](/202606/12/2606.11318v1-mean-variance-optimization-in-ambiguous-financial-markets-with-learning)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：含模糊厌恶和学习的均值-方差投资组合优化
+1. [Exponential Adaptive Smoothing and Importance Sampling for Optimization of the Conditional Value-at-Risk](/202606/13/2606.11515v1-exponential-adaptive-smoothing-and-importance-sampling-for-optimization-of-the-conditional-value-at-risk)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：用于金融风险管理的条件风险价值优化方法
 
 ### 速读区论文标签
-1. [Privacy-Preserving Credit Risk Prediction with Alternative Data](/202606/12/2606.10333v1-privacy-preserving-credit-risk-prediction-with-alternative-data)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：使用机器学习进行信用风险预测
-2. [Particle Methods with Deep Learning for Stochastic Control under Partial Observation](/202606/12/2606.09055v1-particle-methods-with-deep-learning-for-stochastic-control-under-partial-observation)  
+1. [Learning to Strategically Acquire Resources in Competition](/202606/13/2606.06882v1-learning-to-strategically-acquire-resources-in-competition)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：深度学习和粒子方法用于随机控制，可应用于投资组合管理
-3. [Less Context, Better Agents: Efficient Context Engineering for Long-Horizon Tool-Using LLM Agents](/202606/12/2606.10209v1-less-context-better-agents-efficient-context-engineering-for-long-horizon-tool-using-llm-agents)  
+   evidence：获取可分割资源（如金融资产）的博弈论模型
+2. [Arbitrage-free Data Pricing](/202606/13/2606.10451v1-arbitrage-free-data-pricing)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：大语言模型代理在财务费用归集任务中的高效上下文工程
-4. [FlowBank: Query-Adaptive Agentic Workflows Optimization through Precompute-and-Reuse](/202606/12/2606.11290v1-flowbank-query-adaptive-agentic-workflows-optimization-through-precompute-and-reuse)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：在金融运营中使用大语言模型的智能体工作流优化
+   evidence：金融数据定价与套利问题
 
 
 <div class="dpr-home-promo-card">
