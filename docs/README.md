@@ -6,30 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-14
-- 运行时间：2026-06-14 20:18:43 UTC
+- 最新运行日期：2026-06-15
+- 运行时间：2026-06-15 22:23:29 UTC
 - 运行状态：成功
 - 本次总论文数：3
-- 精读区：3
-- 速读区：0
+- 精读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读两篇9.0分论文：启发式投资组合优化的数学基础，以及中国A股市场可解释因子分解模型的决策智能应用。最值得关注：HPO的严谨数学框架与因子分解对大规模金融市场的可解释性优势。下一个步建议：尝试将HPO与因子分解结合，构建兼顾数学严谨与可解释性的投资策略。
-- 详情：[/202606/14/README](/202606/14/README)
+今天速读了3篇时间序列相关论文，其中《FAME》获7分领跑。
+
+最值得关注的是异构时间序列预测中的可预测性感知专家混合方法；非参数自举法的场景生成对比也有参考价值。
+
+建议优先精读FAME模型，后续可结合场景生成方法深入理解时间序列的不确定性建模。
+- 详情：[/202606/15/README](/202606/15/README)
 
 ### 精读区论文标签
-1. [The Mathematics of Heuristic Portfolio Optimization (HPO)](/202606/14/2606.12612v1-the-mathematics-of-heuristic-portfolio-optimization-hpo)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：启发式投资组合优化的数学方法，适用于智能投顾
-2. [Interpretable Factor Decomposition for Decision Intelligence in Large-Scale Financial Markets: Evidence from China's A-Share Market](/202606/14/2606.12843v1-interpretable-factor-decomposition-for-decision-intelligence-in-large-scale-financial-markets-evidence-from-chinas-a-share-market)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：用于股市预测的可解释机器学习
-3. [LEDGER: A Long-Context Benchmark of Corporate Annual Reports for Grounded Financial Retrieval and Extraction](/202606/14/2606.13100v1-ledger-a-long-context-benchmark-of-corporate-annual-reports-for-grounded-financial-retrieval-and-extraction)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：金融报告信息提取与检索的自然语言处理基准
+- 本次无精读推荐。
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [FAME: Forecastability-Aware Mixture of Experts for Heterogeneous Time Series Forecasting](/202606/15/2606.08896v1-fame-forecastability-aware-mixture-of-experts-for-heterogeneous-time-series-forecasting)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：可迁移的时间序列预测方法
+2. [Scenario Generation for Time Series and Curves: A Comparison of Nonparametric and Semiparametric Bootstrap](/202606/15/2606.11859v1-scenario-generation-for-time-series-and-curves-a-comparison-of-nonparametric-and-semiparametric-bootstrap)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：量化金融中资产类别情景生成
+3. [Beyond Uniform Tokens: Adaptive Compression for Time Series Language Models](/202606/15/2606.13624v1-beyond-uniform-tokens-adaptive-compression-for-time-series-language-models)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：时间序列语言模型，可用于金融时间序列分析
 
 
 <div class="dpr-home-promo-card">
