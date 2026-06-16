@@ -6,34 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-15
-- 运行时间：2026-06-15 22:23:29 UTC
+- 最新运行日期：2026-06-16
+- 运行时间：2026-06-16 21:50:54 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：0
-- 速读区：3
+- 本次总论文数：6
+- 精读区：4
+- 速读区：2
 
 ### 今日简报（AI）
-今天速读了3篇时间序列相关论文，其中《FAME》获7分领跑。
-
-最值得关注的是异构时间序列预测中的可预测性感知专家混合方法；非参数自举法的场景生成对比也有参考价值。
-
-建议优先精读FAME模型，后续可结合场景生成方法深入理解时间序列的不确定性建模。
-- 详情：[/202606/15/README](/202606/15/README)
+今日聚焦金融时间序列预测，精读两篇高分论文。重点推荐基于预训练神经网络的高精度期权定价与鲁棒Transformer股票指数预测。普通读者可关注数据增强和扩展窗口评估方法，以提升预测稳定性。
+- 详情：[/202606/16/README](/202606/16/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Fast, Reliable, and Error-Bounded Option Pricing with Pretrained Neural Networks: A GJR--GARCH Study](/202606/16/2606.15502v1-fast-reliable-and-error-bounded-option-pricing-with-pretrained-neural-networks-a-gjr--garch-study)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：使用预训练神经网络的期权定价
+2. [Robust Transformer-Based One-Step Stock Index Forecasting via Shifted Data Augmentation](/202606/16/2606.15701v1-robust-transformer-based-one-step-stock-index-forecasting-via-shifted-data-augmentation)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：用于股指预测的Transformer
+3. [Invisible Manipulation Channels in AI-Assisted Financial Advisory: Implications for Market Integrity and Regulatory Design](/202606/16/2606.16121v1-invisible-manipulation-channels-in-ai-assisted-financial-advisory-implications-for-market-integrity-and-regulatory-design)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：AI金融顾问操纵检测
+4. [Mojo: A Promising Tool for Scalable Financial AI Efficiency](/202606/16/2606.16059v1-mojo-a-promising-tool-for-scalable-financial-ai-efficiency)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：Mojo语言面向可扩展金融AI效率设计
 
 ### 速读区论文标签
-1. [FAME: Forecastability-Aware Mixture of Experts for Heterogeneous Time Series Forecasting](/202606/15/2606.08896v1-fame-forecastability-aware-mixture-of-experts-for-heterogeneous-time-series-forecasting)  
+1. [Machine Learning and the Random Walk Puzzle: Forecasting the CAD/USD Exchange Rate with Expanding Window Evaluation and SHAP Interpretability](/202606/16/2606.15058v1-machine-learning-and-the-random-walk-puzzle-forecasting-the-cadusd-exchange-rate-with-expanding-window-evaluation-and-shap-interpretability)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：可迁移的时间序列预测方法
-2. [Scenario Generation for Time Series and Curves: A Comparison of Nonparametric and Semiparametric Bootstrap](/202606/15/2606.11859v1-scenario-generation-for-time-series-and-curves-a-comparison-of-nonparametric-and-semiparametric-bootstrap)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：量化金融中资产类别情景生成
-3. [Beyond Uniform Tokens: Adaptive Compression for Time Series Language Models](/202606/15/2606.13624v1-beyond-uniform-tokens-adaptive-compression-for-time-series-language-models)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：时间序列语言模型，可用于金融时间序列分析
+   evidence：机器学习预测CAD/USD汇率
+2. [Generative Predictive Distributions for Time Series](/202606/16/2606.16773v1-generative-predictive-distributions-for-time-series)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：用于金融市场的生成式时间序列预测
 
 
 <div class="dpr-home-promo-card">
