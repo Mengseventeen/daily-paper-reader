@@ -6,38 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-16
-- 运行时间：2026-06-16 21:50:54 UTC
+- 最新运行日期：2026-06-17
+- 运行时间：2026-06-17 22:12:15 UTC
 - 运行状态：成功
-- 本次总论文数：6
+- 本次总论文数：4
 - 精读区：4
-- 速读区：2
+- 速读区：0
 
 ### 今日简报（AI）
-今日聚焦金融时间序列预测，精读两篇高分论文。重点推荐基于预训练神经网络的高精度期权定价与鲁棒Transformer股票指数预测。普通读者可关注数据增强和扩展窗口评估方法，以提升预测稳定性。
-- 详情：[/202606/16/README](/202606/16/README)
+今日精读两篇9分论文：自我进化记忆增强的金融多模态推理，与差异后验模糊鲁棒投资组合优化。  
+核心方向：金融AI需结合多模态与不确定性建模，后者投资组合更稳健。  
+建议关注多模态推理在真实交易场景中的鲁棒性验证。
+- 详情：[/202606/17/README](/202606/17/README)
 
 ### 精读区论文标签
-1. [Fast, Reliable, and Error-Bounded Option Pricing with Pretrained Neural Networks: A GJR--GARCH Study](/202606/16/2606.15502v1-fast-reliable-and-error-bounded-option-pricing-with-pretrained-neural-networks-a-gjr--garch-study)  
+1. [FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness](/202606/17/2606.17642v1-finacumen-financial-multimodal-reasoning-via-self-evolving-experience-memory-harness)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：使用预训练神经网络的期权定价
-2. [Robust Transformer-Based One-Step Stock Index Forecasting via Shifted Data Augmentation](/202606/16/2606.15701v1-robust-transformer-based-one-step-stock-index-forecasting-via-shifted-data-augmentation)  
+   evidence：金融多模态推理智能体，结合LLM与工具
+2. [Robust Bayesian Portfolio Optimization with Discrepancy-based Posterior Ambiguity](/202606/17/2606.17643v1-robust-bayesian-portfolio-optimization-with-discrepancy-based-posterior-ambiguity)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：用于股指预测的Transformer
-3. [Invisible Manipulation Channels in AI-Assisted Financial Advisory: Implications for Market Integrity and Regulatory Design](/202606/16/2606.16121v1-invisible-manipulation-channels-in-ai-assisted-financial-advisory-implications-for-market-integrity-and-regulatory-design)  
+   evidence：基于后验模糊性的鲁棒贝叶斯投资组合优化
+3. [The Stanford EDGAR Filings Dataset: Reconstructing U.S. Corporate and Financial Disclosures into Layout-Faithful and Token-Efficient Pretraining Data](/202606/17/2606.18192v1-the-stanford-edgar-filings-dataset-reconstructing-us-corporate-and-financial-disclosures-into-layout-faithful-and-token-efficient-pretraining-data)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：AI金融顾问操纵检测
-4. [Mojo: A Promising Tool for Scalable Financial AI Efficiency](/202606/16/2606.16059v1-mojo-a-promising-tool-for-scalable-financial-ai-efficiency)  
+   evidence：用于金融NLP预训练的SEC文件数据集
+4. [ICBCBench: An Industry Consortium Benchmark for Financial Deep Research](/202606/17/2606.17458v1-icbcbench-an-industry-consortium-benchmark-for-financial-deep-research)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：Mojo语言面向可扩展金融AI效率设计
+   evidence：金融深度研究基准
 
 ### 速读区论文标签
-1. [Machine Learning and the Random Walk Puzzle: Forecasting the CAD/USD Exchange Rate with Expanding Window Evaluation and SHAP Interpretability](/202606/16/2606.15058v1-machine-learning-and-the-random-walk-puzzle-forecasting-the-cadusd-exchange-rate-with-expanding-window-evaluation-and-shap-interpretability)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：机器学习预测CAD/USD汇率
-2. [Generative Predictive Distributions for Time Series](/202606/16/2606.16773v1-generative-predictive-distributions-for-time-series)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：用于金融市场的生成式时间序列预测
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
