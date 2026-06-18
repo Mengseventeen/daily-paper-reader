@@ -6,35 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-17
-- 运行时间：2026-06-17 22:12:15 UTC
+- 最新运行日期：2026-06-18
+- 运行时间：2026-06-18 21:22:58 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：4
-- 速读区：0
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读两篇9分论文：自我进化记忆增强的金融多模态推理，与差异后验模糊鲁棒投资组合优化。  
-核心方向：金融AI需结合多模态与不确定性建模，后者投资组合更稳健。  
-建议关注多模态推理在真实交易场景中的鲁棒性验证。
-- 详情：[/202606/17/README](/202606/17/README)
+今日聚焦金融领域与大语言模型，精读高效金融语言理解与行业级深度研究基准。最值得关注：合成数据蒸馏提升金融语言理解效率，以及ICBCBench构建金融深度研究行业基准。建议关注金融领域专用模型与基准测试，同时可了解时间序列推理与预测的最新探索。
+- 详情：[/202606/18/README](/202606/18/README)
 
 ### 精读区论文标签
-1. [FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness](/202606/17/2606.17642v1-finacumen-financial-multimodal-reasoning-via-self-evolving-experience-memory-harness)  
+1. [Efficient Financial Language Understanding via Distillation with Synthetic Data](/202606/18/2606.18875v1-efficient-financial-language-understanding-via-distillation-with-synthetic-data)  
+   标签：评分：10.0/10、query:ai-finance
+   evidence：金融情感分析的蒸馏与合成数据方法
+2. [ICBCBench: An Industry Consortium Benchmark for Financial Deep Research](/202606/18/2606.17458v1-icbcbench-an-industry-consortium-benchmark-for-financial-deep-research)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：金融多模态推理智能体，结合LLM与工具
-2. [Robust Bayesian Portfolio Optimization with Discrepancy-based Posterior Ambiguity](/202606/17/2606.17643v1-robust-bayesian-portfolio-optimization-with-discrepancy-based-posterior-ambiguity)  
+   evidence：金融深度研究基准，包含面向金融AI代理的双轨评估
+3. [The Stanford EDGAR Filings Dataset: Reconstructing U.S. Corporate and Financial Disclosures into Layout-Faithful and Token-Efficient Pretraining Data](/202606/18/2606.18192v2-the-stanford-edgar-filings-dataset-reconstructing-us-corporate-and-financial-disclosures-into-layout-faithful-and-token-efficient-pretraining-data)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于后验模糊性的鲁棒贝叶斯投资组合优化
-3. [The Stanford EDGAR Filings Dataset: Reconstructing U.S. Corporate and Financial Disclosures into Layout-Faithful and Token-Efficient Pretraining Data](/202606/17/2606.18192v1-the-stanford-edgar-filings-dataset-reconstructing-us-corporate-and-financial-disclosures-into-layout-faithful-and-token-efficient-pretraining-data)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：用于金融NLP预训练的SEC文件数据集
-4. [ICBCBench: An Industry Consortium Benchmark for Financial Deep Research](/202606/17/2606.17458v1-icbcbench-an-industry-consortium-benchmark-for-financial-deep-research)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融深度研究基准
+   evidence：构建金融NLP数据集
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Can LLM Coding Agents Reason About Time Series?](/202606/18/2606.16545v1-can-llm-coding-agents-reason-about-time-series)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：利用LLM编码智能体进行时间序列推理，应用于金融领域
+2. [TimeVista: Exploring and Exploiting Vision-Language Models as Judges for Time Series Forecasting](/202606/18/2606.16173v1-timevista-exploring-and-exploiting-vision-language-models-as-judges-for-time-series-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：时间序列预测方法可迁移至股票市场分析
+3. [ConTex: Reformulating Counterfactual Generation For Time Series Forecasting](/202606/18/2606.18049v1-contex-reformulating-counterfactual-generation-for-time-series-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：为时间序列预测生成反事实解释，可应用于金融决策
 
 
 <div class="dpr-home-promo-card">
