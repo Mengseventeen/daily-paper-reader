@@ -6,38 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-18
-- 运行时间：2026-06-18 21:22:58 UTC
+- 最新运行日期：2026-06-19
+- 运行时间：2026-06-19 21:09:14 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
+- 本次总论文数：7
+- 精读区：4
 - 速读区：3
 
 ### 今日简报（AI）
-今日聚焦金融领域与大语言模型，精读高效金融语言理解与行业级深度研究基准。最值得关注：合成数据蒸馏提升金融语言理解效率，以及ICBCBench构建金融深度研究行业基准。建议关注金融领域专用模型与基准测试，同时可了解时间序列推理与预测的最新探索。
-- 详情：[/202606/18/README](/202606/18/README)
+今日七篇论文精读四篇，两篇高分聚焦金融AI：可审计图表问答与凸优化投资组合。  
+最值得关注9.0分的《AgentFinVQA》多智能体流水线与《DASH》降维方法，前者提升金融图表可审计性，后者优化大规模投资组合选择。  
+普通读者可优先了解多智能体系统在真实金融场景的部署潜力，以及降维技术如何降低投资模型计算成本。
+- 详情：[/202606/19/README](/202606/19/README)
 
 ### 精读区论文标签
-1. [Efficient Financial Language Understanding via Distillation with Synthetic Data](/202606/18/2606.18875v1-efficient-financial-language-understanding-via-distillation-with-synthetic-data)  
-   标签：评分：10.0/10、query:ai-finance
-   evidence：金融情感分析的蒸馏与合成数据方法
-2. [ICBCBench: An Industry Consortium Benchmark for Financial Deep Research](/202606/18/2606.17458v1-icbcbench-an-industry-consortium-benchmark-for-financial-deep-research)  
+1. [AgentFinVQA: A Deployable Multi-Agent Pipeline for Auditable Financial Chart QA](/202606/19/2606.19782v1-agentfinvqa-a-deployable-multi-agent-pipeline-for-auditable-financial-chart-qa)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：金融深度研究基准，包含面向金融AI代理的双轨评估
-3. [The Stanford EDGAR Filings Dataset: Reconstructing U.S. Corporate and Financial Disclosures into Layout-Faithful and Token-Efficient Pretraining Data](/202606/18/2606.18192v2-the-stanford-edgar-filings-dataset-reconstructing-us-corporate-and-financial-disclosures-into-layout-faithful-and-token-efficient-pretraining-data)  
+   evidence：使用多智能体NLP管道进行金融图表问答
+2. [DASH: A Dimensionality Reduction Method for Large-scale Convex MIQP with Applications in Subset Portfolio Selection](/202606/19/2606.20141v1-dash-a-dimensionality-reduction-method-for-large-scale-convex-miqp-with-applications-in-subset-portfolio-selection)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：构建金融NLP数据集
+   evidence：通过降维方法解决子集投资组合选择问题
+3. [DeXposure-Claw: An Agentic System for DeFi Risk Supervision](/202606/19/2606.19501v1-dexposure-claw-an-agentic-system-for-defi-risk-supervision)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：使用图时间序列基础模型的DeFi风险监督LLM智能体
+4. [FFinRED: An Expert-Guided Benchmark Generation and Evaluation Framework for Financial LLM Red-Teaming](/202606/19/2606.19887v1-ffinred-an-expert-guided-benchmark-generation-and-evaluation-framework-for-financial-llm-red-teaming)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：专家引导的金融LLM安全红队评估基准
 
 ### 速读区论文标签
-1. [Can LLM Coding Agents Reason About Time Series?](/202606/18/2606.16545v1-can-llm-coding-agents-reason-about-time-series)  
+1. [AI Economist Agent: An Agentic Framework for Model-Grounded Economic Analysis with RAG, Knowledge Graphs, and Large Language Models](/202606/19/2606.20041v1-ai-economist-agent-an-agentic-framework-for-model-grounded-economic-analysis-with-rag-knowledge-graphs-and-large-language-models)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：利用LLM编码智能体进行时间序列推理，应用于金融领域
-2. [TimeVista: Exploring and Exploiting Vision-Language Models as Judges for Time Series Forecasting](/202606/18/2606.16173v1-timevista-exploring-and-exploiting-vision-language-models-as-judges-for-time-series-forecasting)  
+   evidence：使用AI进行经济分析，结合大语言模型和知识图谱
+2. [Forecasting Is Not Attribution: Localizing Decoder Bypass in Graph-Based Neural Marketing Mix Models](/202606/19/2606.12687v1-forecasting-is-not-attribution-localizing-decoder-bypass-in-graph-based-neural-marketing-mix-models)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：时间序列预测方法可迁移至股票市场分析
-3. [ConTex: Reformulating Counterfactual Generation For Time Series Forecasting](/202606/18/2606.18049v1-contex-reformulating-counterfactual-generation-for-time-series-forecasting)  
+   evidence：基于图的神经网络营销组合模型用于预测商业结果
+3. [QueryMarket: Cost-Aware Online Active Learning in Data Markets](/202606/19/2606.17805v1-querymarket-cost-aware-online-active-learning-in-data-markets)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：为时间序列预测生成反事实解释，可应用于金融决策
+   evidence：适用于金融数据获取的成本感知在线主动学习框架
 
 
 <div class="dpr-home-promo-card">

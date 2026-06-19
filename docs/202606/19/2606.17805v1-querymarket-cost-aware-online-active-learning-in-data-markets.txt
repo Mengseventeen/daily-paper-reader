@@ -1,0 +1,1049 @@
+Title: QueryMarket: Cost-Aware Online Active Learning in Data Markets
+
+URL Source: https://arxiv.org/pdf/2606.17805v1
+
+Published Time: Wed, 17 Jun 2026 01:16:07 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> 1
+
+# QueryMarket: Cost-Aware Online Active Learning in Data Markets 
+
+Xiwen Huang and Pierre Pinson, Fellow, IEEE 
+
+Abstract —Data acquisition is a major bottleneck for learning in real-time streams: analysts must decide on the fly which labels to purchase while respecting a rolling budget. However, existing online active learning rarely unifies pricing , information gain ,and rolling budget constraints under concept drift. We introduce 
+
+QueryMarket , a market-inspired framework that queries each incoming data point based on its estimated utility to the model and its price. Within this framework, we propose OVBAL (online variance-based active learning), which integrates data pricing with information-driven selection by estimating each sample’s marginal utility via a D-optimality criterion with exponential forgetting and executing cost-aware purchases under rolling budget constraints. OVBAL yields a simple, fully online decision rule that adapts to nonstationary streams and heterogeneous label costs. Experiments on synthetic data and a real-world solar power generation forecasting task show that OVBAL is particularly effective under seller-centric pricing and yields a more favorable long-run error–cost trade-off in the real-world task under both pricing schemes. 
+
+Index Terms —Active learning, data markets, mechanism de-sign, regression, online learning 
+
+I. I NTRODUCTION 
+
+A. Context and Motivation 
+
+Machine learning models are increasingly being used in op-erational settings where data arrive sequentially and decisions must be made in real time [1], [2]. In supervised learning tasks, each observation consists of a feature vector and a corresponding ground-truth label. Although features are often readily available from sensors, digital platforms, or transac-tional systems, labels frequently require additional effort to obtain, such as laboratory measurements, expert annotations, audits, or external API queries. This asymmetry between easily observable inputs and costly ground-truth outcomes creates a fundamental bottleneck for learning systems, moti-vating selective label acquisition strategies as studied in active learning [3]–[5]. This sequential acquisition setting resembles classical online selection, such as the secretary problem, where decisions must be made immediately without knowledge of future candidates. However, in the context of online learning, the objective is not to select a single optimal item, but to acquire a sequence of informative labels while managing a limited acquisition budget and adapting to the evolving state of the predictive model. Recent work on active learning markets for label purchase [6] studied cost-effective label acquisition in a batch setting, where a fixed pool of unlabelled candidates is available and the analyst selects labels to purchase under                   
+
+> Xiwen Huang is with the Dyson School of Design Engineer-ing, Imperial College London, London, SW7 2DB, U.K. (e-mail: xi-wen.huang23@imperial.ac.uk). Pierre Pinson is with the Dyson School of Design Engineering, Imperial College London, London, U.K. He has additional affiliations with Halfspace (part of Accenture), the Technical University of Denmark (DTU Management) and Aarhus University (CoRE) – e-mail: p.pinson@imperial.ac.uk.
+
+explicit pricing constraints. Although the batch formulation es-tablishes a principled connection between model improvement and economic cost, it relies on access to a static candidate set and does not model sequential arrivals. Moving to the online regime fundamentally changes the acquisition problem: label value becomes state-dependent as the model evolves, and each purchase decision incurs an opportunity cost by consuming budget that could be reserved for future, potentially more informative observations. Moreover, the marginal contribution of a label is not observable ex ante and must be estimated from the current model state. These considerations motivate an online market-aware acquisition rule that can price, select, and learn in real time from data streaming settings. The online setting introduces additional challenges that are absent in batch acquisition mechanisms. Streaming environ-ments often exhibit non-stationarity, where the underlying data-generating process evolves over time. Such changes may arise from seasonal effects, regime changes, sensor drift, or behavioral changes in the system being monitored. As a result, information obtained from older observations can gradually become outdated and less representative of the current envi-ronment [1], [2]. To adapt to such evolving conditions, online learning algorithms must discount old information while in-corporating newly acquired observations efficiently. A widely adopted approach in recursive estimation and online regression is exponential forgetting , which progressively reduces the weight on older samples and emphasizes recent data [7], [8]. Under a locally-stationary assumption, this mechanism can be interpreted as tracking a time-varying parameter vector, en-abling the model to adapt to distributional changes while main-taining computational efficiency and numerical stability in sequential updates. This formulation is equivalent to assuming that model parameters evolve slowly over time, which allows the estimator to track gradual changes in the data-generating process. At the same time, label acquisition decisions must take into account sequential budget constraints. Most of the existing work on stream-based active learning assumes a fixed query budget or limits the total number of labels that can be requested [9], [10]. In contrast, in many practical data acquisition scenarios, labels have heterogeneous prices, and budgets are spent progressively over time. Each purchase, therefore, incurs an opportunity cost by consuming resources that could otherwise be allocated to future observations. To address these issues, we propose QueryMarket , where labels are owned by data sellers and can be purchased by a data analyst to improve predictive models. At each time step, a data seller provides a willingness-to-sell (WTS) for the current label, while a data analyst forms a willingness-to-pay (WTP) based on the estimated utility of the label for the predictive task. The analyst then decides whether to query the label by balancing informativeness and acquisi-
+
+> arXiv:2606.17805v1 [cs.LG] 16 Jun 2026 2
+
+tion cost under a cumulative budget constraint. This leads to the central research question of this work: How should the analyst decide, in a streaming environment, whether to purchase the label when its utility is uncertain, and the acquisition budget must be managed sequentially over time? 
+
+Within QueryMarket, we develop an online variance-based active learning strategy (OVBAL) that estimates label utility from predictive uncertainty and performs sequential updates using a Newton-Raphson scheme with exponential forgetting. This design enables fast adaptation in non-stationary streams while maintaining explicit cost-efficiency in label acquisition. 
+
+B. Related Work 1) Active Learning (AL): Although mainly studied for classification [11]–[15], AL is also studied in regression, in scenarios where labeling the output for the observations is costly [16], [17]. AL falls into two broad categories: pool-based AL, where a fixed unlabeled data pool is available, and stream-based or online active learning (OAL), where data arrives sequentially [18]. Motivated by our setting in which data points arrive in a stream and labeling incurs a cost under a fixed budget, OAL provides the most natural framework. Although classical AL has a rich theoretical foundation [3], [4], [11], [19], [20], recent efforts in OAL [9], [21], [22] remain limited in their treatment of real-world constraints. In particular, many OAL algorithms either assume labels are freely available or ignore economic considerations entirely. For example, threshold-based querying approaches [23] prioritize uncertainty but overlook the cost associated with each label. Building on the budget-aware querying rule for OAL in [21], [24], we propose a more general and economically grounded framework, incorporating both seller-side willingness-to-sell and the analyst-side willingness-to-pay. This market-driven design enables our algorithm to adaptively balance infor-mativeness with acquisition cost, enhancing efficiency under budget constraints. 
+
+2) Data Market: As data becomes a tradeable asset, recent work in AI and machine learning has increasingly focused on data valuation and data acquisition in markets . Several approaches propose auction- or contract-based mechanisms to price data from strategic sellers [25]–[27]. These methods typically assume batch settings, access to utility functions, or truthful revelations from sellers. In practice, however, label costs are heterogeneous, strategic, and often observable only at query time. Previous work on data valuation [28] generally assumes offline access to data or task-agnostic settings, making them unsuitable for streaming environments. In contrast, our framework situates valuation within an on-line, cost-sensitive learning pipeline, and connects label acquisition decisions to expected utility through the lens of Information Value Theory [29]. Closer to our setting, recent frameworks such as Data Shapley [30] and the Data Valuation using Reinforce-ment Learning (DVRL) method [31] estimate the marginal contribution of data points to task performance. However, they are generally retrospective and computationally intensive and require full retraining or simulation. In contrast, our approach introduces a lightweight real-time market-aware query strategy 
+
+tailored for streaming environments. By combining analyst-side WTP with seller-side WTS, we design an active selection rule that balances informativeness and cost efficiency without requiring utility ground truth or retraining. To our knowledge, this work provides one of the first frameworks that integrates active learning, market pricing, and information-theoretic util-ity estimation in an online setting. 
+
+3) Online Learning: Our work also builds on the frame-work of online convex optimization (OCO) [1], [2], [32], where the models are incrementally updated as new data arrive. Classical algorithms like online Gradient Descent (OGD) [33] and online Newton Step (ONS) [34] provide theoretical guar-anties such as sublinear or logarithmic regret by leveraging first- or second-order information. The closest setting to ours is that of regression markets, where second-order methods such as Newton-Raphson updates with exponential forgetting are used to guide the purchase of features [7]. We extend this line of work to a different acquisition setting, Query-Market, where the analyst purchases missing labels based on task-specific utility under budget and pricing constraints. Although regression markets focus on feature selection for model accuracy, our framework introduces an active learning market that combines utility estimation, cost awareness, and sequential query decisions. In contrast to existing approaches, our framework explicitly models the interaction between the value of data and the acquisition price in a sequential market environment. 
+
+C. Contributions 
+
+Our contributions are threefold. First, we formulate stream-ing label acquisition as a market-aware online active learning problem with heterogeneous label prices, explicitly modelling seller-side willingness-to-sell and analyst-side willingness-to-pay under sequential spending constraints, thereby moving be-yond the common unit-cost or fixed query-budget assumptions in active learning literature. Second, we develop OVBAL, a cost-aware querying strategy that couples uncertainty-based utility estimation with a budget-aware gating rule, and we inte-grate it with exponential forgetting to enable robust adaptation under non-stationarity. Third, we introduce an evaluation pro-tocol for online active learning markets that compares acqui-sition strategies under equal-budget and prequential streaming metrics, and we use this protocol to benchmark buyer-centric and seller-centric pricing schemes on both synthetic and real-world datasets. The remainder of the paper formalizes the QueryMarket setting and pricing interface, derives the OVBAL decision rule and its online update mechanism with forgetting, and evaluates the resulting market-aware acquisition pipeline on synthetic and real-world datasets. Across the experiments, the relative advantage of OVBAL depends on the pricing regime: it is particularly effective under seller-centric pricing, while in the real-world solar forecasting task, it delivers a more favorable long-run error–cost trade-off under both pricing schemes. II. P ROBLEM FORMULATION 
+
+We study cost-aware online label acquisition in a streaming market, where labels are held by data sellers and must be 3
+
+Stream 
+
+˜xt
+
+Forecast model 
+
+OVBAL decision 
+
+ut ≥ τt, ˆℓt ≥ ηt/ϕ 
+
+Seller 
+
+Update 
+
+{βt, H t, σ 2
+
+> y,t
+
+}
+
+Downstream task(s) 
+
+˜xt ˆyt
+
+ut, ˆℓt
+
+query 
+
+yt
+
+Ht ← λH t−1, βt ← βt−1
+
+ˆyt+1 
+
+payment pt
+
+no query 
+
+time t3t1 t2 t4 tT     
+
+> Fig. 1. QueryMarket architecture. At time t, the analyst applies the OVBAL rule to decide whether to query a label from a seller. Queried labels are purchased at price pt(red dashed arrow) and used to update the forecasting model for downstream tasks. Blue blocks correspond to the buyer (analyst) and the grey block to the seller; black arrows indicate the data flow.
+
+purchased under a rolling budget. At each discrete time step 
+
+t = 1, . . . , T , the analyst (buyer) first posts her WTP ϕ
+
+and then observes the incoming covariates, needing to decide immediately whether to acquire the corresponding label; un-purchased labels expire and cannot be revisited. Let zt denote the raw covariates arriving at time t. The analyst observes a (possibly transformed) feature vector xt ∈ RP , while the ground-truth label yt ∈ R is privately held by a seller. The seller posts an ask price ηt > 0 (WTS) for yt and the analyst will decide if she will buy it or not based on query strategy and decision role. This online interaction defines our QueryMarket .
+
+A. Learning Model a) Linear regression setup: We consider a streaming regression problem. At each time step t, the analyst observes a feature vector xt ∈ Rp. We use a linear predictor defined on the augmented feature vector 
+
+˜xt =
+
+ 1
+
+xt
+
+
+
+∈ Rp+1 , (1) where the leading 1 accounts for the intercept term. The prediction at time t is then given by 
+
+ˆyt = f (xt; βt−1) = β⊤ 
+
+> t−1
+
+˜xt, (2) where βt−1 ∈ Rp+1 denotes the model parameter estimated from the labelled data available up to time t − 1. For each labelled observation, we measure the instantaneous prediction loss by 
+
+ℓ(yt, ˆyt) = ℓ yt, β ⊤ 
+
+> t−1
+
+˜xt
+
+ . (3) In this work, we use the squared loss 
+
+ℓ(yt, ˆyt) = ( yt − ˆyt)2 . (4) The analyst is initially given a small labelled set DL =
+
+{(xi, y i)}nL
+
+> i=1
+
+, which is used to initialize the predictor. There-after, observations arrive sequentially, and labels may only be-come available through the acquisition mechanism introduced below. 
+
+b) Nonlinearity via feature embeddings: Although (2) is linear in ˜xt, it is not restrictive with respect to the original co-variates: xt can be any representation xt = ψ(zt), where ψ(·)
+
+may be a nonlinear basis expansion (e.g., polynomials/splines), a kernel feature map (e.g., random Fourier features), or a learned embedding (e.g., a neural encoder). Therefore, the overall mapping zt 7 → ˆyt can capture nonlinear relationships in the raw inputs while retaining an online-update-friendly form in the feature space. 
+
+B. Market Interaction 
+
+Let ˆℓt denote the analyst’s estimated utility of acquiring the label at time t (specified later via an information-gain criterion), and let ϕ > 0 denote the WTP per unit of utility. The analyst submits a bid 
+
+bid t = ϕ ˆℓt. (5) A transaction is feasible only if the bid meets the ask, i.e., 
+
+bid t ≥ ηt. (6) If a trade occurs, the label yt is revealed at transaction price 
+
+pt; otherwise, the opportunity expires. We consider two pricing schemes: seller pricing , where 
+
+pt = ηt, and buyer pricing , where pt = bid t. In both schemes, the feasibility condition (6) must hold. III. P ROPOSED QUERY MARKET FRAMEWORK 
+
+We propose Online Variance-Based Active Learning (OVBAL) , a cost-aware query strategy for sequential label ac-quisition in streaming regression settings, where labels are se-lectively queried under budget constraints. OVBAL is designed to balance the informativeness of the queried data with the cost of acquisition, a setting motivated by practical constraints in real-time learning systems. Unlike traditional stream-based ac-tive learning methods that optimize A-optimality (minimizing average variance) [23], OVBAL is built on the D-optimality principle, which selects queries to maximize information gain through determinant-based variance reduction. We operational-ize this by estimating the Unscaled Predictive Variance (UPV) 4
+
+as a proxy for sample utility and combine it with a market-aware pricing model involving the analyst’s WTP and the seller’s WTS. The result is a principled, cost-sensitive query rule that enables high-quality learning under limited budgets. This method integrates three key components: (i) exponen-tial forgetting to prioritize recent data; (ii) recursive Newton-Raphson updates for real-time model estimation; and (iii) a threshold-based utility estimator to drive query decisions. In addition, we adopt a rolling-budget market mechanism and an observer evaluation protocol, and select the forgetting factor via value-for-money cross-validation. The following subsections describe each component in detail. 
+
+A. Exponential Forgetting 
+
+In dynamic environments where data distributions evolve over time, model adaptation must be both continuous and responsive. To accommodate non-stationarity in streaming data, we adopt an exponential forgetting factor λ ∈ [0 , 1) ,which emphasizes recent observations while discounting older ones. Therefore, the model parameters at time t are obtained by minimizing a time-discounted convex loss function over past observations: 
+
+ˆβt = arg min  
+
+> β
+
+Lt(β), (7) 
+
+Lt(β) = 1
+
+nλ
+
+X
+
+> ti<t
+
+λt−ti ℓ  yti , β ⊤ ˜xti
+
+ , (8) where ℓ(·) is a convex loss function, ˜xt denotes the input vector augmented with a bias term, and nλ = (1 − λ)−1 is the effective memory size. Lt is a time-weighted estimator of the loss function ℓ evaluated over the time horizon up to t. In this work, we adopt the quadratic loss, i.e. ℓ(y, ˆy) = ( y − ˆy)2,which corresponds to the mean squared error (MSE). 
+
+B. Recursive Updates 
+
+Rather than recomputing the solution to (7) from scratch at each time step, we adopt a recursive Newton-style update. This builds on the framework of online convex optimization [2], where the analyst updates the parameters incrementally as new data arrive. Specifically, we incorporate ideas from the Newton-Raphson method [7] and its extended online Newton Step (ONS) algorithm [34], [35], which achieves logarithmic regret by using second-order curvature information in the up-date rule. We adapt these principles to a streaming regression setting with exponential forgetting. Following [7], given that ℓ(·) is a quadratic loss, we recursively update the model as follows: 
+
+ϵt = yt − ˆβ⊤ 
+
+> t−1
+
+˜xt, (9a) 
+
+Ht = λH t−1 + ˜ xt ˜x⊤ 
+
+> t
+
+, (9b) 
+
+ˆβt = ˆβt−1 + H−1 
+
+> t
+
+˜xtϵt, (9c) 
+
+σ2 
+
+> y,t
+
+= λσ 2 
+
+> y,t −1
+
++ (1 − λ)ϵ2 
+
+> t
+
+. (9d) 
+
+C. Variance-Based Label Utility Estimation a) Uncertainty-Based Informativeness: Given a new in-put ˜xt ∈ Rp+1 at time t, the UPV is computed as: 
+
+ut = ˜ x⊤ 
+
+> t
+
+H−1 
+
+> t−1
+
+˜xt, (10) where Ht is the Fisher information matrix maintained by recursive least squares updates, and ut = ˜x⊤ 
+
+> t
+
+H−1 
+
+> t−1
+
+˜xt is the (unscaled) proxy of the predictive variance. To adapt to distribution shift, we estimate a time-varying threshold τt
+
+using a rolling empirical quantile. Specifically, let Ut−1 =
+
+{us}t−1  
+
+> s=max(1 ,t −W)
+
+denote the uncertainty history in a window of size W . We set τt as the (1 − α)-quantile of Ut−1:
+
+τt = q1−α(Ut−1) , (11) so that the querying rate is controlled approximately by 
+
+P(ut ≥ τt) ≈ α. (12) Only samples with uncertainty above this adaptive threshold are considered for labeling. 
+
+Definition 1 (Cost-Aware Query Rule): A label is acquired at time t if and only if: 
+
+ut ≥ τt, (Uncertainty Condition) 
+
+ˆℓt ≥ ηt/ϕ. (Cost-Utility Condition) Here, ˆℓt denotes the estimated utility of a label, ϕ denotes the analyst’s WTP per unit of utility, and ηt is the seller’s WTS. In our QueryMarket, the analyst decides whether to pur-chase a label based on the expected utility of acquiring 
+
+yt. Although the notion of utility can be task-specific (e.g. reducing downstream forecasting error or improving model stability), we adopt a principled, task-agnostic proxy: the ex-pected reduction in model uncertainty induced by observation 
+
+xt.
+
+b) D-optimal utility (expected log-volume reduction): 
+
+In the linear-in-features model, the parameter covariance is proportional to the inverse information matrix. Let Ht−1
+
+denote the information matrix after processing data up to time t − 1. Following (9b), we define estimated utility as the incremental D-optimal log-gain from acquiring (˜ xt, y t),measured as the increase in log-determinant of the information matrix: ˆℓt = log det( Ht) − log det( λH t−1)= log 
+
+
+
+1 + ˜ x⊤ 
+
+> t
+
+(λH t−1)−1 ˜xt
+
+
+
+= log 
+
+
+
+1 + 1 
+
+> λ
+
+˜x⊤ 
+
+> t
+
+H−1 
+
+> t−1
+
+˜xt
+
+
+
+.
+
+(13) where the second equality follows from the matrix determinant lemma. 
+
+Remark 1 (Matrix determinant lemma): For invertible A and vector u, det( A + uu ⊤) = det( A) 1 + u⊤A−1u.
+
+c) True utility (realized D-opt gain): If the label is queried ( qt = 1 ), we compute the true utility as the realized reduction in model uncertainty measured by the D-optimal log-volume criterion. We define the realized (global) utility as 
+
+ℓt = log det  σ2
+
+> y,t −1
+
+H−1
+
+> t−1
+
+ − log det  σ2
+
+> y,t
+
+H−1
+
+> t
+
+
+
+= p log σ2
+
+> y,t −1
+
+σ2
+
+> y,t
+
++
+
+
+
+log det( Ht) − log det( Ht−1)
+
+
+
+. (14) where p = dim(˜ xt) is the number of regression coefficients (including the intercept) and σ2 
+
+> y,t
+
+is the online residual-variance estimate. 5
+
+d) Parameter uncertainty: Under standard linear regres-sion assumptions, the parameter covariance satisfies 
+
+Var( ˆβt) ≈ σ2 
+
+> y,t
+
+H−1 
+
+> t
+
+, (15) where σ2 
+
+> y,t
+
+is an online estimate of the residual variance. In particular, the D-opt utility in (13) depends only on (˜ xt, H −1
+
+> t−1
+
+)
+
+at decision time (and does not require observing yt), making it time-consistent for streaming acquisition. 
+
+D. Online Acquisition Protocol a) Experimental protocol and data split: We warm-start the model on an initial labeled set DL = {(xi, y i)}nL
+
+> i=1
+
+.The subsequent stream is divided into a validation segment 
+
+Dcv = {(xt, η t)}Tcv  
+
+> t=1
+
+to adjust the hyperparameters (e.g., λ), and a hold-out evaluation stream DU = {(xt, η t)}Tt=Tcv +1 .After selecting λ⋆ on Dcv , we warm-start on DL ∪ Dcv and run the online policy on DU . At each time t, if the buyer purchases the label, she pays pt and observes yt; otherwise yt
+
+remains hidden to the analyst. To tune λ, we define a criterion value-for-money (VfM) as the reduction in mean squared error (MSE) relative to a no-update baseline per unit acquisition cost: 
+
+VfM( λ) = MSE no -update (Dcv ) − MSE alg (Dcv ; λ)
+
+P 
+
+> t∈Dcv
+
+pt(λ) . (16) where MSE alg (Dcv ; λ) denotes the running MSE obtained by the algorithm with forgetting factor λ on the validation stream 
+
+Dcv , and P 
+
+> t∈Dcv
+
+pt(λ) is the corresponding cumulative ac-quisition cost. For each algorithm, the forgetting parameter λ
+
+is selected via validation by maximizing the value-for-money (VfM) criterion. 
+
+b) Rolling budget: We model a rolling budget that is re-plenished over time to reflect sequential spending in streaming data acquisition. Let b− 
+
+> t
+
+denote the available budget before the acquisition decision at time t, and b+ 
+
+> t
+
+the remaining budget after the decision, we have: b+0 = b0, b− 
+
+> t
+
+= b+ 
+
+> t−1
+
++ γ. A purchase is feasible only if b− 
+
+> t
+
+≥ pt; then b+ 
+
+> t
+
+= b− 
+
+> t
+
+− pt. If no purchase occurs, b+ 
+
+> t
+
+= b− 
+
+> t
+
+. We also track cumulative spending 
+
+ct = Pti=1 pi for reporting. 
+
+c) Observer protocol and prequential MSE: We adopt an observer protocol: at each step t, the analyst makes a pre-diction using only the information available before observing 
+
+yt. The realized outcome yt is then revealed to the observer for evaluation, while it is used to update the analyst only if 
+
+the label is purchased. Let ˆyt = f (xt; ˆβt−1) and define the prequential error et = yt − ˆyt. We report the running MSE, whose terminal value is equal to the overall MSE on a segment 
+
+S:
+
+MSE( S) = 1
+
+|S| 
+
+X
+
+> t∈S
+
+e2 
+
+> t
+
+= 1
+
+|S| 
+
+X
+
+> t∈S
+
+(yt − ˆyt)2. (17) Lower values indicate better predictive accuracy, and the running curve illustrates stabilization speed and sensitivity to non-stationarity. 
+
+Algorithm 1 Online Variance-Based Active Learning (OVBAL)  
+
+> 1:
+
+Notation: [·] ∈ { 0, 1}; ˜xt ≜ [1; xt] 
+
+> 2:
+
+Input: labeled DL, stream {(xt, η t)}|DU | 
+
+> t=1
+
+, labels {yt} 
+
+> 3:
+
+Params: forgetting factor λ, threshold α, WTP ϕ, initial budget b0, per-step income γ, window W 
+
+> 4:
+
+Init: H0, ˆβ0, σ 2
+
+> y, 0
+
+; b+0 ← b0; c ← 0; U ← U (DL); τ0 by (11)  
+
+> 5:
+
+Output: { ˆβt}, {ˆyt}, {pt}, c, b+  
+
+> |DU|
+> 6:
+
+for t = 1 to |DU | do  
+
+> 7:
+
+b− 
+
+> t
+
+← b+ 
+
+> t−1
+
++ γ 
+
+> 8:
+
+ˆyt ← ˆβ⊤ 
+
+> t−1
+
+˜xt, ut ← ˜x⊤ 
+
+> t
+
+H−1 
+
+> t−1
+
+˜xt 
+
+> 9:
+
+τt−1 ← τ (U) via (11)  
+
+> 10:
+
+ˆℓt by (13); pt by (18)  
+
+> 11:
+
+qt ← [ut ≥ τt] [ ϕˆℓt ≥ ηt] [ b− 
+
+> t
+
+≥ pt] 
+
+> 12:
+
+if qt = 1 then  
+
+> 13:
+
+purchase yt; c ← c + pt; b+ 
+
+> t
+
+← b− 
+
+> t
+
+− pt 
+
+> 14:
+
+Update (ϵt, H t, ˆβt, σ 2
+
+> y,t
+
+) via (9a)–(9d)  
+
+> 15:
+
+compute ℓt via (14)  
+
+> 16:
+
+else  
+
+> 17:
+
+pt ← 0, ℓt ← 0, b+ 
+
+> t
+
+← b− 
+
+> t
+> 18:
+
+Ht ← λH t−1, ˆβt ← ˆβt−1, σ2 
+
+> y,t
+
+← σ2 
+
+> y,t −1
+> 19:
+
+end if  
+
+> 20:
+
+U ← TAIL W (U ∪ { ut}), τ t ← τ (U) via (11)  
+
+> 21:
+
+end for 
+
+d) Query execution and pricing: When the buyer decides to query, the transaction price pt follows one of two pricing rules: 
+
+pt =
+
+(
+
+ϕˆℓt (buyer-centric pricing) 
+
+ηt (seller-centric pricing) . (18) Label purchase occurs only when it is budget-feasible, i.e. 
+
+b− 
+
+> t
+
+≥ pt; under buyer-centric pricing, we additionally require the seller to accept the bid ϕˆℓt ≥ ηt. If a purchase occurs, the analyst updates ˆβt, Ht, and σ2 
+
+> y,t
+
+via (9a)–(9d); otherwise it performs only the forgetting step (no label update). We summarize the complete OVBAL algorithm in Algo-rithm 1. To evaluate the effectiveness of our OVBAL strategy, we compare it with two baselines: a Greedy strategy and a Random Sampling (RS) strategy, described in Algorithms 2 and 3, respectively. In G REEDY , the buyer purchases every arriving label whenever it is budget-feasible, i.e., b− 
+
+> t
+
+≥ pt,without incorporating any informativeness or utility-based selection criterion. In RS, the buyer purchases a label with fixed probability p, again only when b− 
+
+> t
+
+≥ pt, providing a constant-rate acquisition benchmark under the same rolling-budget constraint. These baselines isolate the contribution of OVBAL’s utility-driven selection beyond budget feasibility alone. IV. N UMERICAL RESULTS 
+
+In this section, we first use a synthetic setting to illustrate the behavior of OVBAL and the benchmark methods under controlled pricing regimes, and then evaluate the methods on a real-world solar power forecasting task. While the synthetic study is useful for interpreting the acquisition mechanisms, the 6
+
+Algorithm 2 Greedy  
+
+> 1:
+
+Input: labeled DL, stream {(xt, η t)}|DU | 
+
+> t=1
+
+, labels {yt} 
+
+> 2:
+
+Parameters: λ, ϕ, b0, γ 
+
+> 3:
+
+Init: H0, ˆβ0, σ 2
+
+> y, 0
+
+; b+0 ← b0; c ← 0 
+
+> 4:
+
+Output: { ˆβt}, {ˆyt}, {pt}, c, b+  
+
+> |DU|
+> 5:
+
+for t = 1 to |DU | do  
+
+> 6:
+
+b− 
+
+> t
+
+← b+ 
+
+> t−1
+
++ γ 
+
+> 7:
+
+Predict ˆyt using ˆβt−1 
+
+> 8:
+
+Compute price pt by (18)  
+
+> 9:
+
+if b− 
+
+> t
+
+≥ pt then  
+
+> 10:
+
+Purchase yt, c ← c + pt, b+ 
+
+> t
+
+← b− 
+
+> t
+
+− pt 
+
+> 11:
+
+Update model via (9a)–(9d)  
+
+> 12:
+
+else  
+
+> 13:
+
+pt ← 0, b+ 
+
+> t
+
+← b− 
+
+> t
+> 14:
+
+Ht ← λH t−1, ˆβt ← ˆβt−1, σ 2 
+
+> y,t
+
+← σ2 
+
+> y,t −1
+> 15:
+
+end if  
+
+> 16:
+
+end for Algorithm 3 Random Sampling (RS)  
+
+> 1:
+
+Input: labeled DL, stream {(xt, η t)}|DU | 
+
+> t=1
+
+, labels {yt} 
+
+> 2:
+
+Parameters: λ, ϕ, b0, γ, query probability p 
+
+> 3:
+
+Init: H0, ˆβ0, σ 2
+
+> y, 0
+
+; b+0 ← b0; c ← 0 
+
+> 4:
+
+Output: { ˆβt}, {ˆyt}, {pt}, c, b+  
+
+> |DU|
+> 5:
+
+for t = 1 to |DU | do  
+
+> 6:
+
+b− 
+
+> t
+
+← b+ 
+
+> t−1
+
++ γ 
+
+> 7:
+
+Sample query indicator qt ∼ Bernoulli( p) 
+
+> 8:
+
+Predict ˆyt using ˆβt−1; compute price pt by (18)  
+
+> 9:
+
+if qt = 1 and b− 
+
+> t
+
+≥ pt then  
+
+> 10:
+
+Purchase yt; c ← c + pt, b+ 
+
+> t
+
+← b− 
+
+> t
+
+− pt 
+
+> 11:
+
+update model via (9a)–(9d)  
+
+> 12:
+
+else  
+
+> 13:
+
+pt ← 0, b+ 
+
+> t
+
+← b− 
+
+> t
+> 14:
+
+Ht ← λH t−1, ˆβt ← ˆβt−1, σ 2 
+
+> y,t
+
+← σ2 
+
+> y,t −1
+> 15:
+
+end if  
+
+> 16:
+
+end for 
+
+real-data experiment provides the main evidence of practical performance. 
+
+A. Synthetic Data Setting 
+
+We use this synthetic experiment primarily to illustrate how the acquisition mechanisms behave under controlled buyer-and seller-pricing regimes before turning to the real-world forecasting task. We consider a time-varying linear regression model. At each time step t ∈ { 1, . . . , T }, we observe a feature vector xt = ( xt, 1, x t, 2, x t, 3)⊤ ∈ R3 with i.i.d. components 
+
+xt,i ∼ N (0 , 1) . The response is generated as 
+
+yt = β0,t + β1,t xt, 1 + β2,t xt, 2 + β3,t xt, 3 + ϵt, (19) where ϵt ∼ N (0 , σ 2 
+
+> ϵ
+
+) with σϵ = 0 .3, and T = 20000 . The time-varying coefficients follow a smooth drift: 
+
+β0,t = 1 + 2 × 10 −4 t, (20) 
+
+β1,t = sin(0 .005 t), (21) 
+
+β2,t = 0 .5 + 10 −3 t, (22) 
+
+β3,t = 3 × 10 −4 t. (23) At each t, the buyer posts a bid proportional to her WTP, implemented as bt = ϕ ˆℓt with ϕ = 0.16 , where ˆℓt is calculated from (13). The seller’s ask price ηt is generated i.i.d. as a scaled log-normal random variable: ηt = c ˜ηt, where 
+
+˜ηt ∼ LogNormal( μ = −2, σ = 0 .30) and c = 16 . The agent starts with budget b0 = 1 .6 × 10 −2 and receives a fixed income γ = 6 .4 × 10 −3 at each step. For OVBAL, the selection threshold τt is computed as the rolling 85 th percentile of the most recent 200 historical uncertainty scores 
+
+{ut′ }. Under stable conditions, this yields an approximate candidate rate comparable to querying the top 15% of high-uncertainty observations. We divide the stream chronologically into labelled data DL, validation data Dcv , and test data DU ,using the earliest 5% of observations for warm-starting, the subsequent 10% for hyperparameter tuning, and the remaining 
+
+85% for evaluation. The forgetting factor λ is tuned in Dcv 
+
+on a grid {0.990 , 0.991 , . . . , 0.999 } by maximizing value-for-money (VfM), and then the selected λ is used for evaluation in DU .Figure 2 reports the running prequential MSE over time on the synthetic data set under buyer-centric (BC) and seller-centric (SC) pricing. The results differ markedly across the two pricing regimes. Under BC pricing (Fig. 2a), the greedy strategy achieves the lowest running MSE after the initial transient phase, while OVBAL performs better than random sampling but does not outperform Greedy. This behavior is consistent with the BC mechanism implemented here: since the paid price equals the learner’s bid, Greedy can acquire a very large number of low-bid labels while incurring only a low total cost. As a result, in this controlled setting, broad low-cost acquisition proves more effective than selective high-utility acquisition. In contrast, OVBAL is much more selective and purchases only a small number of high-utility but high-bid labels, resulting in a substantially higher average cost per acquired label. Under SC pricing (Fig. 2b), OVBAL clearly achieves the lowest running MSE throughout most of the stream. In this regime, prices are exogenously determined by sellers, so ac-quisitions require a stronger utility–cost trade-off. As a result, indiscriminate querying becomes inefficient, and OVBAL’s D-optimality-driven selection yields a clear advantage over both Greedy and RS. Table I further illustrates these regime-dependent acquisition patterns. Under BC pricing, OVBAL acquires only 79 labels but incurs the highest total cost (£102), whereas Greedy purchases 17,000 labels at a much lower total cost (£10.19) and attains the best predictive accuracy. Thus, in this synthetic BC setting, OVBAL is more selective but not more cost-effective than Greedy. Under SC pricing, however, OVBAL achieves both the lowest overall acquisition cost (£89.94) and 7                                         
+
+> TABLE I OVERALL COST AND AVERAGE COST PER ACQUIRED DATA POINT (£/ DATA )ON THE SYNTHETIC DATASET UNDER BC ( BUYER )AND SC ( SELLER )
+> PRICING .BC (buyer) SC (seller) Method Overall cost (£) Data £/data Overall cost (£) Data £/data OVBAL 102 79 1.29 89.94 79 1.14 Greedy 10.19 17000 6.00 ×10 −4108.5 97 1.12 RS 9.01 2659 3.39 ×10 −3108.5 80 1.36 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5
+
+Time (×10 3)
+
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Running MSE
+> OVBAL ( =0.990)
+> Greedy ( =0.999)
+> RS ( =0.999)
+
+(a) Buyer pricing 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 
+
+Time (×10 3) 
+
+> 3
+> 4
+> 5
+> 6
+> 7
+> Running MSE
+> OVBAL ( =0.990)
+> Greedy ( =0.992)
+> RS ( =0.991)
+
+(b) Seller pricing  
+
+> Fig. 2. Synthetic data: running prequential MSE versus time step under buyer (BC) and seller (SC) pricing.
+
+the lowest prediction error, while Greedy and RS incur higher total spending (£108.5) and worse forecasting performance. Figure 3 compares the methods at equal budget levels by plotting running MSE against cumulative spending. The equal-budget comparison again highlights the difference between the two pricing regimes. Under BC pricing, OVBAL does not provide the best error–cost trade-off: over the common expenditure range, Greedy achieves lower running MSE at substantially lower total cost. Under SC pricing, by contrast, OVBAL consistently delivers the most favorable error–cost trade-off, achieving lower prediction error than Greedy and RS over most of the comparable spending range. Overall, this synthetic experiment shows that OVBAL is particularly effective when acquisition prices are externally imposed and heterogeneous, whereas under the present BC setup, Greedy benefits from being able to purchase many labels at very low endogenous bid prices. This further highlights that the relative advantage of acquisition strategies depends on the pricing mechanism and data environment, motivating the real-world evaluation in the next subsection. 
+
+B. Solar Power Forecasting 
+
+We evaluated OVBAL on a real-world solar power forecast-ing task using the UNISOLAR data set [36], which contains photovoltaic (PV) generation measurements from 42 solar sites distributed across five campuses, recorded at a 15-minute resolution between January 2020 and April 2022. Experiments were conducted on Site 10 (Campus 3) of the UNISOLAR data set, selected for its relatively complete meteorological records and limited missingness. The site provides synchro-nized PV generation and weather measurements, including apparent temperature, air temperature, dew point temperature, relative humidity, wind speed, and wind direction. The forecasting task is one-step-ahead prediction, i.e., pre-dicting PV generation 15 minutes ahead. Measurements are first aligned to a regular 15-minute grid. Nighttime generation is fixed to zero based on astronomical sunrise–sunset calcu-lations, and only daytime samples are retained for modelling. The input features consist of contemporaneous meteorologi-cal variables, sine–cosine encoding of wind direction, cyclic temporal features for hour-of-day, day-of-year, and month-of-year, and three autoregressive PV lags corresponding to the previous 15, 30, and 60 minutes, i.e., yt−1, yt−2, and yt−4. All input features are standardized using the mean and standard deviation computed from the initial labelled warm-up subset only. We fix the market parameters to ϕ = 0 .38 , initial budget 
+
+b0 = 10 −3, and per-step budget replenishment γincome = 2 ×
+
+10 −3. For each time step, the ask price is sampled i.i.d. from a log-normal distribution, ηt ∼ LogNormal( μη , σ 2 
+
+> η
+
+), with μη =
+
+−2 and ση = 0 .30 .Data are split chronologically to preserve temporal struc-ture: the earliest 5% of observations form the initial labelled set used to warm-start the model, and the subsequent 10% are used for hyperparameter tuning. For buyer-centric (BC) pric-ing, the optimal forgetting factors are λ = 0 .995 (OVBAL), 80 20 40 60 80 100 
+
+> Cumulative spend (£)
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Running MSE
+> OVBAL (£102)
+> Greedy (£10.2)
+> RS (£9.01)
+
+(a) Buyer pricing 0 20 40 60 80 100  
+
+> Cumulative spend (£)
+> 3
+> 4
+> 5
+> 6
+> 7
+> Running MSE
+> OVBAL (£89.9)
+> Greedy (£109)
+> RS (£108)
+
+(b) Seller pricing  
+
+> Fig. 3. Synthetic data: MSE versus cumulative spend (equal-budget comparison) under buyer (BC) and seller (SC) pricing.
+
+λ = 0 .998 (Greedy), and λ = 0 .999 (RS), while for seller-centric (SC) pricing they are λ = 0 .999 (OVBAL), λ = 0 .996 
+
+(Greedy), and λ = 0 .998 (RS). The remaining observations are then processed sequentially as an unlabelled stream to simulate online operation. We compare OVBAL against (i) a greedy baseline that queries whenever budget remains available ( Greedy ) and (ii) a random sampling baseline that queries each incoming data point with probability 0.15 (RS (15%)). For OVBAL, we set 
+
+α = 0 .15 and use a rolling window of 200 observations to compute the threshold τt in (11). This yields an approximate candidate rate comparable to RS(15%) under stable conditions. Since the estimated D-optimal utility ˆℓt is monotone in ut in (13), this thresholding rule is consistent with the utility-based interpretation of OVBAL. All methods share the same budget replenishment mechanism and are evaluated under the same pricing setup with each regime. Table II reports the overall acquisition cost and the average cost per acquired label under buyer-centric (BC) and seller-centric (SC) pricing on the solar forecasting task. Under both pricing schemes, OVBAL acquires far fewer labels than the Greedy baseline. In BC pricing, OVBAL purchases only 47 labels, compared with 662 for Greedy and 802 for RS, while incurring a similar overall expenditure. In SC pricing, OVBAL acquires 458 labels, substantially fewer than Greedy (576) and nearly the same as RS (456). These results indicate that OVBAL achieves stronger forecasting accuracy without requir-ing more total spending and without relying on substantially more label acquisitions than the baselines. Fig. 4 shows the running MSE over time under BC and SC pricing. Across both pricing schemes, OVBAL gener-ally maintains the lowest and most stable prediction error over the streaming horizon. Greedy achieves a relatively fast initial reduction in error, but its performance deteriorates later, especially under BC pricing, suggesting that aggressive early acquisitions may lead to inefficient budget use in the long run. This pattern is consistent with the buyer-pricing mechanism, under which missed informative labels may allow uncertainty to accumulate along poorly learned directions. By prioritizing samples with higher uncertainty-reduction value, OVBAL mitigates this effect and maintains better long-run performance. RS performs better than Greedy in some periods but remains consistently worse than OVBAL overall. To isolate acquisition efficiency from total spending, Fig. 5 plots the cumulative running MSE against cumulative spend. Since the vertical axis is the average prediction error accumulated up to the time when a given spending level is reached, the comparison is path-dependent. OVBAL is therefore not always best in the very low-spend regime, where Greedy or RS may achieve slightly lower cumulative error through more aggressive early acquisitions. However, as the stream progresses, OVBAL delivers a more favorable long-run error– cost trade-off and attains the lowest final running MSE. V. C ONCLUSION 
+
+In this paper, we proposed QueryMarket , an online market-aware framework for cost-effective label acquisition in stream-ing environments. Building on our earlier batch active learning market formulation, QueryMarket extends the label-purchasing problem to the online setting, where acquisition decisions must be made sequentially under uncertainty and budget constraints. The framework models the interaction between the data analyst and data sellers through willingness-to-pay and willingness-to-sell, thereby incorporating heterogeneous label prices into the active learning process. Within this framework, we devel-oped OVBAL, a cost-aware online acquisition strategy that combines utility-based querying with exponential forgetting to adapt to non-stationary data streams. This design enables the analyst to account for both the informativeness and the acquisition cost of candidate labels while maintaining efficient online model updates. Experimental results on synthetic and real-world datasets demonstrated the effectiveness of the pro-posed approach. In particular, the synthetic study showed that the benefit of OVBAL depends on the pricing regime, with the 9
+
+TABLE II OVERALL COST AND AVERAGE COST PER ACQUIRED DATA POINT (£/ DATA ) ON THE REAL -WORLD SOLAR FORECASTING DATASET UNDER BC AND SC 
+
+> PRICING
+
+.BC (buyer) SC (seller) Method Overall cost (£) Data £/data Overall cost (£) Data £/data OVBAL 45.33 47 0.964 46.41 458 0.101 Greedy 46.31 662 0.070 46.71 576 0.081 RS 46.16 802 0.058 46.73 456 0.102 0 5 10 15 20 
+
+Time (×10 3)
+
+0
+
+1
+
+2
+
+3
+
+4
+
+> Running MSE (kWh 2)
+
+OVBAL ( =0.995) 
+
+Greedy ( =0.998) 
+
+RS ( =0.999) 
+
+(a) Buyer pricing 0 5 10 15 20 
+
+Time (×10 3)
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+> Running MSE (kWh 2)
+
+OVBAL ( =0.999) 
+
+Greedy ( =0.996) 
+
+RS ( =0.998) (b) Seller pricing 
+
+Fig. 4. Solar forecasting: running MSE over time under buyer (BC) and seller (SC) pricing. 
+
+clearest advantage arising under seller-centric pricing, while the solar power forecasting case study showed that OVBAL delivers a more favorable long-run error–cost trade-off under both buyer-centric and seller-centric pricing schemes. REFERENCES [1] S. Shalev-Shwartz, “Online learning and online convex optimization,” 
+
+Foundations and Trends® in Machine Learning , vol. 4, no. 2, pp. 107– 194, 2012. [2] S. C. Hoi, D. Sahoo, J. Lu, and P. Zhao, “Online learning: A compre-hensive survey,” Neurocomputing , vol. 459, pp. 249–289, 2021. [3] D. Cacciarelli and M. Kulahci, “Active learning for data streams: a survey,” Machine Learning , vol. 113, no. 1, pp. 185–239, 2024. [4] D. Cohn, Z. Ghahramani, and M. Jordan, “Active learning with statistical models,” Advances in neural information processing systems , vol. 7, 1994. [5] B. Settles, “Active learning literature survey,” University of Wisconsin– Madison, Tech. Rep., 2009. [6] X. Huang and P. Pinson, “How to purchase labels? a cost-effective approach using active learning markets,” INFORMS Journal on Data Science , 2026. [7] P. Pinson, L. Han, and J. Kazempour, “Regression markets and applica-tion to energy forecasting,” TOP , vol. 30, no. 3, pp. 533–573, 2022. [8] F. Orabona, “A modern introduction to online learning,” 2025. [Online]. Available: https://arxiv.org/abs/1912.13213 [9] K. Fujii and H. Kashima, “Budgeted stream-based active learning via adaptive submodular maximization,” Advances in Neural Information Processing Systems , vol. 29, 2016. [10] D. Cacciarelli, M. Kulahci, and J. Tyssedal, “Online active learning for soft sensor development using semi-supervised autoencoders,” arXiv preprint arXiv:2212.13067 , 2022. [11] M.-F. Balcan, S. Hanneke, and J. W. Vaughan, “The true sample complexity of active learning,” Machine learning , vol. 80, no. 2, pp. 111–139, 2010. [12] S. Dasgupta, D. J. Hsu, and C. Monteleoni, “A general agnostic active learning algorithm,” Advances in neural information processing systems ,vol. 20, 2007. [13] G.-Y. Hao, H. Huang, H. Wang, J. Gao, and H. Wang, “Composite active learning: Towards multi-domain active learning with theoretical guaran-tees,” in Proceedings of the AAAI Conference on Artificial Intelligence ,vol. 38, no. 11, 2024, pp. 12 286–12 294. [14] C. L¨ uth, T. Bungert, L. Klein, and P. Jaeger, “Navigating the pitfalls of active learning evaluation: A systematic framework for meaningful performance assessment,” Advances in Neural Information Processing Systems , vol. 36, pp. 9789–9836, 2023. [15] V. Kontonis, M. Ma, and C. Tzamos, “Active classification with few queries under misspecification,” Advances in Neural Information Pro-cessing Systems , vol. 37, pp. 51 684–51 707, 2024. [16] S. Sabato and R. Munos, “Active regression by stratification,” Advances in Neural Information Processing Systems , vol. 27, 2014. [17] M. Sugiyama and G. Ridgeway, “Active learning in approximately linear regression based on conditional expectation of generalization error.” 
+
+Journal of Machine Learning Research , vol. 7, no. 1, 2006. [18] B. Settles, “Active learning literature survey,” University of Wisconsin– Madison, Computer Sciences Technical Report 1648, 2009. [19] D. Cohn, L. Atlas, and R. Ladner, “Improving generalization with active learning,” Machine learning , vol. 15, no. 2, pp. 201–221, 1994. [20] D. Li, Z. Wang, Y. Chen, R. Jiang, W. Ding, and M. Okumura, “A survey on deep active learning: Recent advances and new frontiers,” 
+
+IEEE Transactions on Neural Networks and Learning Systems , vol. 36, no. 4, pp. 5879–5899, 2024. [21] K. Goebel, W. Solow, P. Pesantez-Cabrera, M. Keller, and A. Fern, “Budgeted online active learning with expert advice and episodic priors,” 
+
+arXiv preprint arXiv:2506.03307 , 2025. [22] A. Saran, S. Yousefi, A. Krishnamurthy, J. Langford, and J. T. Ash, “Streaming active learning with deep neural networks,” in International Conference on Machine Learning . PMLR, 2023, pp. 30 005–30 021. [23] C. Riquelme, R. Johari, and B. Zhang, “Online active linear regression via thresholding,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 31, no. 1, 2017. [24] D. Cacciarelli, M. Kulahci, and J. S. Tyssedal, “Stream-based active learning with linear models,” Knowledge-Based Systems , vol. 254, p. 109664, 2022. [25] A. Agarwal, M. Dahleh, and T. Sarkar, “A marketplace for data: An 10 0 10 20 30 40 
+
+Cumulative spend (£) 
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> Running MSE (kWh 2)
+> OVBAL (£45.3)
+> Greedy (£46.3)
+> RS (£46.2)
+
+(a) Buyer pricing 0 10 20 30 40 
+
+Cumulative spend (£)  
+
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> Running MSE (kWh 2)
+> OVBAL (£46.4)
+> Greedy (£46.7)
+> RS (£46.7)
+
+(b) Seller pricing 
+
+Fig. 5. Solar forecasting: equal-budget MSE versus cumulative spend under buyer (BC) and seller (SC) pricing. Numbers in parentheses denote the final cumulative spend. algorithmic solution,” in Proceedings of the 2019 ACM Conference on Economics and Computation , 2019, pp. 701–726. [26] A. Ghosh and A. Roth, “Selling privacy at auction,” in Proceedings of the 12th ACM conference on Electronic commerce , 2011, pp. 199–208. [27] S. R. Pandey, P. Pinson, and P. Popovski, “Strategic coalition for data pricing in iot data markets,” IEEE Internet of Things Journal , vol. 11, no. 4, pp. 6454–6468, 2023. [28] M. M. Amiri, F. Berdoz, and R. Raskar, “Fundamentals of task-agnostic data valuation,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 37, no. 8, 2023, pp. 9226–9234. [29] R. A. Howard, “Information value theory,” IEEE Transactions on systems science and cybernetics , vol. 2, no. 1, pp. 22–26, 2007. [30] A. Ghorbani and J. Zou, “Data shapley: Equitable valuation of data for machine learning,” in International conference on machine learning .PMLR, 2019, pp. 2242–2251. [31] J. Yoon, S. Arik, and T. Pfister, “Data valuation using reinforcement learning,” in International Conference on Machine Learning . PMLR, 2020, pp. 10 842–10 851. [32] T. Osogami, “Second order techniques for learning time-series with structural breaks,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 35, no. 10, 2021, pp. 9259–9267. [33] M. Zinkevich, “Online convex programming and generalized infinitesi-mal gradient ascent,” in International Conference on Machine Learning (ICML) , 2003, pp. 928–936. [34] E. Hazan, A. Agarwal, and S. Kale, “Logarithmic regret algorithms for online convex optimization,” Machine Learning , vol. 69, no. 2, pp. 169– 192, 2007. [35] H. Luo, A. Agarwal, N. Cesa-Bianchi, and J. Langford, “Efficient second order online learning by sketching,” Advances in Neural Information Processing Systems , vol. 29, 2016. [36] S. Wimalaratne, D. Haputhanthri, S. Kahawala, G. Gamage, D. Ala-hakoon, and A. Jennings, “Unisolar: An open dataset of photovoltaic solar energy generation in a large multi-campus university setting,” in 
+
+2022 15th International Conference on Human System Interaction (HSI) .IEEE, 2022, pp. 1–5.
