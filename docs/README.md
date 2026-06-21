@@ -6,29 +6,24 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-20
-- 运行时间：2026-06-20 20:57:40 UTC
+- 最新运行日期：2026-06-21
+- 运行时间：2026-06-21 20:44:43 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：2
+- 本次总论文数：1
+- 精读区：0
 - 速读区：1
 
 ### 今日简报（AI）
-今日精读两篇高分论文：异常检测集成框架与金融市场趋势、波动、临界现象分析；速读一篇多任务学习帕累托导航。重点关注异常检测的集成方法及金融市场中波动与相关性的统计规律。建议读者优先阅读精读两篇，掌握异常检测的鲁棒策略与金融预测的临界点分析思路。
-- 详情：[/202606/20/README](/202606/20/README)
+今日唯一推荐论文提出基于分数的鞅后验方法，为深度神经网络不确定性量化提供新思路。值得关注贝叶斯深度学习与评分匹配结合的方向，可提升模型校准与鲁棒性。普通读者建议先了解鞅后验基础概念，再尝试将该方法用于分类或回归任务的置信区间估计。
+- 详情：[/202606/21/README](/202606/21/README)
 
 ### 精读区论文标签
-1. [How to spot outliers: an Ensemble Anomaly Detection Framework](/202606/20/2606.20079v1-how-to-spot-outliers-an-ensemble-anomaly-detection-framework)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：集成异常检测用于投资银行风险估值
-2. [Trends, Volatility, Correlations, and Critical Phenomena in Financial Markets](/202606/20/2606.20145v1-trends-volatility-correlations-and-critical-phenomena-in-financial-markets)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于趋势预测金融市场波动性和相关性
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Interactive Pareto navigation for deep multi-task learning](/202606/20/2606.19521v1-interactive-pareto-navigation-for-deep-multi-task-learning)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：可泛化至金融的多任务学习优化方法
+1. [Score-Based Martingale Posteriors for Deep Neural Networks](/202606/21/2606.15725v1-score-based-martingale-posteriors-for-deep-neural-networks)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：针对深度神经网络的基于得分的鞅后验方法，可用于金融深度学习任务的不确定性量化
 
 
 <div class="dpr-home-promo-card">
