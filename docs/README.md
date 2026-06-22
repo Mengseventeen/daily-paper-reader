@@ -6,24 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-21
-- 运行时间：2026-06-21 20:44:43 UTC
+- 最新运行日期：2026-06-22
+- 运行时间：2026-06-22 22:34:35 UTC
 - 运行状态：成功
-- 本次总论文数：1
-- 精读区：0
+- 本次总论文数：2
+- 精读区：1
 - 速读区：1
 
 ### 今日简报（AI）
-今日唯一推荐论文提出基于分数的鞅后验方法，为深度神经网络不确定性量化提供新思路。值得关注贝叶斯深度学习与评分匹配结合的方向，可提升模型校准与鲁棒性。普通读者建议先了解鞅后验基础概念，再尝试将该方法用于分类或回归任务的置信区间估计。
-- 详情：[/202606/21/README](/202606/21/README)
+1) 今日精读一篇卷积VAE建模加密波动率曲面的高分论文，速读一篇多任务学习帕累托导航方法。  
+2) 最值得关注的是混合卷积VAE如何超越传统微笑模型，以及基于交互式帕累托前沿的多任务优化思路。  
+3) 建议优先精读加密波动率曲面论文，理解其如何用深度学习捕捉曲面非对称性，再对照速读中的多任务导航提升模型调优效率。
+- 详情：[/202606/22/README](/202606/22/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Beyond the Smile: A Hybrid Convolutional VAE for Crypto Volatility Surfaces](/202606/22/2606.16961v1-beyond-the-smile-a-hybrid-convolutional-vae-for-crypto-volatility-surfaces)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：卷积变分自编码器用于加密货币波动率曲面，金融深度学习应用
 
 ### 速读区论文标签
-1. [Score-Based Martingale Posteriors for Deep Neural Networks](/202606/21/2606.15725v1-score-based-martingale-posteriors-for-deep-neural-networks)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：针对深度神经网络的基于得分的鞅后验方法，可用于金融深度学习任务的不确定性量化
+1. [Interactive Pareto navigation for deep multi-task learning](/202606/22/2606.19521v1-interactive-pareto-navigation-for-deep-multi-task-learning)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：深度多任务学习的交互式帕累托导航，可迁移至多目标金融任务
 
 
 <div class="dpr-home-promo-card">

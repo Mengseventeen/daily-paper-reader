@@ -1,0 +1,337 @@
+Title: Beyond the Smile: A Hybrid Convolutional VAE for Crypto Volatility Surfaces
+
+URL Source: https://arxiv.org/pdf/2606.16961v1
+
+Published Time: Tue, 16 Jun 2026 02:46:58 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Beyond the Smile :A H ybrid Convolutional VAE for Crypto Volatility Surfaces 
+
+Sadanand Singh 1∗
+
+, Allam Reddy 1, and Manan Chopra 11Jasper Research, USA 
+
+# Abstract 
+
+We present a convolutional variational autoencoder for cryptocurrency implied-volatility surfaces, together with a deployable predictor that combines it with a quadratic smile re-fit through a deterministic per-tenor routing rule. Trained on 6 ,034 fully-filled hourly Binance Options surfaces of BTC and ETH spanning May–October 2023 and parameterised on a common 6 × 7 tenor–delta grid, the model attains a hidden-cell surface-completion RMSE in the 0 .94–1 .56 vol-point range across both markets and mask rates 10–50%. The hybrid predictor attains 0 .83 vol points at 50% masking against 7 .00 for the smile re-fit alone, an eightfold reduction obtained at no additional inference cost. Under structurally-correlated hole patterns that emulate the withdrawal of an entire tenor of strikes, the smile re-fit incurs 9 .6–13 .1 vol points of error while the learned model remains at 1 .5–1 .9, isolating a regime in which the generative model is the only viable predictor. Joint training on BTC and ETH improves the in-distribution model on both markets by 9–27% relative to the better-performing single-symbol counterpart, indicating a substantially shared vol-surface manifold across the two largest cryptocurrencies over the observation window. The hybrid is calendar- and butterfly-arbitrage-free at the listed strikes, a property that the parametric smile re-fit alone fails at high mask rates. The per-snapshot reconstruction error of the trained model flags the late-October ETF-anticipation rally and the August 17, 2023 flash crash as elevated-error periods without supervision. All training and evaluation infrastructure is released to support reproducible follow-on work. 
+
+Keywords: implied volatility surface; variational autoencoders; cryptocurrency options; surface completion; cross-asset transfer; anomaly detection. 
+
+# 1 Introduction 
+
+The implied-volatility (IV) surface is the primary state variable of an options book. Risk systems, market-making engines, and structured-product desks all rely on a continuous, well-behaved surface estimated at every update, despite the fact that the ob-served chain is irregular, partially quoted, and at any moment contains stale or absent strikes. The practitioner’s standard re-sponse is a smooth parametric smile model fit per maturity (SVI (Gatheral and Jacquier, 2014), SABR (Hagan et al., 2002), or local-polynomial variants), together with cross-tenor interpola-tion rules. This works well when the chain is densely populated near the money, and breaks down precisely in the operational scenarios for which the surface is most needed: when a feed goes silent, when wing liquidity dries up, or when a single maturity is delisted from the venue. Variational autoencoders (Kingma and Welling, 2014; Rezende et al., 2014) o ff er a complementary tool. A low-dimensional latent representation of a population of historical surfaces yields a prior over plausible shapes that can be used both to reconstruct a surface from a partial observation and to flag surfaces lying outside the learned manifold. Existing applications to equity-index volatility surfaces (e.g. Ackerer et al., 2020; Bergeron and Lund, 2024; Reddy, 2019) have demonstrated that the smooth, near-stationary equity smile admits an e ff ective low-dimensional encoding. Cryptocurrency options constitute a comparatively young mi-crostructure and present a distinct combination of opportunities and constraints. Markets trade continuously without a daily settlement break, hourly data is publicly available from venues such as Binance and Deribit, and the listed strike grid is typically denser in the wings than equity-index chains. At the same time, single-event regime transitions (exchange failures, regulatory an-nouncements, and macro liquidity shocks) can shift the surface by several volatility points within an hour. The combination of high-frequency cadence and strong cross-currency comovement between BTC and ETH implied volatilities provides a setting in which the out-of-distribution behaviour of a learned surface model can be studied along several axes simultaneously: across mask patterns, across calendar regimes, and across underlying assets. 
+
+1.1 Contributions 
+
+This paper presents an empirical study of a masked-input VAE for the cryptocurrency implied-volatility surface, with an eval-uation protocol informed by the operational requirements of market-making and risk-management systems. The contribu-tions are as follows. 1. End-to-end pipeline and release. A reproducible processing pipeline converts the public Binance Options end-of-hour (EOH) archive into a fixed 6 × 7 tenor–delta grid suitable for grid-shaped neural architectures, with quality flags and provenance preserved at each stage (Section 3); code and per-run artifacts are released with the manuscript. 2. Convolutional VAE with a deterministic hybrid routing rule. A 2D-convolutional masked-input VAE for the 6 × 7tenor–delta grid, combined with the practitioner’s standard quadratic smile re-fit through a per-tenor routing rule (defer to the smile re-fit when a tenor row retains at least three ob-served cells; invoke the ConvVAE otherwise), attains 0 .83 vol points of completion RMSE at 50% random masking 
+
+> arXiv:2606.16961v1 [cs.LG] 15 Jun 2026
+
+Preprint – B eyond the Smile 2against 7 .00 for the smile baseline alone, an eightfold re-duction obtained at no additional inference cost (Section 7). The architecture choice is justified by an internal ablation against MLP and self-attention encoder–decoders trained on the same data (Section 6). 3. Failure-mode separation between parametric and learned predictors. Under structured holes that emulate plausible operational failures (an entire tenor of strikes withdrawn, or a full delta column unquoted), the smile re-fit incurs an order of magnitude greater error than the ConvVAE (9 .6–13 .1 vs. 1 .5– 1.9 vol points), establishing a regime in which a generative prior is the only viable predictor rather than an incremental improvement (Section 8). 4. Static no-arbitrage compliance. The deployed predictor is calendar- and butterfly-arbitrage-free at the seven listed strikes per tenor on both markets, inheriting the gridded data’s compliance profile cell for cell; calendar compliance is enforced by a free L2 post-projection ( ≤ 0.001 vol-point RMSE impact) and butterfly compliance holds empirically without enforcement. The parametric smile re-fit, by contrast, admits a butterfly arbitrage on 38 .9% (33 .1%) of BTC (ETH) reconstructions at 50% masking (Section 7.2). 5. Cross-asset transfer. A ConvVAE trained on BTC alone attains within 5–27% of its in-distribution accuracy when evaluated on ETH under the target’s own normalisation. Joint training on BTC and ETH yields a further 9–27% reduction relative to the better-performing single-symbol counterpart on both markets, indicating a substantially shared vol-surface manifold across the two largest cryptocurrencies over the observation window (Section 9). 6. Unsupervised anomaly signal. The per-snapshot recon-struction error of the trained ConvVAE, evaluated without masking, flags known dislocations (the late-October ETF-anticipation rally and the August 17, 2023 flash crash) as elevated-error periods without supervision, and the latent representation exhibits an interpretable temporal trajectory with anomalies concentrated at the manifold periphery (Sec-tion 10). 
+
+# 2 Related Work 
+
+Parametric smile models. Parametric smile models have a long lineage in derivative pricing. The stochastic-volatility-inspired (SVI) parameterisation (Gatheral and Jacquier, 2014) and its arbitrage-free refinements, the SABR model (Hagan et al., 2002), and lower-order polynomial parameterisations remain the standard choice on equity-index desks; Gatheral (2006) provides a comprehensive practitioner treatment. Arbitrage-free smooth-ing of the empirical surface, prior to any pricing application, is itself a substantial sub-literature (Fengler, 2009). We adopt the quadratic-in-log-moneyness variant as our parametric baseline because it is the inverse of the gridding procedure we use to construct training targets (Section 3.3). 
+
+Arbitrage-free smoothing. A second strand within the para-metric tradition enforces static no-arbitrage on the empirical sur-face independently of the choice of smile family. Fengler (2009) constructs C2 smoothing splines on call prices that automatically satisfy butterfly and calendar conditions in strike space; Gatheral and Jacquier (2014) characterise the arbitrage-free subset of the SVI parameter space and provide explicit closed-form condi-tions on its coe ffi cients; Ackerer et al. (2020) embed analogous penalties as soft constraints in a neural smoother and demon-strate large reductions in violation rates on equity-index surfaces. Section 7.2 adopts the discrete analogue of these conditions at the seven listed strikes per tenor and reports compliance empiri-cally for the deployed predictor rather than enforcing it through a constrained parameterisation. 
+
+Statistical decomposition of vol surfaces. Cont and da Fonseca (2002) introduce principal-component (PCA) and functional-PCA decompositions of the IV surface, identifying a small number of orthogonal shape factors (level, skew, term-structure slope, and curvature) that account for the bulk of empir-ical variation. A PCA-based completion baseline (fit the leading components on training surfaces, then solve for the latent code that best matches the observed cells) is the closest classical analogue of a VAE for our completion task and provides a non-neural comparator (Section 7.1). 
+
+Neural surface modelling. A first generation of deep-learning work on volatility models has focused on pricing and calibra-tion under prescribed stochastic processes (Horvath et al., 2021; Bayer and Stemper, 2018). Such approaches substitute a fitted neural function for expensive Monte Carlo simulation and are largely orthogonal to the question of how the empirical surface should be represented. A second line of work models the sur-face directly: Ackerer et al. (2020) propose a constrained neural smoother on SPX surfaces with explicit butterfly and calendar no-arbitrage penalties, and demonstrate that a learned represen-tation outperforms local-polynomial baselines. The generative-modelling perspective is initiated by Reddy (2019), who train a variational autoencoder on single-maturity smiles generated by a SABR model, and is extended to multi-maturity SPX surfaces by Bergeron and Lund (2024). Generative-adversarial formula-tions have been pursued for related problems by Cuchiero et al. (2020) and Wiese et al. (2020); we do not implement a GAN baseline here. 
+
+Masked-input training and architectural priors. The masked-input training paradigm we adopt is standard in self-supervised representation learning, originating with the context-encoder formulation of Pathak et al. (2016) and most recently scaled in the masked autoencoder of He et al. (2022). The convo-lutional and self-attention architectures we compare in Section 6 correspond to two well-established families of inductive bias for grid-structured inputs: locality and translation equivariance for the former, and permutation-equivariant pairwise interaction for the latter, building on the original transformer (Vaswani et al., 2017) and its set-structured variant (Lee et al., 2019). 
+
+Anomaly detection. The use of reconstruction error from a generative model as an anomaly score is well-established (An and Cho, 2015; Ru ff et al., 2021). The analysis in Section 10 applies this approach to cryptocurrency IV surfaces using the per-snapshot reconstruction error of an unmasked input as an un-supervised statistic, and is presented as an analytical by-product of the completion model rather than as a methodological contri-bution to the anomaly-detection literature. Preprint – B eyond the Smile 3Table 1: Raw Binance Options EOH dataset. “Snapshots” is the number of hourly observation timestamps. “Avg options” is the mean number of listed option contracts observed per snapshot.             
+
+> Symbol Rows Days Snaps. Avg opts /snap BTCUSDT 796,972 147 3,501 226 ETHUSDT 979,331 147 3,501 278
+
+Cryptocurrency options. Madan et al. (2019) and Hou et al. (2020) calibrate parametric stochastic-vol models to Bitcoin op-tions; Alexander and Imeraj (2023) document the BTC smile’s index-option characteristics. To our knowledge no prior work applies a masked-input VAE jointly to BTC and ETH or exam-ines the parametric–learned routing policy that we identify as the deployable configuration. 
+
+# 3 Data 
+
+3.1 Source 
+
+Our primary dataset is the public Binance Options end-of-hour summary archive, 2 which publishes one CSV per (symbol, date) containing 24 hourly snapshots of the full option chain together with best bid /ask prices, sizes, open-interest, venue-supplied implied volatilities, and Greeks. Coverage is May 18, 2023 through October 23, 2023, a span of 147 days, after which the archive was discontinued by the publisher. We use the two most liquid pairs, BTCUSDT and ETHUSDT. Raw row counts and snapshot counts are summarised in Table 1. 
+
+3.2 Cleaning, forward inversion, and quality flags 
+
+We parse the contract names to extract expiry, strike, and option right; coerce numeric columns; compute days-to-expiry and time-to-expiry in years; and drop rows with non-positive DTE, malformed strike, missing or zero mark price, or invalid right. The drop rate at this stage is approximately 2 .2%. For each (snapshot, expiry) group we pair every (strike, call mid, put mid) triplet and recover an implied forward via put–call parity (Stoll, 1969), 
+
+F = K + (Cmid − Pmid ), ˆFsnap, exp = median K F(K), (1) taking the median across strikes for robustness and assuming the USDT short-rate r ≈ 0 over the relevant tenors. Forward coverage is 99 .5–99 .7% of rows. Implied vols on bid, ask, and mark prices are recovered by Newton iteration on the Black– 76 forward form (Black, 1976), warm-started from the venue-published mark_iv . The warm-start is the principal numeri-cal consideration: the published mark IV typically lies within 
+
+±20% of the bid /ask IV, which secures convergence of Newton’s method in two or three iterations. After IV recovery we tag each row with quality flags 
+
+is_quoted , is_oi_positive , is_tight_quote (half-spread /mid < 0.5), is_train_tenor (7 ≤ DTE ≤ 365), 
+
+is_train_moneyness (K/F ∈ [0 .5, 2.0]), is_iv_sane 
+
+(σ ∈ [10% , 300%]), and their boolean conjunction 
+
+> 2https://data.binance.vision/data/option/daily/ EOHSummary/
+
+is_train_grade . No rows are dropped from the cleaned parquet; filters become columns so that the same cleaned data can be re-used under di ff erent downstream criteria. Train-grade rows are 52 .2% of BTC and 48 .4% of ETH. We retain the venue-published mark_iv as our canonical IV. Our own inverted IVs from parity-derived forwards agree on the median strike to 2 .7–2 .9 vol points and disagree on the deep OTM tail by up to 22 vol points, which we attribute to the venue using its perpetual-index price as the forward (rather than parity). We retain our inverted bid /ask IVs as auxiliary features and treat 
+
+mark_iv as the canonical value for downstream gridding. 
+
+3.3 Smile re-fit and the 6 × 7 grid 
+
+For each snapshot and each listed expiry Ti with at least five train-grade strikes, we fit a total-variance quadratic in log-moneyness 
+
+k = log( K/F), 
+
+wTi (k) = ai + bik + cik2, w(k) = σ2(k) T, (2) by ordinary least squares on the observed ( k, w) pairs. This three-parameter form captures level, skew, and curvature, and is deliberately less expressive than SVI; we adopt it both as the parametric baseline and as the generator of the ( τ, δ )-grid. For each target tenor T ⋆ we linearly interpolate ( a, b, c) between the two bracketing fitted expiries (equivalent to a linear-in-T
+
+interpolation of total variance at fixed k), with flat extrapolation at the boundaries. For each target call delta δ we then solve, by fixed-point iteration, 
+
+d1 B −k + 12 σ2T ⋆
+
+σ √T ⋆ = Φ −1(δ), σ = pw(k)/T ⋆, (3) iterating k ← 12 σ2T ⋆ − Φ−1(δ) σ √T ⋆ to convergence in at most 50 iterations. We reject any cell whose converged ( k, σ ) does not reproduce δ to within 10 −4.The target tenors and deltas are 
+
+τ ∈ { 14 , 30 , 60 , 90 , 120 , 180 } days ,δ ∈ { 0.10 , 0.20 , 0.30 , 0.50 , 0.70 , 0.80 , 0.90 },
+
+giving 6 × 7 = 42 cells per surface. These spe-cific values are not canonical: they are the largest subset of the standard (7 , 14 , 30 , 60 , 90 , 180 , 365) ×
+
+(0 .05 , 0.10 , 0.20 , 0.30 , 0.50 , 0.70 , 0.80 , 0.90 , 0.95) grid for which Binance’s listings admit a high fill rate. The archive contains e ff ectively no 365-day listings in our window; 7-day tenors are only intermittently bracketed by listed expiries; and the δ = 0.05 and δ = 0.95 wings require long-range smile extrapolation that is unreliable at long tenors. Restricting the grid to the corners supported by the listed strikes raises the fully-filled-snapshot rate from 9% on the canonical grid to 80 .9% for BTC and 92 .1% for ETH (Table 2). 
+
+3.4 Splits and per-symbol normalisation 
+
+We adopt a single time-ordered 70 /15 /15 split of the fully-filled snapshots, with train, validation, and test windows formed from contiguous blocks of calendar time. This yields 1 ,974 /423 /424 snapshots for BTC and 2 ,249 /481 /483 for ETH. A random i.i.d. split would substantially overstate out-of-sample accuracy in Preprint – B eyond the Smile 4Table 2: Gridded surfaces: counts of fully-filled hourly snap-shots (no NaN across all 42 cells) and per-cell IV coverage in the long-format output.             
+
+> Symbol Snaps. Fully filled Pct. Per-cell cov. BTCUSDT 3,489 2,821 80 .9% 99 .8% ETHUSDT 3,487 3,213 92 .1% 99 .8%
+
+the presence of strong hour-to-hour autocorrelation; the time-ordered split is the appropriate evaluation unit and underlies every reported figure. For each symbol we compute per-cell mean and standard devia-tion on the corresponding training block and use these statistics to z-normalise all inputs at both training and inference, including in the joint training setting where two independently-normalised symbols are concatenated. This procedure separates IV level from IV shape and ensures that the cross-symbol experiments measure transfer of shape rather than coincidence of absolute levels. 
+
+# 4 Methodology 
+
+4.1 Masked-input ConvVAE 
+
+Let X ∈ R6×7 be a z-normalised surface arranged on the (tenor, delta) grid, and M ∈ { 0, 1}6×7 the corresponding observation mask, with Mr,c = 1 indicating that cell ( r, c) is observed and 
+
+Mr,c = 0 that it is hidden. We present the masked input to the encoder as a 2-channel image [ X ⊙ M; M] ∈ R2×6×7. The encoder is a stack of three 3 × 3 convolutional layers with GELU activations, padded to preserve the 6 × 7 spatial dimensions throughout; the resulting feature map is flattened and projected by two linear heads to ( μ, log σ2) on Rz. We use the standard reparameterisation (Kingma and Welling, 2014), z = μ + σ ⊙ ε
+
+with ε ∼ N (0, I) during training and z = μ at inference. The decoder is the encoder’s mirror image: a linear map from Rz
+
+to an h × 6 × 7 feature map, three 3 × 3 convolutional layers with GELU activations, and a final 1 × 1 projection to the scalar output channel. The convolutional architecture imposes two inductive biases well-matched to the volatility surface: translation equivariance, so that the same response is produced by a given local shape feature regardless of where it occurs on the grid; and locality, so that each layer’s receptive field is restricted to a 3 × 3 neigh-bourhood of cells before composition. Both are consistent with the smooth tenor- and delta-wise structure of empirical IV sur-faces. Section 6 provides a direct empirical comparison against alternative encoder–decoder families that justifies this design. The training objective is the masked β-VAE loss (Kingma and Welling, 2014; Higgins et al., 2017), weighted to favour hidden-cell reconstruction: 
+
+L(x, m) = whid ¯ℓ ¯m(x, ˆx) + wobs ¯ℓm(x, ˆx)
+
++ β KL  q(z | x, m) ∥ N (0, I), (4) where ¯m = 1 − m is the hidden-cell mask, ¯ℓw(x, ˆx) =
+
+> 1
+> ∥w∥1
+
+Pi wi(xi − ˆxi)2 is the per-sample mean squared error over the cells flagged by w, and the KL term is computed in closed form. Unless noted otherwise we set whid = 1.0, wobs = 0.1, and β = 10 −3. The dominant weight on hidden cells reflects that masked completion is the primary objective; a small weight on observed cells maintains consistency between the encoder’s eff ective input and the decoder’s reconstruction; and a small β
+
+avoids posterior collapse on a dataset whose information content does not warrant strong regularisation of the latent prior. 
+
+4.2 Masking schemes 
+
+At training time we draw, for each minibatch sample, a per-cell mask in which a fixed number nhid = ⌊r · 42 ⌋ of the 42 cells are hidden, with r ∼ U (0 .10 , 0.50) drawn independently per sample. We refer to this as the random mask scheme. For the structured-hole experiments in Section 8 we also con-sider five fixed-pattern masks: 
+
+• row_random : one tenor row chosen uniformly at random is fully hidden (7 cells, 16 .7%); 
+
+• col_random : one delta column chosen uniformly at random is fully hidden (6 cells, 14 .3%); 
+
+• wing_put : deltas {0.10 , 0.20 } for all tenors are hidden (12 cells, 28 .6%); 
+
+• wing_call : deltas {0.80 , 0.90 } for all tenors are hidden (12 cells, 28 .6%); 
+
+• long_tenor : the 180d row is hidden (7 cells, 16 .7%). 
+
+4.3 Smile re-fit baseline 
+
+The baseline inverts the gridding procedure described in Sec-tion 3.3, applied to the observed cells of a held-out surface. For each tenor row containing at least three observed cells we re-fit the quadratic in Eq. (2) on the observed ( kcell , σ cell ) pairs by least squares. Tenors with fewer than three observations inherit smile parameters by linear interpolation across neighbouring fitted tenors. For each hidden cell we then solve Eq. (3) at that cell’s target delta and report the implied σ.The baseline is deliberately strong: the gridded targets defined in Section 3.3 are themselves the output of exactly this procedure applied to the full observed chain. When each tenor row is su ffi ciently populated, the re-fit asymptotes to the inverse of the data-generating map and the RMSE on hidden cells approaches zero. We regard this not as a coincidence but as the appropriate parametric oracle: any learned model must demonstrate value in the regime where the parametric family is insu ffi cient, not where it is. 
+
+4.4 Hybrid routing rule 
+
+We define a deterministic routing rule that combines the two predictors: ˆσhybrid  
+
+> r,c
+
+(x, m) =
+
+( ˆσrefit  
+
+> r,c
+
+(x, m) if Pc′ mr,c′ ≥ 3,
+
+ˆσConvVAE  
+
+> r,c
+
+(x, m) otherwise. (5) The threshold of three follows from the rank requirement of the quadratic in Eq. (2) : three is the minimum number of distinct (k, w) pairs required to identify ( a, b, c). Below this threshold no per-tenor re-fit is well-posed; above it the re-fit attains near-optimal accuracy on the gridded targets. The rule is therefore not a learned ensemble but a deterministic decomposition grounded in the rank deficiency of the parametric model. Preprint – B eyond the Smile 5
+
+4.5 Architecture and training details 
+
+All experiments follow the architecture and optimiser settings of Table 3, varying only the dimensions explicitly ablated. Im-plementation is in PyTorch (Paszke et al., 2019); a single con-figuration trains in 10–50 seconds on a consumer-grade GPU, and the complete ablation grid reported below trains and evalu-ates within five minutes of wall-clock time. Per-run configura-tions, training histories, checkpoints, and evaluation metrics are stored in immutable per-run directories and released with the manuscript. Table 3: Default hyperparameters. Where a sweep is reported we vary the indicated entry and hold the rest fixed.                         
+
+> Hyperparameter Default Architecture ConvVAE (3 ×3 conv, 3 layers) Latent dim z16 Channel width h64 Activation GELU (encoder +decoder)
+> whid ,wobs , β 1.0,0.1,10 −3
+> Optimiser Adam (Kingma and Ba, 2015), lr =10 −3
+> Batch size 128 Epochs 500 (max), patience 50 Mask rate (random) r∼ U (0 .10 ,0.50) per sample Splits 70 /15 /15, time-ordered
+
+# 5 Experimental Setup 
+
+We report results in vol points (i.e. 0 .01 = 1 vol pt) so that errors can be read against the absolute IV level (BTC ATM IV is in the 25–60% range in our window). All RMSEs are computed on the hidden cells of the masked input only: observed cells are returned unchanged by both the baseline and the hybrid, so including them would artificially deflate error rates and produce a misleading comparison. For each ablation we evaluate at five mask rates r ∈{0.10 , 0.20 , 0.30 , 0.40 , 0.50 } on the same fixed-seed masks across methods, so direct comparison between methods at the same mask rate is paired. Where appropriate we additionally report results on the five structured-hole schemes of Section 4. The smile-re-fit baseline numbers are computed once per test set and cached, since they depend only on the data and the mask seed, not on any learned parameter. 
+
+# 6 Architecture Selection 
+
+The convolutional encoder–decoder of Section 4.1 is one of sev-eral natural choices for a 42-cell grid. We motivate it empirically by comparing it against two alternatives that bracket it in terms of inductive bias. 
+
+MLP baseline. A fully-connected MLP that ignores the (tenor , delta ) layout entirely: a two-layer encoder MLP with hid-den width 128 and GELU activations operating on the flattened concatenation [ x ⊙ m; m] ∈ R84 , with linear heads producing (μ, log σ2), and a symmetric two-layer decoder. The MLP has no spatial prior whatsoever. 
+
+AttnVAE. A permutation-equivariant encoder representing the surface as a set of 42 tokens. Each cell token receives a learned (tenor , delta ) positional embedding together with its (masked value, mask flag). Two multi-head self-attention layers with feed-forward sub-layers update the tokens; the encoder pools the cell representations by mean before projecting to ( μ, log σ2). The decoder broadcasts the latent across cell positions, applies a symmetric attention stack, and projects each token to a scalar value. 
+
+Comparison protocol. All three architectures are trained on the joint BTC +ETH z-normalised training set (4 ,223 surfaces) under identical loss weights, optimiser, mask schedule, and epoch budget; they di ff er only in the encoder–decoder. We hold the latent dimension fixed at z = 16. The MLP uses hidden width 128 (56k parameters); the ConvVAE uses 64 feature chan-nels (318k parameters); the AttnVAE uses 64 token dimensions across two layers (221k parameters). Table 4 reports BTC-test RMSE on three random-mask rates and the four structured-hole patterns of Section 4; Figure 1 visualises the same comparison. Table 4: Architecture comparison on the BTC test set: hidden-cell RMSE (vol points) for an MLP encoder–decoder, a 2D-convolutional encoder–decoder (ConvVAE), and a per-cell self-attention encoder–decoder (AttnVAE). All models are trained on the joint BTC +ETH set with z = 16 and the same loss, optimiser, and mask schedule; they di ff er only in the encoder– decoder. Lowest entry per row in bold.                            
+
+> Scenario MLP ConvVAE AttnVAE random 10% 1.40 0.94 1.36 random 30% 1.51 1.07 1.55 random 50% 1.67 1.25 1.68
+> row_random 3.43 1.88 3.12
+> long_tenor 2.26 1.54 1.99
+> wing_put 1.99 1.50 2.05
+> wing_call 1.55 1.20 1.59 Parameters 56k 318k 221k
+
+The ConvVAE attains the lowest error in every evaluated sce-nario, with random-mask reductions of 25–33% relative to the MLP and a 45% reduction on the row_random structured hole. The locality bias of the 3 ×3 kernels accounts for the row-shaped-hole result: when one row is unobserved the convolutional receptive field still pools information from the two adjacent rows in the first layer, and from progressively wider neighbour-hoods thereafter, whereas an MLP must allocate capacity to discover the same relationship from a flat representation. The AttnVAE underperforms the ConvVAE at every scenario and matches only the MLP at random masking, despite a comparable parameter budget (221k vs. 318k). The discrepancy between the two parameter-heavy models points to inductive bias rather than raw capacity: the convolutional locality and translation-equivariance priors capture the dominant tenor- and delta-wise smoothness much more e ffi ciently than full self-attention does at our 4 ,223-surface training scale. We report ConvVAE results in the remainder of the paper. Preprint – B eyond the Smile 6
+
+Figure 1: Architecture comparison on the BTC test set across the seven evaluation scenarios. The ConvVAE attains the lowest error in every scenario; the largest absolute reduction relative to the MLP is on the row-shaped structured holes ( row_random ,3.43 → 1.88, a 45% reduction). The AttnVAE matches the MLP at random masking and is uniformly worse than the ConvVAE despite a comparable parameter budget, indicating that the locality bias of the convolutional kernels, not raw capacity, is what carries the result. Table 5: Hybrid completion RMSE (vol points) on the BTC test set vs. its components. The ConvVAE is the joint-trained z=16, 
+
+h=64 model. Lowest entry per column in bold.                     
+
+> Method 0.10 0.20 0.30 0.40 0.50 Smile re-fit only 0.00 1.28 2.53 4.05 7.00 ConvVAE only (joint) 0.94 1.01 1.07 1.13 1.25
+> Hybrid 0.00 0.12 0.32 0.50 0.83
+
+Figure 2: Surface completion: the hybrid routing rule (red dia-monds) attains lower hidden-cell RMSE than either component at every random mask rate on the BTC test set. At 50% mask-ing the hybrid (0 .83 vol points) is more than 8 × more accurate than the smile re-fit alone and a third more accurate than the ConvVAE alone. 
+
+# 7 Surface Completion 
+
+The two component predictors exhibit complementary error pro-files. The smile re-fit is rank-su ffi cient and near-optimal at low mask rates, where most tenor rows retain enough observed cells to identify the quadratic in Eq. (2) , but its error grows roughly linearly with mask rate as a growing fraction of rows lose rank. The ConvVAE attains a nearly mask-rate-independent accuracy in the range 0 .94–1 .25 vol points by drawing on the learned manifold rather than re-solving a parametric fit. The routing rule of Eq. (5) composes them so that at every random mask rate the hybrid is at least as accurate as the better component: it attains the smile re-fit’s near-zero error at low masking and inherits the ConvVAE’s robust accuracy at high masking (Table 5, Figure 2). At 50% random masking the hybrid attains 0 .83 vol points, a more-than-eightfold reduction relative to the smile re-fit alone and a 34% reduction relative to the ConvVAE alone. The rule in-troduces no additional model parameters and no latency beyond what the two components already require. Figure 3 resolves the aggregate RMSE to the individual cells of the 6 × 7 grid at r = 0.5. The smile re-fit incurs its largest per-cell errors at the boundary tenors (14d and 180d), where cross-tenor extrapolation is supported by a single neighbour rather than two and the deep-wing cells at the 14d row exceed 17 vol points. The ConvVAE distributes substantially smaller errors more uniformly across the grid. The hybrid is below either component in nearly every cell, because the per-tenor routing rule selects whichever predictor is structurally qualified for each hidden cell, preserving the re-fit’s near-zero error at well-populated tenors and substituting the ConvVAE only where rank deficiency forces it. Preprint – B eyond the Smile 7
+
+7.1 Comparison against published baselines 
+
+The hybrid result above is established against the practitioner’s parametric oracle. Table 6 places it within a broader set of base-lines: a PCA decomposition in the style of Cont and da Fonseca (2002), an Ackerer-style deterministic deep smoother with a soft calendar-arbitrage penalty (Ackerer et al., 2020), and the joint-trained ConvVAE. All learned models are trained on identical data with identical splits and mask schedule; the smile re-fit and PCA require no training. Three observations follow from Table 6. The ConvVAE is the lowest-error learned predictor on every column. Against the PCA decomposition the gain is modest at random masks (10– 12% reduction across the three rates evaluated) but substantial on row-shaped holes (55% on row_random ), reflecting the inability of a linear subspace to recover the across-tenor dependence required when a full row is unobserved. Against the Ackerer-style deep smoother the gain is 5–9% at random masks and 18–32% on row-shaped holes, attributable to the explicit two-dimensional grid structure of the ConvVAE that the smoother’s flat MLP lacks. No learned model beats the smile re-fit at low mask rates, since the gridded targets are parametric in that regime; the hybrid routing rule exploits this. Finally, none of the baselines (parametric, statistical, or neural) approaches the hybrid at the operating points where the hybrid dominates: at 50% random masking the hybrid attains 0 .83 vol points against the next-best 1 .25 for the ConvVAE alone and 1 .38 for the deep smoother. 
+
+7.2 Static no-arbitrage compliance 
+
+A frequent objection to neural surface models is the absence of static no-arbitrage guarantees. We test this empirically against both standard conditions on the seven listed strikes per tenor. 
+
+Calendar arbitrage. The calendar condition in the delta parameterisation requires that total variance w(Ti, δ j) =
+
+σ2(Ti, δ j) Ti be non-decreasing in Ti at fixed δ j (Ackerer et al., 2020). We project per delta column by L2 isotonic regression (Pool-Adjacent-Violators) and compare hidden-cell RMSE be-fore and after. 
+
+Butterfly arbitrage. For each tenor row we recover the strike 
+
+Ki, j = Fi exp (ki, j) of each cell from its vol via ki, j = σ2 
+
+> i,j
+
+Ti/2 −
+
+σi, j
+
+√Ti Φ−1(δ j), sort by K, and check that the Black-76 for-ward call price C(Ki, j)/Fi = Φ (d1) − exp (k)Φ(d2) is convex in K by second divided di ff erences. Convexity is the discrete butterfly-arbitrage condition at the listed strikes and requires no continuous-smile fit. Table 7 supports three conclusions. First, the ConvVAE matches the underlying data’s arbitrage profile cell for cell: on BTC neither the data nor the ConvVAE reconstructions produce any calendar or butterfly violation at any mask rate, and on ETH the ConvVAE inherits the same 0 .2% calendar-violation rate as the gridded data (traceable to a small number of high-spread, low-liquidity snapshots) while remaining butterfly-free. The hybrid inherits the same property because the smile re-fit operates only on rows with ≥ 3 observed cells, where the parametric fit is well-determined and itself near-compliant. Second, the calendar projection step is operationally free: it changes hidden-cell RMSE by at most 0 .001 vol points on the learned predictors, and in fact improves smile-refit RMSE by up to 0 .2 vol points on its own outputs. Third, the smile re-fit alone is the only predictor that materially violates either condition at high mask rates: 38 .9% (33 .1%) of its BTC (ETH) reconstructions at r =
+
+0.5 admit a butterfly arbitrage at the listed strikes. The routing rule of Section 4.4 suppresses this failure mode in the hybrid by deferring to the ConvVAE on rank-deficient rows. Static no-arbitrage at the seven listed strikes is therefore a demon-strated property of the deployed predictor at no measurable accu-racy cost. Arbitrage between the listed strikes requires a smooth interpolant (Gatheral and Jacquier, 2014; Fengler, 2009) and is the one no-arbitrage condition this paper does not address. 
+
+# 8 Structured Holes 
+
+Random per-cell masking is the standard evaluation in the ma-chine learning literature, but the distribution of missing cells in production systems is rarely independent across the surface. A feed disruption typically removes an entire tenor row, and the withdrawal of a market maker from one wing removes a delta column. We therefore evaluate on five fixed-pattern masks corresponding to such scenarios and compare each against a random-mask control of identical cell count, so that the e ff ect of mask structure is isolated from the e ff ect of mask rate .Table 8 and Figure 4 partition the scenarios into two regimes. In the column-hole and wing-hole scenarios every tenor row retains at least five of seven cells; the smile re-fit is rank-su ffi cient at each tenor and reproduces the gridded targets to within numerical tolerance, while the ConvVAE incurs 0 .9–1 .5vol points; the hybrid defers to the re-fit. In the row-hole scenar-ios ( row_random , long_tenor ) the re-fit is rank-deficient at the a ff ected tenor, forced to cross-tenor extrapolation of ( a, b, c), and incurs 9 .6–13 .1 vol points, an order of magnitude above the random-mask control. The ConvVAE attains 1 .54–1 .88 vol points in the same regime, and the hybrid defers to it. Compari-son of the ConvVAE under structured versus random masks at matched cell counts shows a residual distribution-shift cost on 
+
+row_random : 1 .88 vs. 1 .03 vol points, a 1 .83 × penalty. The residual is bounded and substantially smaller than the order-of-magnitude failure of the parametric baseline in the same scheme. 
+
+# 9 Cross -M arket Generalisation 
+
+Whether a single model can serve more than one cryptocurrency market is tested by two complementary experiments: zero-shot out-of-distribution evaluation of a BTC-only ConvVAE on the ETH test set, and joint training on both symbols with per-market evaluation. 
+
+9.1 Zero-shot out-of-distribution transfer 
+
+We take the BTC-only ConvVAE and evaluate it directly on the ETH test set, normalising the inputs with ETH’s own training statistics, which is the realistic deployment configuration. As a complementary diagnostic we also evaluate the same model with normalisation drawn from the source’s (BTC’s) training statistics, which separates the contribution of shape transfer from any coincidence in marginal IV levels. Results are reported in Table 9. Preprint – B eyond the Smile 8Table 6: Surface-completion RMSE on the BTC test set (vol points) across baselines and the proposed configuration. PCA is reported at its best operating point ( k = 8 principal components, selected by random-mask average); “Deep Smoothing” is an amortised Ackerer-style deterministic autoencoder with a calendar-arbitrage penalty; ConvVAE and Hybrid are the configurations of this paper. Lowest entry per column in bold.                                         
+
+> Random mask Row-shaped hole Method r=0.10 r=0.30 r=0.50 row_random long_tenor
+> Smile re-fit 0.00 2.53 7.00 9.59 13.12 PCA, k=8 (Cont and da Fonseca, 2002) 1.06 1.21 1.40 4.15 3.51 Deep Smoothing (Ackerer et al., 2020) 0.99 1.16 1.38 2.30 2.26 ConvVAE (ours) 0.94 1.07 1.25 1.88 1.54 Hybrid (ours) 0.00 0.32 0.83 1.88 1.54
+
+Figure 3: Per-cell RMSE on the BTC test set under random 50% masking, evaluated only on cells that were hidden. The smile re-fit (mean 5 .3 vol points) incurs its largest errors at the boundary tenors (14d and 180d); the joint ConvVAE (mean 1 .1 vol points) distributes its smaller errors more uniformly; the hybrid (mean 0 .7 vol points) attains the lowest per-cell error in nearly every cell by routing each hidden cell to the predictor that is structurally qualified for it. Table 7: Static no-arbitrage compliance at r = 0.5 random mask-ing. “Cal.” is the fraction of test surfaces with any calendar violation in total variance; “Bfly.” is the fraction with any but-terfly violation at a listed strike; “ ∆RMSE” is the change in hidden-cell RMSE (vol points) after calendar projection.                                     
+
+> Market Method Cal. Bfly. ∆RMSE BTC ConvVAE 0.0% 0.0% +0.000 BTC Hybrid 0.0% 0.0% +0.000 BTC Smile re-fit 9.7% 38 .9% −0.125 BTC data 0.0% 0.0% n/aETH ConvVAE 0.2% 0.0% +0.000 ETH Hybrid 0.4% 0.0% +0.000 ETH Smile re-fit 9.1% 33 .1% −0.188 ETH data 0.2% 0.0% n/a
+
+Under target-symbol normalisation the cross-asset RMSE on ETH is within 5–27% of the in-distribution BTC reference across the five mask rates evaluated. At r = 0.5 the BTC-trained ConvVAE on ETH attains 1 .82 vol points, 3 .2× below Table 8: Structured-hole evaluation (vol points), joint-trained ConvVAE ( z=16 , h=64). “struct.” is RMSE under the structured mask; “rnd.” is RMSE under a random mask hiding the same number of cells. “Hid.” is cells hidden per snapshot.                                             
+
+> Smile re-fit ConvVAE Hyb. Scheme Hid. Rate struct. rnd. struct. rnd. struct.
+> row_random 70.17 9.59 0.14 1.88 1.03 1.88
+> col_random 60.14 0.00 0.00 0.94 1.00 0.00
+> wing_put 12 0.29 0.00 2.22 1.50 1.05 0.00
+> wing_call 12 0.29 0.00 2.22 1.20 1.05 0.00
+> long_tenor 70.17 13.12 0.14 1.54 1.03 1.54
+
+the ETH-specific parametric baseline (5 .84). Source-symbol normalisation is in fact marginally more accurate than target-symbol normalisation at the high-mask end (1 .66 vs. 1 .82 vol points at r = 0.5), consistent with the close alignment of the per-cell IV distributions of BTC and ETH over the window: the 60-day ATM IV means of the two symbols di ff er by only 1 .1 vol points. The representation learned by the ConvVAE is therefore Preprint – B eyond the Smile 9
+
+Figure 4: Structured-hole evaluation. Solid bars: RMSE under the structured mask. Hatched bars: RMSE under a random mask with the same number of hidden cells. The smile re-fit collapses on row-shaped holes ( row_random , long_tenor ) where one tenor has zero observed cells; the ConvVAE remains usable. Where a tenor row retains ≥ 3 observed cells ( col_random , wings), the smile re-fit is essentially perfect because the gridded targets are outputs of the same parametric family, and the hybrid correctly routes to it. Table 9: Zero-shot transfer: BTC-only ConvVAE evaluated on the ETH test set, against the in-distribution BTC reference and the ETH-specific smile re-fit baseline (vol points).                                    
+
+> Mask rate r=0.10 r=0.20 r=0.30 r=0.40 r=0.50 BTC test (in-distribution reference) 1.28 1.39 1.51 1.47 1.67 ETH test, target normalisation 1.63 1.61 1.58 1.66 1.82 ETH test, source normalisation 1.48 1.45 1.44 1.49 1.66 ETH smile re-fit baseline 0.00 0.83 1.52 3.71 5.84
+
+not BTC-specific, and the cryptocurrency vol-surface manifold within the observation window is substantially shared between the two largest markets. 
+
+9.2 Joint training 
+
+We additionally train a ConvVAE on the concatenation of per-symbol z-normalised BTC and ETH training surfaces, yielding a 4 ,223-surface training set against the 1 ,974 and 2 ,249 surfaces used for the single-symbol counterparts. The architecture and optimiser are unchanged. Each market’s test set is evaluated under its own normalisation; results appear in Table 10 and Figure 5. The joint ConvVAE is the lowest-error learned predictor on both test sets at every mask rate. Relative to the better-performing single-symbol counterpart it reduces error by 9–27% across the ten test-set /mask-rate combinations. Against the matching in-distribution single-symbol model the reduction is larger on BTC (23–29%, joint vs. BTC-only) than on ETH (9–16%, joint vs. ETH-only), reflecting that the BTC training set is both smaller and structurally less clean than the ETH one (1 ,974 vs. 2 ,249 fully-filled snapshots, 80 .9% vs. 92 .1% fully-filled fraction; Sec-Table 10: Joint vs. single-symbol ConvVAE training (vol points). Bold marks the lowest value in each column. The smile baseline wins at low mask rates (where it is the parametric oracle on the gridded targets) and the joint ConvVAE wins at higher mask rates. Among learned models, the joint ConvVAE is uniformly best on both markets at every mask rate.                                             
+
+> 0.10 0.20 0.30 0.40 0.50
+> BTC test set
+> BTC-only ConvVAE 1.28 1.39 1.51 1.47 1.67 ETH-only ConvVAE 1.40 1.43 1.39 1.32 1.40 Joint ConvVAE 0.94 1.01 1.07 1.13 1.25
+> BTC smile baseline 0.00 1.28 2.53 4.05 7.00
+> ETH test set
+> BTC-only ConvVAE 1.63 1.61 1.58 1.66 1.82 ETH-only ConvVAE 1.46 1.58 1.58 1.65 1.72 Joint ConvVAE 1.31 1.33 1.33 1.43 1.56
+> ETH smile baseline 0.00 0.83 1.52 3.71 5.84
+
+Preprint – B eyond the Smile 10 
+
+Figure 5: Joint vs. single-symbol ConvVAE training. The joint model is the lowest-error learned predictor on each market at every mask rate, including the in-distribution market on which each single-symbol model was specifically trained. tion 3). The ETH-only ConvVAE in turn exceeds the BTC-only ConvVAE on the BTC test set at high mask rates (1 .40 vs. 1 .67 at r = 0.5); at our sample size training-set quality dominates the nominal in-distribution advantage. Both the increase in e ff ective training-set size and the additional shape diversity introduced by the second market contribute to the joint gain. 
+
+9.3 Synthesis across the evaluation grid 
+
+Figure 6 consolidates the combined e ff ect of the routing rule, the joint model, and cross-market training across the seven eval-uation scenarios examined in this paper: three random-mask rates (10%, 30%, 50%) and four structured holes (an entire tenor row dropped, the longest tenor dropped, the put wing dropped, and the call wing dropped), evaluated separately on the BTC and ETH test sets. The hybrid attains the lowest error in every scenario on both markets. In the wing-hole scenarios the smile re-fit is rank-su ffi cient and the hybrid inherits its near-zero error; in the random-mask and row-hole scenarios the joint ConvVAE provides the fallback, keeping the hybrid in low single-digit vol points everywhere even as the smile re-fit alone exceeds twelve. The hybrid Pareto-dominates each component across the entire evaluation grid. 
+
+# 10 Anomaly Detection Case Study 
+
+The joint ConvVAE trained for masked completion in Sections 7– 9 also yields an unsupervised per-snapshot anomaly score. With the mask set to all-observed, the reconstruction error ∥x − ˆx∥
+
+quantifies the distance of a surface from the manifold that the model has been trained to encode. We compute this score for every BTC snapshot in the train, validation, and test windows of the 147-day record and examine the resulting time series and latent geometry. Across the 2 ,821 scored BTC snapshots the mean recon-struction RMSE is 0.76 vol points; the 99th percentile is 2.17; the maximum is 4.30. The top five anoma-lies fall in late September and October 2023, with times-tamps 2023-10-02 03:00 (4 .30), 2023-10-23 10:00 (3 .24), 
+
+2023-09-29 18:00 (2 .62), 2023-10-20 02:00 (2 .59), and 
+
+2023-09-29 19:00 (2 .57 vol points). Figure 7 overlays the reconstruction-error time series on three diagnostic surface features: the at-the-money ( δ = 0.50) implied volatility at the 60-day tenor, the 25-delta skew at the same tenor, and the term-structure slope between the 14- and 180-day at-the-money points, together with the BTC spot price proxied by the shortest-tenor parity-implied forward. Several features of the period are evident. The at-the-money volatility declines from approximately 55% at the start of the window to approximately 25% by early September, a level shift of ∼30 volatility points; the term structure inverts and becomes irregular through September; and the spot price rises from $26 ,000 in mid-October to $33 ,000 by month end. The early-October peak (October 2) precedes the late-October ETF-anticipation rally by roughly two weeks, and the rally itself appears as the cluster of high-error snapshots on October 20 and 23. The August 17 flash crash (an intraday move from $29 ,000 to $25 ,500) is visible as a localised spike in reconstruction error rather than a top-ranked anomaly. The September 29 cluster does not coincide with a major crypto-specific event known to the authors; the model identifies it from the surface data alone. Examination of the corresponding surfaces (Figure 8) shows that the high-error snapshots exhibit systematic, spatially-coherent residuals rather than random fluctuations: the residual heatmaps display sign-coherent blocks in the deep out-of-the-money call wing and in the short-tenor at-the-money region, indicating that the model is failing to reproduce genuine local shape features rather than overfitting to noise. This is consistent with these snapshots residing at the periphery of the learned manifold rather than o ff it. Projection of the encoded latent means μi onto their first two principal components (Figure 9) reveals interpretable manifold structure. The snapshots trace a continuous temporal trajectory in the ( PC1 , PC2 ) plane between the start and end of the 147-day window, with the high- and low-volatility regimes occupying separable regions. The top-30 anomalies (red rings) concentrate at the periphery of the dense scatter rather than within its interior, Preprint – B eyond the Smile 11 
+
+Figure 6: Hidden-cell RMSE of the smile re-fit (orange), the joint ConvVAE (blue), and the hybrid (red) across seven evaluation scenarios on the BTC and ETH test sets. Bars are clipped at 9 vol points for legibility; the true value is annotated above any clipped bar. In every scenario on every market, the hybrid attains the lowest error. The smile re-fit is competitive only when each tenor row retains ≥ 3 observed cells (wing- and column-hole scenarios); the ConvVAE is the only viable predictor when a tenor row is fully unobserved. the expected qualitative signature of a generative-model anomaly score on a well-trained representation. The anomaly result requires no labels, no re-training, and no threshold beyond a ranking of per-snapshot errors. It is an analytical by-product of a trained surface model rather than a complete anomaly-detection study; a complete study would compare against labelled events, drift baselines, and sliding-window statistical detectors. The claim is the narrower one: the representation learned for masked completion is also informative for flagging surfaces that warrant further investigation. 
+
+# 11 Deployment Considerations 
+
+The empirical results of Sections 6–10 support a single deploy-able configuration. A predictor intended to serve a multi-market cryptocurrency options book should consist of a 2D convolu-tional VAE (trained jointly on the per-symbol z-normalised con-catenation of all available training surfaces) queried through the routing rule of Eq. (5) : the smile re-fit when each tenor row retains at least three observed cells, and the ConvVAE otherwise. The same trained model provides, at no additional inference cost, a per-snapshot reconstruction-error statistic that may be used to flag surfaces lying away from the learned manifold, and produces calendar- and butterfly-arbitrage-free outputs at the listed strikes by construction (Section 7.2). The computational requirements of the configuration are modest. Both predictors execute in time that is independent of chain depth: the ConvVAE consists of 318k parameters and reduces at inference to a fixed sequence of small convolutional passes over the 6 × 7 grid, while the smile re-fit reduces to a single ordinary least-squares solve per tenor on a system of at most seven points. Neither requires accelerator hardware at inference, and both can be hosted within a common surface-construction service. The marginal contribution of the ConvVAE is concentrated in the regime in which the parametric smile is rank-deficient, namely tenor rows with fewer than three observed cells, as characterised in Section 8. In the complementary regime, where the paramet-ric smile is well-determined, the gridded targets impose an upper bound on the accuracy attainable by any learned model and the routing rule defers to the parametric predictor by construction. The cross-market results of Section 9 provide a complemen-tary justification for the modelling cost: jointly trained models outperform single-symbol alternatives on every test market ex-amined, including the symbol on which each single-symbol model was specifically trained. Both an increase in e ff ective training-set size and the additional shape diversity introduced by a second market plausibly contribute to the gain. 
+
+# 12 Limitations and Future Work 
+
+Window length and regime coverage. Our empirical record spans the 147-day Binance Options EOH archive (May–October 2023). The window contains one major intra-period disloca-tion (the August 17 flash crash) and the late-October ETF-anticipation rally, but does not span structurally distinct regimes such as the FTX collapse, the 2024 spot-ETF launch, or post-halving environments. The cross-asset transfer results of Sec-tion 9 should accordingly be interpreted as evidence of a shared BTC–ETH manifold over this window, not as a guarantee of generalisation across the full crypto-volatility regime space. 
+
+Gridded targets and the parametric oracle. The training and evaluation targets are themselves the output of a parametric gridding procedure (Section 3.3), which makes the smile re-fit baseline the inverse of the data-generating map and unbeatable whenever each tenor row is adequately populated. Training the ConvVAE directly on raw cleaned chains, bypassing the parametric gridding, would relax this asymmetry but would Preprint – B eyond the Smile 12 
+
+Figure 7: Anomaly forensics. Top: per-snapshot reconstruction RMSE under no masking, with train /val /test windows distinguished. Second and third: diagnostic surface features (ATM, skew, term slope). Bottom: BTC spot proxied by shortest-tenor parity-implied forward. Dotted vertical lines mark known events. require a permutation-equivariant or set-structured encoder and is left as an extension. 
+
+Residual structured-vs-random penalty. The ConvVAE re-tains a 1 .83 × structured-vs-random penalty on row_random .Closing it further requires an encoder–decoder that explicitly conditions each tenor on its observed neighbours (hierarchical latents indexed by tenor, or arbitrage-constrained decoder fac-torisations) rather than relying on convolutional receptive-field growth alone. 
+
+Continuous-smile arbitrage. Section 7.2 establishes that the deployed predictor is calendar- and butterfly-arbitrage-free at the seven listed strikes per tenor: calendar arbitrage via a free iso-tonic post-projection, butterfly empirically without enforcement. Arbitrage between the listed strikes (for example, at a strike interpolated for a Greek on an o ff -grid expiry) requires a smooth interpolant: an arbitrage-free SVI (Gatheral and Jacquier, 2014) or a Fengler-style C2 spline (Fengler, 2009). We do not ad-dress this finer condition; pairing the ConvVAE outputs with a constrained interpolant is the natural next step. 
+
+Cross-asset-class transfer. We address only cryptocurrency markets. Whether the same architecture transfers to equity-index options, which exhibit pronounced left-skew and qualitatively di ff erent term-structure dynamics than crypto, requires a sepa-rate treatment of the corresponding data pipeline and arbitrage constraints and is beyond the scope of this paper. Preprint – B eyond the Smile 13 
+
+Figure 8: Top-5 anomalous BTC surfaces by ConvVAE reconstruction error. Each row shows the actual surface (left), the ConvVAE reconstruction (centre), and the signed residual (right; red = over-prediction, blue = under-prediction). Residuals are spatially coherent rather than random, indicating genuine o ff -manifold structure rather than fitted noise. Preprint – B eyond the Smile 14 
+
+Figure 9: Two-dimensional PCA projection of the z-dim latent means. Colour: time. Red rings: top-30 reconstruction anoma-lies. Anomalies sit at the manifold edges, not within the dense interior. 
+
+# 13 Conclusion 
+
+A 2D-convolutional masked-input VAE for the cryptocurrency volatility surface, combined with a quadratic smile re-fit through a deterministic per-tenor routing rule, attains the lowest hidden-cell RMSE at every random and structured masking scenario examined and on both BTC and ETH test sets (Figure 6). At 50% random masking the hybrid attains 0 .83 vol points against 7 .00 for the smile re-fit alone, an eightfold reduction over standard parametric practice obtained at no additional inference cost. The hybrid additionally removes a categorical failure mode of the parametric baseline. When a tenor row is fully unobserved (a configuration routinely produced in production by feed fail-ures or maturity delistings), the smile re-fit is rank-deficient at the a ff ected tenor and incurs 9 .6–13 .1 vol points of error (“row dropped” and “180d dropped” panels of Figure 6); the ConvVAE retains 1 .5–1 .9 vol points and the routing rule defers to it automatically. The cryptocurrency vol-surface manifold is substantially shared across the two largest markets over the observation window: a ConvVAE trained on BTC alone attains within 5–27% of its in-distribution accuracy on ETH, and joint training on BTC and ETH yields a further 9–27% reduction on every market exam-ined, including the symbol on which each single-symbol model was specifically trained. A single jointly-trained ConvVAE is therefore the appropriate choice for a multi-currency portfolio. The deployed predictor is calendar- and butterfly-arbitrage-free at the seven listed strikes per tenor on both markets: calendar via a free L2 post-projection that moves hidden-cell RMSE by at most 0 .001 vol points, and butterfly empirically without en-forcement (Section 7.2). The parametric smile re-fit, by contrast, admits a butterfly arbitrage at the listed strikes on 38 .9% (33 .1%) of BTC (ETH) reconstructions at 50% masking; the routing rule suppresses this failure mode in the hybrid. The same trained model yields, at no additional cost and without supervision, a per-snapshot reconstruction-error statistic that flags the late-October ETF-anticipation rally and the August 17, 2023 flash crash as elevated-error periods, and a latent repre-sentation that traces an interpretable temporal trajectory. All training and evaluation infrastructure is released to support re-producible follow-on work. 
+
+Code and Data Availability. The code for the data pipeline, model training, the ablation study, and all figures and ta-bles in this manuscript is available at https://github. com/jasper-research/beyond-the-smile-paper under the MIT License. An archived snapshot of the code, to-gether with the processed 6 × 7 gridded volatility surfaces and the per-run configurations, checkpoints, and metric files underlying the reported results, is deposited on Zenodo (DOI: 10.5281/zenodo.20693546 ). The sole data source, the Binance Options end-of-hour archive, is publicly available. The complete ablation grid of Sections 7–9.2 trains and evaluates in under five minutes of GPU time on commodity hardware, permitting full re-verification of the reported results from the raw archive. 
+
+# References 
+
+Damien Ackerer, Natasa Tagasovska, and Thibault Vatter. Deep Smoothing of the Implied Volatility Surface. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. Carol Alexander and Arben Imeraj. The bitcoin volatility smile and the index option e ff ect. Journal of Futures Markets , 2023. Jinwon An and Sungzoon Cho. Variational autoencoder based anomaly detection using reconstruction probability. Special Lecture on IE , 2(1):1–18, 2015. Christian Bayer and Benjamin Stemper. Deep calibration of rough stochastic volatility models. arXiv preprint , 2018. Maxime Bergeron and Niels Lund. Variational autoencoders for the implied volatility surface, 2024. Working paper / preprint — citation details to be verified. Fischer Black. The pricing of commodity contracts. Journal of Financial Economics , 3(1–2):167–179, 1976. Rama Cont and Jose da Fonseca. Dynamics of implied volatility surfaces. Quantitative Finance , 2(1):45–60, 2002. Christa Cuchiero, Wahid Khosrawi, and Josef Teichmann. A generative adversarial network approach to calibration of local stochastic volatility models. Risks , 8(4):101, 2020. Matthias R. Fengler. Arbitrage-free smoothing of the implied volatility surface. Quantitative Finance , 9(4):417–428, 2009. Jim Gatheral. The Volatility Surface: A Practitioner’s Guide .Wiley Finance, 2006. Jim Gatheral and Antoine Jacquier. Arbitrage-free svi volatility surfaces. Quantitative Finance , 14(1):59–71, 2014. Patrick S. Hagan, Deep Kumar, Andrew S. Lesniewski, and Diana E. Woodward. Managing smile risk. Technical report, Wilmott Magazine, 2002. Kaiming He, Xinlei Chen, Saining Xie, Yanghao Li, Piotr Dollár, and Ross Girshick. Masked autoencoders are scalable vision learners. In IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2022. Irina Higgins, Loïc Matthey, Arka Pal, Christopher Burgess, Xavier Glorot, Matthew Botvinick, Shakir Mohamed, and Preprint – B eyond the Smile 15 Alexander Lerchner. β-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework. In Proceedings of the 5th International Conference on Learning Representations (ICLR) , 2017. Blanka Horvath, Aitor Muguruza, and Mehdi Tomas. Deep Learning Volatility: A Deep Neural Network Perspective on Pricing and Calibration in (Rough) Volatility Models. Quan-titative Finance , 21(1):11–27, 2021. Ai Jun Hou, Weining Wang, Cathy Y. H. Chen, and Wolf-gang Karl Härdle. Pricing cryptocurrency options. Journal of Financial Econometrics , 18(2):250–279, 2020. Diederik P. Kingma and Jimmy Ba. Adam: A Method for Stochastic Optimization. In Proceedings of the 3rd Inter-national Conference on Learning Representations (ICLR) ,2015. Diederik P. Kingma and Max Welling. Auto-Encoding Varia-tional Bayes. In Proceedings of the 2nd International Confer-ence on Learning Representations (ICLR) , 2014. Juho Lee, Yoonho Lee, Jungtaek Kim, Adam R. Kosiorek, Se-ungjin Choi, and Yee Whye Teh. Set transformer: A frame-work for attention-based permutation-invariant neural net-works. In International Conference on Machine Learning (ICML) , 2019. Dilip B. Madan, Sofie Reyners, and Wim Schoutens. Advanced Model Calibration on Bitcoin Options. Digital Finance , 1: 117–137, 2019. Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Na-talia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Köpf, Edward Yang, Zach DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. PyTorch: An Imperative Style, High-Performance Deep Learning Library. In Advances in Neural Information Processing Systems (NeurIPS) , 2019. Deepak Pathak, Philipp Krähenbühl, Je ff Donahue, Trevor Dar-rell, and Alexei A. Efros. Context encoders: Feature learning by inpainting. In IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2016. S. Reddy. Learning the implied volatility smile with variational autoencoders, 2019. Citation details to be verified. Danilo Jimenez Rezende, Shakir Mohamed, and Daan Wierstra. Stochastic Backpropagation and Approximate Inference in Deep Generative Models. In Proceedings of the 31st Interna-tional Conference on Machine Learning (ICML) , 2014. Lukas Ru ff , Jacob R. Kau ff mann, Robert A. Vandermeulen, Gré-goire Montavon, Wojciech Samek, Marius Kloft, Thomas G. Dietterich, and Klaus-Robert Müller. A unifying review of deep and shallow anomaly detection. Proceedings of the IEEE , 109(5):756–795, 2021. Hans R. Stoll. The relationship between put and call option prices. The Journal of Finance , 24(5):801–824, 1969. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkor-eit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems (NeurIPS) , 2017. Magnus Wiese, Robert Knobloch, Ralf Korn, and Peter Kretschmer. Quant GANs: deep generation of financial time series. Quantitative Finance , 20(9):1419–1440, 2020.
