@@ -6,28 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-22
-- 运行时间：2026-06-22 22:34:35 UTC
+- 最新运行日期：2026-06-23
+- 运行时间：2026-06-23 20:49:20 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：1
-- 速读区：1
+- 本次总论文数：10
+- 精读区：6
+- 速读区：4
 
 ### 今日简报（AI）
-1) 今日精读一篇卷积VAE建模加密波动率曲面的高分论文，速读一篇多任务学习帕累托导航方法。  
-2) 最值得关注的是混合卷积VAE如何超越传统微笑模型，以及基于交互式帕累托前沿的多任务优化思路。  
-3) 建议优先精读加密波动率曲面论文，理解其如何用深度学习捕捉曲面非对称性，再对照速读中的多任务导航提升模型调优效率。
-- 详情：[/202606/22/README](/202606/22/README)
+今日精读6篇、速读4篇，共10篇金融多模态推理与风险管理论文，其中《FinAcumen》和《Reinforcement Learning》得分最高。  
+重点关注《FinAcumen》提出的自进化经验记忆多模态推理，以及《Reinforcement Learning》中的自由能-熵对偶方法用于风险敏感投资。  
+建议普通读者先深入精读这两篇高分论文，再结合速读中的实时市场模拟器（KineticSim）和隐马尔可夫风险模型，快速构建从理论到实战的闭环。
+- 详情：[/202606/23/README](/202606/23/README)
 
 ### 精读区论文标签
-1. [Beyond the Smile: A Hybrid Convolutional VAE for Crypto Volatility Surfaces](/202606/22/2606.16961v1-beyond-the-smile-a-hybrid-convolutional-vae-for-crypto-volatility-surfaces)  
+1. [FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness](/202606/23/2606.17642v2-finacumen-financial-multimodal-reasoning-via-self-evolving-experience-memory-harness)  
+   标签：评分：10.0/10、query:ai-finance
+   evidence：金融多模态推理代理框架
+2. [Reinforcement Learning for Risk-Sensitive Investment Management: a Free Energy--Entropy Duality Approach](/202606/23/2606.20903v1-reinforcement-learning-for-risk-sensitive-investment-management-a-free-energy--entropy-duality-approach)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：强化学习用于风险敏感的基准资产配置
+3. [MetaPS: Adaptive Programmatic Strategy Selection for Market Agents](/202606/23/2606.22385v1-metaps-adaptive-programmatic-strategy-selection-for-market-agents)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：自适应性程序化策略选择用于市场代理
+4. [IPO Finance Agent: Evaluation of LLM Financial Analysts beyond Finance Agent v2, with Automated Rubric Generation -- the Case of the SpaceX (SPCX) IPO](/202606/23/2606.23032v1-ipo-finance-agent-evaluation-of-llm-financial-analysts-beyond-finance-agent-v2-with-automated-rubric-generation----the-case-of-the-spacex-spcx-ipo)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：LLM金融分析师在IPO尽职调查中的评估
+5. [From Complaint Narratives to Monetary Relief: A Hybrid Machine Learning Framework for CFPB Consumer Complaints](/202606/23/2606.22664v1-from-complaint-narratives-to-monetary-relief-a-hybrid-machine-learning-framework-for-cfpb-consumer-complaints)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：卷积变分自编码器用于加密货币波动率曲面，金融深度学习应用
+   evidence：利用投诉文本的NLP来预测消费者金融中的货币救济结果
+6. [Endogenous Randomness from Adversarial Market Learning](/202606/23/2606.22743v1-endogenous-randomness-from-adversarial-market-learning)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：包含预测交易者的确定性对抗市场模型，与股票市场分析相关
 
 ### 速读区论文标签
-1. [Interactive Pareto navigation for deep multi-task learning](/202606/22/2606.19521v1-interactive-pareto-navigation-for-deep-multi-task-learning)  
+1. [KineticSim: A Lightweight, High-Performance Execution Engine for Real-Time Market Simulators](/202606/23/2606.21784v1-kineticsim-a-lightweight-high-performance-execution-engine-for-real-time-market-simulators)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：用于实时市场仿真的可重用并行引擎
+2. [Continuous Hidden Markov Models for Equity Returns: Heavy-Tail Emission Families and Regime-Conditional Value-at-Risk](/202606/23/2606.23492v1-continuous-hidden-markov-models-for-equity-returns-heavy-tail-emission-families-and-regime-conditional-value-at-risk)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：股票收益的隐马尔可夫模型与机制条件风险
+3. [Leakage-Aware Benchmarking of LLM Forecasting: Real-Time Nowcasts as the Decision-Time Input for Macro Factor Ranking](/202606/23/2606.22719v1-leakage-aware-benchmarking-of-llm-forecasting-real-time-nowcasts-as-the-decision-time-input-for-macro-factor-ranking)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：LLM预测的泄漏感知基准，用于股票因子排名，与股票市场分析相关
+4. [Selective Time Series Forecasting via Metalearning](/202606/23/2606.23448v1-selective-time-series-forecasting-via-metalearning)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：深度多任务学习的交互式帕累托导航，可迁移至多目标金融任务
+   evidence：基于元学习的选择性时间序列预测，可对高风险预测弃权
 
 
 <div class="dpr-home-promo-card">
