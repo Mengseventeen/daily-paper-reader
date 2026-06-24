@@ -6,52 +6,53 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-23
-- 运行时间：2026-06-23 20:49:20 UTC
+- 最新运行日期：2026-06-24
+- 运行时间：2026-06-24 21:45:36 UTC
 - 运行状态：成功
-- 本次总论文数：10
+- 本次总论文数：11
 - 精读区：6
-- 速读区：4
+- 速读区：5
 
 ### 今日简报（AI）
-今日精读6篇、速读4篇，共10篇金融多模态推理与风险管理论文，其中《FinAcumen》和《Reinforcement Learning》得分最高。  
-重点关注《FinAcumen》提出的自进化经验记忆多模态推理，以及《Reinforcement Learning》中的自由能-熵对偶方法用于风险敏感投资。  
-建议普通读者先深入精读这两篇高分论文，再结合速读中的实时市场模拟器（KineticSim）和隐马尔可夫风险模型，快速构建从理论到实战的闭环。
-- 详情：[/202606/23/README](/202606/23/README)
+今日精读6篇速读5篇，重点关注AI金融分析师评估与财务问答审计两大方向。值得关注《IPO Finance Agent》构建的LLM分析师评估框架和《EvidenceLens》提出的证据矩阵审计方法。建议优先阅读这两篇高分论文，了解AI金融分析的前沿评估标准。
+- 详情：[/202606/24/README](/202606/24/README)
 
 ### 精读区论文标签
-1. [FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness](/202606/23/2606.17642v2-finacumen-financial-multimodal-reasoning-via-self-evolving-experience-memory-harness)  
-   标签：评分：10.0/10、query:ai-finance
-   evidence：金融多模态推理代理框架
-2. [Reinforcement Learning for Risk-Sensitive Investment Management: a Free Energy--Entropy Duality Approach](/202606/23/2606.20903v1-reinforcement-learning-for-risk-sensitive-investment-management-a-free-energy--entropy-duality-approach)  
+1. [IPO Finance Agent: Evaluation of LLM Financial Analysts beyond Finance Agent v2, with Automated Rubric Generation -- the Case of the SpaceX (SPCX) IPO](/202606/24/2606.23032v2-ipo-finance-agent-evaluation-of-llm-financial-analysts-beyond-finance-agent-v2-with-automated-rubric-generation----the-case-of-the-spacex-spcx-ipo)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：强化学习用于风险敏感的基准资产配置
-3. [MetaPS: Adaptive Programmatic Strategy Selection for Market Agents](/202606/23/2606.22385v1-metaps-adaptive-programmatic-strategy-selection-for-market-agents)  
+   evidence：基于LLM的IPO尽职调查金融分析
+2. [EvidenceLens: A Claim-Evidence Matrix for Auditing Financial Question Answering](/202606/24/2606.23724v1-evidencelens-a-claim-evidence-matrix-for-auditing-financial-question-answering)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：自适应性程序化策略选择用于市场代理
-4. [IPO Finance Agent: Evaluation of LLM Financial Analysts beyond Finance Agent v2, with Automated Rubric Generation -- the Case of the SpaceX (SPCX) IPO](/202606/23/2606.23032v1-ipo-finance-agent-evaluation-of-llm-financial-analysts-beyond-finance-agent-v2-with-automated-rubric-generation----the-case-of-the-spacex-spcx-ipo)  
+   evidence：使用大语言模型和声明-证据矩阵审计金融问答
+3. [RAVEN: A Regime-Aware Variable-context Expert Network for Financial Time Series Forecasting](/202606/24/2606.24062v1-raven-a-regime-aware-variable-context-expert-network-for-financial-time-series-forecasting)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：LLM金融分析师在IPO尽职调查中的评估
-5. [From Complaint Narratives to Monetary Relief: A Hybrid Machine Learning Framework for CFPB Consumer Complaints](/202606/23/2606.22664v1-from-complaint-narratives-to-monetary-relief-a-hybrid-machine-learning-framework-for-cfpb-consumer-complaints)  
+   evidence：用于金融时间序列预测的深度学习模型，具有自适应上下文窗口
+4. [Path Space Robust Bayesian Portfolio Selection](/202606/24/2606.24212v1-path-space-robust-bayesian-portfolio-selection)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：基于卡尔曼-布西滤波的鲁棒贝叶斯投资组合选择
+5. [KineticSim: A Lightweight, High-Performance Execution Engine for Real-Time Market Simulators](/202606/24/2606.21784v1-kineticsim-a-lightweight-high-performance-execution-engine-for-real-time-market-simulators)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：利用投诉文本的NLP来预测消费者金融中的货币救济结果
-6. [Endogenous Randomness from Adversarial Market Learning](/202606/23/2606.22743v1-endogenous-randomness-from-adversarial-market-learning)  
+   evidence：用于多智能体强化学习的高性能市场模拟器
+6. [Quant Convergence: Bridging Classical Value Investing and Modern Factor Models for Systematic Equity Selection](/202606/24/2606.24575v1-quant-convergence-bridging-classical-value-investing-and-modern-factor-models-for-systematic-equity-selection)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：包含预测交易者的确定性对抗市场模型，与股票市场分析相关
+   evidence：使用XGBoost和AutoGluon等机器学习模型进行系统性股票选择
 
 ### 速读区论文标签
-1. [KineticSim: A Lightweight, High-Performance Execution Engine for Real-Time Market Simulators](/202606/23/2606.21784v1-kineticsim-a-lightweight-high-performance-execution-engine-for-real-time-market-simulators)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：用于实时市场仿真的可重用并行引擎
-2. [Continuous Hidden Markov Models for Equity Returns: Heavy-Tail Emission Families and Regime-Conditional Value-at-Risk](/202606/23/2606.23492v1-continuous-hidden-markov-models-for-equity-returns-heavy-tail-emission-families-and-regime-conditional-value-at-risk)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：股票收益的隐马尔可夫模型与机制条件风险
-3. [Leakage-Aware Benchmarking of LLM Forecasting: Real-Time Nowcasts as the Decision-Time Input for Macro Factor Ranking](/202606/23/2606.22719v1-leakage-aware-benchmarking-of-llm-forecasting-real-time-nowcasts-as-the-decision-time-input-for-macro-factor-ranking)  
+1. [PepsiCo Deploys AI-Driven Pricing and Promotion Optimization at Scale](/202606/24/2606.17941v1-pepsico-deploys-ai-driven-pricing-and-promotion-optimization-at-scale)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：LLM预测的泄漏感知基准，用于股票因子排名，与股票市场分析相关
-4. [Selective Time Series Forecasting via Metalearning](/202606/23/2606.23448v1-selective-time-series-forecasting-via-metalearning)  
+   evidence：大规模AI驱动的定价与促销优化在商业环境中的应用
+2. [Exploring the relationship between human-centric AI and firm idiosyncratic risks](/202606/24/2606.24224v1-exploring-the-relationship-between-human-centric-ai-and-firm-idiosyncratic-risks)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：研究以人为中心的AI对企业特质风险的影响，将AI战略与金融风险联系起来
+3. [Randomized Neural Networks for estimation of exposure profiles and Credit Valuation Adjustment (CVA) for American Equity Options](/202606/24/2606.24309v1-randomized-neural-networks-for-estimation-of-exposure-profiles-and-credit-valuation-adjustment-cva-for-american-equity-options)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：使用随机神经网络估计美国股票期权的风险暴露和信用估值调整
+4. [Agentic Time Machine as an Infrastructure for Future-Event Forecasting](/202606/24/2606.21013v1-agentic-time-machine-as-an-infrastructure-for-future-event-forecasting)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：基于元学习的选择性时间序列预测，可对高风险预测弃权
+   evidence：基于LLM智能体的事件预测基础设施，应用于金融市场
+5. [Distribution-Aware Diffusion-LLM for Robust Ultra-Long-Term Time Series Forecasting](/202606/24/2606.23391v1-distribution-aware-diffusion-llm-for-robust-ultra-long-term-time-series-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：扩散-大语言模型的时间序列预测方法，可应用于金融
 
 
 <div class="dpr-home-promo-card">
