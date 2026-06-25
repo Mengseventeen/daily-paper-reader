@@ -1,0 +1,624 @@
+Title: MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios
+
+URL Source: https://arxiv.org/pdf/2606.24950v1
+
+Published Time: Thu, 25 Jun 2026 00:04:04 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# MacroLens: A Multi-Task Benchmark for Contextual Finan-cial Reasoning under Macroeconomic Scenarios 
+
+Patara Trirat 1, Jin Myung Kwak 1,2 , Jay Heo 1, Heejun Lee 1,2 , Sung Ju Hwang 1,2 
+
+> 1
+
+DeepAuto.ai, 2KAIST {patara, jinmyung, jawook, ain, sjhwang}@deepauto.ai Seoul, South Korea 
+
+## Abstract 
+
+Financial decision-making is contextual: forecasting prices, valuing companies, and assess-ing event exposure weigh price history, accounting fundamentals, macroeconomic regime, and contemporaneous text. A benchmark over these four signals is hard to build because finance violates four assumptions of time-series evaluation: text must be gated by its pub-lication date to prevent look-ahead, quarterly fundamentals are reported with a one- to ninety-day lag, filing text is partly redundant with the numerical statement fields it ac-companies, and macroeconomic regimes leak across calendar splits. No public benchmark addresses all four signals jointly. MacroLens covers 4,416 U.S. small- and micro-cap eq-uities over 2021–2026. Seven tasks share one point-in-time panel of prices, 46.8M XBRL accounting facts, 53 macroeconomic series, 295,860 SEC filings, and 215,882 news articles, plus a scenario layer of 1,130 macroeconomic events across 49 types automatically detected and rendered as natural language. Tasks span contextual forecasting, public and private valuation, statement generation from fundamentals and descriptions, scenario-conditioned returns, and real-estate valuation. We evaluate 19 methods across six families spanning naive heuristics through time-series foundation models, fine-tuned LLM-based time-series models, and zero-shot large language models (LLMs), plus a five-step feature-context ab-lation on two frontier LLMs and a gradient-boosted baseline. MacroLens is released at 
+
+https://huggingface.co/datasets/DeepAuto-AI/MacroLens .
+
+## 1 Introduction 
+
+Financial decisions weigh four signals together: price history, accounting fundamentals, macroeco-nomic regime, and contemporaneous text. A practitioner judging whether a small-cap survives a Federal Reserve tightening cycle reads its 10-K, watches Consumer Price Index (CPI) releases, compares it to its sector, and weighs each signal against the others. No public benchmark asks a model to do the same. Generic time-series benchmarks drop text or supply non-financial text (Godahewa et al., 2021; Qiu et al., 2024; Aksu et al., 2024; Williams et al., 2025). Financial language benchmarks evaluate classifica-tion, sentiment, and document understanding rather than temporally grounded prediction over fundamentals and macroeconomic state (Xie et al., 2023; 2024). Multimodal forecasting benchmarks report large textual-context gains (22–29 directional-accuracy points (Jang et al., 2026) and a 67% reduction in continuous ranked probability score (Williams et al., 2025)), but only on non-financial or partly synthetic data (Williams et al., 2025; Kim et al., 2024; Liu et al., 2024a). Whether those gains hold on real financial decisions remains open. 
+
+Finance violates four assumptions embedded in existing time-series benchmarks. Filings and news become available only when published, often well after the events they describe: a 10-K for a December fiscal year-end is filed the following February or March. Attaching such text by the date of the content it reports, rather than by its filing or publication date, exposes a model to it before it was public, so text 
+
+> arXiv:2606.24950v1 [cs.LG] 23 Jun 2026 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios
+
+Figure 1: Left : Positioning of MacroLens against existing benchmarks. Right : A MacroLens instance at anchor date t, showing the four input types and the seven tasks derived from the same evidence. inputs must be gated by their release date. Quarterly fundamentals are reported with a one- to ninety-day lag, so a feature observed at calendar time t may not have been knowable at decision time t. Filing text is domain-specific and partially redundant with the numerical statement fields it accompanies, so multimodal models cannot be evaluated against unimodal ones without joint construction. Macroeconomic regimes are persistent and locally correlated, so a chronological split that respects calendar time still leaks regime structure across train and test. A financial benchmark must address all four at construction time, not at evaluation time. 
+
+MacroLens addresses these constraints over 4,416 U.S. small- and micro-cap equities for 2021-01-04 to 2026-03-31. Seven tasks share one point-in-time panel of prices, eXtensible Business Reporting Language (XBRL) accounting facts, Federal Reserve Economic Data (FRED) and Energy Information Administration (EIA) macroeconomic series, Securities and Exchange Commission (SEC) filings, and financial news. A scenario layer of 1,130 macroeconomic events across 49 types is automatically detected from the macro panel and ren-dered as natural-language descriptions (Figure 1, right). Every text input is gated by its publication or filing date, tabular fundamentals carry the as-reported figures for the most recent reporting period ending by t, and macroeconomic series are aligned by their reference date. The tasks span contextual time-series forecasting, public and private valuation, financial-statement generation, scenario-conditioned return forecasting, state-ment generation from natural-language descriptions, and real-estate valuation. Three of these—private-company valuation, statement generation from natural-language descriptions, and real-estate valuation—target capabilities central to private-equity (PE) and venture-capital (VC) practice that have no analogue in prior financial benchmarks (Xie et al., 2023; 2024; Hu et al., 2025; Jiang et al., 2026; Sugiura et al., 2026). MacroLens occupies the intersection of temporal grounding and multimodal context that no prior benchmark covers (Figure 1, left). Our contributions are as follows. 
+
+• We introduce MacroLens, the first benchmark requiring models to reason jointly over price history, funda-mentals, macroeconomic state, and firm-level text on a point-in-time panel of 4,416 small- and micro-cap U.S. equities, through seven tasks—three of them new to financial benchmarks: private-company valua-tion, statement generation from natural language, and real-estate valuation. 
+
+• We enforce four construction invariants at build time to prevent evaluation leakage, and add the scenario layer for scenario-conditioned evaluation. 
+
+• We benchmark 19 methods across six families plus a five-step feature-context ablation on two frontier LLMs and a gradient-boosted baseline. 
+
+• We release the dataset, evaluation harness, datasheet (Gebru et al., 2021), and Croissant meta-data (Akhtar et al., 2024) at https://huggingface.co/datasets/DeepAuto-AI/MacroLens under a permissive license. 2MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios                                                                                     
+
+> Benchmark Scope Forecasting Text Scenarios Valuation Multi-Granularity
+> Generic time-series forecasting
+> TFB (Qiu et al., 2024) 8,068 univ. series + 25 multiv. datasets, 1–862 vars yes no no no across datasets GIFT-Eval (Aksu et al., 2024) 144K series across 23 datasets, 1–321 vars yes no no no across datasets
+> Context-rich forecasting
+> Time-MMD (Liu et al., 2024a) 9 domains, univariate yes yes no no no CiK (Williams et al., 2025) 71 contextual tasks ( ×5 inst.), univariate yes yes contextual no no MTBench (Chen et al., 2025) 2 domains (fin / weather), univariate yes yes (news) no no no WIT (Jang et al., 2026) 5,352 instances, univariate dir. only yes expert no no SciTS (Wu et al., 2026) 50K+ inst. across 12 domains and 43 tasks yes yes (prompts) no no across datasets
+> Financial language and forecasting
+> PIXIU (Xie et al., 2023) 9 datasets across 5 NLP tasks no yes no no N/A FinBen (Xie et al., 2024) 36 datasets across 24 NLP tasks classif. only yes no no N/A FinTSB (Hu et al., 2025) 6,000 stocks across 20 datasets, 6 features yes no regimes no no Fin-RATE (Jiang et al., 2026) 7,500 questions across 3 reasoning tasks no yes no no N/A EDINET-Bench (Sugiura et al., 2026) 2,565 samples, tabular + text classif. only yes (JP) no 3 classif. tasks no
+> MacroLens (ours) 4,416 tickers, 131 numeric features, 1,130 scenarios yes yes 49 types 7 tasks daily / weekly / monthly
+
+Table 1: Positioning of MacroLens against related benchmarks. We report the Scope of each row in the cited paper’s native unit; rows are not directly comparable on Scope , only on the categorical columns. “N/A” in the Multi-Granularity column marks pure-NLP benchmarks for which a temporal granularity is not defined. 
+
+## 2 Related Work 
+
+Generic time-series benchmarks standardized empirical comparison across domains and supplied the corpora behind time-series foundation models such as Chronos (Ansari et al., 2024), Moirai (Woo et al., 2024; Liu et al., 2025), and TimesFM (Das et al., 2024); examples include Monash (Godahewa et al., 2021), TFB (Qiu et al., 2024), and the foundation-model-oriented GIFT-Eval (Aksu et al., 2024). These resources are unimodal: none tests whether a model conditions on temporally aligned text, macroeconomic-scenario descriptions, or valuation-relevant evidence. MacroLens adds these conditioning channels while keeping forecasting as a primary task. 
+
+A second line of work makes context an explicit input. CiK (Williams et al., 2025), Time-MMD (Liu et al., 2024a), the TimeText Corpus (Kim et al., 2024), and SciTS (Wu et al., 2026) pair numerical series with text, and WIT (Jang et al., 2026) evaluates directional forecasting under alternative future scenarios. These benchmarks span weather, retail, and scientific domains rather than firm-level finance, and they evaluate forecasting in isolation from valuation. Within finance, event-study methodology (MacKinlay, 1997) and regime-switching models (Hamilton, 1989) have long conditioned predictions on detected events or latent regimes; MacroLens brings this conditioning into a benchmark-evaluated multimodal setting. Our statistical inference for clustered observations follows the cluster-bootstrap construction of Cameron et al. (2008). 
+
+MacroLens places macroeconomic-scenario reasoning and valuation on the same instance, a combination absent from prior multimodal benchmarks. 
+
+Financial benchmarks have advanced language understanding and reasoning over filings, including PIXIU (Xie et al., 2023), FinBen (Xie et al., 2024), and Fin-RATE (Jiang et al., 2026), but they evaluate static document reasoning rather than temporally grounded prediction. Closer to our setting, FinTSB (Hu et al., 2025) provides large-scale stock forecasting without contextual text, and EDINET-Bench (Sugiura et al., 2026) pairs filings with three classification tasks; other multimodal financial work is model-specific (Koval et al., 2024; 2025; Chen et al., 2024) rather than benchmark-centric. Table 1 positions MacroLens against these benchmarks on forecasting, text input, scenario-conditioning, valuation coverage, and multi-granularity axes. MacroLens unifies numerical history, firm-level text, and detected macroeconomic events within one evaluation framework spanning forecasting, valuation, and statement generation. 
+
+## 3 Background and Problem Setting 
+
+Let T index a universe of 4,416 tickers and let g ∈ { daily , weekly , monthly } index granularity. For each 
+
+(i, t, g ) with ticker i ∈ T and timestamp t (the anchor date at which the instance is evaluated), we observe a numeric feature vector xi,t,g ∈ R131 from the 141-column panel (whose remaining 10 columns are non-feature identifier and date fields), optional static covariates zi, an optional scenario object st (type plus natural-language rendering), and optional text context ui, ≤t from filings or news; xi,t −L:t,g below denotes the length-L lookback window of features ending at t.3MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Figure 2: MacroLens construction pipeline: universe definition, per-source ingestion, four build-time invariants, panel and scenario assembly, and per-task ground-truth construction. A MacroLens instance is the tuple ⟨i, t, g, x i,t −L:t,g , z i, s t, u i, ≤t⟩ paired with a task-specific target yi,t . Setting any optional input to ∅ yields a natural modality ablation. Forecasting tasks score on chronological splits; valuation and generation tasks score on company-level holdouts; the real-estate task scores on an address-level holdout. §4.7 specifies y per task. 
+
+Point-in-Time Alignment. Every coordinate of xi,t,g , every covariate in zi, every scenario st, and every text excerpt in ui, ≤t is observable by t. §4.5 details the operational enforcement. 
+
+Algebraic Leakage. For the public and private valuation tasks the target is realized market capitalization. After we exclude every column that is an algebraic function of the target, the largest residual feature-target Pearson correlation is with shares outstanding ( ρ ≈ 0.3), a legitimate size proxy. 
+
+## 4 The MacroLens Benchmark 
+
+MacroLens couples a point-in-time multimodal panel of 4,416 firms with an automatically extracted macroeconomic scenario layer, and defines seven evaluation tasks (§4.7). The single-panel design supports paired contrasts on the same firms: public-company versus private-company valuation isolates the value of the derived valuation-ratio features; statement generation from numerical fundamentals versus from a natural-language description isolates the contribution of text; and close-price versus scenario-conditioned return forecasting share lookback windows, the latter adding scenario-conditioning text. Sepa-rately curated task files cannot support these contrasts. Four construction invariants enforce point-in-time discipline at build time (§4.5), and Figure 2 gives the end-to-end pipeline. 
+
+4.1 Composition: 4,416 small- and micro-cap U.S. equities, 2021–2026, three granularities 
+
+MacroLens is a point-in-time multimodal panel over 4,416 U.S. small- and micro-cap equities from 2021-01-04 to 2026-03-31, spanning a full macro cycle: pandemic recovery, 2022–2023 Fed tightening, and the 2024–2026 easing pivot. The universe combines the Russell 2000, the S&P SmallCap 600, the iShares Micro-Cap universe, and uncovered NASDAQ small caps outside all three indices, with an upper market-capitalization bound of $7.4B applied only to the off-index sources, while index constituents enter at their as-published caps. We impose no lower bound, so the panel deliberately spans small and micro caps. Market capitalization ranges from roughly $0.5M to $41.2B, with 67.5% of firms below $1B and 30.8% inside the $1B-$7.4B small-cap band. Of the 4,416 tickers, 3,857 are operating companies, 333 are funds, and 226 are special-purpose acquisition companies (SPACs). We include funds that report on Form N-CSR (the SEC certified annual shareholder report for registered investment companies) because they share the small-cap 4MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 2: Schema by feature group: 131 numeric features plus 10 non-numeric keys and metadata.                      
+
+> Feature group Count Coverage
+> OHLCV + adjusted close 6daily price and volume Derived valuation ratios 19 market capitalization, P/E, EV/Revenue, EV/EBITDA, P/B, debt-to-equity, FCF yield, β, WACC, margins, growth, liquidity ratios XBRL statement fields 45 income, balance, cash-flow line items + trailing-twelve-month variants FRED macroeconomic series 46 rates, inflation, labor, credit, housing, activity, monetary aggregates, sentiment EIA commodity series 7crude oil and natural gas spot/futures and production Filing recency 1days since the most recent filing Index membership + disclosure activity 7three index-membership flags, full-time-employee count, and rolling 8-K / news / press-release activity counts
+> Numeric / boolean total 131
+> Non-numeric keys and metadata 10 ticker, date, sector, industry, exchange, label, split, nearest-filing keys
+> Panel column total 141
+
+valuation environment with operating companies and supply a meaningful applicability-mask contrast for the statement-generation tasks, where their reporting cadence differs from operating-company XBRL filings. Each ticker is labelled by security type, and the panel resamples to three granularities: daily as the primary, weekly at Friday close, monthly at last trading day. Every ticker appears in every granularity. 
+
+4.2 Panel Schema 
+
+At each (i, t, g ) triple the panel carries 141 columns; 131 are numeric or boolean and feed the method as 
+
+xi,t,g ∈ R131 , with the remaining 10 carrying ticker, date, sector, industry, exchange, label, split, and the nearest-filing keys. Table 2 lists the feature groups. 
+
+4.3 Data Sources: prices, XBRL, macro, filings, news, real estate 
+
+Table 3: MacroLens summary statistics.               
+
+> Statistic Value
+> Equity universe 4,416 small- and micro-cap U.S. tickers Security types 3,857 operating, 333 fund, 226 SPAC Time span 2021-01-04 to 2026-03-31 (5 years, 3 months) Granularities daily, weekly, monthly Panel features 131 numeric / 141 columns total XBRL facts 46.8M across 4,088 tickers (92.6% universe coverage) SEC filings 295,860 documents (7 text-filing form types) Financial news 215,882 articles Macroeconomic series 53 (46 FRED + 7 EIA) Macroeconomic scenarios 1,130 events across 49 types Real-estate properties 139,855 across 100 U.S. metros Temporal split 70/30 chronological at 2024-09-03 Company-level holdout 30% (1,324 tickers, seed = 42)
+
+Six sources feed the panel and scenario layer: market prices, XBRL accounting fundamentals from SEC EDGAR (Electronic Data Gathering, Analysis, and Retrieval), FRED (McCracken & Ng, 2016) and EIA macroeconomic series, SEC filings, financial news, and RentCast property records for the real-estate task; Table 3 reports counts. XBRL covers 92.6% of the universe (4,088 of 4,416 tickers). For the remain-ing 328 tickers, yfinance fundamentals fill 314 of the gap, leaving 14 tickers with neither XBRL nor yfi-nance coverage. These are applicability-masked on the valuation and statement-generation tasks and retained on the two forecasting tasks. To respect upstream licensing, the release ships derived features and reconstruction scripts rather than raw redistributable artifacts; per-source provenance, redistribution licenses, and collection windows appear in §A. 
+
+4.4 Construction Pipeline 
+
+Figure 2 summarises the construction pipeline. Given the same seed and external-API responses, the pipeline is deterministic; each stage is idempotent. 
+
+4.5 Leakage Controls 
+
+Four invariants must hold at build time, not at evaluation time: (i) point-in-time observability :text inputs (filings, news) are gated by their publication or filing date; tabular fundamentals are aligned by reporting period-end, so each instance carries the as-reported figures for the most recent fiscal period ending on or before t; and macroeconomic series are aligned by their reference date; (ii) text-availability gating : SEC filings are gated by filing date and ticker news by article publication date, while later-dated macroeconomic scenarios are surfaced only as explicit hypothetical conditioning; (iii) algebraic-leakage exclusion : no input column is an algebraic function of any task’s target (§3, enforced by a column blacklist at construction time); (iv) applicability masking : firms structurally missing a signal class (e.g., funds and SPACs without 5MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 4: Summary of MacroLens tasks. Holdout sizes are company-level (T2–T6) or address-level (T7).                            
+
+> Task Name Holdout / Scope Primary Metric
+> T1 Forecasting full panel, chronological 70/30 split MSE T2 Public Valuation 1,324-ticker company-level holdout MedAPE T3 Statement Generation 1,058 filing-level instances (latest FY) within the 1,324-ticker holdout, 11-field statement panel per-field MAPE T4 Scenario Return 1,130 events ×panel tickers, post-event 63-calendar-day ( ∼44 trading-day) windows Return MAE T5 Private Valuation (no prices) 1,324-ticker holdout, no price-derived inputs MedAPE T6 Description-Based Generation 1,058 filing-level instances (latest FY) within the 1,324-ticker holdout, NL company description as input per-field MAPE T7 Real-Estate Valuation address-level random 70/30 holdout ( Neval = 1 ,000 )rent + price MAPE
+
+statement disclosures) are masked out of the relevant tasks rather than back-filled with zeros. A release validator independently re-checks the materialized artifact at release time (§C). 
+
+Splits. The forecasting tasks use a chronological split at 2024-09-03, the date before which ∼70% of trading days in the panel lie; the resulting test window of ∼18 months covers one Fed pivot. The valuation and statement-generation tasks use a 30% company-level holdout (1,324 tickers); each ticker contributes its latest valid snapshot, and the statement-generation tasks add a per-ticker temporal split. The real-estate task uses an address-level random 70/30 holdout because it is a static valuation task, not a forecasting one. 
+
+Per-Task Safeguards. Tabular fundamentals are aligned to each instance by a backward as-of join on the reporting period-end (the as-reported figures for the most recent fiscal period ending by t) and macroeconomic series by their reference date, so no future-period value is surfaced retrospectively. For the scenario-return task, the pipeline drops rows whose pre-event price falls below a deliberately conservative $0.50 sub-dollar floor—well below the $5.00 price level in the SEC penny-stock definition—to prevent float-noise outliers in micro-priced names from dominating the return MAE while retaining the bulk of legitimately low-priced small caps. Together, these choices address contamination and retrospective-availability concerns documented for time-series evaluation (Qiu et al., 2024; Aksu et al., 2024; Liu et al., 2024a); per-task formulas appear in §D. 
+
+4.6 Scenario Extraction: 1,130 events across 49 types, rendered as natural language 
+
+A macroeconomic scenario in MacroLens is a structured description of a macroeconomic state transition at 
+
+t that crosses a category-specific threshold: a sharp rate move, a volatility spike, a commodity shock, or a credit-spread widening. Scenarios fall into ten categories: rates, inflation, labor, credit, currencies, equity volatility, commodities, housing, money supply, and composites. Detection applies thresholds to standardized changes in macroeconomic variables and deduplicates within episodes, identifying 1,130 events across 49 types in the five-year window. The taxonomy is robust to the threshold: rescaling detection thresholds by 0.5 to 
+
+1.5× moves the event count from 2,256 to 608 while leaving the per-type composition stable (Spearman rank-correlation of per-type counts against the default = 1 .0 for the looser settings, 0.94 at 1.25 ×, and 0.875 
+
+at 1.5×). Each record carries a unique identifier, event type, event date, pre- and post-event windows (63 calendar days, ∼44 trading days each), and a natural-language description from structured templates (e.g., 
+
+“On 2022-12-01, the Fed raised rates by 32 bps to 4.10%.” ). Storing both structured metadata and textual descriptions exposes the same event to tabular models, multimodal forecasters, and LLMs. 
+
+4.7 Downstream Tasks for Evaluation 
+
+Each task uses the shared instance schema ⟨i, t, g, x i,t −L:t,g , z i, s t, u i, ≤t⟩ from §3. Table 4 summarizes inputs, holdouts, and primary metrics. The seven tasks form paired contrasts. T2 vs T5 (valuation with and without the derived valuation-ratio block) measures the value of those derived ratios, two of which (beta, WACC) are price-linked. T3 vs T6 (numerical fundamentals vs natural-language description as input) isolates the contribution of text-based generation. T4 conditions return forecasting on detected macroeconomic scenarios (Xu et al., 2024; Jang et al., 2026). T7 transfers the multimodal-valuation function class to a static-attribute, non-equity setting, probing whether valuation behavior generalizes outside the equity panel. Primary metrics span mean squared error (MSE) for forecasting, mean absolute error (MAE) for scenario-conditioned returns, median absolute percentage error (MedAPE) for valuation (T2, T5) and per-field mean absolute percentage error (MAPE) for statement generation (T3, T6). Formal problem formulations for each task and secondary metrics appear in §D. 6MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+## 5 Experiments 
+
+5.1 Evaluation Protocol 
+
+Temporal Split. All tasks share a single chronological split at 2024-09-03 for daily (2024-09-06 for weekly and 2024-09-01 for monthly), placing ∼70% train / 30% test by trading-day count. T2, T3, T5, and T6 add a seeded company-level holdout of 1,324 tickers (30% of the universe, seed = 42) for evaluation on entirely unseen firms. 
+
+Cluster-Bootstrap Confidence. All primary metrics use seed = 42 with cluster-bootstrap 95% CIs, following the single-run precedent of Qiu et al. (2024), Aksu et al. (2024), Williams et al. (2025), Hu et al. (2025), and Sugiura et al. (2026). Resampling keys are ticker for T1, T2, T3, T5, T6; scenario id for T4; address for T7. The resample count adapts to CI width, B ∈ [1 ,000 , 10 ,000] , escalating whenever the CI width exceeds 5% of |mean |. The bootstrap CI captures test-set variance and defers training-stochasticity variance to a follow-up reporting layer. 
+
+Task-Specific Evaluation Metrics. Per-instance absolute percentage error (APE) is capped at 1,000% (10 ×) before averaging on every valuation task (T2, T3, T5, T6, T7) to prevent one mispredicted outlier from dominating the mean; MedAPE accompanies MAPE on every valuation task. Directional accuracy (DA) is task-specific. For T1 it is anchor-relative: the fraction of horizon points whose predicted level ˆy lies on the same side of the last observed close c as the realized level y, i.e. sign(ˆ y − c) = sign( y − c). For T4 it is the fraction of events whose predicted post-event return matches the sign of the realized return. T2 and T5 report no DA; their cross-sectional rank quality is summarized by the Spearman rank-correlation ( ρ) between predicted and realized market capitalizations. For T3 and T6 we report a parse rate (Parse%): the fraction of the (field × ticker) prediction grid that yields a parseable numeric value of the requested shape, in the spirit of the SciTS convention (Wu et al., 2026). Beyond aggregate scores, every metric is stratified by Global Industry Classification Standard (GICS) sector, market-capitalization quartile, scenario category (T4), and filing-density tercile for applicability-aware comparison; applicability masking covers the 14 tickers without structured-statement coverage and the funds and SPACs for which statement fields are structurally absent. 
+
+Contamination. The temporal split in §4.5 keeps future-knowing features out of supervised training. Pretraining contamination for the zero-shot LLM baselines is bounded. The test window (2024-09-03 to 2026-03-31) spans approximately eighteen months: the first half overlaps current frontier-LLM pretraining cutoffs (potential contamination), while the second half (approximately mid-2025 onward) post-dates the publicly reported cutoffs of the zero-shot LLM baselines and carries no disclosed-cutoff overlap. We probe the first half with a closing-price recall test: each LLM receives a ticker and an in-window date and must recall the realized close, over 200 sampled (ticker, date) pairs per model. Two models decline on every pair (GPT-5.1, Llama-4 Scout) and two more on over 93% (EXAONE-4.5, Qwen-3.5); only Gemini-3-Flash answers a majority of pairs ( 55 .5% ), and it recalls just 8.5% of closes within a 5% tolerance, with no model exceeding 8.5% (Table 23, §F)—no evidence that the test-window panel is memorized. 
+
+Sample Budget. Every method runs on identical indices on every task. Sub-sampling stratifies on sector ×
+
+market-capitalization quartile under a fixed seed, adding event type for T4 and property type × state for T7. Default budgets ( Neval = 1 ,000 for T1, T4, T7; the full 1,324-ticker holdout for T2 and T5; 1,058 filing-level instances within the same holdout for T3 and T6) yield stable per-task estimates while staying tractable for LLM evaluation on 4×A100. The released evaluation API makes budgets configurable. Primary results report at daily granularity; weekly and monthly results appear in appendices. 
+
+5.2 Evaluation Baselines: 19 methods across six families, plus a five-step context ablation 
+
+The baseline panel includes 19 methods across six families spanning the standard progression of baseline classes: naive, classical, deep learning, time-series foundation model (TSFM), fine-tuned LLM-based time-series, and zero-shot LLM. 
+
+Family 1 (Naive, 4 methods) comprises Persistence, HistoricalAnalogue, Sector-Median, and Metro-Median, all deterministic heuristics with no fitted parameters that establish per-task floors. Family 2 (Classical, 2 methods) pairs LightGBM (Ke et al., 2017) with RandomForest, both fitted on the 131-feature panel with 7MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+task-specific targets. Family 3 (Deep sequence, 3 methods) trains DLinear (Zeng et al., 2023), iTrans-former (Liu et al., 2024b), and ModernTCN (donghao & wang xue, 2024) from scratch, one representative per architectural family (linear decomposition, inverted-transformer attention, and modern convolution). 
+
+Family 4 (TSFM zero-shot, 3 methods) runs Chronos-2 (Ansari et al., 2025), Moirai-2 (Liu et al., 2025), and TimesFM (Das et al., 2024) without MacroLens-specific training. Family 5 (fine-tuned LLM-based time-series, 2 methods) runs ChatTime (Wang et al., 2025) and Time-MQA (Kong et al., 2025), language models that their authors fine-tuned on time-series corpora; we evaluate them on MacroLens without further fine-tuning on our train data. Family 6 (Zero-shot LLMs, 5 methods) comprises two frontier closed-source baselines (GPT-5.1 and Gemini-3-Flash) and three open-weights baselines (Llama-4 Scout, EXAONE-4.5, and Qwen-3.5-27B), spanning a 27B–109B parameter range across mixture-of-experts and dense architec-tures. Open-weights methods run locally with vLLM on a 4-GPU tensor-parallel (model weights sharded across GPUs) slice of a shared 8 ×NVIDIA A100-SXM4-80GB node; the closed-source LLMs run via the OpenRouter API (§F). Model hyperparameters and selection rules appear in §D. 
+
+Modality Coverage. The families consume different subsets of the instance schema. Classical baselines (LightGBM, RandomForest) and deep-sequence baselines (DLinear, iTransformer, ModernTCN) consume only the 131-feature numerical lookback xi,t −L:t,g ; the text channel ui, ≤t is dropped at the model boundary, and missing numeric inputs are handled per family: LightGBM routes them through its native missing-value splits, RandomForest zero-fills, and the deep-sequence models forward-fill then zero-fill the lookback tensor. The scenario channel st is absent on the price tasks (e.g., st = ∅ on T1) but present on T4, where every instance is an event encoded as an event-type one-hot. TSFMs (Chronos-2, Moirai-2, TimesFM) consume the close-price coordinate of the lookback. Fine-tuned LLM-based time-series adapters (ChatTime, Time-MQA) consume only the close-price coordinate of the lookback, each via its authors’ native serialization: Time-MQA receives a natural-language list of float values in the prompt, while ChatTime is driven through its vendor value-binning forecasting pipeline. Zero-shot LLMs receive a prompt that may include each channel (lookback summary statistics, fundamentals, macroeconomic state, scenario description, filing-text excerpt); whether each channel is used by each LLM is precisely the question the following five-step feature-context ablation answers. Table 5: Five-step feature-context ablation ladder. Strictly nested ( A ⊂
+
+B ⊂ C ⊂ D ⊂ E): each step adds one signal channel, so error should decrease monotonically if every channel contributes.             
+
+> Setting Features Included Count
+> AOHLCV only 6BA + fundamentals and firm attributes (XBRL statement fields, derived ratios, shares outstanding, employee count) 71 CB + macroeconomic state (FRED + EIA) 124 DC + disclosure-activity flags (8-K count, news count, press-release flag, days-since-filing) 128 ED + filing-text excerpt rendered into the LLM prompt 128 + text
+
+Context Ablation. A two-model ablation tests whether error decreases monotonically as context channels are added, on the panel’s two zero-shot frontier LLMs (GPT-5.1 and Gemini-3-Flash). We restrict to these two because the full A-E factorial across the five-LLM panel would dominate the wall-clock budget. The ablation spans five nested feature settings (Table 5) and four regression tasks (T1, T2, T4, T5); T3, T6, and T7 are excluded because their metric families and feature spaces do not align with the A-E ladder. Makridakis et al. (2022), Williams et al. (2025), and Liu et al. (2024a) report large textual-context gains on non-financial benchmarks, and the ablation tests whether the same effect holds on MacroLens. 
+
+## 6 Results and Discussion 
+
+This section presents the T1 forecasting results (Table 6) and the context-ablation figure (Figure 3); the figure’s underlying numerical values, together with a LightGBM reference, appear in Table 11. Task-specific tables appear in §E: T2 / T5 valuation in Table 7, T3 / T6 statement generation in Table 8, T4 scenario-conditioned returns in Table 9, and T7 real-estate valuation in Table 10. A representative scenario-category breakdown for T4 appears in Table 22. All main results are reported at the daily granularity; the method rankings are stable across daily, weekly, and monthly granularities (Spearman ρ between 0.74 and 1.00 across the seven tasks, mean 0.92 ; §E.2, Table 14), so the daily results table is representative of all three. 8MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 6: Daily forecasting at h = 252 trading days. Best per column in bold . The LLM-TS family label denotes the fine-tuned LLM-based time-series models. Per-horizon and per-granularity breakdowns appear in §E. 
+
+Family Method MSE [95% CI] MAE RMSE DA% MASE 
+
+Naive Persistence 628,438 [3,946, 1.88 ×10 6] 41.92 792.74 0.32 33.41 Classical LightGBM 61,174 [1,880, 170,835] 20.00 247.33 58.91 37.28 Classical RandomForest 57,086 [1,836, 157,224] 19.22 238.93 60.33 34.90 Sequence DLinear 421,995 [3,797, 1.26 ×10 6] 36.86 649.61 60.32 38.48 Sequence iTransformer 588,027 [3,880, 1.76 ×10 6] 40.79 766.83 60.32 32.63 
+
+Sequence ModernTCN 436,188 [2,928, 1.31 ×10 6] 35.17 660.45 60.29 36.49 TSFM Chronos-2 1.70 ×10 6 [6,795, 5.13 ×10 6] 62.29 1,303.36 48.20 41.69 TSFM Moirai-2 667,336 [4,897, 2.00 ×10 6] 44.11 816.91 47.57 39.62 TSFM TimesFM 2.35 ×10 6 [8,319, 7.12 ×10 6] 68.81 1,534.44 48.14 41.78 LLM-TS ChatTime 1.02 ×10 6 [4,739, 3.06 ×10 6] 49.49 1,007.70 50.13 35.18 LLM-TS Time-MQA 1.02 ×10 6 [10,292, 2.98 ×10 6] 59.58 1,008.81 47.81 62.74 LLM (zero-shot) GPT-5.1 3.71 ×10 6 [5,105, 1.13 ×10 7] 76.36 1,926.50 47.26 56.20 LLM (zero-shot) Gemini-3-Flash 133,037 [16,095, 347,615] 39.16 364.74 49.32 85.73 LLM (zero-shot) Llama-4 Scout 386,440 [5,464, 1.14 ×10 6] 38.60 621.64 49.71 87.45 LLM (zero-shot) EXAONE-4.5 401,692 [63,892, 988,416] 45.33 633.79 48.36 140.30 LLM (zero-shot) Qwen-3.5 2.12 ×10 6 [5,717, 6.41 ×10 6] 65.74 1,455.05 42.42 50.70 
+
+6.1 Empirical Observations 
+
+Forecasting (T1, Table 6). Classical tree models lead long-horizon forecasting under our default-hyperparameter, zero-shot evaluation regime : at h=252 , RandomForest (MSE 57 ,086 [1,836, 157,224] ) and LightGBM ( 61 ,174 [1,880, 170,835] ) outperform every TSFM, every fine-tuned LLM-based time-series model, and every zero-shot LLM; RandomForest also holds the best MAE ( 19 .22 ) and RMSE ( 238 .93 ), and ties the deep models for the best directional accuracy ( ∼60.3%: RandomForest 60 .33% , DLinear and iTrans-former 60 .32% , ModernTCN 60 .29% ). The deep models trail by roughly one order of magnitude (DLinear 
+
+421 ,995 , ModernTCN 436 ,188 , iTransformer 588 ,027 ; iTransformer alone takes the best MASE at 32 .63 ), and the TSFMs by one-to-two orders (Moirai-2 667 ,336 , Chronos-2 1.70 ×10 6, TimesFM 2.35 ×10 6). Among the zero-shot LLMs, Gemini-3-Flash ( 133 ,037 ) comes closest to the classical leaders at only ∼2.3 × the best MSE; Llama-4 Scout ( 386 ,440 ) and EXAONE-4.5 ( 401 ,692 ) stay within an order of magnitude. The remaining two rank among the worst panel entries: Qwen-3.5 ( 2.12 ×10 6) and GPT-5.1 ( 3.71 ×10 6, the single highest MSE). GPT-5.1 carries the widest CI because one extreme extrapolation dominates its MSE—a single instance con-tributes 99 .6% of its total squared error—and its outlier-resistant winsorized MSE (each method’s squared errors clipped at its own 99th-percentile threshold; §E.1) is 3,504 . No method emits an order-of-10 13 blow-up on this recomputed panel: the fine-tuned LLM-TS baselines (ChatTime and Time-MQA, both 1.02 ×10 6) sit in the same band as the weaker TSFMs rather than producing extreme outliers. The 95% CIs are wide on heavy-tailed MSE, consistent with the small-cap panel’s high cross-sectional volatility. 
+
+T2 vs T5 Paired Comparison (Table 7). Zero-shot LLMs value private firms (T5) more accurately than public firms (T2). Classical baselines remain stable across the public-to-private transition (LightGBM MedAPE 52 .35 → 53 .28 , RandomForest 50 .78 → 50 .44 ) and retain the best valuation accuracy on both tasks, but every zero-shot LLM improves on the fundamentals-only task. GPT-5.1 73 .22 → 66 .23 (∆ = −6.99 ), Gemini-3-Flash 88 .17 → 61 .27 (∆ = −26 .90 ), Qwen-3.5 89 .16 → 73 .42 (∆ = −15 .75 ), and Llama-4 Scout 
+
+100 .00 → 68 .92 (∆ = −31 .08 ), with EXAONE-4.5 moving from 428 .20 on T2 down to the 100 .00 ceiling on T5 ( ∆ = −328 .20 ). The same pattern appears in rank quality: Spearman ρ rises from T2 to T5 for all five LLMs (GPT-5.1 +0 .07 , Qwen-3.5 +0 .15 , Gemini-3-Flash +0 .23 , EXAONE-4.5 +0 .30 , Llama-4 Scout +0 .60 ,the largest rise from a near-zero T2 correlation of 0.03 ) while the classical baselines stay flat (RandomForest 
+
+0.77 → 0.77 , LightGBM 0.78 → 0.77 ). The eleven features T5 withholds, spanning profit margins, leverage, tax rate, revenue growth, beta, and WACC, are the derived valuation ratios that the tree ensembles do 9MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 7: T2 (public) vs T5 (private) valuation. The T5 −T2 gap measures the value of the derived valuation-ratio features that T2 carries and T5 withholds. 
+
+Family Method T2 MedAPE [95% CI] T2 ρ T5 MedAPE [95% CI] T5 ρ Gap 
+
+Classical RandomForest 50.78 [47.4, 54.7] 0.77 50.44 [47.1, 54.3] 0.77 −0.33 Classical LightGBM 52.35 [48.9, 56.8] 0.78 53.28 [47.5, 57.8] 0.77 +0.93 LLM-TS Time-MQA 97.64 [95.6, 99.3] 0.28 92.13 [90.4, 93.1] 0.36 −5.51 LLM (zero-shot) GPT-5.1 73.22 [69.6, 76.0] 0.55 66.23 [62.5, 70.9] 0.62 −6.99 LLM (zero-shot) Gemini-3-Flash 88.17 [86.2, 90.3] 0.43 61.27 [58.3, 64.2] 0.67 −26.90 LLM (zero-shot) Llama-4 Scout 100.00 [100.0, 100.0] 0.03 68.92 [65.5, 72.6] 0.63 −31.08 LLM (zero-shot) EXAONE-4.5 428.20 [354.0, 531.3] 0.07 100.00 [96.5, 100.0] 0.37 −328.20 LLM (zero-shot) Qwen-3.5 89.16 [87.6, 90.8] 0.43 73.42 [69.8, 76.2] 0.58 −15.75 Table 8: T3 (numerical fundamentals) / T6 (NL company description) statement generation. 
+
+Overall MAPE% over the 11-field statement panel and balance-equation accuracy on T3. 
+
+Family Method T3 MAPE% [95% CI] T3 Parse% T6 MAPE% [95% CI] T6 Parse% Bal. eq. (T3) 
+
+Naive Sector-Median 271.79 [256.4, 287.2] 100.0 279.71 [265.3, 294.4] 100.0 8.97 Classical RandomForest 117.48 [113.6, 121.7] 100.0 183.47 [175.6, 191.8] 100.0 1.98 Classical LightGBM 142.01 [136.0, 148.3] 100.0 170.07 [163.2, 177.3] 100.0 0.58 LLM-TS Time-MQA 132.54 [127.0, 138.5] 100.0 100.00 [100, 100] 0.0 19.93 LLM (zero-shot) GPT-5.1 203.55 [188.3, 219.7] 53.1 268.71 [242.3, 296.4] 30.8 95.07 LLM (zero-shot) Gemini-3-Flash 185.19 [171.0, 199.9] 53.1 212.84 [189.2, 237.7] 30.8 84.08 LLM (zero-shot) Llama-4 Scout 148.69 [139.5, 158.3] 53.1 247.13 [223.9, 271.3] 30.8 15.47 LLM (zero-shot) EXAONE-4.5 165.01 [153.7, 176.7] 53.1 235.47 [213.3, 259.2] 30.8 43.72 LLM (zero-shot) Qwen-3.5 198.74 [184.3, 214.1] 53.1 277.34 [248.7, 306.7] 30.8 65.47 exploit on T2, and the classical models treat them as roughly neutral (RandomForest 50 .78 → 50 .44 ). Yet every zero-shot LLM values more accurately once they are removed. The standard derived ratios degrade an LLM’s valuation rather than sharpen it, the opposite of their effect on the tree ensembles. 
+
+T3 vs T6 Paired Comparison (Table 8). Classical regressors lead statement generation; zero-shot LLMs trail. On T3, the best method is the classical RandomForest at 117 .5% MAPE, with LightGBM at 
+
+142 .0%; every zero-shot LLM is worse, spanning 148 .7% (Llama-4 Scout) to 203 .5% (GPT-5.1), and the LLM-TS baseline Time-MQA sits at 132 .5%. All comfortably beat naive (Sector-Median = 271 .8%). The LLM deficit is partly a coverage gap: zero-shot LLMs parse only 53 .1% (T3) and 30 .8% (T6) of the 11-field 
+
+× ticker grid, whereas every non-LLM regressor emits all 11 × N predictions. Unparsed fields default to zero against double-digit-billion-dollar ground truth and inflate MAPE. Balance-equation accuracy on T3 shows the opposite pattern: the zero-shot LLMs are the only methods that keep assets = liab. + equity on their parsed outputs (GPT-5.1 95 .1% , Gemini-3-Flash 84 .1% , Qwen-3.5 65 .5% , EXAONE-4.5 43 .7% ), while every classical and naive baseline stays in the 0.6–9.0% range—LLMs produce internally consistent statements but on a smaller, less accurate subset of fields. T6, conditioned on a natural-language company description rather than numerical fundamentals, is harder still: classical baselines lead (LightGBM best at 
+
+170 .1% , RandomForest 183 .5% ) while LLMs span 212 .8–277 .3% MAPE (Gemini-3-Flash best at 212 .8% ;Qwen-3.5 worst at 277 .3% ). Time-MQA degenerates on T6, parsing 0% of fields and defaulting to 100 .0% 
+
+MAPE. These results indicate that T3/T6 offer the largest headroom on MacroLens and the clearest target for supervised LLM training. 
+
+Scenario-Conditioned Returns (T4, Table 9). Return MAEs concentrate near a ∼21% floor. iTrans-former leads at 20 .83% [19.0, 22.8] with DA 53 .5% , Gemini-3-Flash ( 20 .86% ) and DLinear ( 20 .88% ) fol-low within hundredths of a point, and the top eight methods sit within a ∼0.5 percentage-point band (20 .83 –21 .29% , spanning iTransformer, Gemini-3-Flash, DLinear, Time-MQA, GPT-5.1, Llama-4 Scout, ModernTCN, and the HistoricalAnalogue baseline itself). The absolute-error metric is therefore nearly sat-urated: the best methods (iTransformer 20 .83% , Gemini-3-Flash 20 .86% , DLinear 20 .88% ) edge below the naive analogue baseline ( 21 .29% ) by less than half a point, while the two tree ensembles that lead T1 and the valuation tasks land clearly above it (LightGBM 23 .64% , RandomForest 24 .15% ). Sophisticated modeling 10 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 9: Performance comparison on scenario-conditioned post-event return. EXAONE-4.5 and Qwen-3.5 are not comparable to the other rows: their errors are dominated by zero-substituted non-responses ( 90 .7% 
+
+and 66 .5% of events). 
+
+Family Method Return MAE% [95% CI] DA% 
+
+Naive HistoricalAnalogue 21.29 [19.4, 23.3] 48.60 Classical RandomForest 24.15 [22.0, 26.4] 49.00 Classical LightGBM 23.64 [21.7, 25.7] 48.80 Sequence DLinear 20.88 [19.0, 22.9] 53.50 Sequence iTransformer 20.83 [19.0, 22.8] 53.50 Sequence ModernTCN 21.21 [19.4, 23.2] 52.10 LLM-TS ChatTime 23.66 [21.6, 25.9] 52.60 LLM-TS Time-MQA 21.01 [19.1, 23.0] 54.90 
+
+LLM (zero-shot) GPT-5.1 21.03 [19.2, 23.0] 49.60 LLM (zero-shot) Gemini-3-Flash 20.86 [19.0, 22.9] 53.90 LLM (zero-shot) Llama-4 Scout 21.07 [19.2, 23.2] 52.50 LLM (zero-shot) EXAONE-4.5 22.38 [20.3, 24.7] 4.70 LLM (zero-shot) Qwen-3.5 27.57 [24.5, 31.1] 15.40 
+
+Table 10: Performance comparison on real-estate valuation.                                                   
+
+> Family Method Rent MAPE [95% CI] Price MAPE [95% CI]
+> Naive Metro-Median 33.40 [30.8, 36.1] 126.17 [104.7, 149.1]
+> Classical RandomForest 35.26 [31.8, 39.1] 78.29 [64.1, 94.4]
+> Classical LightGBM 33.58 [30.5, 37.1] 76.80 [62.2, 93.8]
+> LLM-TS Time-MQA 43.30 [41.5, 45.2] 86.00 [71.0, 103.0]
+> LLM (zero-shot) GPT-5.1 22.82 [20.2, 26.1] 184.48 [159.8, 210.5]
+> LLM (zero-shot) Gemini-3-Flash 23.87 [20.6, 27.6] 199.47 [174.0, 226.4]
+> LLM (zero-shot) Llama-4 Scout 31.30 [29.6, 33.0] 154.80 [132.1, 179.1]
+> LLM (zero-shot) EXAONE-4.5 25.54 [23.4, 27.9] 183.13 [157.8, 210.5]
+> LLM (zero-shot) Qwen-3.5 24.91 [22.8, 27.1] 168.27 [143.7, 194.4]
+
+buys almost nothing on scenario-conditioned returns, and the classical models that dominate elsewhere un-derperform the naive baseline here. The remaining dispersion sits at the bottom of the table, where the two reasoning-tuned LLMs fail to emit a parseable return on most events: EXAONE-4.5 on 90 .7% and Qwen-3.5 on 66 .5% . The evaluator substitutes zero for these non-responses. Because a zero prediction matches neither sign, this both inflates their reported MAE (EXAONE-4.5 22 .38% , Qwen-3.5 27 .57% ) and drives their direc-tional accuracy to near zero (EXAONE-4.5 4.70% , Qwen-3.5 15 .40% ). GPT-5.1 and Gemini-3-Flash parse every event. These two MAE values reflect non-response, not sign-inverted magnitudes, and are not compa-rable to the responding methods’. Directional accuracy is led by Time-MQA at 54 .90% , with iTransformer, DLinear, Gemini-3-Flash, ChatTime, and Llama-4 Scout all in the 52 –54% range; HistoricalAnalogue and both classical baselines stay at chance ( 48 .6–49 .0% ). Categorical breakdowns appear in Table 22. 
+
+Cross-Domain Real-Estate Valuation (T7, Table 10). All five zero-shot LLMs beat classical baselines. 
+
+GPT-5.1 leads at 22 .82% [20.2, 26.1] rent MAPE, followed by Gemini-3-Flash ( 23 .87% ), Qwen-3.5 ( 24 .91% ), EXAONE-4.5 ( 25 .54% ), and Llama-4 Scout ( 31 .30% ), all below the 33 –35% band of classical methods (LightGBM 33 .58% , RandomForest 35 .26% ) and Metro-Median ( 33 .40% ). The price column inverts this ordering: classical methods lead, with LightGBM best at 76 .80% [62.2, 93.8] and RandomForest at 78 .29% ,while every zero-shot LLM lands far higher ( 155 –199% , ranging from Llama-4 Scout’s 154 .80% to Gemini-3-Flash’s 199 .47% ). The Time-MQA point forecaster is the exception to both halves: it is the worst entry on rent ( 43 .30% ) yet the third-best on price ( 86 .00% ), narrowly behind the two classical regressors. T7 moves valuation out of equities into a static-attribute, non-equity setting. The zero-shot LLMs trail the classical baselines on equity valuation (T2/T5) yet lead them on real-estate rent, while classical methods regain the lead on sale price. This rent-versus-price split indicates that the LLMs’ valuation behavior is domain- and target-specific rather than a uniform capability that transfers across settings. 
+
+11 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios A B C D E            
+
+> Context setting (A →E)
+> 10 5
+> 10 6
+> 10 7
+> MSE (log)
+> T1 (MSE)
+> GPT-5.1
+> Gemini-3-Flash
+> ABCDE
+> Context setting (A →E)
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> medAPE%
+> T2 (medAPE%)
+> ABCDE
+> Context setting (A →E)
+> 20.85
+> 20.90
+> 20.95
+> 21.00
+> 21.05
+> 21.10
+> 21.15
+> MAE%
+> T4 (MAE%)
+> ABCDE
+> Context setting (A →E)
+> 60
+> 80
+> 100
+> 120
+> 140
+> 160
+> 180
+> medAPE%
+> T5 (medAPE%)
+
+Figure 3: Context ablation across the A →E feature ladder on the two zero-shot frontier LLMs (GPT-5.1, Gemini-3-Flash). One panel per task: T1 MSE at h = 252 (log scale), T2 / T5 MedAPE, T4 return MAE. Each curve traces a single LLM’s primary metric across the five nested feature settings. The results isolate which signal channels each task is sensitive to and quantify within-model monotonicity (whether adding context channels reduces error). 
+
+Context Ablation (Figure 3, Table 11). The A →E ladder is non-monotonic, and the flat tail reflects the channels, not the models. Scenario flags (D) and the in-prompt filing-text excerpt (E) yield no consistent gains over fundamentals + macroeconomic state (C) for either frontier LLM; the largest within-model improvement lands at A →B (OHLCV →+fundamentals), a 13 –289 MedAPE-point drop across the two models and two valuation tasks (e.g., GPT-5.1 T2 366 .5 → 77 .1, Gemini-3-Flash T5 178 .4 → 62 .4). A zero-shot LLM might fail to use a channel that carries signal, so we run the same ladder on LightGBM, which consumes the panel directly. It too gains only at A →B (T2 MedAPE 86 .2 → 52 .4, T1 MSE bottoming at C) and is otherwise flat; because it cannot read the filing text, its D and E coincide. A model that does exploit the panel extracts no further signal from the macroeconomic state, scenario flags, or filing text, so the flat tail reflects limited marginal signal in those channels on MacroLens rather than a zero-shot-LLM-specific failure to use them. 
+
+6.2 Additional Discussions 
+
+What the benchmark probes. Each of MacroLens’s seven tasks isolates a contextual-reasoning capa-bility that no prior financial benchmark covers in combination. T1 probes pattern extrapolation under macroeconomic context: it forecasts a small-cap close-price trajectory from the same numerical history other unimodal benchmarks supply, plus the macroeconomic state and scenario layer that practitioners use. The T2 →T5 gap removes the eleven derived valuation-ratio features that T2 carries. This isolates how far each method’s market-cap estimate leans on derived inputs rather than the raw fundamentals both settings re-tain. The fundamentals-only T5 setting approximates the unlisted-firm case, where market-derived ratios are unavailable. T3 and T6 form the dual generation pair: both predict the same 11-field statement panel, but T3 conditions on prior-period numerical fundamentals and T6 on a natural-language company description, isolating whether structured generation tracks numerical or textual inputs. T4 probes scenario-conditioned reasoning: whether a textual scenario description lifts post-event return forecasts above the price-only base-line. T7 probes cross-domain transfer to a non-equity valuation problem, rent and sale price from static property attributes, testing whether the same multimodal-reasoning capabilities generalize outside the eq-uity panel. 
+
+Evaluation practices we prescribe. Researchers reporting on MacroLens should (i) evaluate across all applicable tasks, not only T1; (ii) report the full A-E context-ablation ladder rather than the best configuration alone; (iii) stratify T4 by scenario category; (iv) report both T2 and T5 when making claims about private-company valuation; and (v) use the released evaluation API to enforce the 70/30 temporal split, seed set, bootstrap CIs, and no-future-information constraints programmatically. 
+
+Limitations. (i) Coverage gaps. Universe-level XBRL coverage is 92.6%; 14 tickers carry neither XBRL nor yfinance fundamentals and stay applicability-masked for T2, T3, T5, and T6. (ii) Sector-specific statement coverage. Universe-wide revenue-field coverage (87.6%) trails total-assets-field coverage (93.6%) because banks, insurers, and REITs report revenue under sector-specific concepts; audit per-sector field coverage when interpreting T3 and T6 results. (iii) English and U.S. scope. The universe, filings, news, and scenarios are 12 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+U.S.-centric and English-only, and international generalization is not evaluated. (iv) Single macroeconomic regime. The 2021–2026 window covers one pandemic recovery, the 2022–2023 Fed tightening cycle, and early 2024–2026 easing; generalization to structurally different regimes is not guaranteed. (v) Survivorship. The universe is defined by current index membership, so delisted firms and prior-year constituents are under-represented. (vi) Test-window contamination risk. The 2024-09-03 to 2026-03-31 test window overlaps current LLM pretraining cutoffs; point-in-time alignment mitigates the construction-time concern but does not eliminate it. §5.1 discusses contamination probes. (vii) Static evaluation. MacroLens does not model transaction costs, slippage, execution latency, or other deployment-time effects; results do not support direct trading-strategy claims. 
+
+Broader Impact. MacroLens targets research on contextual forecasting, scenario reasoning, and benchmark methodology. Its outputs are not investment advice. Any downstream deployment requires independent validation, risk controls, and jurisdictional compliance review. The release lowers the barrier to academic research on PE/VC-relevant capabilities (T5–T7) that proprietary data vendors have historically gated. The dataset contains no personally identifiable information (PII) beyond named officers in public SEC filings, no human-subjects data, and no crowdsourced labels. 
+
+## 7 Conclusions 
+
+MacroLens fills the price–fundamentals–macro–text–scenario gap left open in financial benchmarking, with seven tasks defined on a point-in-time panel of 4,416 U.S. small- and micro-cap equities. Across the 19-method panel three findings run counter to prevailing TSFM- and LLM-centric expectations: (i) classical tree models lead long-horizon close-price forecasting; (ii) the analyst-style derived valuation ratios that aid tree ensembles 
+
+degrade zero-shot LLM valuation—every LLM values companies more accurately, in both median error and cross-sectional rank quality, from raw fundamentals alone (T5) than when also supplied the ratios (T2); and (iii) the A →E context ladder is non-monotonic, with gains concentrated at the fundamentals step rather than at scenario flags or in-prompt filing text. The release includes the dataset, evaluation harness, datasheet, and Croissant metadata. 
+
+Future Work. Three directions extend MacroLens. First, an annual temporal extension keeps the bench-mark current as new filings, scenarios, and price history accrue; it also addresses the test-window contamina-tion concern by pushing the test split past current LLM pretraining cutoffs. Second, an international panel ports the construction methodology to non-U.S. jurisdictions (EDINET, ESMA), testing cross-jurisdictional generalization under the same point-in-time discipline. Third, extending the closing-price recall probe of §5.1 to the fuller protocol of Sugiura et al. (2026), with code review by the upstream authors, would broaden the contamination evidence beyond the present recall test. 
+
+## References 
+
+Mubashara Akhtar, Omar Benjelloun, Costanza Conforti, Luca Foschini, Joan Giner-Miguelez, Pieter Gi-jsbers, Sujata Goswami, Nitisha Jain, Michalis Karamousadakis, Michael Kuchnik, Satyapriya Krishna, Sylvain Lesage, Quentin Lhoest, Pierre Marcenac, Manil Maskey, Peter Mattson, Luis Oala, Hamidah Oderinwale, Pierre Ruyssen, Tim Santos, Rajat Shinde, Elena Simperl, Arjun Suresh, Goeff Thomas, Slava Tykhonov, Joaquin Vanschoren, Susheel Varma, Jos van der Velde, Steffen Vogler, Carole-Jean Wu, and Luyao Zhang. Croissant: A metadata format for ML-ready datasets. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2024. 2, 17 Taha Aksu, Gerald Woo, Juncheng Liu, Xu Liu, Chenghao Liu, Silvio Savarese, Caiming Xiong, and Doyen Sahoo. GIFT-eval: A benchmark for general time series forecasting model evaluation. In NeurIPS Work-shop on Time Series in the Age of Large Models , 2024. 1, 3, 6, 7 Abdul Fatir Ansari, Lorenzo Stella, Ali Caner Turkmen, Xiyuan Zhang, Pedro Mercado, Huibin Shen, Olek-sandr Shchur, Syama Sundar Rangapuram, Sebastian Pineda Arango, Shubham Kapoor, Jasper Zschieg-ner, Danielle C. Maddix, Hao Wang, Michael W. Mahoney, Kari Torkkola, Andrew Gordon Wilson, Michael Bohlke-Schneider, and Bernie Wang. Chronos: Learning the language of time series. Transactions on Machine Learning Research , 2024. ISSN 2835-8856. Expert Certification. 3 13 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Abdul Fatir Ansari, Oleksandr Shchur, Jaris Küken, Andreas Auer, Boran Han, Pedro Mercado, Syama Sun-dar Rangapuram, Huibin Shen, Lorenzo Stella, Xiyuan Zhang, et al. Chronos-2: From univariate to universal forecasting. arXiv preprint arXiv:2510.15821 , 2025. 8 A Colin Cameron, Jonah B Gelbach, and Douglas L Miller. Bootstrap-based improvements for inference with clustered errors. The review of economics and statistics , 90(3):414–427, 2008. 3 Jialin Chen, Aosong Feng, Ziyu Zhao, Juan Garza, Gaukhar Nurbek, Cheng Qin, Ali Maatouk, Leandros Tassiulas, Yifeng Gao, and Rex Ying. Mtbench: A multimodal time series benchmark for temporal reasoning and question answering. arXiv preprint arXiv:2503.16858 , 2025. 3 Pinyu Chen, Zois Boukouvalas, and Roberto Corizzo. A deep fusion model for stock market prediction with news headlines and time series data. Neural Computing and Applications , 36(34):21229–21271, 2024. 3 Abhimanyu Das, Weihao Kong, Rajat Sen, and Yichen Zhou. A decoder-only foundation model for time-series forecasting. In Forty-first international conference on machine learning , 2024. 3, 8 Luo donghao and wang xue. ModernTCN: A modern pure convolution structure for general time series analysis. In The Twelfth International Conference on Learning Representations , 2024. 8 Timnit Gebru, Jamie Morgenstern, Briana Vecchione, Jennifer Wortman Vaughan, Hanna Wallach, Hal Daumé Iii, and Kate Crawford. Datasheets for datasets. Communications of the ACM , 64(12): 86–92, 2021. 2, 17 Rakshitha Wathsadini Godahewa, Christoph Bergmeir, Geoffrey I. Webb, Rob Hyndman, and Pablo Montero-Manso. Monash time series forecasting archive. In Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2) , 2021. 1, 3 James D Hamilton. A new approach to the economic analysis of nonstationary time series and the business cycle. Econometrica: Journal of the econometric society , pp. 357–384, 1989. 3 Yifan Hu, Yuante Li, Peiyuan Liu, Yuxia Zhu, Naiqi Li, Tao Dai, Shu-tao Xia, Dawei Cheng, and Changjun Jiang. Fintsb: A comprehensive and practical benchmark for financial time series forecasting. arXiv preprint arXiv:2502.18834 , 2025. 2, 3, 7 Jinkwan Jang, Hyunbin Jin, Hyungjin Park, Kyubyung Chae, and Taesup Kim. What if tsf: A benchmark for reframing forecasting as scenario-guided multimodal forecasting. arXiv preprint arXiv:2601.08509 ,2026. 1, 3, 6 Yidong Jiang, Junrong Chen, Eftychia Makri, Jialin Chen, Peiwen Li, Ali Maatouk, Leandros Tassiulas, Eliot Brenner, Bing Xiang, and Rex Ying. Fin-rate: A real-world financial analytics and tracking evaluation benchmark for llms on sec filings. arXiv preprint arXiv:2602.07294 , 2026. 2, 3 Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Wei Chen, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. Lightgbm: A highly efficient gradient boosting decision tree. Advances in neural information processing systems , 30, 2017. 7 Kai Kim, Howard Tsai, Rajat Sen, Abhimanyu Das, Zihao Zhou, Abhishek Tanpure, Mathew Luo, and Rose Yu. Multi-modal forecaster: Jointly predicting time series and textual data. arXiv preprint arXiv:2411.06735 , 2024. 1, 3 Yaxuan Kong, Yiyuan Yang, Yoontae Hwang, Wenjie Du, Stefan Zohren, Zhangyang Wang, Ming Jin, and Qingsong Wen. Time-mqa: Time series multi-task question answering with context enhancement. In 
+
+Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 29736–29753, 2025. 8 Ross Koval, Nicholas Andrews, and Xifeng Yan. Financial forecasting from textual and tabular time series. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pp. 8289–8300, 2024. 3 14 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Ross Koval, Nicholas Andrews, and Xifeng Yan. Multimodal language models with modality-specific experts for financial forecasting from interleaved sequences of text and time series. arXiv preprint arXiv:2509.19628 , 2025. 3 Chenghao Liu, Taha Aksu, Juncheng Liu, Xu Liu, Hanshu Yan, Quang Pham, Silvio Savarese, Doyen Sahoo, Caiming Xiong, and Junnan Li. Moirai 2.0: When less is more for time series forecasting. arXiv preprint arXiv:2511.11698 , 2025. 3, 8 Haoxin Liu, Shangqing Xu, Zhiyuan Zhao, Lingkai Kong, Harshavardhan Kamarthi, Aditya B. Sasanur, Megha Sharma, Jiaming Cui, Qingsong Wen, Chao Zhang, and B. Aditya Prakash. Time-MMD: Multi-domain multimodal dataset for time series analysis. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2024a. 1, 3, 6, 8 Yong Liu, Tengge Hu, Haoran Zhang, Haixu Wu, Shiyu Wang, Lintao Ma, and Mingsheng Long. itransformer: Inverted transformers are effective for time series forecasting. In The Twelfth International Conference on Learning Representations , 2024b. 8 A Craig MacKinlay. Event studies in economics and finance. Journal of economic literature , 35(1):13–39, 1997. 3 Spyros Makridakis, Evangelos Spiliotis, and Vassilios Assimakopoulos. M5 accuracy competition: Results, findings, and conclusions. International Journal of Forecasting , 38(4):1346–1364, 2022. 8 Michael W McCracken and Serena Ng. Fred-md: A monthly database for macroeconomic research. Journal of Business & Economic Statistics , 34(4):574–589, 2016. 5 Xiangfei Qiu, Jilin Hu, Lekui Zhou, Xingjian Wu, Junyang Du, Buang Zhang, Chenjuan Guo, Aoying Zhou, Christian S. Jensen, Zhenli Sheng, and Bin Yang. Tfb: Towards comprehensive and fair benchmarking of time series forecasting methods. Proc. VLDB Endow. , 17(9):2363–2377, 2024. 1, 3, 6, 7 Issa Sugiura, Takashi Ishida, Taro Makino, Chieko Tazuke, Takanori Nakagawa, Kosuke Nakago, and David Ha. EDINET-bench: Evaluating LLMs on complex financial tasks using japanese financial statements. In 
+
+The Fourteenth International Conference on Learning Representations , 2026. 2, 3, 7, 13 Chengsen Wang, Qi Qi, Jingyu Wang, Haifeng Sun, Zirui Zhuang, Jinming Wu, Lei Zhang, and Jianxin Liao. Chattime: A unified multimodal time series foundation model bridging numerical and textual data. In Proceedings of the AAAI Conference on Artificial Intelligence , pp. 12694–12702, 2025. 8 Andrew Robert Williams, Arjun Ashok, Étienne Marcotte, Valentina Zantedeschi, Jithendaraa Subrama-nian, Roland Riachi, James Requeima, Alexandre Lacoste, Irina Rish, Nicolas Chapados, and Alexandre Drouin. Context is key: A benchmark for forecasting with essential textual information. In Forty-second International Conference on Machine Learning , 2025. 1, 3, 7, 8 Gerald Woo, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. Unified train-ing of universal time series forecasting transformers. In Forty-first International Conference on Machine Learning , 2024. 3 Wen Wu, Ziyang Zhang, Liwei Liu, Xuenan Xu, Jimin Zhuang, Ke Fan, Qitan Lv, Junlin Liu, Chen Zhang, Zheqi Yuan, Siyuan Hou, Tianyi Lin, Kai Chen, Bowen Zhou, and Chao Zhang. SciTS: Scientific time series understanding and generation with LLMs. In The Fourteenth International Conference on Learning Representations , 2026. 3, 7 Qianqian Xie, Weiguang Han, Xiao Zhang, Yanzhao Lai, Min Peng, Alejandro Lopez-Lira, and Jimin Huang. PIXIU: A comprehensive benchmark, instruction dataset and large language model for finance. In Thirty-seventh Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2023. 1, 2, 3 15 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Qianqian Xie, Weiguang Han, Zhengyu Chen, Ruoyu Xiang, Xiao Zhang, Yueru He, Mengxi Xiao, Dong Li, Yongfu Dai, Duanyu Feng, Yijing Xu, Haoqiang Kang, Ziyan Kuang, Chenhan Yuan, Kailai Yang, Zheheng Luo, Tianlin Zhang, Zhiwei Liu, GUOJUN XIONG, Zhiyang Deng, Yuechen Jiang, Zhiyuan Yao, Haohang Li, Yangyang Yu, Gang Hu, Huang Jiajia, Xiao-Yang Liu, Alejandro Lopez-Lira, Benyou Wang, Yanzhao Lai, Hao Wang, Min Peng, Sophia Ananiadou, and Jimin Huang. Finben: An holistic financial benchmark for large language models. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2024. 1, 2, 3 Zhijian Xu, Hao Wang, and Qiang Xu. Intervention-aware forecasting: Breaking historical limits from a system perspective. arXiv preprint arXiv:2405.13522 , 2024. 6 Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu. Are transformers effective for time series forecasting? In Proceedings of the AAAI conference on artificial intelligence , pp. 11121–11128, 2023. 8 16 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+## A Datasheet for MacroLens 
+
+The release documents the dataset following the datasheets-for-datasets framework (Gebru et al., 2021) and provides Croissant JSON-LD metadata with Responsible AI (RAI) extensions (Akhtar et al., 2024). Hugging Face Datasets hosts MacroLens at https://huggingface.co/datasets/DeepAuto-AI/MacroLens 
+
+with a pinned release commit hash and a standard datasets-library loader. Reconstruction scripts cover all sources with redistribution restrictions, and no component of the release depends on a private server. 
+
+Purpose. We created MacroLens to evaluate models that must reason over numerical history and contextual information (macroeconomic state, scenarios, and firm text) in a financial setting. 
+
+Composition. Each instance anchors at a (ticker, date, granularity) triple and carries (i) a lookback window over 131 numeric features, (ii) point-in-time static covariates, (iii) an optional scenario object with natural-language rendering, (iv) optional filing and news text, and (v) a task-specific target. The panel contains 4.84M daily, 1.01M weekly, and 232K monthly rows; per-task ground-truth volumes are summarized in Table 4. All data come from public sources; the dataset contains no personally identifiable information beyond named officers in public SEC filings. 
+
+Collection. Market data come from Yahoo Finance; quarterly fundamentals from yfinance and 46.8M XBRL facts across 4,088 tickers and 37 XBRL-bearing form types from SEC EDGAR; 53 macroeconomic series from FRED (46) and the EIA (7); the text channel comprises 295,860 SEC filings across 7 filing form types and 215,882 news articles; and 139,855 RentCast property records across 100 U.S. metropolitan areas for the real-estate task. The collection window is 2021-01-04 to 2026-03-31, and every collector adheres to upstream API rate limits and terms. RentCast records carry street-level addresses under research-licensed terms. The released artifact aggregates address strings to ZIP-3 (or hashes them when ZIP-3 aggregation is unsafe for de-identification) before redistribution, preserving the geospatial and property-attribute signal required for T7 evaluation without releasing parcel-identifying strings. 
+
+Preprocessing. A scripted multi-stage pipeline ends in task-specific ground-truth construction for T1–T7. Scenario detection thresholds standardized changes with temporal deduplication (1,130 events; 49 types). Tabular fundamentals are aligned by a backward as-of join on the reporting period-end and macroeconomic series by their reference date, while filings and news are gated by their filing or publication date, so each instance observes only the as-reported figures and text available at t. The Tier-A rule set (§C) documents the 20 data-quality rules applied during preprocessing. 
+
+Uses. MacroLens is intended to support research on time-series foundation models under macroeconomic regime shifts, LLM-based contextual forecasting, scenario sensitivity analysis, and unified forecasting + valuation under a point-in-time discipline. The benchmark is not intended for direct trading or investment-advisory use; deployment-stage applications require independent validation, risk controls, and jurisdictional compliance review. 
+
+Distribution. Parquet files with Croissant JSON-LD metadata including Responsible AI fields. Code: MIT. Derived features: CC-BY-4.0. Reconstruction scripts cover sources with redistribution restrictions. 
+
+Responsible AI metadata. The Croissant RAI extension documents (1) data collection from public regulatory filings and government statistics; (2) sensitive-data flagging for officer names in SEC filings (public record); (3) bias considerations (U.S., English, survivorship); (4) use restrictions (research only, no automated trading); (5) intended users (ML researchers, benchmark maintainers, financial-AI developers). 
+
+Maintenance. The release is maintained with an annually scheduled temporal extension that appends new quarters of data and re-detects scenarios under the same protocol. 
+
+## B Scenario Taxonomy 
+
+The 1,130 detected events are organized across 49 types within ten macroeconomic categories, with each event rendered as natural language from a structured template. Representative event types within each category are listed below. 17 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+• Rates. Federal Reserve rate change, Secured Overnight Financing Rate (SOFR) shock, Treasury move, yield-curve inversion, mortgage-rate shock. 
+
+• Equity volatility. S&P 500 drawdown, NASDAQ move, Dow Jones move, CBOE Volatility Index (VIX) spike, volatility-regime shift. 
+
+• Commodities. Oil shock, West Texas Intermediate (WTI) shock, Henry-Hub shock, natural-gas shock. 
+
+• Currencies. Currency shock, U.S. dollar shock. 
+
+• Inflation. Consumer Price Index (CPI) shock, Producer Price Index (PPI) shock, Personal Consumption Expenditures (PCE) inflation shock, breakeven inflation shock. 
+
+• Labor. Unemployment shock, payroll shock, Job Openings and Labor Turnover Survey (JOLTS) shock, earnings-data shock. 
+
+• Credit. High-yield spread event, investment-grade spread event, credit compression. 
+
+• Housing. Housing-starts shock, home-price event, building-permit shock. 
+
+• Money supply. M2 (broad money stock) shock, monetary-base shock, Fed balance-sheet move, business-loans shock. 
+
+• Composites. Real-yield shift, term-premium change. 
+
+## C Data Quality Recovery (Rules and Validator) 
+
+The rule set comprises twenty data-quality rules, each addressing a specific anomaly class observed in raw XBRL or upstream price data. The following are representative rules. 1. Balance-equation multi-pass reconciliation. We resolve balance-equation inconsistencies by deriving any missing leg from the remaining two and cross-checking against the reported total of liabilities and stock-holders’ equity; triples that remain inconsistent are nulled. After this reconciliation every retained balance-sheet triple satisfies the accounting identity assets = liabilities + equity ( A = L + E) within 1%, a guarantee the release-time validator hard-asserts at zero violations. 2. Shares-outstanding unit correction. We apply per-ticker corrections for known XBRL unit-of-measure inconsistencies in the shares-outstanding field. 3. Negative-revenue forward-fill. We forward-fill negative revenue values within each ticker; the value is left missing when no prior positive value is available. 4. Non-positive total-assets forward-fill. The same per-ticker forward-fill rule applies to total assets when reported values are non-positive. 5. Adjusted-close fallback. We fall back to the unadjusted closing price when the adjusted-close value is negative; this affects a small number of ticker windows. 6. Price-to-earnings null-masking. We mask the price-to-earnings ratio as undefined when earnings are non-positive. 7. Industry-to-sector consistency. We assign each ticker its modal sector across sources to resolve disagree-ments among industry-to-sector mappings. 8. Period-end and reference-date alignment. We align tabular fundamentals to each instance by a backward as-of join on the reporting period-end, so every instance carries the as-reported figures for the most recent fiscal period ending on or before t, and align macroeconomic series by a backward as-of join on their reference date; text inputs are gated separately by filing or publication date (next rule). 9. Text-availability windowing. We gate filings and news by their filing or publication date so that no text input is observable before its release. 10. Scenario temporal deduplication. We collapse repeated scenario detections within the same macroeconomic episode to a single event per episode. 
+
+Validation Suite. An end-to-end validator runs ≥130 atomic data-quality checks across 20 sections at three granularities, covering schema conformance, coverage, leakage controls, balance-equation consistency, applicability masking, scenario integrity, split purity, holdout seeding, and point-in-time filing recency (every attached filing dated on or before t). The released artifact passes all checks with no warnings or failures. A separate release-readiness audit records per-file SHA-256 hashes and verifies provenance, artifact integrity, public API contract, and end-to-end reproducibility. 18 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+## D Problem Formulations 
+
+We state a formal problem definition for each of the seven tasks, using the notations introduced in §3: the ticker universe T , ticker index i ∈ T , timestamp t, granularity g, lookback length L, horizon length h, feature vector xi,t,g , static covariates zi, scenario object st, text context ui, ≤t, and task-specific target yi,t . Problem 7 introduces a separate static-item universe A disjoint from T . Predictions are denoted ˆy throughout. 
+
+Problem 1: Time-Series Forecasting. For i ∈ T and forecast anchor t, learn a function 
+
+f : (xi,t −L:t,g , z i, u i, ≤t
+
+) 7 −→ ˆyi,t +1: t+h = (ˆ yi,t +1 , . . . , ˆyi,t +h) ∈ Rh
+
+that maps the length-L lookback window and the optional static and text contexts to the length-h trajectory of the target. 
+
+Problem 2: Point-in-Time Valuation. For i ∈ T and anchor t, learn a function 
+
+f : (xi,t,g , z i, u i, ≤t
+
+) 7 −→ ˆyi,t ∈ R+
+
+that maps the panel observation and the optional static and text contexts to a positive-valued target. 
+
+Problem 3: Statement Generation from Numerical Inputs. For a fixed indexed set of J statement fields, i ∈ T , and reporting period t, learn a function 
+
+f = ( f (1) , . . . , f (J)) : ({xi,t ′,g }t′<t , z i
+
+) 7 −→ ˆyi,t = (ˆy(1)  
+
+> i,t
+
+, . . . , ˆy(J)
+
+> i,t
+
+) ∈ RJ
+
+that maps prior-period panel observations to the J-dimensional statement panel at period t.
+
+Problem 4: Scenario-Conditioned Return Forecasting. For i ∈ T and event time t at which a scenario 
+
+st is detected, learn a function 
+
+f : (xi,t −L:t,g , s t, z i
+
+) 7 −→ ˆyi,t ∈ R
+
+that maps the length-L pre-event lookback and the scenario object (type plus natural-language rendering) to the scalar post-event return over horizon h.
+
+Problem 5: Valuation under Input Restriction. Let x′ 
+
+> i,t,g
+
+denote xi,t,g restricted to a designated subset of its coordinates. For i ∈ T and anchor t, learn a function 
+
+f : (x′ 
+
+> i,t,g
+
+, z i
+
+) 7 −→ ˆyi,t ∈ R+
+
+predicting the same positive-valued target as in Problem 2. 
+
+Problem 6: Statement Generation from Natural Language. With ui, ≤t specialized to a natural-language description of entity i, for i ∈ T and reporting period t, learn a function 
+
+f = ( f (1) , . . . , f (J)) : (zi, u i, ≤t
+
+) 7 −→ ˆyi,t = (ˆy(1)  
+
+> i,t
+
+, . . . , ˆy(J)
+
+> i,t
+
+) ∈ RJ
+
+predicting the same J-dimensional statement panel as in Problem 3. 
+
+Problem 7: Cross-Domain Valuation from Static Attributes. Let a ∈ A index a static-item universe disjoint from T with per-item attributes za in place of zi. Learn a function 
+
+f = ( f (1) , . . . , f (K)) : za 7 −→ ˆya = (ˆy(1)  
+
+> a
+
+, . . . , ˆy(K)
+
+> a
+
+) ∈ RK
+
+> +
+
+that maps the per-item attributes to a K-dimensional positive-valued target (here K = 2 : monthly rent and sale price). 
+
+D.1 MacroLens Instantiation of the Seven Problems 
+
+Problem 1 sets yi,t to the close price; L ∈ { 63 , 126 , 252 } daily, h ∈ { 5, 21 , 63 , 126 , 252 } daily / {4, 13 , 26 , 52 }
+
+weekly / {1, 3, 6, 12 } monthly; primary metric MSE, secondary MAE, RMSE, DA, and MASE (here the 19 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+full-horizon MAE scaled by the naive one-step absolute error at the first horizon point, |yi,t +1 − ci|, with ci
+
+the last observed close); this submission reports h = 252 daily. 
+
+Problem 2 sets yi,t to realized market capitalization. The admitted feature set comprises the raw statement fields and a subset of derived ratios; valuation ratios that are algebraic functions of market capitalization are removed by a construction-time blacklist of the eight columns that are closed-form functions of market capi-talization (the market-cap column itself, price-to-earnings, enterprise value, EV-to-revenue, EV-to-EBITDA, two price-to-book variants, and free-cash-flow yield), so no input is an algebraic function of the target; the one retained feature that still carries any price information, the cost-of-capital estimate (WACC), enters only through its equity weight e/ (d + e), where e and d are the market values of equity and debt, and is weakly cap-linked. The largest residual feature–target correlation after the exclusion is with shares outstanding, a legitimate size feature. Primary metric MedAPE, secondary Spearman ρ.
+
+Problem 3 sets J = 11 over the curated statement fields revenue, net income, total assets, total liabilities, stockholders’ equity, operating income, cash and cash equivalents, net property, plant and equipment, long-term debt, R&D expense, and operating cash flow (released as US-GAAP XBRL tags in the schema); primary metric MAPE, secondary balance-equation accuracy on the three balance-sheet fields and parse rate (Parse%). 
+
+Problem 4 sets the post-event horizon to a 63 calendar-day window ( ∼44 trading days realized); the scenario set comprises 1,130 events across 49 types; primary metric MAE, secondary DA. 
+
+Problem 5 instantiates the input restriction x′ as the Problem 2 feature vector with the entire engineered-ratio block ablated: the 11 derived ratios admitted to Problem 2 (market beta, WACC, and nine fundamental ratios: COGS ratio, cost of debt, current ratio, debt-to-equity, EBITDA margin, effective tax rate, gross margin, net margin, and year-over-year revenue growth) are dropped, of which only beta and WACC carry price information and the other nine are pure fundamentals; same metrics as Problem 2. 
+
+Problem 6 specializes ui, ≤t to the released company description; same field set and metrics as Problem 3. 
+
+Problem 7 sets A to real-estate addresses, K = 2 (monthly rent, sale price), and za to (city, county, state, ZIP code, property type, square footage, lot size, bedrooms, bathrooms, year built, latitude, longitude, last sale date, years since last sale); split is address-level random 70/30 (seed = 42); primary metrics rent MAPE and sale-price MAPE. 
+
+## E Extra Experimental Results 
+
+This section provides additional and detailed results. 
+
+E.1 Outlier-Resistant and Scale-Aware Secondary Metrics 
+
+Table 12 and Table 13 report secondary metrics: T1 winsorized MSE (each method’s squared errors clipped at its own 99th-percentile threshold) and symmetric mean absolute percentage error (sMAPE%) as outlier-resistant and scale-aware alternatives to MSE; T2/T5 RMSE in dollar units and log-MAE on log-transformed market caps as alternatives to MedAPE. 
+
+Outlier-Resistance Interpretation. Under MSE wins (each method’s per-step squared errors clipped at its own 99th percentile before averaging), the heaviest-tailed methods have their large-outlier penalties shrink by two to three orders of magnitude (GPT-5.1 3.71 × 10 6 → 3,504 , TimesFM 2.35 × 10 6 → 4,163 , Qwen-3.5 
+
+2.12 × 10 6 → 4,505 ); the classical leaders (RandomForest 652 , LightGBM 697 ) nonetheless remain the two best methods, so the ordering does not invert. Under sMAPE the classical, sequence, and naive methods cluster tightly together with the LLM-TS model ChatTime (RandomForest 32 .84% , iTransformer 32 .86% ,Persistence 33 .21% , ChatTime 33 .96% , LightGBM 34 .59% , ModernTCN 34 .85% ), the three TSFMs sit just behind ( ∼36.6–36.8%), the other LLM-TS model Time-MQA is an outlier at 53 .48% , and every zero-shot LLM remains worse ( 44 –60% ); the classical-vs-LLM ordering is robust under both metric reformulations. 
+
+Scale-Aware Interpretation. RMSE in dollars (a single point estimate without the log-compression of MedAPE) ranks the two classical methods ( ∼5.8 ×10 9) roughly an order of magnitude tighter than every 20 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 11: Underlying values for the context ablation in Figure 3: each frontier zero-shot LLM’s primary metric across the five nested feature settings, with LightGBM added as a non-prompt reference that consumes the panel directly. Lowest (best) setting per row in bold ; LightGBM cannot read the filing-text excerpt, so its D and E coincide. The LLM rows use a separate controlled A–E prompt template and are not directly comparable to the primary-panel values in §6 (where rare single-instance LLM extrapolations dominate MSE, e.g. GPT-5.1 on T1), whereas LightGBM’s values match its primary-panel result. Only within-ladder (A → E) trends are interpreted. 
+
+Task (metric) Model A B C D E
+
+T1 forecasting (MSE) GPT-5.1 229,066 72,687 28,901 112,677 38,038 Gemini-3-Flash 2.19 ×10 7 4.68 ×10 6 4.17 ×10 6 1.35 ×10 7 1.41 ×10 7
+
+LightGBM 70,263 68,949 58,248 61,251 61,251 T2 public valuation (MedAPE%) GPT-5.1 366.50 77.07 76.12 76.39 76.74 Gemini-3-Flash 100.00 86.70 89.22 89.41 89.24 LightGBM 86.17 52.35 52.35 52.35 52.35 T4 scenario return (MAE%) GPT-5.1 21.08 21.16 21.08 21.05 21.04 
+
+Gemini-3-Flash 20.91 20.93 20.88 20.82 20.83 LightGBM 22.22 22.50 23.37 23.40 23.40 T5 private valuation (MedAPE%) GPT-5.1 91.10 68.81 68.69 68.79 69.26 Gemini-3-Flash 178.36 62.42 64.18 64.32 65.42 LightGBM 86.17 53.28 53.28 53.28 53.28 
+
+Table 12: Outlier-resistant and scale-aware metrics ( h=252 , daily). winsorized MSE caps each method’s squared errors at its own 99th percentile before averaging; sMAPE is the symmetric MAPE in percent. 
+
+Family Method MSE wins sMAPE% 
+
+Naive Persistence 2,523 33.21 Classical LightGBM 697 34.59 Classical RandomForest 652 32.84 
+
+Sequence DLinear 1,919 35.72 Sequence iTransformer 2,392 32.86 Sequence ModernTCN 1,431 34.85 TSFM Chronos-2 3,624 36.66 TSFM Moirai-2 2,933 36.60 TSFM TimesFM 4,163 36.76 LLM-TS ChatTime 2,911 33.96 LLM-TS Time-MQA 5,735 53.48 LLM (zero-shot) GPT-5.1 3,504 44.22 LLM (zero-shot) Gemini-3-Flash 5,823 60.36 LLM (zero-shot) Llama-4 Scout 3,343 46.31 LLM (zero-shot) EXAONE-4.5 5,770 49.57 LLM (zero-shot) Qwen-3.5 4,505 45.16 
+
+zero-shot LLM ( 2.4 × 10 10 –5.9 × 10 11 on T2) and broadly tracks the MedAPE ordering in Table 7. The dollar metric also exposes upper-tail pathologies that the median hides. GPT-5.1’s RMSE increases sharply from T2 to T5 ( 2.39 × 10 10 → 1.65 × 10 13 ) even as its MedAPE improves (73 .22 → 66 .23 ), and Llama-4 Scout’s degenerate near-zero equity-value predictions on T2 (MedAPE 100% ) surface as a log-MAE of 15 .08 . The median-based primary metric is therefore necessary but not sufficient: the secondary metrics confirm the classical-vs-LLM gap while revealing that the LLMs’ errors are substantially heavier-tailed than the median alone suggests. 21 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 13: T2/T5 valuation metrics. RMSE (in dollars) and log-MAE (mean absolute difference of log-market-caps).                                               
+
+> Family Method T2 RMSE ($) T2 log-MAE T5 RMSE ($) T5 log-MAE
+> Classical RandomForest 5.86 ×10 90.87 5.86 ×10 90.86 Classical LightGBM 5.76 ×10 90.87 5.83 ×10 90.88 LLM (zero-shot) GPT-5.1 2.39 ×10 10 1.45 1.65 ×10 13 1.33 LLM (zero-shot) Gemini-3-Flash 8.96 ×10 10 1.97 1.87 ×10 11 1.13 LLM (zero-shot) Llama-4 Scout 2.37 ×10 10 15.08 6.29 ×10 91.29 LLM (zero-shot) EXAONE-4.5 5.92 ×10 11 3.23 4.45 ×10 11 1.63 LLM (zero-shot) Qwen-3.5 9.38 ×10 10 1.97 1.44 ×10 11 1.39
+
+Table 14: Method-ranking stability across granularities: Spearman ρ between the daily, weekly, and monthly method orderings (averaged over the three pairwise comparisons) per task, computed over the methods reported in the corresponding per-task table.               
+
+> T1 T2 T3 T4 T5 T6 T7 Spearman ρ0.74 0.98 1.00 0.87 0.98 0.87 0.99
+
+E.2 Detailed Results for Multiple Granularity and Categorical Breakdowns 
+
+We report daily results as primary (§6); the benchmark, however, provides all seven tasks at daily, weekly, and monthly granularity, and the released run-record artifacts cover every applicable (method, task, gran-ularity) cell. The method rankings are stable across granularities, so the daily primary results generalize. Table 14 reports the Spearman rank-correlation between the per-granularity method orderings for each task: ρ ranges from 0.74 (T1, the heaviest-tailed metric) to 1.00 (T3), with mean 0.92 . The leading method is consistent across granularities: RandomForest leads T1, T3, and T5 at all three granularities; the two near-tied classical methods top T2 (RandomForest at daily, LightGBM at weekly and monthly, separated by under three MedAPE points); iTransformer leads T4 and GPT-5.1 leads T7-rent at all three granularities; and LightGBM is the strongest non-degenerate method on T6. Only absolute magnitudes shift (e.g., T1 MSE compresses at the monthly horizon as long-run noise averages out). Tables 15–21 give the full primary-metric values at all three granularities. 
+
+Per-Category Interpretation. The category ordering by difficulty is consistent across methods: nasdaq-acute is the hardest ( ∼32.5–34.9% MAE for every method); sp500-acute and DJIA are the easiest ( ∼15–20%). Method-vs-method rankings are largely category-invariant: the iTransformer-vs-HistoricalAnalogue gap of 
+
+∼0.5 percentage points in Table 22 stays within roughly half a point across all eight top categories rather than concentrating on any subset, while the two tree ensembles (RandomForest, LightGBM) are uniformly the worst of these six methods on the easier equity-index categories (sp500-acute, DJIA). 
+
+## F Compute and Reproducibility Table 23: Contamination probe . Closing-price re-call on 200 sampled (ticker, date) pairs per model from the first half of the test window (through 2025-06-30). 
+
+Declined : non-numeric responses; Parse% : fraction yielding a numeric price; Recall@5% : fraction within 
+
+5% of the realized close.                   
+
+> Model Declined Parse% Recall@5%
+> GPT-5.1 200/200 0.0 0.0 Gemini-3-Flash 89/200 55.5 8.5 Llama-4 Scout 200/200 0.0 0.0 EXAONE-4.5 194/200 3.0 0.0 Qwen-3.5 186/200 6.5 0.0
+
+Contamination Probe. Table 23 reports the closing-price recall probe of §5.1 on the contamination-risk first half of the test window (through 2025-06-30): each model is shown a ticker and an in-window date and asked for the realized close, over 200 sampled pairs at a 5% recall toler-ance. GPT-5.1 and Llama-4 Scout decline on all 200 pairs; EXAONE-4.5 and Qwen-3.5 produce a price on 3–7% of pairs and recall none within tol-erance; Gemini-3-Flash answers 55 .5% of the time but recalls only 8.5% within tolerance. No model 22 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 15: T1 close-price forecasting (MSE ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold .                                                                                             
+
+> Method MSE (D) MSE (W) MSE (M) Persistence 628,438 2.61 ×10 6553,072 LightGBM 61,174 105,574 26,722 RandomForest 57,086 57,434 19,270
+> DLinear 421,995 1.76 ×10 6376,516 iTransformer 588,027 2.49 ×10 6509,203 ModernTCN 436,188 862,264 161,110 Chronos-2 1.70 ×10 615 .99 ×10 62.69 ×10 6
+> Moirai-2 667,336 8.71 ×10 61.57 ×10 6
+> TimesFM 2.35 ×10 610 .84 ×10 61.96 ×10 6
+> ChatTime 1.02 ×10 63.41 ×10 6752,795 Time-MQA 1.02 ×10 6979,305 53,848 GPT-5.1 3.71 ×10 61.60 ×10 6486,311 Gemini-3-Flash 133,037 2.29 ×10 6252,673 Llama-4 Scout 386,440 1.11 ×10 6398,408 EXAONE-4.5 401,692 1.92 ×10 6471,188 Qwen-3.5 2.12 ×10 64.53 ×10 6483,585
+
+Table 16: T2 public valuation (MedAPE% ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold (degenerate 100% format-failure ceilings excluded from the bold rule).                            
+
+> Method MedAPE% (D) MedAPE% (W) MedAPE% (M) LightGBM 52.35 53.79 53.05
+> RandomForest 50.78 56.28 55.25 Time-MQA 97.64 99.82 98.37 GPT-5.1 73.22 73.71 75.05 Gemini-3-Flash 88.17 90.10 90.09 Llama-4 Scout 100.00 100.00 100.00 EXAONE-4.5 428.20 462.64 464.12 Qwen-3.5 89.16 92.24 90.55
+
+can reproduce test-window closes, supporting the reading that the zero-shot results are not driven by mem-orization. 
+
+Pipeline. A single command reconstructs the released dataset under a fixed Python environment. Seed 42 controls every stochastic operation, including holdout selection, scenario deduplication, and stratified subsampling. Each pipeline stage is idempotent and resumable, allowing reconstruction to proceed from an interrupted state without recomputing completed work. 
+
+Experiments. Hardware: a shared 8 ×NVIDIA A100-SXM4-80GB node, of which open-weights serving uses a 4-GPU tensor-parallel slice. Local inference uses vLLM with FP8 quantization for the open-weights LLMs (Llama-4 Scout, EXAONE-4.5 33B, Qwen-3.5-27B) and the fine-tuned LLM-based time-series models (ChatTime-1-7B, Time-MQA on Qwen-2.5-7B with low-rank adaptation (LoRA)). Frontier closed-source LLMs (GPT-5.1, Gemini-3-Flash) run via OpenRouter API with reasoning tokens explicitly disabled to obtain visible completions; the open-weights LLMs additionally disable thinking-mode to ensure parseable direct-answer outputs. Naive, classical (LightGBM, RandomForest), deep-sequence (DLinear, iTransformer, ModernTCN), and TSFM (Chronos-2, Moirai-2, TimesFM) methods run on CPU/GPU as appropriate. Primary seed: 42. Cluster-bootstrap 95% CIs use adaptive B ∈ [1 ,000 , 10 ,000] with escalation when the CI width exceeds 5% of |mean |. The full baseline sweep (216 method ×task ×granularity cells: 72 per granularity across daily, weekly, and monthly) consumes approximately 38 hours of model fit-and-predict time ( ∼29 h local GPU, ∼7 h via the OpenRouter API, ∼2 h CPU), excluding the one-time dataset-construction pipeline; per-cell fit and predict times, peak memory, and the hardware descriptor are recorded in the per-cell run-23 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 17: T3 statement generation (MAPE% ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold (degenerate 100% format-failure ceilings excluded from the bold rule).                               
+
+> Method MAPE% (D) MAPE% (W) MAPE% (M) Sector-Median 271.79 236.87 236.87 LightGBM 142.01 135.05 135.05 RandomForest 117.48 109.90 109.90
+> Time-MQA 132.54 127.72 127.94 GPT-5.1 203.55 194.78 198.54 Gemini-3-Flash 185.19 176.04 176.76 Llama-4 Scout 148.69 149.10 153.02 EXAONE-4.5 165.01 155.97 154.16 Qwen-3.5 198.74 183.36 184.83
+
+Table 18: T4 scenario return (MAE% ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold .                                          
+
+> Method MAE% (D) MAE% (W) MAE% (M) Hist. Analogue 21.29 22.48 21.45 LightGBM 23.64 23.44 22.67 RandomForest 24.15 23.60 22.43 DLinear 20.88 21.98 21.19 iTransformer 20.83 21.95 21.14
+> ModernTCN 21.21 22.92 21.47 ChatTime 23.66 23.80 23.21 Time-MQA 21.01 21.96 21.48 GPT-5.1 21.03 22.25 21.46 Gemini-3-Flash 20.86 22.06 21.35 Llama-4 Scout 21.07 22.02 21.68 EXAONE-4.5 22.38 24.15 26.71 Qwen-3.5 27.57 28.18 30.46
+
+record JSON artifacts shipped with the release; the GPU-hours and the local/API/CPU time split above are derived by summing these per-cell records. 
+
+Hyperparameters. Every method is evaluated with its upstream library’s (or author’s) default hyper-parameters. This is a deliberate benchmark policy: default-only evaluation gives a fair, fully reproducible comparison that any user can replicate without per-method search, and it does not advantage methods whose authors invest more in tuning; a tuned leaderboard is left to downstream users through the released API. The only project-side modifications are system-level flags required to run each method on the available hardware (parallelism, device, tensor-parallel size, FP8 quantization, vLLM serving port); no model-internal knob ( n_estimators , max_depth , learning_rate , sampling temperature, or equivalent) is tuned. The exact per-method configuration is recorded in each method’s run-record JSON. 24 MacroLens: A Multi-Task Benchmark for Contextual Financial Reasoning under Macroeconomic Scenarios 
+
+Table 19: T5 private valuation (MedAPE% ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold (degenerate 100% format-failure ceilings excluded from the bold rule). 
+
+Method MedAPE% (D) MedAPE% (W) MedAPE% (M) LightGBM 53.28 57.27 58.05 RandomForest 50.44 55.52 55.88 
+
+Time-MQA 92.13 93.45 92.99 GPT-5.1 66.23 68.07 69.15 Gemini-3-Flash 61.27 62.40 65.90 Llama-4 Scout 68.92 74.47 73.15 EXAONE-4.5 100.00 100.00 100.00 Qwen-3.5 73.42 73.94 76.14 
+
+Table 20: T6 description-based generation (MAPE% ↓) across daily (D), weekly (W), monthly (M) granu-larities; best per column bold (degenerate 100% format-failure ceilings excluded from the bold rule). 
+
+Method MAPE% (D) MAPE% (W) MAPE% (M) Sector-Median 279.71 254.53 254.53 LightGBM 170.07 161.00 161.00 
+
+RandomForest 183.47 165.24 165.24 Time-MQA 100.00 100.00 100.00 GPT-5.1 268.71 282.04 280.92 Gemini-3-Flash 212.84 212.76 211.75 Llama-4 Scout 247.13 258.99 261.27 EXAONE-4.5 235.47 259.29 257.98 Qwen-3.5 277.34 269.45 269.84 
+
+Table 21: T7 real-estate rent (MAPE% ↓) across daily (D), weekly (W), monthly (M) granularities; best per column bold (degenerate 100% format-failure ceilings excluded from the bold rule). 
+
+Method Rent MAPE% (D) Rent MAPE% (W) Rent MAPE% (M) Metro-Median 33.40 33.40 33.40 LightGBM 33.58 33.36 33.36 RandomForest 35.26 35.25 35.25 Time-MQA 43.30 43.06 43.31 GPT-5.1 22.82 21.85 22.34 
+
+Gemini-3-Flash 23.87 23.94 23.88 Llama-4 Scout 31.30 31.18 30.96 EXAONE-4.5 25.54 25.56 25.57 Qwen-3.5 24.91 24.75 24.71 
+
+Table 22: T4 per-event-category mean absolute return error across the eight most frequent event types in MacroLens’s scenario layer, for the naive, classical, and deep-sequence methods. Each cell is a method’s mean absolute return error within that event category. FX = currency-pair shock; Nat.-gas = natural-gas price shock; NASDAQ / DJIA = NASDAQ Composite / Dow Jones Industrial Average index move; VIX = VIX volatility spike; “(acute)” = acute short-term ( ≤5 trading-day) shock of the named series.                                                         
+
+> Method FX Nat.-gas NASDAQ NASDAQ (acute) VIX Oil (acute) S&P500 (acute) DJIA
+> HistoricalAnalogue 25.67 19.83 20.83 34.85 22.36 22.08 14.91 15.18 RandomForest 26.93 25.59 27.51 33.97 20.80 24.71 18.48 20.41 LightGBM 28.03 23.04 25.12 32.51 19.62 19.48 17.21 18.63 DLinear 25.66 19.71 21.14 34.68 21.75 22.12 14.67 15.16 iTransformer 25.52 19.81 21.00 34.62 21.82 22.16 14.68 15.29 ModernTCN 25.71 19.77 20.78 34.08 21.18 19.96 15.72 17.33
+
+25
