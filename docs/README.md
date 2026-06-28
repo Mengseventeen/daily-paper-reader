@@ -6,21 +6,21 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-27
-- 运行时间：2026-06-27 20:52:53 UTC
+- 最新运行日期：2026-06-28
+- 运行时间：2026-06-28 20:04:26 UTC
 - 运行状态：成功
 - 本次总论文数：1
 - 精读区：1
 - 速读区：0
 
 ### 今日简报（AI）
-今日精读一篇高分论文，聚焦于一种用于评估量化交易智能体的可验证多任务环境。该环境（OpenFinGym）为量化Agent提供了标准化、多任务评估平台，值得关注其验证机制与任务设计。建议量化研究者关注此环境，用于测试和比较不同交易策略智能体的性能。
-- 详情：[/202606/27/README](/202606/27/README)
+今日精读1篇论文，聚焦金融智能体评估新环境。重点推荐《OpenFinGym》，提出了可验证的多任务模拟平台，专用于测试量化交易AI的核心能力。建议量化领域从业者关注，该环境可能成为智能体评估的重要基准。
+- 详情：[/202606/28/README](/202606/28/README)
 
 ### 精读区论文标签
-1. [OpenFinGym: A Verifiable Multi-Task Gym Environment for Evaluating Quant Agents](/202606/27/2606.26350v1-openfingym-a-verifiable-multi-task-gym-environment-for-evaluating-quant-agents)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：统一的量化金融agent多任务gym环境
+1. [OpenFinGym: A Verifiable Multi-Task Gym Environment for Evaluating Quant Agents](/202606/28/2606.26350v1-openfingym-a-verifiable-multi-task-gym-environment-for-evaluating-quant-agents)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：面向量化智能体评估的多任务环境，涵盖投资组合管理
 
 ### 速读区论文标签
 - 本次无速读推荐。
