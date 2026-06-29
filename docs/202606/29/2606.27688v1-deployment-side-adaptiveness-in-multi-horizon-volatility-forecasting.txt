@@ -1,0 +1,738 @@
+Title: Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting
+
+URL Source: https://arxiv.org/pdf/2606.27688v1
+
+Published Time: Mon, 29 Jun 2026 00:21:44 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting ∗
+
+## Riku Green 
+
+riku.green@bristol.ac.uk The University of Bristol Bristol, UK 
+
+## Zahraa S. Abdallah 
+
+zahraa.abdallah@bristol.ac.uk The University of Bristol Bristol, UK 
+
+## Telmo M Silva Filho 
+
+telmo.silvafilho@bristol.ac.uk The University of Bristol Bristol, UK 
+
+## Abstract 
+
+In financial forecasting, predictive performance depends not only on which model is trained, but also on how the trained model is deployed. We study this issue in multi-horizon volatility forecasting. Our starting point is that a trained multi-output (MIMO) forecaster does not define a single deployable predictor: by changing the inference-time rollout rule, the same trained model induces a fam-ily of forecasts with different accuracy and cost profiles. Across 20 stock-volatility series, three forecast horizons, and architectures ranging from linear models to PatchTST, we find that non-default rollout rules often improve over standard MIMO deployment. How-ever, the best fixed rule varies substantially across architectures and horizons, making any single static replacement unreliable. We therefore evaluate validation-based deployment policies over the induced rule family. Under the primary MSE objective, validation-selected singletons provide a low-cost improvement over default MIMO, while small rule subsets recover much of the benefit of larger ensembles at substantially lower inference cost. We also find that policy rankings are metric-sensitive: MSE-selected policies do not transfer uniformly to QLIKE, a finance-standard volatility loss. These results show that inference-time deployment is a meaningful source of adaptiveness in financial forecasting, and that trained volatility forecasters should be evaluated not only by their archi-tecture, but also by their deployment policy. 
+
+## Keywords 
+
+time series forecasting, financial forecasting, ensemble methods, multistep forecasting, efficiency 
+
+## 1 Introduction 
+
+Financial forecasting systems are deployed repeatedly across assets, horizons, and market conditions, often under latency, compute, and maintenance constraints. These issues are especially impor-tant in volatility forecasting, which underpins risk management [ 7], volatility timing and allocation [ 10 ], and the realized-volatility pipeline used throughout empirical finance [ 1 , 5]. Recent evidence shows that machine learning methods can be competitive with strong classical volatility baselines [ 6 ], while surveys document the growing role of modern ML in financial forecasting [ 3, 12 , 20 , 25 ]. Yet forecasting systems are still commonly evaluated as though training alone determines the predictor that will be deployed. This view is too narrow for multi-horizon forecasting. In multi-step prediction, the forecast used in practice depends not only on learned parameters, but also on the inference-time rule used 
+
+> ∗Accepted at the 9th Workshop on Machine Learning in Finance, co-located with ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD 2026), Jeju, Korea, August 9, 2026.
+
+to generate the horizon. Prior work shows that different multi-step forecasting strategies can produce materially different errors across datasets, horizons, and model classes, with no single strategy uniformly best [ 16 , 17 ]. Recursive composition can also change the effective prediction problem faced at deployment, rather than merely accumulating error [ 15 ]. Thus, deployment choices can materially alter the predictor used in practice, even after training is fixed. This is particularly relevant for multi-output forecasting. A trained multi-output (MIMO) model is usually treated as defin-ing one natural deployed predictor: the default direct multi-horizon forecast [ 17 ]. We instead view the same trained model as inducing a family of predictors. By committing smaller output blocks, updating the input state, and reusing the same forecasting function, a fixed MIMO model can generate distinct multi-horizon forecasts without retraining. We therefore ask: once a multi-horizon MIMO forecaster has been trained, is the default MIMO forecast necessarily its best operational deployment? This deployment-side perspective is especially natural in finance. Practitioners care not only about average benchmark error, but also about repeated inference cost, heterogeneity across assets and hori-zons, and whether the selected policy matches the operational loss. This distinction is especially relevant in volatility forecasting, where long-horizon targets are highly uncertain, squared-error objectives can favor accurate but distributionally conservative conditional-mean forecasts, and log-scale MSE and finance-standard losses such as QLIKE emphasize different aspects of forecast quality [ 13 ]. De-ployment is therefore a budgeted and metric-sensitive evaluation problem. We study this perspective in daily multi-step stock-volatility forecasting. Across 20 stock-volatility series, multiple forecast hori-zons, and architectures ranging from linear models to PatchTST, we evaluate the forecast family induced by alternative inference-time rollout rules. Non-default rollout rules often improve over default MIMO deployment, but the strongest fixed rule varies across ar-chitectures and horizons, making any single static replacement unreliable. Validation-based deployment policies exploit this induced rule family under practical inference budgets. Under the primary MSE objective, validation-selected singletons provide a low-cost improve-ment over default MIMO, while small rule subsets recover much of the benefit of larger ensembles at substantially lower inference cost. However, policy rankings are metric-sensitive: MSE-selected policies do not transfer uniformly to QLIKE. Finally, compared with matched policies built from separately trained models, induced policies achieve near-parity predictive performance at substantially lower retraining cost. 
+
+> arXiv:2606.27688v1 [cs.LG] 26 Jun 2026 Riku Green, Zahraa S. Abdallah, and Telmo M Silva Filho
+
+The main implication is that inference-time deployment is a meaningful source of adaptiveness in financial forecasting. Our contributions are as follows: 
+
+• We introduce the induced-rule view of MIMO deployment for volatility forecasting: a single trained multi-output fore-caster defines a family of deployable predictors through inference-time rollout choices. 
+
+• We show that this induced rule family provides useful MSE-oriented deployment headroom. Non-default rollout rules often improve over default MIMO, but the best fixed rule is architecture- and horizon-dependent; validation-selected singletons and small rule subsets exploit this headroom under practical inference budgets. 
+
+• We show that deployment choice is metric-sensitive in volatility forecasting. Policies selected under validation MSE do not transfer uniformly to QLIKE, so the preferred deployment policy depends on the operational loss. 
+
+• We compare induced-forecast policies with matched poli-cies built from separately trained models, showing that in-duced policies can approach trained-policy accuracy while reducing the retraining cost needed to reproduce a selected deployment policy. 
+
+## 2 Related Work 
+
+Multi-step forecasting strategies. Multi-step forecasting is com-monly organized around recursive, direct, hybrid, and multi-output strategies [ 17 ]. Strategy choice can materially affect forecast er-ror, and in the multi-output setting it also affects inference cost: recursive-style deployment with committed output size 𝑠 requires approximately ⌈𝐻 /𝑠 ⌉ rollout calls, whereas default MIMO deploy-ment predicts the full horizon in one call. Recent work shows that no single multi-step strategy is uniformly best across datasets and function classes [ 17 ], and that recursive and direct behavior can dif-fer because recursive composition changes the effective dynamics and uncertainty propagation of the learned predictor [ 14 , 15 ]. Our focus is different. We do not compare separately trained forecasting strategies as alternative model classes. Instead, we study how a 
+
+single trained MIMO model can be redeployed through alternative inference-time rollout rules. 
+
+Forecast combination and ensembling. Forecast combination has a long history, from classical work showing that combining forecasts can reduce mean-squared error [ 2 ], to modern reviews documenting a wide range of successful weighting and aggrega-tion schemes [ 24 ]. More generally, ensemble methods are effec-tive when component predictors are individually useful but not perfectly correlated [ 4, 9], and forecasting evidence continues to support combinations as a strong baseline [ 19 ]. Prior work also em-phasizes that the value of combination depends on the uniqueness and dependence structure of the component forecasts [ 23 , 27 ]. In multi-step forecasting, dynamic strategy selection and combination can help when the best fixed strategy is not knowable a priori [ 16 ]. Our setting differs from both conventional ensemble construction and stochastic test-time ensembling. Rather than training many independent predictors or sampling randomized model evaluations, as in MC dropout [ 11 ], we obtain a deterministic family of forecasts from a single trained model by varying only the inference-time rollout rule. Diversity therefore comes from different compositions of the same forecasting map and the self-induced states visited during deployment, while the trained parameters remain fixed. 
+
+Financial volatility forecasting. Volatility forecasting is central to financial risk management, volatility timing, and the broader realized-volatility literature [ 1, 5 , 7, 10 ]. Recent surveys document the growing role of machine learning and deep learning in financial forecasting and volatility prediction [ 3, 12 , 20 , 25 ]. Recent empiri-cal evidence further shows that machine learning methods can be competitive with, and often outperform, strong HAR-style realized-volatility baselines [ 6]. Much of this literature emphasizes model class, feature design, and predictive accuracy. Our contribution is complementary: we do not propose a new volatility architecture, but study how deployment choices within a trained multi-horizon forecaster affect accuracy, inference cost, and metric-sensitive eval-uation. 
+
+Positioning of this work. This paper studies deployment choice as a source of variation within a fixed trained forecaster. Rather than comparing separately trained multi-step strategies, constructing ensembles from independently trained models, or proposing a new volatility architecture, we hold the trained MIMO model fixed and vary only the inference-time rollout rule. This isolates a deployment-side mechanism by which one model induces multiple predictors with different empirical behavior. In the volatility setting, this lets us evaluate whether the induced rule family can improve MSE-oriented deployment under inference budgets, and whether policies selected under MSE remain preferable under QLIKE. 
+
+## 3 Background 
+
+We study supervised multi-step forecasting from a univariate time series 
+
+{𝑧 𝑡 }𝑇 𝑡 =1.
+
+Using an input window of length 𝑊 and forecast horizon 𝐻 , we form supervised input–target pairs 
+
+𝑋 = {𝑥 𝑡 }𝑇 −𝐻 𝑡 =𝑊 , 𝑌 = {𝑦 𝑡 }𝑇 −𝐻 𝑡 =𝑊 , (1) 
+
+𝑥 𝑡 = 𝑧 𝑡 −𝑊 +1: 𝑡 , 𝑦 𝑡 = 𝑧 𝑡 +1: 𝑡 +𝐻 . (2) Each example therefore consists of a historical window 𝑥 𝑡 and its future target block 𝑦 𝑡 .A forecasting model maps the current state to an 𝐻 -step predic-tion, 
+
+𝑓 𝜃 (𝑥 𝑡 ) ↦ → ˆ𝑦 𝑡 +1: 𝑡 +𝐻 .
+
+A standard distinction in multi-step forecasting is between recur-sive and multi-output deployment. In a recursive strategy, the model predicts a small number of future steps, feeds those predictions back into the state, and repeats until the full horizon is covered. In a multi-output strategy, the model predicts the full horizon in a single call. We refer to this latter case as MIMO, which is the default direct deployment of a multi-output forecaster. Figure 1 illustrates the relationship between default MIMO deployment, block-recursive deployment, and the fully recursive extreme; Appendix A.3 gives a concrete rollout example. In our setting, a trained MIMO model can be redeployed through smaller committed output blocks. Let 𝑠 denote the number of fore-cast steps committed per call. Then 
+
+• 𝑠 = 𝐻 recovers the default MIMO forecast; Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting            
+
+> 𝑡 +1𝑡 +2𝑡 +3𝑡 +4𝑡 +5
+> Forecast horizon
+> 𝐻 =5
+
+Default MIMO 
+
+(𝑠 = 5) x𝑡 𝑓 𝜃 
+
+> single-shot forecast
+
+Block-recursive 
+
+(𝑠 = 2)
+
+x𝑡 ˆx𝑡 +2 ˆx𝑡 +4   
+
+> ⊕⊕
+> 𝑓 𝜃
+> (truncate output past 𝑡 +2)
+> 𝑓 𝜃
+> · · ·
+> 𝑓 𝜃  Truncated past desired horizon
+
+Fully recursive 
+
+(𝑠 = 1)
+
+x𝑡 ˆx𝑡 +1 ˆx𝑡 +2 ˆx𝑡 +3 ˆx𝑡 +4   
+
+> ⊕⊕⊕⊕
+> 𝑓 𝜃
+> 𝑓 𝜃
+> 𝑓 𝜃
+> 𝑓 𝜃
+> 𝑓 𝜃
+> · · ·
+
+Figure 1: A trained 𝐻 -output MIMO forecaster can be redeployed with smaller block size 𝑠 ≤ 𝐻 . Top: default MIMO deployment uses all 𝐻 = 5 outputs in one shot. Middle: block-recursive deployment with 𝑠 = 2 commits the first two outputs from each call; these committed predictions are fused with the current state to form the next rolled state, which is then reused by the same forecasting function 𝑓 𝜃 . Bottom: fully recursive deployment with 𝑠 = 1 repeats the same forecast-and-roll procedure one step at a time, producing updated states ˆx𝑡 +1, . . . , ˆx𝑡 +4 before the final fifth committed prediction. Points to the right of the dotted line indicate outputs emitted beyond the desired horizon; these are truncated at deployment time. 
+
+• 1 ≤ 𝑠 < 𝐻 gives block-recursive multi-output deployment; 
+
+• 𝑠 = 1 gives the fully recursive extreme. To compare deployment rules across horizons, we index them by the rollout ratio 
+
+𝑟 = 𝑠 𝐻 .
+
+Thus, a single trained model induces a family of deployable forecasts 
+
+n
+
+ˆ𝑦 (𝑟 ) 
+
+> 𝑡 +1: 𝑡 +𝐻
+
+: 𝑟 ∈ R 
+
+o
+
+.
+
+To make this dependence explicit, let 𝐶 𝑠 (·) denote the operator that retains only the first 𝑠 outputs of an 𝐻 -output prediction, and let 𝑈 (· , ·) denote the state-update operator that appends those com-mitted predictions to the current input window and truncates back to length 𝑊 . Starting from 𝑥 (0) 
+
+> 𝑡
+
+= 𝑥 𝑡 , deployment with block size 𝑠 
+
+generates rolled states 
+
+𝑥 (𝑘 +1) 
+
+> 𝑡
+
+= 𝑈 
+
+
+
+𝑥 (𝑘 ) 
+
+> 𝑡
+
+, 𝐶 𝑠 
+
+
+
+𝑓 𝜃 (𝑥 (𝑘 ) 
+
+> 𝑡
+
+)
+
+ 
+
+.
+
+The corresponding deployed 𝐻 -step predictor is therefore the com-posed map 
+
+𝑔 𝜃,𝑠 (𝑥 𝑡 ) = concat 
+
+
+
+𝐶 𝑠 (𝑓 𝜃 (𝑥 (0) 
+
+> 𝑡
+
+)) , 𝐶 𝑠 (𝑓 𝜃 (𝑥 (1) 
+
+> 𝑡
+
+)) , . . . 
+
+ 
+
+> 1: 𝐻
+
+,
+
+where concatenation is truncated to the first 𝐻 forecast steps. Changing 𝑠 therefore changes the effective deployed predictor 𝑔 𝜃,𝑠 
+
+even when the trained parameters 𝜃 are fixed. This deployment-side view is consistent with [ 15 ], which argues that recursive compo-sition can materially alter the effective prediction problem faced at inference time. In particular, different rollout rules evaluate the same trained forecaster on different self-induced states, and so can produce genuinely different multi-step predictors. We study whether this induced family can be exploited through forecast aggregation. For a subset of rollout rules 𝑆 ⊆ R , we con-sider the weighted combination 
+
+ˆ𝑦 ens =∑︁  
+
+> 𝑟 ∈𝑆
+
+𝑤 𝑟 ˆ𝑦 (𝑟 ) .
+
+The two ensemble variants differ only in how the weights are chosen. In the simple ensemble, the weights are fixed uniformly, 
+
+𝑤 𝑟 = |𝑆 |−1, 𝑟 ∈ 𝑆. 
+
+In the linear ensemble, the weights {𝑤 𝑟 }𝑟 ∈𝑆 are learned from held-out input–target pairs (𝑥 𝑡 , 𝑦 𝑡 ), allowing the contribution of each induced forecast to adapt to empirical performance. The rationale for aggregation is forecast diversity, but diversity alone is not sufficient. Aggregation helps when the component forecasts make sufficiently different errors, so that averaging or weighting can cancel residual variation. When errors are strongly aligned, however, combining more forecasts may offer little benefit [26 ]. This is why more forecasts are not necessarily better, and why subset selection or learned weighting may outperform naive expansion of the ensemble. 
+
+## 4 Experimental Setup 
+
+We evaluate whether alternative deployment rules from a single trained multi-output forecaster can improve daily stock-volatility Riku Green, Zahraa S. Abdallah, and Telmo M Silva Filho 
+
+forecasting, and whether aggregating these induced forecasts yields a useful accuracy–cost trade-off. 
+
+## 4.1 Data and task 
+
+We study multi-step forecasting of daily stock volatility using the VOLARE archive [ 8] on 20 univariate stock series, each evaluated with 3 independent repeats. The volatility target is the log realized variance, computed as a subsampled 5-minute realized variance estimator ( rv5 _ss ), which aggregates squared intraday returns and provides a noise-robust proxy of daily volatility. Each example uses an input window of length 𝑊 = 20 to predict the next 𝐻 steps, with 𝐻 ∈ { 10 , 20 , 30 }, allowing us to evaluate robustness across different forecasting horizons. Series are 2,827 values in total length and split chronologically into train, validation, and test segments using 70%, 15%, 15% for each split respectively. All subset selection and linear-combiner fitting use validation only; test is used only for final evaluation. 
+
+## 4.2 Models 
+
+We evaluate a diverse set of forecasting architectures spanning linear, recurrent, and transformer-based models. Specifically, we consider a linear baseline ( LinearNet ), a multilayer perceptron (MLP ), a long short-term memory recurrent network ( LSTM [18 ]), a deep residual forecasting architecture ( N-BEATS [22 ]), and a transformer-based time series model ( PatchTST [21]). Each model is trained as a direct multi-output forecaster, predict-ing the full horizon in a single forward pass. Training is performed using the Adam optimizer with learning rate 10 −3, batch size 128, and 100 epochs. Model selection is based on validation error over the full forecasting horizon. Additional architecture-specific hyper-parameters are provided in Appendix B. 
+
+## 4.3 Induced rule pool and deployable policies 
+
+For each trained model, we evaluate a fixed pool of inference-time rollout rules. Each rule is defined by an output block size 𝑠 , or equivalently a rollout ratio 𝑟 = 𝑠 /𝐻 , and produces a distinct multi-step forecast from the same trained parameters. For each horizon 
+
+𝐻 ∈ { 10 , 20 , 30 }, we use eight approximately uniformly spaced output sizes between 1 and 𝐻 . This gives coverage across a broad range of recursive depth and inference-time cost, from the fully recursive extreme ( 𝑠 = 1) to the default direct MIMO forecast (𝑠 = 𝐻 ). We evaluate the following deployment policies: 
+
+• Default MIMO : the standard direct forecast with 𝑠 = 𝐻 ;
+
+• Singleton rules : each induced rule deployed on its own; 
+
+• Validation-selected singleton : the single induced rule with the best validation performance; 
+
+• Subset ensembles : simple or linear ensembles formed from subsets of induced rules; 
+
+• Full simple ensemble : the uniform average over the full rule pool; 
+
+• Full linear ensemble : a linear combination over the full rule pool. To study the budgeted deployment space, we evaluate ensembles built from rule subsets of size 𝑘 . The reported 𝑘 -subset policies use greedy forward selection on the validation split. Starting from the empty set, we add one rollout rule at a time. At each step, we choose the remaining rule whose inclusion gives the lowest validation MSE for the current ensemble. For a greedy simple subset, the validation score is the MSE of the uniform average over the selected rules. For a greedy linear subset, the validation score is the MSE after fitting an ordinary-least-squares linear combiner on the validation split, with no intercept. After 𝑘 rules have been selected, the selected subset is fixed and evaluated once on the test split. Linear subset weights are fitted only on validation data and then applied unchanged to the test forecasts. We also evaluate randomly sampled 𝑘 -subsets as diagnostic base-lines. For each 𝑘 , we sample up to min 
+
+n | R cand |
+
+> 𝑘
+
+, 50 
+
+o
+
+distinct subsets uniformly without replacement from the candidate rule pool Rcand ,enumerating all subsets when fewer than 50 are available. 
+
+## 4.4 Evaluation 
+
+Our primary baseline is the default MIMO deployment within each function class. Since the central question is whether a trained multi-output forecaster is best used through its default MIMO rule, we report all main metrics relative to this within-class baseline. Let 𝑦 𝑡 +ℎ = log RV 𝑡 +ℎ denote the target at horizon step ℎ, where 
+
+RV 𝑡 +ℎ is the realized variance, and let ˆ𝑦 𝑡 +ℎ denote the corresponding forecast. Performance is evaluated at the task level over the full multi-step horizon, rather than stepwise by forecast depth, so that each horizon forecast is treated as a single decision problem. For a single forecast block, we define the horizon-averaged mean squared error on the log-volatility scale as 
+
+MSE ( ˆ𝑦 𝑡 , 𝑦 𝑡 ) = 1
+
+𝐻 
+
+> 𝐻
+
+∑︁ 
+
+> ℎ=1
+
+( ˆ𝑦 𝑡 +ℎ − 𝑦 𝑡 +ℎ )2.
+
+Because the forecasting target is log realized variance, QLIKE is evaluated on the original variance scale rather than directly on the log scale. Defining 
+
+𝑣 𝑡 +ℎ = exp (𝑦 𝑡 +ℎ ), ˆ𝑣 𝑡 +ℎ = exp ( ˆ𝑦 𝑡 +ℎ ),
+
+we compute the horizon-averaged QLIKE loss as 
+
+QLIKE ( ˆ𝑦 𝑡 , 𝑦 𝑡 ) = 1
+
+𝐻 
+
+> 𝐻
+
+∑︁ 
+
+> ℎ=1
+
+ 𝑣 𝑡 +ℎ
+
+ˆ𝑣 𝑡 +ℎ
+
+− log 𝑣 𝑡 +ℎ
+
+ˆ𝑣 𝑡 +ℎ
+
+− 1
+
+
+
+.
+
+Equivalently, since 𝑦 𝑡 +ℎ = log 𝑣 𝑡 +ℎ and ˆ𝑦 𝑡 +ℎ = log ˆ 𝑣 𝑡 +ℎ ,
+
+QLIKE ( ˆ𝑦 𝑡 , 𝑦 𝑡 ) = 1
+
+𝐻 
+
+> 𝐻
+
+∑︁ 
+
+> ℎ=1
+
+(exp (𝑦 𝑡 +ℎ − ˆ𝑦 𝑡 +ℎ ) − ( 𝑦 𝑡 +ℎ − ˆ𝑦 𝑡 +ℎ ) − 1) .
+
+For a deployed predictor, each loss is averaged over all test fore-cast blocks in the task. Let 𝐿 ( ˆ𝑦 ) denote the resulting value of an evaluation metric for a deployed forecast ˆ𝑦 , and let ˆ𝑦 MIMO denote the corresponding default MIMO forecast. For any loss or cost metric 𝐿 , we report the relative score 
+
+𝐿 ( ˆ𝑦 )
+
+𝐿 ( ˆ𝑦 MIMO ) .
+
+Values below 1 indicate improvement over default MIMO, while values equal to 1 indicate parity. Using this convention, we report relative test MSE, relative QLIKE, and relative inference time. MSE evaluates predictive ac-curacy on the log-realized-variance scale used for training, while Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting 1 2 3 4 6 7 8                              
+
+> Rollout Chunk Size (s-values)
+> Linear
+> MLP
+> LSTM
+> NBeats
+> PatchTST
+> 76.7 65.0 76.7 78.3 80.0 83.3 78.3
+> 16.7 21.7 31.7 35.0 38.3 45.0 46.7
+> 36.7 51.7 56.7 63.3 68.3 61.7 63.3
+> 28.3 36.7 41.7 45.0 45.0 45.0 50.0
+> 58.3 68.3 68.3 61.7 58.3 61.7 63.3
+
+(a) H = 10. 1 3 6 9 11 14 17                                
+
+> Rollout Chunk Size (s-values)
+> Linear
+> MLP
+> LSTM
+> NBeats
+> PatchTST
+> 80.0 86.7 88.3 86.7 86.7 80.0 85.0
+> 25.0 60.0 71.7 76.7 83.3 78.3 63.3
+> 41.7 41.7 38.3 31.7 33.3 36.7 38.3
+> 36.7 61.7 65.0 70.0 80.0 78.3 76.7
+> 70.0 66.7 60.0 78.3 85.0 78.3 78.3
+
+(b) H = 20. 1 5 9 13 17 21 25                                
+
+> Rollout Chunk Size (s-values)
+> Linear
+> MLP
+> LSTM
+> NBeats
+> PatchTST
+> 88.3 90.0 81.7 86.7 86.7 93.3 93.3
+> 31.7 33.3 50.0 53.3 55.0 61.7 63.3
+> 31.7 23.3 20.0 28.3 41.7 38.3 53.3
+> 63.3 83.3 78.3 91.7 91.7 91.7 91.7
+> 73.3 50.0 45.0 55.0 38.3 61.7 78.3
+> 0
+> 25
+> 50
+> 75
+> 100
+> Win rate vs MIMO (%)
+
+(c) H = 30. 
+
+Figure 2: Rule-level win rates against default MIMO across horizons. For each horizon, cells show the fraction of tasks on which a non-MIMO singleton deployment rule outperforms default MIMO for the same trained model. Many non-MIMO rules beat MIMO on a majority of tasks, showing substantial deployment headroom. At the same time, the strongest rule depends on model class and horizon, indicating that no single fixed alternative rule dominates globally. 8 7 6 4 3 2 1          
+
+> Rollout chunk size s(positioned by rollout depth H/s)
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> 1.15
+> MSE ratio vs MIMO (lower is better)
+> Model
+> Linear
+> MLP
+> LSTM
+> N-BEATS
+> PatchTST
+> 22234510
+> Rollout calls H/s
+
+(a) H = 10. 17 14 11 9 6 3 1           
+
+> Rollout chunk size s(positioned by rollout depth H/s)
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> 1.15
+> MSE ratio vs MIMO (lower is better)
+> Model
+> Linear
+> MLP
+> LSTM
+> N-BEATS
+> PatchTST
+> 22234720
+> Rollout calls H/s
+
+(b) H = 20. 25 21 17 13 9 5 1           
+
+> Rollout chunk size s(positioned by rollout depth H/s)
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> 1.15
+> MSE ratio vs MIMO (lower is better)
+> Model
+> Linear
+> MLP
+> LSTM
+> N-BEATS
+> PatchTST
+> 22234630
+> Rollout calls H/s
+
+(c) H = 30. 
+
+Figure 3: Singleton deployment rules expose a heterogeneous accuracy–cost landscape. Each point is a fixed non-MIMO singleton rule for a given model class. The x-position uses the pre-ceiling rollout depth 𝐻 /𝑠 to separate rules with different chunk sizes, while the top axis reports the actual call budget ⌈𝐻 /𝑠 ⌉. The y-axis shows the median test MSE ratio relative to default MIMO, with error bars denoting interquartile variation across tasks. Dashed lines mark MIMO parity in error. 
+
+QLIKE evaluates the forecasts on the original variance scale and is standard in volatility forecasting. Win rate versus MIMO denotes the fraction of tasks on which a deployment policy achieves lower test MSE than default MIMO. For ensemble policies, inference time is taken as the sum of the inference costs of the constituent induced forecasts; we ignore aggregation overhead and linear weight fitting cost, since our focus is deployment-time forecasting cost and these additional costs are negligible in comparison. 
+
+## 5 Results 
+
+The empirical results are organized around the deployment deci-sions a practitioner would face after training a MIMO forecaster. We first ask whether the induced rollout rules contain useful al-ternatives to default MIMO deployment. We then ask whether validation-based policies can exploit those alternatives under in-ference budgets. Finally, we examine two qualifications: whether policies selected under MSE remain preferable under QLIKE, and whether induced policies are competitive with policies built from separately trained rule-specific models. Figures 2 and 3 summarize the rule-level evidence. They show that the induced rule family contains useful deployment headroom, but also that this headroom is heterogeneous across architectures, horizons, and inference costs. The remaining results therefore focus on validation-based policies rather than on choosing a single fixed non-MIMO rule. 
+
+## 5.1 Inference-time rollout rules expose deployment headroom 
+
+Figure 2 shows that non-MIMO singleton rules frequently outper-form default MIMO. The effect is not uniform: the strongest chunk size varies across model classes and horizons, and some architec-tures admit more useful non-MIMO alternatives than others. Thus, default MIMO is often not the best deployment of a trained multi-output model, but no single fixed rollout rule is a reliable global replacement. Figure 3 adds the cost dimension. Singleton rules occupy differ-ent regions of the accuracy–cost landscape: some deeper rollouts improve over MIMO, others do not, and rules with similar rollout depth can have different median MSE ratios. This indicates that the induced rule family contains useful deployment headroom, but inference cost alone is not a sufficient selection criterion. Riku Green, Zahraa S. Abdallah, and Telmo M Silva Filho                                                                                                                             
+
+> Val-sin Sim-k3 Lin-k3 Sim-ens Lin-Ens Model Win Median LQ UQ Win Median LQ UQ Win Median LQ UQ Win Median LQ UQ Win Median LQ UQ Linear 65.6 0.995 0.979 1.000 93.3 0.994 0.984 0.998 70.0 0.973 0.948 1.005 92.2 0.993 0.982 0.997 68.3 0.974 0.949 1.004 MLP 27.8 1.000 0.999 1.000 65.6 0.998 0.989 1.002 65.0 0.981 0.957 1.025 57.8 0.995 0.984 1.009 64.4 0.983 0.958 1.025 LSTM 35.6 1.000 0.990 1.020 48.9 1.000 0.987 1.015 51.1 0.999 0.973 1.038 49.4 1.000 0.987 1.015 50.6 0.999 0.974 1.038 NBEATS 57.8 0.991 0.968 1.000 85.6 0.975 0.947 0.993 85.0 0.942 0.908 0.980 73.3 0.970 0.947 1.003 85.0 0.943 0.907 0.980 PatchTST 86.7 0.945 0.901 0.989 95.6 0.950 0.920 0.971 95.6 0.838 0.808 0.874 81.7 0.966 0.946 0.986 95.6 0.837 0.808 0.876
+
+Table 1: Test performance of deployable policies by function class, relative to default MIMO. For each model class and policy, we report the fraction of tasks on which the policy improves over MIMO (Win, %), together with the median, lower quartile (LQ), and upper quartile (UQ) of the test MSE ratio relative to MIMO. Values below 1 indicate improvement over default MIMO. Aggregation often improves median MSE, but the strongest deployable policy remains architecture-dependent. 
+
+## 5.2 Validation-based policies exploit the induced rule family 
+
+We next ask whether validation-based policies can use this hetero-geneous rule family effectively. Figure 4 shows that, pooled over model classes, most operational policies improve on the MIMO baseline in median test MSE. Validation-selected singletons give low-cost gains, while subset and ensemble policies typically achieve larger reductions at higher inference cost. Linear subset and full linear aggregation are among the strongest pooled policies, often matching or exceeding the oracle best singleton benchmark. Table 1 shows that these gains remain architecture-dependent. Linear models benefit most consistently from simple averaging 10 0 10 1
+
+> Median inference-time ratio vs MIMO
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> 0.96
+> 0.98
+> 1.00
+> 1.02
+> Median MSE ratio vs MIMO  H=10
+> H=20
+> H=30
+> Operational policy
+> Oracle Best Single
+> Val. Best Single
+> Greedy Simple k=3
+> Greedy Linear k=3
+> Simple Ensemble
+> Linear Ensemble
+> Horizon
+> H=10
+> H=20
+> H=30
+
+Figure 4: Operational deployment policies improve the MSE– cost trade-off over default MIMO. Each point summarizes a policy by its median inference-time ratio and median test MSE ratio relative to MIMO, pooled over model classes; marker shape indicates horizon. Dashed lines mark the unit-cost, unit-error MIMO baseline, and black stars show the oracle best singleton benchmark. Validation-selected single-tons offer low-cost gains, while subset and ensemble policies achieve larger MSE reductions at higher inference cost, with linear aggregation often matching or exceeding the oracle singleton reference. 
+
+policies, while MLP and LSTM are closer to parity. N-BEATS and PatchTST show larger gains from aggregation, especially learned linear aggregation. Overall, validation-based deployment policies improve the MSE–cost trade-off, but the most effective policy de-pends on the model class. 
+
+## 5.3 The preferred operational policy depends on the budget 
+
+Table 2 summarizes the pooled MSE–cost trade-off by horizon. Validation-selected singletons are the lowest-cost upgrade over MIMO, but their accuracy gains are modest. Small subsets provide a stronger middle ground: simple 𝑘 = 3 subsets improve win rates at moderate cost, while linear 𝑘 = 3 subsets achieve the largest median MSE reductions in the pooled results. Full ensembles are substantially more expensive, and their additional gains over the corresponding 𝑘 = 3 policies are often small. This pattern is most visible for linear aggregation. At 𝐻 = 10 
+
+and 𝐻 = 20 , the full linear ensemble and linear 𝑘 = 3 subset have nearly identical median MSE ratios, but the subset is much cheaper. At 𝐻 = 30 , the full linear ensemble again provides only a marginal additional gain at considerably higher cost. These results suggest a simple operational protocol. A practitioner can first evaluate the induced rule pool on validation data, then choose the cheapest policy that meets the required accuracy improvement over default MIMO. When additional budget is minimal, this favors a validation-selected singleton; when moderate extra inference is acceptable, small subsets offer a stronger accuracy–cost compromise; and when cost is secondary, full ensembles serve as high-cost endpoints. 
+
+## 5.4 MSE gains do not transfer equally to QLIKE across deployment policies 
+
+The preceding results use test MSE relative to default MIMO as the primary objective. We now evaluate whether the same policies also improve QLIKE. To isolate transfer rather than re-selection, all policies are selected exactly as before using validation MSE only, and are then evaluated on the test set under both MSE and QLIKE. Figure 5 shows the model-class–policy level comparison. Several policies improve both MSE and QLIKE, but transfer is heteroge-neous. Validation-selected singletons and simple averaging policies more often remain near or inside the joint-improvement region. Learned linear combinations achieve stronger MSE reductions in several cases, but their QLIKE improvements are less consistent. Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting 
+
+Policy Win rate (%) MSE ratio Time ratio Horizon = 10 Val-sin 44.3 1.000 [0.976, 1.000] 2.66 [1.00, 5.46] Sim-k3 70.7 0.994 [0.972, 1.001] 8.16 [4.80, 12.18] Lin-k3 73.0 0.966 [0.916, 1.004] 10.47 [8.11, 13.22] Sim-ens 62.7 0.995 [0.977, 1.007] 24.76 [20.14, 25.72] Lin-ens 72.0 0.966 [0.915, 1.004] 24.76 [20.14, 25.72] Horizon = 20 Val-sin 51.3 0.999 [0.975, 1.000] 1.87 [1.00, 6.68] Sim-k3 82.3 0.990 [0.958, 0.998] 8.10 [4.73, 19.64] Lin-k3 70.0 0.970 [0.906, 1.009] 18.35 [13.44, 22.28] Sim-ens 75.0 0.989 [0.953, 0.999] 34.83 [27.74, 36.26] Lin-ens 69.0 0.969 [0.903, 1.015] 34.83 [27.74, 36.26] Horizon = 30 Val-sin 68.3 0.989 [0.952, 1.000] 3.45 [1.64, 18.92] Sim-k3 80.3 0.983 [0.950, 0.998] 11.44 [5.73, 29.97] Lin-k3 77.0 0.953 [0.874, 0.992] 23.30 [11.60, 31.13] Sim-ens 75.0 0.984 [0.957, 1.000] 41.91 [32.95, 43.84] Lin-ens 77.3 0.955 [0.875, 0.993] 41.91 [32.95, 43.84] 
+
+Table 2: Pooled policy-level performance relative to default MIMO. For each horizon and policy, we report the win rate against MIMO, the median test MSE ratio, and the median inference-time ratio, with interquartile ranges in brackets. Results are aggregated over model classes. Values below 1 indicate improved MSE or lower cost relative to MIMO. The table shows a deployment ladder: validation-selected single-tons are the lowest-cost upgrade, small subsets provide larger gains at moderate cost, and full ensembles are the highest-cost endpoint. 
+
+Figure 6 summarizes the same pattern by deployment family. Simple and linear subsets have broadly similar MSE win rates, but simple subsets convert MSE wins into QLIKE wins more reli-ably. Thus, policies that are strongest under squared error are not necessarily the most reliable under QLIKE. The point is not that MSE-based deployment is invalid. Rather, MSE and QLIKE reward different aspects of volatility forecasts, so a policy selected for one objective may not be the preferred policy for another. This makes deployment selection part of the evaluation design: the induced rule family should be searched under the operational loss that will matter in the intended financial use case. 
+
+## 5.5 Induced policies avoid a separately trained rule sweep 
+
+Finally, we compare induced policies with a more expensive alter-native: training a separate model for each candidate rollout block size and applying the same validation-based policy class to that trained rule family. This comparison does not assume rule-wise equivalence. An induced rule with block size 𝑠 and a model trained specifically for block size 𝑠 are different predictors, and the best rule in each family need not coincide. The question is instead practical: how much performance is lost by using the rule family exposed 0.80 0.85 0.90 0.95 1.00 
+
+> MSE ratio vs MIMO
+> 0.90
+> 0.95
+> 1.00
+> 1.05
+> 1.10
+> 1.15
+> QLIKE ratio vs MIMO
+> Policy
+> Val-sin
+> Sim-k3
+> Sim-k8
+> Lin-k3
+> Lin-k8
+> Model
+> Linear
+> MLP
+> LSTM
+> N-BEATS
+> PatchTST
+
+Figure 5: Transfer of MSE-selected deployment policies to QLIKE. Each point is a model-class–policy pair, with median test MSE ratio on the x-axis and median test QLIKE ratio on the y-axis, both relative to default MIMO. Error bars show interquartile ranges across tasks. Policies are selected using validation MSE only and are not re-tuned for QLIKE. Dashed lines mark MIMO parity; lower-left points improve both metrics, while upper-left points improve MSE but worsen QLIKE. 0.2 0.4 0.6 0.8 1.0 
+
+MSE win rate against MIMO 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> QLIKE win rate among MSE wins
+
+Policy family 
+
+Simple 
+
+Linear 
+
+Highlighted points 
+
+k=1 
+
+k=3 
+
+k=8 
+
+Figure 6: Transfer of MSE wins to QLIKE by deployment family. Each point corresponds to a subset size 𝑘 , aggregated across architectures within a deployment family. The x-axis shows the MSE win rate against default MIMO, and the y-axis shows the conditional QLIKE win rate among those MSE wins. Simple and linear subsets have similar MSE win rates, but simple subsets transfer MSE wins into QLIKE wins. 
+
+by one trained MIMO model, rather than paying for a separately trained rule sweep? Riku Green, Zahraa S. Abdallah, and Telmo M Silva Filho 
+
+Policy Induced Win (%) Median ΔMSE Q25 Q75 Oracle Ratio 
+
+Val-sin 50.2 0.00 -0.02 0.02 0.93 G-Sim-3 28.2 0.01 0.00 0.04 0.30 G-Lin-3 40.7 0.00 -0.01 0.02 0.30 Sim-ens 23.8 0.01 0.00 0.04 0.11 Lin-ens 41.8 0.00 -0.01 0.02 0.11 
+
+Table 3: Induced policies versus separately trained rule fam-ilies. We report ΔMSE = (MSE induced − MSE trained )/ MSE trained ,where negative values favor induced policies. “Induced Win” is the fraction of runs where the induced policy has lower MSE. “Oracle Ratio” is a post-selection lower bound on 
+
+Train induced /Train trained , charging the trained alternative only for the final selected policy members rather than for the full rule sweep. 
+
+Table 3 reports ΔMSE = MSE induced −MSE trained  
+
+> MSE trained
+
+, so negative values fa-vor induced policies and zero denotes parity. Separately trained rule families are slightly stronger overall, as reflected by induced win rates below 50% for most policies. However, median ΔMSE remains close to zero, so the extra training cost yields little median MSE improvement. Even under the oracle post-selection cost reported in the table, the induced-to-trained training ratio is about 0.30 for greedy 𝑘 = 3 policies and 0.11 for full ensembles. Under full policy search, the contrast is larger: induced policies require one trained MIMO model, whereas the separately trained alternative requires one model per candidate block size. 
+
+## 6 Discussion 
+
+Our results show that deployment is an active part of predictive de-sign in multi-horizon financial forecasting. A trained multi-output forecaster does not define only one deployed system: alternative rollout rules induce different predictors from the same learned pa-rameters, with different empirical accuracy and cost profiles. This distinction matters in volatility forecasting because predictions are generated repeatedly across assets and horizons, often under infer-ence budgets and under evaluation criteria that reflect downstream financial use. The main practical implication is that default MIMO deployment is often not the best use of a trained MIMO model. Non-default rollout rules frequently improve over MIMO, but the strongest fixed rule depends on the model class and forecast horizon. This makes a single global replacement rule unreliable and instead motivates deployment policies over the induced rule family. Under the primary MSE objective, validation-selected singletons provide a low-cost upgrade, while small subsets recover much of the available gain at substantially lower cost than full ensembles. The QLIKE results qualify this MSE-based conclusion rather than replacing it. Policies selected by validation MSE do not transfer uni-formly to QLIKE: learned linear combinations often achieve the strongest MSE reductions, but their improvements are less consis-tent under the volatility-sensitive loss. Simpler policies, such as singleton selection and simple averaging, tend to transfer more reli-ably across the two metrics. Thus, the preferred deployment policy depends not only on inference budget, but also on the operational loss used to evaluate volatility forecasts. Overall, the results support viewing a trained MIMO forecaster as a compact deployment space rather than a single predictor. This space can be exploited with simple validation-based policies, but the best operating point is budget- and metric-dependent. In financial forecasting settings where repeated train and inference cost, and evaluation mismatch are both relevant, deployment policy should therefore be evaluated alongside model architecture. Practically, the results suggest a lightweight deployment check for multi-horizon volatility forecasters. After training a MIMO model, one can gen-erate a small pool of induced rollout policies, evaluate them on validation data under the relevant operational loss, and select the cheapest policy that achieves the desired improvement over default MIMO. This procedure does not require retraining the base model, but it can reveal whether the trained forecaster is being underused by its default deployment rule. 
+
+Limitations and Future Work. Our study is limited to univariate daily realized-volatility forecasting, a fixed rollout family based on output block size, and simple deployment policies based on selection and aggregation. The quantitative trade-offs may differ in multivariate, higher-frequency, or cross-asset settings, and stronger budget-aware policies may improve on the baselines considered here. We evaluate forecast losses rather than downstream decisions; our results should not be read as evidence of improved portfolio utility or risk-control performance. They show that deployment policies can change volatility-forecast accuracy, cost, and QLIKE behavior; whether these changes translate into better financial decisions remains an important downstream evaluation question. 
+
+## Conclusion 
+
+A trained MIMO volatility forecaster is not a single deployed pre-dictor, but a family of predictors induced by inference-time rollout choices. We showed that this deployment space often improves over default MIMO, with validation-selected singletons and small subsets offering practical MSE–cost trade-offs without a separately trained rule sweep. Financial forecasting systems should therefore evaluate not only what model is trained, but how that model is deployed. 
+
+## References                          
+
+> [1] Torben G Andersen, Tim Bollerslev, Francis X Diebold, and Paul Labys. 2003. Modeling and forecasting realized volatility. Econometrica 71, 2 (2003), 579–625. [2] John M Bates and Clive WJ Granger. 1969. The combination of forecasts. Journal of the operational research society 20, 4 (1969), 451–468. [3] Itishree Behera, Pragyan Nanda, Soma Mitra, and Swapna Kumari. 2024. Machine learning approaches for forecasting financial market volatility. Machine learning approaches in financial analytics (2024), 431–451. [4] Leo Breiman. 2001. Random forests. Machine learning 45, 1 (2001), 5–32. [5] Andrea Bucci. 2017. Forecasting realized volatility: a review. Journal of Advanced Studies in Finance (JASF) 8, 16 (2017), 94–138. [6] Kim Christensen, Mathias Siggaard, and Bezirgen Veliyev. 2023. A machine learning approach to volatility forecasting. Journal of Financial Econometrics 21, 5 (2023), 1680–1727. [7] Peter F Christoffersen and Francis X Diebold. 2000. How relevant is volatility forecasting for financial risk management? Review of Economics and Statistics 82, 1 (2000), 12–22. [8] Fabrizio Cipollini, Giulia Cruciani, Giampiero M Gallo, Alessandra Insana, Edoardo Otranto, and Fabio Spagnolo. 2026. VOLatility Archive for Realized Estimates (VOLARE). arXiv preprint arXiv:2602.19732 (2026).
+
+Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting 
+
+[9] Thomas G Dietterich. 2000. Ensemble methods in machine learning. In Interna-tional workshop on multiple classifier systems . Springer, 1–15. [10] Jeff Fleming, Chris Kirby, and Barbara Ostdiek. 2001. The economic value of volatility timing. The Journal of Finance 56, 1 (2001), 329–352. [11] Yarin Gal and Zoubin Ghahramani. 2016. Dropout as a bayesian approximation: Representing model uncertainty in deep learning. In international conference on machine learning . PMLR, 1050–1059. [12] Sofia Giantsidi and Tarantola Claudia. 2025. Deep learning for financial forecast-ing: A review of recent advancements. Available at SSRN 5263710 (2025). [13] Riku Green, Zahraa S Abdallah, et al . 2026. Expectations vs. Realities: The Cost of MSE-Optimal Forecasting Under Conditional Uncertainty. arXiv preprint arXiv:2606.04342 (2026). [14] Riku Green, Zahraa S Abdallah, et al. 2026. Exposure Bias as Epistemic Underi-dentification in Recursive Forecasting. arXiv preprint arXiv:2606.12990 (2026). [15] Riku Green, Huw Day, Zahraa S Abdallah, et al . 2025. Epistemic Error Decom-position for Multi-step Time Series Forecasting: Rethinking Bias-Variance in Recursive and Direct Strategies. arXiv preprint arXiv:2511.11461 (2025). [16] Riku Green, Grant Stevens, Zahraa Abdallah, et al . 2024. Time-series classification for dynamic strategies in multi-step forecasting. arXiv preprint arXiv:2402.08373 
+
+(2024). [17] Riku Green, Grant Stevens, Zahraa S Abdallah, and Telmo M Silva Filho. 2025. Stratify: unifying multi-step forecasting strategies: R. Green et al. Data Mining and Knowledge Discovery 39, 5 (2025), 64. [18] Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long short-term memory. Neural computation 9, 8 (1997), 1735–1780. [19] Spyros Makridakis, Evangelos Spiliotis, and Vassilios Assimakopoulos. 2018. The M4 Competition: Results, findings, conclusion and way forward. International Journal of forecasting 34, 4 (2018), 802–808. [20] Ricardo P Masini, Marcelo C Medeiros, and Eduardo F Mendes. 2023. Machine learning advances for time series forecasting. Journal of economic surveys 37, 1 (2023), 76–111. [21] Yuqi Nie, Nam H Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam. 2022. A time series is worth 64 words: Long-term forecasting with transformers. arXiv preprint arXiv:2211.14730 (2022). [22] Boris N Oreshkin, Dmitri Carpov, Nicolas Chapados, and Yoshua Bengio. 2019. N-BEATS: Neural basis expansion analysis for interpretable time series forecasting. 
+
+arXiv preprint arXiv:1905.10437 (2019). [23] Mary E Thomson, Andrew C Pollock, Dilek Önkal, and M Sinan Gönül. 2019. Combining forecasts: Performance and coherence. International Journal of Fore-casting 35, 2 (2019), 474–484. [24] Xiaoqian Wang, Rob J Hyndman, Feng Li, and Yanfei Kang. 2023. Forecast combinations: An over 50-year review. International Journal of Forecasting 39, 4 (2023), 1518–1547. [25] Helmut Wasserbacher and Martin Spindler. 2022. Machine learning for financial forecasting, planning and analysis: recent developments and pitfalls. Digital Finance 4, 1 (2022), 63–88. [26] Danny Wood, Tingting Mu, Andrew M Webb, Henry WJ Reeve, Mikel Lujan, and Gavin Brown. 2023. A unified theory of diversity in ensemble learning. Journal of machine learning research 24, 359 (2023), 1–49. [27] Hao Wu and David Levinson. 2021. The ensemble approach to forecasting: A review and synthesis. Transportation Research Part C: Emerging Technologies 132 (2021), 103357. 
+
+## A Additional Methodological Context 
+
+This appendix adds a few extra notes on the forecasting target, the evaluation losses, the baseline comparison, and the rollout construction. These details are included to make the experimental setup easier to interpret. 
+
+## A.1 Log realized variance and QLIKE 
+
+We model log realized variance rather than realized variance di-rectly because realized variance is strictly positive, highly right-skewed, and typically more stable on the logarithmic scale. The log transformation reduces the effect of extreme volatility days and makes squared-error training closer to a scale-stabilized regression problem. QLIKE is evaluated on the original variance scale and is com-monly used in volatility forecasting because it penalizes errors in variance forecasts in a way that is relevant for risk measurement. Writing 𝑣 for realized variance and ˆ𝑣 for the variance forecast, the QLIKE loss is 𝑣 
+
+ˆ𝑣 − log 
+
+ 𝑣 
+
+ˆ𝑣 
+
+
+
+− 1.
+
+This loss is minimized at ˆ𝑣 = 𝑣 , but its shape is asymmetric in eco-nomically meaningful ways. In particular, severe under-prediction of variance can be heavily penalized because the ratio 𝑣 /ˆ𝑣 becomes large. This differs from log-scale MSE, which treats positive and negative log-errors symmetrically. Consequently, a deployment policy selected to minimize validation MSE need not be the best policy under QLIKE, which motivates the metric-transfer analysis in Section 5. 
+
+## A.2 Scope of the baseline comparison 
+
+The central comparison in this paper is between deployment poli-cies for a fixed trained multi-output forecaster, not between volatil-ity model classes. We therefore use within-class default MIMO as the primary baseline. This isolates the deployment-side question: once the model and trained parameters are fixed, is the standard direct MIMO forecast the best operational use of that model? Classical realized-volatility models such as HAR-RV are impor-tant baselines for absolute forecasting performance, but they ad-dress a different question: whether a machine-learning architecture outperforms a classical volatility model. HAR-style benchmark-ing would help calibrate absolute forecast quality, but it would not directly test whether alternative rollout rules improve a fixed MIMO forecaster. We therefore treat it as complementary to the within-class deployment comparisons studied here. 
+
+## A.3 Worked example of induced rollout 
+
+Consider a trained MIMO forecaster with horizon 𝐻 = 10 and a deployment block size 𝑠 = 2. On the first call, the model produces a 10-step forecast 
+
+𝑓 𝜃 (𝑥 𝑡 ) = ( ˆ𝑦 (0) 
+
+> 𝑡 +1
+
+, . . . , ˆ𝑦 (0) 
+
+> 𝑡 +10
+
+).
+
+The deployment rule commits only the first two values, 
+
+( ˆ𝑦 (0) 
+
+> 𝑡 +1
+
+, ˆ𝑦 (0)
+
+> 𝑡 +2
+
+),
+
+appends them to the input window, and truncates the window back to length 𝑊 to obtain the rolled state 𝑥 (1) 
+
+> 𝑡
+
+. The same trained model is then evaluated again: 
+
+𝑓 𝜃 (𝑥 (1) 
+
+> 𝑡
+
+) = ( ˆ𝑦 (1) 
+
+> 𝑡 +3
+
+, . . . , ˆ𝑦 (1)
+
+> 𝑡 +12
+
+),
+
+where only the first two outputs are again committed. Repeating this process five times produces the deployed 10-step forecast 
+
+ˆ𝑦 (𝑠 =2)  
+
+> 𝑡 +1: 𝑡 +10
+
+= ( ˆ𝑦 (0) 
+
+> 𝑡 +1
+
+, ˆ𝑦 (0) 
+
+> 𝑡 +2
+
+, ˆ𝑦 (1)
+
+> 𝑡 +3
+
+, ˆ𝑦 (1) 
+
+> 𝑡 +4
+
+, . . . , ˆ𝑦 (4) 
+
+> 𝑡 +9
+
+, ˆ𝑦 (4) 
+
+> 𝑡 +10
+
+).
+
+The trained parameters are unchanged throughout. Only the inference-time state sequence changes. Thus, different choices of 𝑠 define dif-ferent deployed predictors even though they reuse the same trained MIMO forecasting map. 
+
+## B Additional experimental details 
+
+Rollout block sizes. For each horizon, we use 𝐾 = 8 candidate deployment block sizes. In implementation these are generated by evenly spacing values between 1 and 𝐻 , converting to integers, and removing duplicates: 
+
+S𝐻 = unique (⌊ linspace (1, 𝐻, 𝐾 )⌉) , 𝐾 = 8,Riku Green, Zahraa S. Abdallah, and Telmo M Silva Filho                                                                                             
+
+> Val-sin Sim-k3 Lin-k3 Sim-ens Lin-ens Model 𝐻 Win Med. LQ UQ Win Med. LQ UQ Win Med. LQ UQ Win Med. LQ UQ Win Med. LQ UQ Linear 10 55.0 0.997 0.989 1.000 85.0 0.995 0.992 0.999 66.7 0.980 0.960 1.005 83.3 0.995 0.993 0.999 66.7 0.981 0.960 1.004 20 61.7 0.997 0.976 1.000 95.0 0.995 0.983 0.998 61.7 0.980 0.950 1.014 95.0 0.992 0.982 0.997 56.7 0.980 0.951 1.022 30 80.0 0.991 0.971 0.999 100.0 0.987 0.965 0.996 81.7 0.955 0.908 0.985 98.3 0.988 0.969 0.995 81.7 0.956 0.908 0.986 MLP 10 11.7 1.000 1.000 1.000 50.0 1.000 0.996 1.004 63.3 0.979 0.963 1.032 35.0 1.003 0.995 1.013 63.3 0.980 0.962 1.035 20 21.7 1.000 1.000 1.000 80.0 0.997 0.988 0.999 58.3 0.990 0.966 1.031 75.0 0.991 0.978 0.999 56.7 0.990 0.966 1.032 30 50.0 1.000 0.983 1.000 66.7 0.993 0.967 1.001 73.3 0.973 0.937 1.010 63.3 0.993 0.965 1.010 73.3 0.974 0.937 1.006 LSTM 10 40.0 1.000 0.978 1.013 56.7 0.997 0.978 1.012 56.7 0.991 0.958 1.042 61.7 0.994 0.982 1.012 53.3 0.995 0.959 1.042 20 36.7 1.000 0.992 1.018 50.0 1.000 0.987 1.017 50.0 1.000 0.976 1.038 48.3 1.001 0.988 1.019 50.0 1.000 0.975 1.039 30 30.0 1.000 0.997 1.025 40.0 1.002 0.992 1.017 46.7 1.003 0.982 1.033 38.3 1.005 0.993 1.014 48.3 1.000 0.981 1.036 N-BEATS 10 35.0 1.000 0.992 1.007 75.0 0.989 0.976 1.000 83.3 0.952 0.904 0.981 58.3 0.989 0.973 1.018 81.7 0.955 0.906 0.982 20 55.0 0.992 0.969 1.000 86.7 0.979 0.946 0.991 85.0 0.947 0.920 0.981 70.0 0.962 0.942 1.013 86.7 0.949 0.921 0.983 30 83.3 0.972 0.941 0.987 95.0 0.953 0.934 0.971 86.7 0.933 0.895 0.966 91.7 0.954 0.941 0.968 86.7 0.934 0.890 0.966 PatchTST 10 80.0 0.938 0.883 0.982 86.7 0.946 0.914 0.973 95.0 0.861 0.825 0.898 75.0 0.973 0.949 0.999 95.0 0.862 0.822 0.897 20 81.7 0.961 0.914 0.994 100.0 0.951 0.917 0.972 95.0 0.847 0.818 0.881 86.7 0.959 0.936 0.984 95.0 0.852 0.816 0.884 30 98.3 0.946 0.910 0.983 100.0 0.952 0.935 0.965 96.7 0.812 0.770 0.840 83.3 0.969 0.955 0.985 96.7 0.810 0.768 0.840
+
+Table 4: Horizon-wise version of Table 1. For each model class and horizon, we report the win rate against default MIMO and the median, lower quartile (LQ), and upper quartile (UQ) of the test MSE ratio relative to default MIMO over asset–seed runs. Values below one indicate improvement. 
+
+where ⌊·⌉ denotes integer rounding as used in the implementation. This gives approximately uniform coverage from the fully recursive extreme 𝑠 = 1 to the default MIMO rule 𝑠 = 𝐻 , while keeping the candidate deployment pool small enough for validation-based policy selection. For the reported horizons, this gives: 
+
+S10 = {1, 2, 3, 4, 6, 7, 8, 10 },
+
+S20 = {1, 3, 6, 9, 11 , 14 , 17 , 20 },
+
+S30 = {1, 5, 9, 13 , 17 , 21 , 25 , 30 }.
+
+Data and assets. We use the VOLARE realized-variance stock archive and evaluate 20 univariate equity volatility series: AAPL, ADBE, AMD, AMGN, AMZN, AXP, BA, CAT, CRM, CSCO, CVX, DIS, GE, GOOGL, GS, HD, HON, IBM, JNJ, and JPM. For each asset, observations are sorted chronologically and the forecasting target is the log realized variance, 
+
+𝑧 𝑡 = log (max (rv5 _ss 𝑡 , 10 −12 )) .
+
+Each series is split chronologically into 70% train, 15% validation, and 15% test segments. Normalisation is fitted on the training seg-ment only and then applied to validation and test: 
+
+˜𝑧 𝑡 = 𝑧 𝑡 − 𝜇 train 
+
+𝜎 train + 10 −8 .
+
+All models are trained and evaluated on the resulting normalized windowed datasets. Each input uses a window of length 𝑊 = 20 ,and we evaluate horizons 𝐻 ∈ { 10 , 20 , 30 }.
+
+Model families. We evaluate five forecaster classes: LinearNet, MLPModel, LSTMModel, N-BEATS, and PatchTST. Each model is trained as a direct multi-output forecaster that predicts the full horizon 𝐻 in one forward pass. All results use three random seeds, 
+
+{0, 1, 2}, for each asset, horizon, and model class. 
+
+Hyperparameters. Unless otherwise stated, all models are trained with Adam, learning rate 10 −3, batch size 128, and 100 training epochs. The shared neural-network configuration uses embedding width 64, one layer, and 10% dropout. PatchTST uses patch length 5, stride 2, and 4 attention heads. These values were selected using a short validation grid search over learning rate {10 −5, 10 −4, 10 −3 },embedding width {32 , 64 , 128 }, and number of layers {1, 2, 3}. Model selection is performed using validation rollout MSE over full hori-zon. 
+
+Checkpoint selection. Training is run for the full epoch budget, but the final saved model restores the epoch with the best validation rollout MSE. For the induced-rule family, where a single 𝐻 -output model can be rolled out with multiple block sizes, the selected checkpoint is the epoch with the best validation rollout MSE over the horizon. For the separately trained family, where one model is trained for each block size 𝑠 , the selected checkpoint is based on the validation rollout MSE for that same 𝑠 .
+
+## C Horizon Breakdown of Table 1 
+
+Table 4 provides a horizon-wise version of Table 1, reporting results separately for 𝐻 ∈ { 10 , 20 , 30 }. The qualitative conclusions are consistent across horizons. In particular, non-default deployment policies continue to outperform default MIMO on a substantial fraction of runs, but the strongest policy remains dependent on both the model class and the horizon. Validation-selected singletons provide modest but low-cost im-provements across all horizons, while subset and ensemble policies achieve larger median MSE reductions at higher inference cost. The relative performance of simple versus linear aggregation is also consistent with the main text: linear combinations often achieve stronger median MSE gains, but the advantage is not uniform across architectures or horizons. Overall, the horizon-wise breakdown confirms that the deploy-ment headroom identified in Table 2 is not driven by a particular forecast length, and that no single deployment policy dominates uniformly across horizons.

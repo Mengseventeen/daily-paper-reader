@@ -6,24 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-28
-- 运行时间：2026-06-28 20:04:26 UTC
+- 最新运行日期：2026-06-29
+- 运行时间：2026-06-29 21:38:21 UTC
 - 运行状态：成功
-- 本次总论文数：1
-- 精读区：1
-- 速读区：0
+- 本次总论文数：5
+- 精读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读1篇论文，聚焦金融智能体评估新环境。重点推荐《OpenFinGym》，提出了可验证的多任务模拟平台，专用于测试量化交易AI的核心能力。建议量化领域从业者关注，该环境可能成为智能体评估的重要基准。
-- 详情：[/202606/28/README](/202606/28/README)
+今日精读双获9.0高分，聚焦金融因果推理与AI投资审计。最值得看《Causal Connections》多语言微调金融QA和《Auditing AI Investment Recommendations》可执行动作审计。建议优先精读这两篇，再速读时间序列预训练与电商定价对齐法。
+- 详情：[/202606/29/README](/202606/29/README)
 
 ### 精读区论文标签
-1. [OpenFinGym: A Verifiable Multi-Task Gym Environment for Evaluating Quant Agents](/202606/28/2606.26350v1-openfingym-a-verifiable-multi-task-gym-environment-for-evaluating-quant-agents)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向量化智能体评估的多任务环境，涵盖投资组合管理
+1. [Causal Connections: Leveraging Multilingual Fine-Tuning for Financial QA@FinCausal 2026](/202606/29/2606.27446v1-causal-connections-leveraging-multilingual-fine-tuning-for-financial-qafincausal-2026)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：从金融叙述中抽取出因果关系，直接应用自然语言处理于金融分析
+2. [Auditing AI Investment Recommendations as Executable Actions](/202606/29/2606.27570v1-auditing-ai-investment-recommendations-as-executable-actions)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：审计AI投资建议作为可执行动作
+3. [Deployment-Side Adaptiveness in Multi-Horizon Volatility Forecasting](/202606/29/2606.27688v1-deployment-side-adaptiveness-in-multi-horizon-volatility-forecasting)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：使用深度学习架构的多期限波动率预测，直接适用于股票市场分析
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [The Simulacrum: Decision-Theoretic Pretraining for Near-Optimal Time-Series Forecasting and Inference](/202606/29/2606.27711v1-the-simulacrum-decision-theoretic-pretraining-for-near-optimal-time-series-forecasting-and-inference)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：基于决策论预训练的神经网络时间序列预测与推断框架
+2. [AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing](/202606/29/2606.26787v1-aigp-an-llm-based-framework-for-long-term-value-alignment-in-e-commerce-pricing)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：基于LLM的定价决策框架，可应用于金融AI
 
 
 <div class="dpr-home-promo-card">
