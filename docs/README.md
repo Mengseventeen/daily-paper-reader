@@ -6,50 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-30
-- 运行时间：2026-06-30 21:20:56 UTC
+- 最新运行日期：2026-07-01
+- 运行时间：2026-07-01 20:49:11 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：6
-- 速读区：4
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-今天精读了两篇9分论文，分别聚焦可解释图时序因果建模的风险投资决策优化，以及LLM嵌入供应链文本信号对收益可预测性的影响。最值得关注方向：图时序因果建模与风险感知投资决策、供应链文本传播与横截面收益预测。建议普通读者优先理解这两个框架的核心逻辑，再尝试复现或应用其开源工具。
-- 详情：[/202606/30/README](/202606/30/README)
+今日精选6篇量化金融与金融AI论文，重点关注税感知投资组合管理与金融Agent心理测评基准。  
+两篇高分论文分别提出三阶段税感知投资组合基础模型（9.0）和金融Agent纵向心理稳定性基准FinPersona-Bench（9.0），值得深入研读。  
+建议优先精读这两篇，再结合速读中的路径依赖交易信号最优执行与社区驱动虚拟资产市场测试床拓展应用思路。
+- 详情：[/202607/01/README](/202607/01/README)
 
 ### 精读区论文标签
-1. [FinInvest-GTCN: Explainable Graph-Temporal-Causal Modeling for Risk-Aware Investment Decision Optimization](/202606/30/2606.28933v1-fininvest-gtcn-explainable-graph-temporal-causal-modeling-for-risk-aware-investment-decision-optimization)  
+1. [A Three-Phase Foundation Model for Tax-Aware Personalized Portfolio Management](/202607/01/2606.30997v1-a-three-phase-foundation-model-for-tax-aware-personalized-portfolio-management)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：图-时序-因果网络用于风险感知投资决策
-2. [Supply Chain Propagation of Textual Signals: LLM Embeddings and Cross-Sectional Return Predictability](/202606/30/2606.29290v1-supply-chain-propagation-of-textual-signals-llm-embeddings-and-cross-sectional-return-predictability)  
+   evidence：基于深度强化学习的个性化投资组合管理，考虑税务因素
+2. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/01/2606.31522v1-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：LLM嵌入和供应链图用于收益预测
-3. [Adaptive Financial Transformer with Regime-Gated Attention for Stock Return Prediction](/202606/30/2606.29347v1-adaptive-financial-transformer-with-regime-gated-attention-for-stock-return-prediction)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：自适应金融Transformer用于股票收益预测
-4. [CLQT: A Closed-Loop, Cost-Aware, Strategy-Consistent Benchmark for Diagnostic Evaluation of LLM Portfolio-Management Agents](/202606/30/2606.29771v1-clqt-a-closed-loop-cost-aware-strategy-consistent-benchmark-for-diagnostic-evaluation-of-llm-portfolio-management-agents)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：LLM投资组合管理代理的诊断基准
-5. [AI Trading's Alpha Singularity: Emergent Market Reasoning through Agent-to-Agent Self-Evolution](/202606/30/2606.29194v1-ai-tradings-alpha-singularity-emergent-market-reasoning-through-agent-to-agent-self-evolution)  
+   evidence：面向自主金融代理（含交易指令）的基准测试
+3. [Fund2Persona: A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data](/202607/01/2606.29793v2-fund2persona-a-framework-for-building-and-refining-financial-advisor-personas-from-fund-disclosure-data)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：AI驱动的阿尔法挖掘与自进化交易代理
-6. [When Summaries Distort Decisions: Information Fidelity in LLM-Compressed Financial Analysis](/202606/30/2606.29251v1-when-summaries-distort-decisions-information-fidelity-in-llm-compressed-financial-analysis)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：研究LLM压缩金融分析时信息保真度对投资决策的影响
+   evidence：利用LLM从基金披露构建财务顾问角色
 
 ### 速读区论文标签
-1. [Persona-Trained Monte Carlo: Estimating Market-Outcome Distributions via Swarms of Persona-Conditioned Neural Policy Bots in a Limit Order Book](/202606/30/2606.29556v1-persona-trained-monte-carlo-estimating-market-outcome-distributions-via-swarms-of-persona-conditioned-neural-policy-bots-in-a-limit-order-book)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：深度强化学习用于市场模拟和股票分析
-2. [Fund2Persona: A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data](/202606/30/2606.29793v1-fund2persona-a-framework-for-building-and-refining-financial-advisor-personas-from-fund-disclosure-data)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：从基金数据构建金融顾问角色的框架
-3. [AI Premium](/202606/30/2606.30583v1-ai-premium)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：利用AI消费数据构建金融市场的AI因子和溢价
-4. [Constrained Tabular Diffusion for Finance](/202606/30/2606.28674v1-constrained-tabular-diffusion-for-finance)  
+1. [Signature-Based Optimal Execution for Statistical Arbitrage with Path-Dependent Trading Signals](/202607/01/2606.31387v1-signature-based-optimal-execution-for-statistical-arbitrage-with-path-dependent-trading-signals)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：生成扩散模型用于金融中带约束的表格数据生成
+   evidence：金融中的统计套利与最优执行
+2. [CSTrader: A Testbed for Language-Grounded Trading in a Community-Driven Virtual Asset Market](/202607/01/2606.31461v1-cstrader-a-testbed-for-language-grounded-trading-in-a-community-driven-virtual-asset-market)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：基于LLM的交易系统，利用虚拟资产市场中的社区讨论
+3. [Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework Applied to the S&P 500](/202607/01/2606.31251v1-regime-conditional-distributional-comparison-of-trading-strategies-a-gamlsszaga-framework-applied-to-the-sp-500)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：使用GAMLSS对S&P 500交易策略进行分布比较
 
 
 <div class="dpr-home-promo-card">
