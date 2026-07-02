@@ -6,40 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-01
-- 运行时间：2026-07-01 20:49:11 UTC
+- 最新运行日期：2026-07-02
+- 运行时间：2026-07-02 21:46:25 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：7
+- 精读区：5
+- 速读区：2
 
 ### 今日简报（AI）
-今日精选6篇量化金融与金融AI论文，重点关注税感知投资组合管理与金融Agent心理测评基准。  
-两篇高分论文分别提出三阶段税感知投资组合基础模型（9.0）和金融Agent纵向心理稳定性基准FinPersona-Bench（9.0），值得深入研读。  
-建议优先精读这两篇，再结合速读中的路径依赖交易信号最优执行与社区驱动虚拟资产市场测试床拓展应用思路。
-- 详情：[/202607/01/README](/202607/01/README)
+1) 今日7篇论文聚焦AI驱动金融决策，精读两篇高分文章分别探讨端到端参数化期货择时模型与新闻知识图谱信用风险报告生成。  
+2) 最值得关注：端到端参数化策略在跨资产期货择时中超越传统规则，以及新闻金融知识图谱可生成证据支持的信用风险报告。  
+3) 建议优先关注结合知识图谱与深度学习的方法，这对资产配置和信用分析的实际应用价值较高。
+- 详情：[/202607/02/README](/202607/02/README)
 
 ### 精读区论文标签
-1. [A Three-Phase Foundation Model for Tax-Aware Personalized Portfolio Management](/202607/01/2606.30997v1-a-three-phase-foundation-model-for-tax-aware-personalized-portfolio-management)  
+1. [End-to-End Parametric Portfolio Policies for Cross-Asset Futures Timing: When Do AI Models Beat Simple Rules?](/202607/02/2607.00475v1-end-to-end-parametric-portfolio-policies-for-cross-asset-futures-timing-when-do-ai-models-beat-simple-rules)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于深度强化学习的个性化投资组合管理，考虑税务因素
-2. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/01/2606.31522v1-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
+   evidence：端到端AI策略直接映射市场状态到期货投资组合权重，用于跨资产择时
+2. [Evidence-Supported Credit Risk Report Generation Using News-Centric Financial Knowledge Graphs](/202607/02/2607.01023v1-evidence-supported-credit-risk-report-generation-using-news-centric-financial-knowledge-graphs)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向自主金融代理（含交易指令）的基准测试
-3. [Fund2Persona: A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data](/202607/01/2606.29793v2-fund2persona-a-framework-for-building-and-refining-financial-advisor-personas-from-fund-disclosure-data)  
+   evidence：自然语言处理用于金融分析：信用风险报告生成
+3. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/02/2606.31522v2-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：利用LLM从基金披露构建财务顾问角色
+   evidence：用于评估自主金融代理行为稳定性的基准
+4. [Decision-focused Sparse Tangent Portfolio Optimization](/202607/02/2607.00581v1-decision-focused-sparse-tangent-portfolio-optimization)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：深度学习用于股票市场投资组合优化
+5. [Shapley in Context: Explaining Financial Language with Domain Expertise](/202607/02/2607.00856v1-shapley-in-context-explaining-financial-language-with-domain-expertise)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：使用Shapley值和领域知识解释金融语言模型
 
 ### 速读区论文标签
-1. [Signature-Based Optimal Execution for Statistical Arbitrage with Path-Dependent Trading Signals](/202607/01/2606.31387v1-signature-based-optimal-execution-for-statistical-arbitrage-with-path-dependent-trading-signals)  
+1. [Agent-to-Agent Finance: Blockchain Payments and Trust Infrastructure for Autonomous AI Agents](/202607/02/2607.00245v1-agent-to-agent-finance-blockchain-payments-and-trust-infrastructure-for-autonomous-ai-agents)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：金融中的统计套利与最优执行
-2. [CSTrader: A Testbed for Language-Grounded Trading in a Community-Driven Virtual Asset Market](/202607/01/2606.31461v1-cstrader-a-testbed-for-language-grounded-trading-in-a-community-driven-virtual-asset-market)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：基于LLM的交易系统，利用虚拟资产市场中的社区讨论
-3. [Regime-Conditional Distributional Comparison of Trading Strategies: A GAMLSS/ZAGA Framework Applied to the S&P 500](/202607/01/2606.31251v1-regime-conditional-distributional-comparison-of-trading-strategies-a-gamlsszaga-framework-applied-to-the-sp-500)  
+   evidence：自主AI代理金融交易的基础设施
+2. [Neural Network-Based Estimation of Time-Dependent Parameters in AR(p) Processes](/202607/02/2607.00470v1-neural-network-based-estimation-of-time-dependent-parameters-in-arp-processes)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：使用GAMLSS对S&P 500交易策略进行分布比较
+   evidence：神经网络估计时变AR参数，可应用于金融预测
 
 
 <div class="dpr-home-promo-card">
