@@ -6,26 +6,22 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-05
-- 运行时间：2026-07-05 21:00:50 UTC
+- 最新运行日期：2026-07-06
+- 运行时间：2026-07-06 21:41:08 UTC
 - 运行状态：成功
-- 本次总论文数：1
+- 本次总论文数：0
 - 精读区：0
-- 速读区：1
+- 速读区：0
 
 ### 今日简报（AI）
-今天仅速读了一篇7分论文，聚焦神经网络在AR(p)时变参数估计中的应用。  
-最值得看的方向：利用神经网络动态建模时间序列中的参数变化，适合处理非线性、非平稳数据。  
-建议先理解AR模型与时变参数的基本概念，再对比传统方法评估该网络的实用性与局限性。
-- 详情：[/202607/05/README](/202607/05/README)
+> 今日无新推荐，系统未产出可展示论文。
+- 详情：[/202607/06/README](/202607/06/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Neural Network-Based Estimation of Time-Dependent Parameters in AR(p) Processes](/202607/05/2607.00470v1-neural-network-based-estimation-of-time-dependent-parameters-in-arp-processes)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：基于神经网络的时变参数估计，可用于金融时间序列
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
