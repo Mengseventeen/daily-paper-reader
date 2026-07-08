@@ -1,0 +1,875 @@
+Title: Signature-based identification of volatility models from path geometry
+
+URL Source: https://arxiv.org/pdf/2607.06340v1
+
+Published Time: Wed, 08 Jul 2026 01:25:46 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Signature-based identification of volatility models from path geometry 
+
+# Òscar Burés § and Rafael De Santiago †
+
+# July 8, 2026 
+
+Abstract 
+
+We propose a signature-based framework for the identification of stochastic volatility model classes from observed path data. By mapping volatility trajectories into a feature space via truncated path signatures and applying a gradient boosting classifier, we show that it is possible to distinguish between different classes of volatility dynamics without relying on parametric calibration. Through a series of numerical experiments, we demonstrate that the method achieves high classification accuracy across a range of settings, from structurally distinct models to cases involving rough volatility models with closely spaced Hurst parameters. We show that the method remains effective under parameter uncertainty, where each simulated path is drawn with randomly sampled model parameters, and provide a detailed analysis of the misclassification pattern between the Heston and Ornstein–Uhlenbeck models in terms of the volatility of volatility parameter. The results highlight that most of the relevant discriminative information is captured by the first four levels of the signature, while higher-order terms provide only marginal improvements. Overall, the findings support the view that stochastic volatility models can be effectively identified through the geometry of their sample paths. 
+
+Keywords: Path signatures, stochastic volatility models, model identification, gradient boosting, rough volatility, Hurst parameter. 
+
+JEL Classification: C55, C58, C63, G13. 
+
+MSC 2020: : 60G22, 60H99, 68T05, 91G20. 
+
+# 1 Introduction 
+
+A common problem in applied science is how to infer from observed data the mechanism 
+
+underlying a dynamical system. In chemistry, for instance, one typically observes only a series of concentrations over time, while the true mechanism (a sequence of chemical reactions) is hidden. Scientists typically extract features from data (such as reaction rates and how these rates depend on concentrations), derive mathematical models (rate laws), and then compare alternative mechanisms manually by calibrating the models and assessing their goodness of fit. An alternative approach, made available by the development of machine learning techniques, is to define a finite set of possible mechanisms (classes), and then frame the calibration problem 
+
+The authors thank Elisa Alòs, Miguel A. Canela and Josep Vives for carefully reading an earlier version of this manuscript and for their valuable comments and suggestions. 
+
+> §
+
+Departament de Matemàtica Econòmica, Financera i Actuarial, Universitat de Barcelona. Diagonal 690–696, 08034 Barcelona, Spain. 
+
+> †
+
+Department of Managerial Decision Sciences, IESE Business School. Av. Pearson 21, 08034 Barcelona, Spain. Òscar Burés supported by program AGAUR-FI ajuts (2025 FI-1 00580) from the Department of Research and Universities of the Government of Catalonia and the co-funding of the European Social Fund Plus (ESF+). 
+
+1arXiv:2607.06340v1 [q-fin.CP] 7 Jul 2026 as a classification task. Rather than estimating the parameters of a fixed volatility model, one identifies the type of system that generated the data. Burés and Larrosa (2023) use this approach to identify the reaction mechanism from kinetic data. They simulate a range of candidate mechanisms and train a neural network to classify the underlying mechanism from a small number of observed concentration profiles. The model learns directly from the shape of the trajectories and is able to identify the correct mechanism with high accuracy. Inspired by this approach, we aim to infer the underlying volatility model directly from observed (simulated) paths. Our methodology differs from Burés and Larrosa (2023) in that, rather than learning from the raw trajectories, we learn from their signature representation. This distinction also influences our choice of learning algorithm and the overall framework. In particular, we investigate whether the signature of a volatility path (to be defined precisely below) contains enough information to identify the model driving the volatility dynamics. More precisely, we address the following questions: (i) how accurately can signatures distinguish between Heston, Ornstein-Uhlenbeck and rough Bergomi volatility; (ii) how well can they distinguish between rough Bergomi volatilities generated with different values of the Hurst parameter H.The signature of a path, originally introduced in Chen (1957) and developed rigorously in Lyons (1998), provides a rich and systematic encoding of its temporal structure. By mapping paths into a collection of iterated integrals, signatures capture nonlinear interactions between increments without relying on a specific parametric model. This makes them particularly well suited for representing and distinguishing the behaviors exhibited by different stochastic volatility models. On the one hand, signatures have been used for the calibration of the implied volatility surface, as in Cuchiero et al. (2025) and Alòs et al. (2026). In that setting, the volatility is represented as a linear functional of the truncated signature of a driving stochastic process, and the goal is to determine the coefficients of this functional so as to minimize the discrepancy between model-generated asset prices and market asset prices. On the other hand, a growing body of work has explored the use of machine learning techniques for the calibration of stochastic volatility models, in particular in the rough volatility setting; see, for instance, Stone (2020), Horvath et al. (2021), Bayer et al. (2019b), Hernandez (2017) or Kondratyev (2018). Our objective here is of a different nature. Rather than calibrating model parameters to market data, we address a model identification problem: given a volatility trajectory, can we infer the volatility model that generated it? Stone (2020) proposes a convolutional neural network approach to estimate the Hölder ex-ponent (equivalently, the Hurst parameter H) from simulated log-volatility paths of the rough Bergomi model. Calibration is framed as a regression problem, where the network is trained on paths with known H and then used to predict the Hurst parameter from unseen trajectories. Our approach differs in two important respects, which can be summarized as follows: 
+
+Input Output 
+
+Raw path −→ Parameter estimation (e.g. ˆH)Signature −→ Model identification (e.g. Heston vs. Ornstein–Uhlenbeck vs. rBergomi) First, rather than estimating a single parameter of a fixed model, we ask which class of stochastic volatility model generated the observed trajectory. Second, instead of feeding raw paths directly into a neural network, we map each path to its truncated signature before classification, providing a structured and theoretically grounded feature representation that captures the full geometry of the path. In this paper we simulate volatility paths from several benchmark stochastic volatility models, compute their truncated signatures, and train an XGBoost classifier to infer the underlying model class. We consider two settings of increasing difficulty: a controlled setting in which each model 2class is simulated with fixed parameter values, and a more demanding setting in which parameters are sampled randomly within given ranges, so that the classifier learns to identify model struc-ture rather than specific parameter configurations. Performance is evaluated on out-of-sample trajectories using confusion matrices and classification accuracy. The remainder of the paper is organized as follows. In Section 2 we introduce the basic elements of rough path theory required to define and compute path signatures. In Section 3 we describe the volatility models under consideration and discuss how their associated paths can be lifted and represented via signatures. In Section 4 we present the learning framework, with particular emphasis on the XGBoost algorithm. In Section 5, we address the question: “Can signatures distinguish between path geometries?” To this end, we perform a series of proof-of-concept experiments in which trajectories within each class are generated using fixed parameter values. In Section 6, we turn to the more challenging problem of model-class identification under parameter uncertainty, addressing the question: “Can signatures identify the underlying model class despite changing parameters?” In this setting, model parameters are randomly sampled for each trajectory, so that the classifier must learn to recognize structural properties of the volatility dynamics rather than features associated with a particular parameter configuration. We conclude in Section 7 with a discussion of the main findings and possible directions for future research. 
+
+# 2 Signatures of Rough Paths 
+
+We introduce here the essential ideas from rough path theory that underpin the signature-based approach. An insightful exposition is given in the Saint-Flour lecture notes by Lyons et al. (2007); see also Lyons and Qian (2002), Chevyrev and Kormilitzin (2016), and Geng (2021). In the paragraphs below we present the main results required for the implementation of signature-based models, omitting proofs. We follow Alòs et al. (2026), which provides a self-contained introduction to the necessary concepts and includes the proofs of most results. We begin with sufficiently regular trajectories. Let X : [0 , T ] → V be a path of bounded variation. Its signature is defined as the formal series of iterated integrals: 
+
+S(X)s,t =
+
+
+
+1,
+
+Z ts
+
+dX, 
+
+Z
+
+> s<u 1<u 2<t
+
+dX u1 ⊗ dX u2 ,
+
+Z
+
+> s<u 1<u 2<u 3<t
+
+dX u1 ⊗ dX u2 ⊗ dX u3 , . . . 
+
+
+
+.
+
+Let X take values in Rd. As the N -th iterated integral is a tensor with dN components, the natural framework to organize these objects is that of tensor algebras. We therefore introduce the following concepts. Let V be a finite-dimensional real vector space. The extended tensor algebra over V is defined as the space of formal series of tensors of all orders: 
+
+T (( V )) = {a = ( a0, a 1, . . . ) : an ∈ V ⊗n};
+
+The tensor algebra T (V ) is defined as the subspace of T (( V )) consisting of elements with finitely many non-zero terms. The truncated tensor algebra of order N is defined as 
+
+T N (V ) = {a ∈ T (( V )) : ak = 0 for all k > N }.
+
+For any a, b ∈ T N (V ), we define the truncated tensor product in T N (V ) as 
+
+a ⊗≤N b = π≤N (a ⊗ b),
+
+where the projection map π≤N : T (( V )) → T N (V ) is defined as π≤N (( ai)∞
+
+> i=0
+
+) := ( ai)Ni=0 . If there is no risk of confusion, we will use ⊗ in T N (V ) to denote ⊗≤N .Let (e1, . . . , e d) be a basis of V , and let I = ( i1, . . . , i n) ∈ { 1, . . . , d }n be a word of length n
+
+over the alphabet {1, . . . , d }. Then the family 
+
+{eI := ei1 ⊗ · · · ⊗ ein : |I| = n}
+
+3forms a basis of V ⊗n.Given ℓ ∈ T (V ) and a ∈ T (( V )) , with expansions 
+
+ℓ = X
+
+> |I|≥ 0
+
+ℓI eI , a = X
+
+> |I|≥ 0
+
+aI eI ,
+
+we introduce the linear functional 
+
+⟨ℓ, a ⟩ := X
+
+> |I|≥ 0
+
+ℓI aI ,
+
+which is well-defined since ℓ has finitely many non-zero coefficients. Note that the coordinates of 
+
+a can be recovered via ⟨eI , a ⟩ = aI .Signatures are characterized by the following two important properties. 
+
+Theorem 2.1 (Chen’s identity) . Let X : [0 , T ] → V be a continuous path of bounded variation. Then, for all t ∈ (0 , T ),
+
+S(X)0,T = S(X)0,t ⊗ S(X)t,T . (2.1) Chen’s identity enables the reconstruction of the signature of X over the interval [0 , T ] provided that it is known on a collection of subintervals that cover [0 , T ].Signatures also satisfy the group-like property . An element a ∈ T (( V )) is said to be group-like if for every pair ℓ1, ℓ 2 ∈ T (V ) we have 
+
+⟨ℓ1, a⟩⟨ ℓ2, a⟩ = ⟨ℓ1  ℓ2, a⟩,
+
+where the shuffle product  represents all the ways in which two tensors can be combined while preserving their internal order. We denote by G(V ) the set of group-like elements of T (( V )) .
+
+Proposition 2.2. Let X : [0 , T ] → V be a continuous path of bounded variation. Then, the signature of X satisfies the group-like property. That is, for every pair ℓ1, ℓ 2 ∈ T (V ),
+
+⟨ℓ1, S (X)0,T ⟩⟨ ℓ2, S (X)0,T ⟩ = ⟨ℓ1  ℓ2, S (X)0,T ⟩.
+
+The group-like property says that evaluating the shuffle is equivalent to evaluating each tensor separately and multiplying the results. As a consequence, products of signature coordinates can be expressed as linear combinations of higher-order coordinates. Let X : [0 , T ] → V be a continuous path of bounded variation and ∆T = {(s, t ) ∈ [0 , T ]2; s ≤ t}.The truncated signature of order N of a path X can be defined as 
+
+S(X)≤N : ∆ T → T N (V )(s, t ) 7 → π≤N (S(X)s,t ).
+
+We write S(X)≤N (s, t ) = S(X)≤Ns,t . It follows from Chen’s identity that, for all 0 ≤ s < u < t ≤ T ,
+
+S(X)≤Ns,t = S(X)≤Ns,u ⊗ S(X)≤Nu,t . (2.2) We say that the truncated signature S(X)≤N is multiplicative .
+
+# 2.1 Rough Paths 
+
+A rough path can be viewed as a lift of a path, obtained by enriching it with its iterated integrals. For smooth paths, this coincides with the classical signature, while for irregular paths this structure needs to be defined abstractly. We start with the following definition, that extends (2.2) to a more general setting. 4Definition 2.3 (Multiplicative functional) . For N ∈ N, let X : ∆ T → T N (V ) be a continuous map and denote X(s, t ) = Xs,t . Since Xs,t ∈ T N (V ), we can write Xs,t = ( X0
+
+> s,t
+
+, X1
+
+> s,t
+
+, . . . , XNs,t ),where Xks,t ∈ V ⊗k for each k. We say that X is a multiplicative functional of degree N in V if, for every (s, t ) ∈ ∆T , we have X0 
+
+> s,t
+
+:= 1 and 
+
+Xs,t = Xs,u ⊗ Xu,t (2.3) 
+
+for all s ≤ u ≤ t.
+
+By extension, we also refer to (2.3) as Chen’s identity. Instead of constructing the signature from a classical path, we now assume the algebraic structure of a signature and study its properties as a path taking values in the tensor algebra T N (V ).For a continuous functional X : ∆ T → T N (V ), let 
+
+|| X|| p·var := max  
+
+> 1≤k≤N
+
+sup 
+
+> D
+
+X
+
+> ti∈D
+
+|| πk(Xti,t i+1 )|| p/k V ⊗k
+
+!k/p 
+
+, (2.4) where the sup is taken over all the partitions D[0 ,T ]. If || X|| p·var < ∞, the functional X is said to have finite p-variation. The p-variation distance between two functionals X and Y of finite 
+
+p-variation is defined as 
+
+dp·var (X, Y) := || X − Y|| p·var . (2.5) The following result highlights that, for a multiplicative functional with finite p-variation, the first ⌊p⌋ levels completely capture all of its information. 
+
+Theorem 2.4 (Lyons’ Extension Theorem) . Let p ≥ 1 be a real number, N ≥ 1 an integer, and let X : ∆ T → T N (V ) be a multiplicative functional of degree N with finite p-variation. Suppose that N ≥ ⌊ p⌋. Then, for every integer n > N , there exists a unique continuous multiplicative functional 
+
+Y : ∆ T → T n(V )
+
+such that Y agrees with X up to level N (that is, π≤N (Y) = X), and Y has finite p-variation. Moreover, the map that sends X to its extension Y is continuous with respect to the p-variation metric. 
+
+This important result allows us to work with “compressed” versions of multiplicative function-als, which contain exactly the levels up to ⌊p⌋ because they capture all relevant information. 
+
+Definition 2.5 (Rough Path) . Let p ≥ 1. A p-rough path is a continuous multiplicative functional 
+
+X : ∆ T → T ⌊p⌋(V )
+
+of degree ⌊p⌋ with finite p-variation. The space of p-rough paths is denoted by ΩpT (V ).
+
+Rough paths form a highly abstract class, while paths of bounded variation are concrete and familiar. It is therefore natural to examine the rough paths that are close to signatures of bounded variation paths, namely, those that arise as limits of such signatures. 
+
+Definition 2.6 (Geometric Rough Paths) . A geometric p-rough path is a p-rough path X for which there exists a sequence of paths of bounded variation (Xn)n≥1 such that 
+
+lim  
+
+> n→∞
+
+dp·var (X, S (Xn)≤⌊ p⌋) = 0 .
+
+The space of geometric p-rough paths is denoted by GΩpT (V ).
+
+It follows from Proposition 2.2 that the signature of a bounded variation path satisfies the group-like property. Therefore, every geometric p-rough path takes values in G⌊p⌋(V ), the set of group-like elements in the truncated tensor algebra T ⌊p⌋(V ).However, not every p-rough path taking values in G⌊p⌋(V ) arises as the limit of signatures of bounded variation paths. This distinction motivates the following definition. 5Definition 2.7 (Weakly Geometric Rough Paths) . A weakly geometric p-rough path is a p-rough path taking values in G⌊p⌋(V ). The space of weakly geometric p-rough paths is denoted by 
+
+W G ΩpT (V ).
+
+Since the Itô signature of Brownian motion fails to be group-like , the canonical rough path lift is taken to be the Stratonovich lift , which is group-like: 
+
+Bs,t := 
+
+
+
+1, B t − Bs,
+
+Z ts
+
+(Bu − Bs) ◦ dB u
+
+
+
+.
+
+# 2.2 Time-augmented Paths 
+
+Let S(X) denote the signature of a path X : [0 , T ] → V . It is well known that the map 
+
+X 7 → S(X) is not injective: different paths can share the same signature—for example, if they trace out the same image at different speeds. To address this issue, instead of lifting Xt alone, we lift the augmented path ˆX : [0 , T ] → R ⊕ V defined by: 
+
+ˆXt := ( t, X t).
+
+Proposition 2.8 below shows that, under time augmentation, a path that admits a lift to a weakly geometric p-rough path continues to do so. And Theorem 2.11 shows that the time-augmented signature uniquely determines the path (i.e., that augmenting the path by adding time recovers injectivity). 
+
+Proposition 2.8. Let X : [0 , T ] → V be a continuous path that admits a weakly geometric p-rough path lift X ∈ W G ΩpT (V ). Define the time-augmented path ˆX : [0 , T ] → R ⊕ V by 
+
+ˆXt := ( t, X t).
+
+Then ˆX also admits a weakly geometric p-rough path lift ˆX ∈ W G ΩpT (R ⊕ V ).
+
+Once we know that there exists a lift for the time-augmented path ˆX, we define the corre-sponding space. 
+
+Definition 2.9 (Time-Augmented Weakly Geometric Rough Path) . A time-augmented weakly geometric p-rough path is a weakly geometric p-rough path X ∈ W G ΩpT (R ⊕ V ) such that (i) the first level satisfies π1(Xs,t ) = ˆXt − ˆXs, where ˆXt = ( t, X t) for some continuous path 
+
+X : [0 , T ] → V that admits a weakly geometric p-rough path lift; (ii) for any I with |I| ≤ ⌊ p⌋,
+
+⟨eI0, Xs,t ⟩ =
+
+Z ts
+
+⟨eI , Xs,u ⟩du, 
+
+where the integral is a Young integral, and where the notation eI0 means appending a 0 (the time component) to the multi-index I.We denote the space of such paths by W G ˆΩpT (V ).
+
+Time augmentation allows the signature to distinguish between paths that follow the same geometric shape but evolve at different speeds; it is essential for learning path-dependent func-tionals in an adapted way. Without time, the signature treats two paths with the same shape but different timing as indistinguishable—an undesirable feature in many stochastic or temporally sensitive learning tasks. Note that a rough path in W G ˆΩpT (V ) presupposes the existence of a path X : [0 , T ] → V ,which is augmented to ˆX : [0 , T ] → R ⊕ V . This contrasts with the rough paths in W G ΩpT (V ),which are defined independent of any base path. We now proceed to extend the rough paths. 62.3 Signatures of Rough Paths 
+
+Let X ∈ ΩpT (V ) be a p-rough path. By the extension theorem, for every integer N ≥ ⌊ p⌋,there exists a unique multiplicative extension of X to degree N with finite p-variation. Since this extension process can be carried out to arbitrarily high degrees, it is natural to define the signature 
+
+of a p-rough path as its formal infinite extension. This motivates the following definition. 
+
+Definition 2.10 (Signature of a Rough Path) . Let X ∈ ΩpT (V ) be a p-rough path. The truncated signature of order N ≥ ⌊ p⌋ is defined as the unique extension of X to level N with finite p-variation, denoted by: 
+
+S(X)≤N :=  1, S (X)1, . . . , S (X)N  ∈ T N (V ).
+
+The (full) signature of X is the formal series 
+
+S(X) : ∆ T → T (( V )) (s, t ) 7 → S(X)s,t := (1 , S (X)1
+
+> s,t
+
+, . . . , S (X)ns,t , . . . ),
+
+where S(X)ns,t ∈ V ⊗n denotes the n-th level of the extension. 
+
+Note the slight shift in notation that has taken place here. We started with a path X : [0 , T ] → V
+
+and constructed its signature, denoted by S(X) : ∆ T → T (( V )) . In contrast, we now start with a multiplicative functional X : ∆ T → T ⌊p⌋(V ), which satisfies specific algebraic and analytic properties (multiplicativity and finite p-variation) that allow it to be uniquely extended to higher levels N ≥ ⌊ p⌋. The above definition simply relabels this extended functional using the signature notation previously introduced for bounded variation paths. Although we do not perform model calibration in this paper, we briefly present the univer-sal approximation theorems to illustrate the power of signatures for representing and learning functionals of paths, particularly in supervised learning settings. The following result states that the signature of a time-augmented weakly geometric p-rough path X, evaluated at time T , uniquely determines X. We use the simplified notation Xt := X0,t .
+
+Theorem 2.11 (Uniqueness of the Signature) . Let X, Y ∈ W G ˆΩpT (V ). Then, 
+
+S(X)T = S(Y)T ⇐⇒ ∀ t ∈ [0 , T ], Xt = Yt.
+
+Note that W G ˆΩpT (V ), equipped with the p-variation distance, becomes a topological space whose topology is induced by the p-variation metric. The following important result is proved by applying the Stone–Weierstrass theorem. 
+
+Theorem 2.12 (First Universal Approximation Theorem) . Let K ⊂ W G ˆΩpT (V ) be compact, and let f : W G ˆΩpT (V ) → R be continuous with respect to the p-variation topology. Then, for every 
+
+ε > 0, there exists ℓ ∈ T (R ⊕ V ) such that 
+
+sup 
+
+> X∈K
+
+|f (X) − ⟨ ℓ, S (X)T ⟩| < ε. 
+
+The signature S(X), evaluated at time T , serves as a feature map that transforms a path into an infinite sequence of coordinates capturing all relevant information. Theorem 2.11 ensures that this representation is injective for time-augmented paths. Theorem 2.12 (First UAT) states that continuous functionals on compact subsets of the rough path space can be approximated arbitrarily well by linear functionals on the signature, that is, by finite linear combinations of iterated integrals. Consider a stochastic process of the form 
+
+Yt = f  (Xs)s∈[0 ,t ]
+
+,
+
+with each Xs ∈ W G ˆΩpt (V ). Assume that X : [0 , s ] → V admits a lift X ∈ W G ˆΩps (V ). We need this lift to be understood as living in W G ˆΩpt (V ), so that f can act on a common space. To 7interpret a rough path in W G ˆΩps (V ) as an element of W G ˆΩpt (V ) in a consistent way we need to stop the path (but not the time), and impose a specific topology in the new space. The concept of stopped rough paths provides a useful framework for handling adaptedness, but constructing the corresponding space of weakly geometric stopped p-rough paths, together with a suitable topology, is rather technical. We refer the reader to Kalsi et al. (2020) and Bayer et al. (2023) for a detailed treatment. At an intuitive level, the Second Universal Approximation Theorem extends Theorem 2.12 to functionals depending on the path up to variable times. In particular, it ensures that any continuous functional of a stopped rough path can be uniformly approximated—over both paths and truncation times t ∈ [0 , T ]—by linear functionals of the corresponding truncated signatures. We now turn to the practical implementation of these ideas. In particular, we focus on com-puting the signatures of volatility paths, which will serve as feature representations in the learning framework developed below. 
+
+# 3 Volatility Models and their Signatures 
+
+We begin by simulating sample paths from three stochastic processes commonly used to model volatility. The Heston model is a classical stochastic volatility model in which the variance follows a mean-reverting square-root process: 
+
+dS t = St
+
+√vt dB t dv t = κ(θ − vt) dt + ν√vt dW t, (3.1) where Bt and Wt are correlated Brownian motions, and the risk-free rate is assumed to be zero. The parameters κ, θ, and ξ respectively control the speed of mean reversion, the long-term variance level, and the volatility of volatility. The Heston model remains one of the most widely used frameworks in quantitative finance due to its analytical tractability and its ability to capture key facts such as volatility clustering. Any continuous semimartingale S = A + M , where M is a continuous local martingale and A
+
+is a continuous path of bounded variation on compact intervals, admits a canonical Stratonovich rough path lift, which is weakly geometric (see Friz and Victoir (2010), Chapter 14). 1 Therefore, the Heston variance process admits a canonical weakly geometric p-rough path lift. Note that the Feller condition 2κθ ≥ ν2 ensures positivity, but is not required for existence of the lift. Rough volatility models, such as those in Alòs et al. (2007), Fukasawa (2017), Gatheral et al. (2018), have gained popularity because they capture key empirical features of realized volatility that traditional Markovian models struggle to reproduce (such as the exploding term structure of the at-the-money skew as maturity tends to zero) and, when embedded in pricing models, produce option prices that match market data remarkably well. Here we consider the rough Bergomi model, a non-Markovian model introduced in Bayer et al. (2016) and designed to reproduce the empirically observed roughness of volatility. The variance process is given by 
+
+vt = v0 exp  ηW Ht − 12 η2t2H  , (3.2) where W Ht is a fractional Brownian motion with Hurst parameter H < 1/2.This model captures the fact that log-volatility exhibits rough sample paths, with regularity lower than that of Brownian motion. Empirical studies have shown that such rough volatility models provide a better fit to market data, particularly in reproducing the short-maturity implied volatility. See, for example, Gatheral et al. (2018), Livieri et al. (2018) and Bayer et al. (2019a). Unlike the case of continuous semimartingales, the rough path lift of fractional Brownian motion must be constructed using techniques from Gaussian process theory. See Friz and Hairer       
+
+> 1The roughness of Sis driven by the martingale component M, while the bounded variation part Acan be handled using classical integration. The construction of the lift relies on the Burkholder–Davis–Gundy inequality and properties of quadratic variation.
+
+8(2024), Chapter 10. Coutin and Qian (2002) show that fractional Brownian motion admits a canonical geometric rough path lift for any Hurst parameter H > 1/4.Finally, we also consider the Ornstein–Uhlenbeck (OU) process, defined by 
+
+dX t = κ(θ − Xt) dt + σ dW t, (3.3) which is a mean-reverting Gaussian process. While the OU process is not a realistic model for volatility in modern financial markets—since it lacks both stochastic volatility structure and rough-ness—it provides a useful benchmark due to its simplicity and well-understood properties. As the Ornstein–Uhlenbeck process is a continuous semimartingale, it admits a canonical weakly geometric rough path lift in the Stratonovich sense (it does not exhibit any additional roughness beyond that induced by the Brownian motion). We primarily focus on the Heston and rough Bergomi models, as they represent the most relevant frameworks for capturing market volatility dynamics in modern quantitative finance. The Ornstein–Uhlenbeck process is only included to test the ability of our methodology to distinguish between different types of dynamics. If V has dimension d, let dN := PNk=0 dk denote the dimension of the truncated tensor algebra 
+
+T N (V ). The following notation allows us to represent elements of T N (V ) as vectors in RdN . Let 
+
+L : {I; |I| ≤ N } → {1, . . . , d N }
+
+be a labeling function, that is, a bijection that assigns a unique index to each multi-index I of length at most N . For any ℓ = P 
+
+> |I|≤ N
+
+ℓI eI , the map 
+
+vec : T N (V ) → RdN
+
+ℓ 7 →  ℓL−1(1) , . . . , ℓ L−1(dN )
+
+
+
+flattens the elements of T N (V ), making it possible to identify tensors with vectors in RdN . This makes the use of signature data in numerical algorithms quite convenient. For example, assume that the dynamics of (Xt)t≥0 are given by 
+
+dX t = κ(θ − Xt) dt + νpXt dW t. (3.4) By Proposition 2.8, the time-augmented process also admits a weakly geometric p-rough path lift X ∈ W G ΩpT (R ⊕ R), where time corresponds to coordinate 0 and Xt to coordinate 1. The truncated signature of order 2 has the form 
+
+S(X)≤2 
+
+> t
+
+= 1, (t, X t),
+
+R t 
+
+> 0
+
+s ds R t 
+
+> 0
+
+s dX s
+
+R t 
+
+> 0
+
+Xs ds R t 
+
+> 0
+
+Xs dX s
+
+!! 
+
+,
+
+and the flattened signature can be written as: 
+
+vec (S(X)≤2 
+
+> t
+
+) = 
+
+
+
+1, t, X t, 12 t2,
+
+Z t
+
+> 0
+
+s dX s,
+
+Z t
+
+> 0
+
+Xs ds, 
+
+Z t
+
+> 0
+
+Xs dX s
+
+
+
+The third level of the signature, S(X)3 
+
+> t
+
+, consists of iterated integrals over 0 < u 0 < u 1 < u 2 < t ,indexed by I = ( i0, i 1, i 2) ∈ { 0, 1}3, and it includes 23 = 8 terms: 
+
+S(X)3 
+
+> t
+
+=
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+du 0 du 1 du 2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+du 0 du 1 dX u2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+du 0 dX u1 du 2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+du 0 dX u1 dX u2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+dX u0 du 1 du 2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+dX u0 du 1 dX u2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+dX u0 dX u1 du 2
+
+R t
+
+> 0
+
+R u2
+
+> 0
+
+R u1 
+
+> 0
+
+dX u0 dX u1 dX u2
+
+
+
+.
+
+The flattened truncated signature of order 3 is thus a vector in R15 . In Sections 5 and 6, we work with truncated signatures of order 4, for which dN = 31 , so that the vectorized signature 
+
+vec (S(X)≤4 
+
+> t
+
+) lies in R31 . Although this corresponds to a higher-order feature representation, the resulting dimension remains modest: each path is summarized by only 31 features, rather than by the full collection of observations along the trajectory. 94 Gradient boosting models 
+
+Our data has a tabular structure consisting of feature vectors obtained from truncated signa-tures. For this type of framework, tree-based ensemble methods are known to be accurate, robust, and easy to tune. This section briefly reviews the main ideas behind gradient boosting and the XGBoost algorithm. A decision tree is a simple and intuitive predictive rule that makes decisions by recursively partitioning the input space. At each internal node, the data are split according to a rule of the form xj ≤ c, where xj is one of the input features and c is a threshold. This process continues until reaching the terminal nodes (leaves), where the model outputs a prediction. Intuitively, a decision tree can be seen as a sequence of if–then rules that partition the feature space into regions. To improve predictive performance, it is common to combine multiple trees (that learn weakly) into a single, more powerful model. Such approaches are known as ensemble methods . The basic idea is that while individual trees may be unstable, their combination can yield a more accurate predictor. As an illustration, consider a binary classification problem where the goal is to determine whether a path comes from volatility Model A or B, based on two signature features x1 and x2.A simple decision tree might proceed as follows: 
+
+• If x1 ≤ 0.5, predict Model A; 
+
+• otherwise, check x2:
+
+– if x2 ≤ 1.2, predict Model B; 
+
+– else, predict Model A. Such a tree partitions the feature space into regions. An ensemble model improves upon this by combining many such trees, each capturing different aspects of the data. In gradient boosting , trees are added sequentially, each correcting the errors of the current model. This stands in contrast to random forests , another ensemble method where trees are built independently in parallel and their predictions are averaged. XGBoost (Extreme Gradient Boosting), introduced by Chen and Guestrin (2016), is a highly efficient and widely used implementation of gradient boosting. It incorporates several important enhancements to prevent overfitting and to allow fast training on large datasets. As with all supervised classification methods, training proceeds by minimizing a loss function that measures the discrepancy between predicted and true class labels. In the multi-class setting considered here, this is the categorical cross-entropy loss, which encourages the classifier to assign high probability to the correct model class. 2
+
+In our setting, we adopt XGBoost as the primary classification algorithm. Its task is to assign each volatility path to one of several candidate volatility model classes based on its truncated signature representation. While the empirical machine learning literature documents a tendency for tree-based methods to perform well on tabular data (Chen and Guestrin, 2016; Grinsztajn et al., 2022; Shwartz-Ziv and Armon, 2022; Wu et al., 2021; Giannakas et al., 2021), such comparisons should be interpreted with care. Any benchmark is necessarily limited to a specific collection of datasets, and the no-free-lunch principle implies that no single model dominates uniformly across all problems (Shwartz-Ziv and Armon, 2022). The strong performance of gradient boosting in our experiments is not simply a consequence of a general superiority over neural networks on tabular data, but reflects the fact that path signatures already provide a structured, geometrically meaningful representation of the input data: each component of the truncated signature corresponds to a specific iterated integral encoding a             
+
+> 2The categorical cross-entropy loss is defined as ℓ(y) = −PKk=1 1{y=k}log ˆ pk, where y∈ { 1, . . . , K }is the true class label and ˆpkis the predicted probability of class k.
+
+10 well-defined aspect of path geometry. This feature space aligns naturally with the strengths of tree-based methods, which excel at identifying nonlinear combinations of features rather than learning representations from scratch. In this sense, the signature does much of the work that a neural network would need to learn implicitly from raw path data. 
+
+# 4.1 The algorithm 
+
+We begin by simulating volatility paths from the Heston model, the rough Bergomi model for different values of H, and the Ornstein–Uhlenbeck model. For each simulated trajectory, we compute its truncated signature, which serves as a feature representation of the path. This corresponds to steps 1 and 2 in Algorithm 1 below. The signature features are then used as input to an XGBoost classifier, which is trained to assign each path to the stochastic process from which it was generated (steps 3–5). Finally, in step 6 we evaluate the performance of the trained model on out-of-sample data, that is, on trajectories not used during training. 
+
+Input: Model classes {M k }Kk=1 ; number of paths per class nMC ; truncation level N
+
+Output: Classifier ˆg : Rd → { 1, . . . , K } and performance metrics  
+
+> 1
+
+Step 1 (Data generation).  
+
+> 2
+
+For each class Mk , simulate paths {X(k,i )}nMC  
+
+> i=1
+
+. 
+
+> 3
+
+Step 2 (Feature extraction).  
+
+> 4
+
+For each path X(k,i ), compute the truncated signature 
+
+Φ(k,i ) := vec 
+
+
+
+S(X(k,i ))≤Nt
+
+
+
+∈ RdN , with dN =
+
+> N
+
+X
+
+> k=0
+
+2k . 
+
+> 5
+
+Step 3 (Dataset construction).  
+
+> 6
+
+Form the labelled dataset 
+
+D := 
+
+n Φ(k,i ), y (k,i ) = k : i = 1 , . . . , n MC ; k = 1 , . . . , K 
+
+o
+
+. 
+
+> 7
+
+Step 4 (Train-test split).  
+
+> 8
+
+Partition D = Dtrain ∪ D test . 
+
+> 9
+
+Step 5 (Learning).  
+
+> 10
+
+Train an XGBoost classifier to learn the mapping ˆg : Φ 7 → y by solving 
+
+ˆg ∈ arg min 
+
+> g∈G
+
+X
+
+> (Φ ,y )∈D train
+
+ℓ g(Φ) , y ,
+
+where ℓ is a categorical cross-entropy loss function.  
+
+> 11
+
+Step 6 (Prediction and evaluation).  
+
+> 12
+
+Evaluate ˆg on Dtest and compute the confusion matrix. 
+
+Algorithm 1: Signature-based Model Classification with XGBoost For each model, we generate 250 ,000 sample paths, resulting in a total dataset of one million trajectories. The data are split into training and test sets, with ntest = 50 ,000 paths reserved for out-of-sample evaluation in each model. The dataset is therefore well balanced across classes, avoiding issues associated with class imbalance and ensuring that the classification performance is not biased toward any particular model. 11 Implementation details. All computations are carried out in Python. The simulation of rough Bergomi paths follows the hybrid scheme of Bennedsen et al. (2017), and builds on the code of McCrickerd and Pakkanen (2018), 3 adapted for GPU acceleration. Signature computations are based on a vectorized adaptation of the implementation by Peter Foster, 4 modified for GPU execution. The XGBoost classifier is implemented using the standard XGBClassifier from the xgboost 
+
+Python package (Chen and Guestrin, 2016), with a learning rate of 0.05 , maximum tree depth of 6, and 500 estimators; GPU acceleration is enabled to handle the large dataset efficiently. The remaining components of the pipeline—path generation for the Heston and OU models, dataset construction, and train-test splitting—are implemented from scratch using standard NumPy and CuPy routines. The full code will be made available upon publication. We do not use a separate validation set for the XGBoost experiments, since overfitting is controlled directly through built-in regularization mechanisms, which provide stable out-of-sample performance without requiring an explicit early-stopping procedure. Note that, although random parameter sampling introduces substantial within-class variabil-ity, the paths remain realizations of well-specified stochastic models, and extreme or anomalous observations arise with probabilities governed by those models. With real market data, by con-trast, structural breaks, liquidity distortions, and other microstructure effects can produce outliers that are qualitatively different from anything seen during training—in other words, with synthetic data even the tails are part of the model, whereas with market data, outliers may lie outside the model’s support entirely. As a result, model-generated data provides a more controlled learning environment than empirical time series, and the generalization gap between training and test performance is expected to be smaller than it would be with real market data. To evaluate performance, we use the confusion matrix and overall classification accuracy, de-fined as the proportion of correctly classified paths. This is the most natural performance measure in our setting, where the goal is to identify the underlying volatility model from an observed path. Standard binary metrics such as false positive and false negative rates are less informative here, since the problem is inherently multi-class and does not involve a decision threshold in the usual sense. 
+
+# 5 Classification with constant model parameters 
+
+This section serves as a proof of concept to assess whether signature features can distinguish volatility dynamics in controlled settings, where each model class is simulated using fixed param-eter values. Consequently, the boosting algorithm does not classify model classes in general, but rather trajectories generated from models with a specific parameter configuration. For the Heston variance 
+
+dX t = κ(θ − Xt) dt + νpXt dW t,
+
+we consider X0 = 0 .1, κ = 2 , θ = 0 .1, ν = 0 .2. For the rough Bergomi variance 
+
+Xt = ξ exp  ηW Ht − 12 η2t2H  ,
+
+we set ξ = 0 .08 and η = 1 .8. In each experiment we consider several values of H, representing different degrees of roughness. Finally, for the Ornstein–Uhlenbeck process 
+
+dX t = κ(θ − Xt) dt + σ dW t,
+
+we use parameters X0 = 0 .15 , κ = 3 , θ = 0 .15 , σ = 0 .1.  
+
+> 3Available at https://github.com/ryanmccrickerd/rough_bergomi .
+> 4Available at https://github.com/pafoster/path_signatures_introduction .
+
+12 Paths are simulated over a short time horizon T = 0 .1 in order to capture roughness features, which are most pronounced at short time scales. The truncated signatures are computed from discretized paths with 100 time steps and used as feature vectors for the learning algorithm. In the numerical computations below, we focus on relatively small values of the Hurst parame-ter H, in line with the empirical evidence reported in the literature. In particular, Gatheral et al. (2018) document that log-volatility exhibits rough behavior, with typical estimates of the Hurst parameter around H ≈ 0.1. This finding is further supported by Bennedsen et al. (2022), who show that volatility dynamics display distinct short- and long-term regimes, with rough behavior dominating at short time scales. Wu et al. (2022) analyze a large set of financial time series and find that stock market indices typically have Hurst exponents in the range H ≈ 0.1–0.15 , while individual stocks often exhibit even smaller values. We therefore run most of our simulations for small values of H in order to reflect realistic market conditions, although in this section we occasionally consider larger values as a proof of concept to explore smoother volatility dynamics. As mentioned above, Coutin and Qian (2002) show that fractional Brownian motion admits a canonical geometric rough path lift when H > 1/4. Lower values of H, like those we use below, do not pose difficulties in practice because we work with the time-augmented path ˆXt = ( t, X t),where the bounded variation time component adds regularity to the system. Besides, signatures are computed from discrete observations of the path, which are interpolated linearly, and such piecewise linear approximations always admit a canonical rough path lift. 5
+
+# 5.1 Experiment 1: Heston vs OU vs rough Bergomi 
+
+We start with a classification problem involving the Heston model, the Ornstein–Uhlenbeck process, and two rough Bergomi models with Hurst parameters H = 0 .1 and H = 0 .3. Our goal here is to check whether the learning algorithm is able to distinguish between classical and rough volatility trajectories. The classification performance is summarized by the confusion matrix in Figure 5.1, where the entries correspond to the absolute number of paths in each category. 
+
+Figure 5.1: Confusion matrix for Experiment 5.1 ( ntest = 50 ,000 ). The confusion matrix indicates an almost perfect classification performance. Only three paths out of 200 ,000 are misclassified. Interestingly, the Heston and Ornstein–Uhlenbeck processes are identified without any misclassification. Training and test accuracies coincide across all classes, indicating excellent generalization and no evidence of overfitting. In the next experiment, we extend the analysis by investigating whether the Heston volatility 
+
+> 5Issa et al. (2023) note that the choice of interpolation method typically has little impact and that linear interpolation is often sufficient. In the context of model calibration with signatures, Alòs et al. (2026) experiment with cubic splines and also report that the marginal gains in accuracy are negligible.
+
+13 can be clearly distinguished from rough Bergomi models across a wider range of Hurst parameters. 
+
+# 5.2 Experiment 2: Heston vs several rough Bergomi models 
+
+We now consider a classification problem involving the Heston and three rough Bergomi models with H = 0 .15 , H = 0 .4, and H = 0 .6. In this setting, the task becomes more challenging, as the models differ more subtly in their pathwise behavior. Classification performance is summarized by the confusion matrix in Figure 5.2. 
+
+Figure 5.2: Confusion matrix for Experiment 5.2 ( ntest = 50 ,000 ). The results show that the classifier is able to separate trajectories with very high accuracy, with only a negligible fraction (around 0.04% ) of paths misclassified. Misclassifications occur between Heston and rough Bergomi trajectories with H = 0 .6, as well as between rough Bergomi trajectories with H = 0 .4 and H = 0 .6. In contrast, rough Bergomi paths with H = 0 .15 are perfectly identified, reflecting their distinctly rough behavior. These patterns are consistent with the interpretation of the Hurst parameter: as H increases, the rough Bergomi model becomes progressively smoother and closer in behavior to classical diffusion models, making the distinction more subtle. Importantly, the model exhibits excellent generalization properties. The training and test accuracies are nearly identical (Train: 1.0, Test: 0.9999 ), indicating that the classifier is not overfitting and generalizes effectively to unseen data. This stability is further supported by the balanced dataset and the regularization mechanisms inherent in the XGBoost algorithm. 
+
+# 5.3 Experiment 3: Only rough Bergomi models 
+
+We now consider four rough Bergomi models with parameters H = 0 .05 , H = 0 .15 , H = 0 .25 ,and H = 0 .35 . As all models share the same structural form and differ only through relatively close values of the Hurst parameter, we expect some misclassification, particularly between models with adjacent values of H. Performance is summarized in Figure 5.3. The results are as expected, but still maintaining a high classification accuracy. The confusion matrix reveals that misclassifications occur exclusively between trajectories from models with adjacent Hurst parameters: paths generated with H = 0 .05 are occasionally classified as H = 0 .15 ,and similarly for the pairs (0 .15 , 0.25) and (0 .25 , 0.35) . In contrast, there is no confusion between trajectories from models with more distant values of H. And the number of misidentified paths is extremely small: the worst case ( 81 paths) represents only 0.16% of the 50 ,000 paths in its test set. This behavior is consistent with the interpretation of the Hurst parameter as a measure of path regularity. 14 Figure 5.3: Confusion matrix for Experiment 5.3 ( ntest = 50 ,000 ). Importantly, the classifier continues to exhibit good generalization properties. The training and test accuracies are very close (Train: 0.9996 , Test: 0.9983 ), with only a small gap between them, indicating that the model is not overfitting the training data (further confirmed by the high per-class accuracies across both training and test sets). This suggests that the XGBoost classifier, combined with signature-based features, is able to capture fine variations in path geometry while maintaining robust out-of-sample performance. 
+
+# 5.4 Computational cost and practical considerations 
+
+In Table 5.1 we report the running times for the different experiments. As can be seen, the dominant cost arises from the computation of the signatures, especially for the rough Bergomi paths, while the running times of the XGBoost classifier itself remain comparatively small. Total time Signature computation XGBoost training Experiment 5.1 0:04:09 0:04:01 0:00:08 Experiment 5.2 0:10:35 0:10:18 0:00:17 Experiment 5.3 0:15:44 0:15:24 0:00:20 Table 5.1: Running times for the different experiments. Considering that we work with signatures truncated at order 4, the computational times remain moderate: the full pipeline—simulation, feature extraction, and training—can be executed within a few minutes. This is partly due to the use of vectorized implementations and GPU acceleration, which significantly reduce the computational burden. We return to the issue of computational cost in Section 6.9. All computations were carried out on a standard consumer desktop with 128 GB of RAM and an NVIDIA RTX 3080 Ti GPU. The relatively short running times highlight the practical feasibility of the approach. 
+
+# 6 Classification with randomly sampled model parameters 
+
+The experiments above were designed to assess whether signature features can distinguish volatility dynamics in controlled settings, where each model class is simulated with fixed parameter values. We now turn to a more demanding classification problem. For each simulated path, the 15 model parameters are sampled randomly from prescribed ranges, so that the classifier must learn to identify the model class rather than a particular parameter configuration. As in Section 5, paths are simulated for a maturity T = 0 .1.
+
+# 6.1 Experiment 1: Heston vs OU vs rough Bergomi 
+
+We now repeat the first experiment from Section 5, but with randomly sampled parameters within each model class. For the Heston variance process 
+
+dX t = κ(θ − Xt) dt + νpXt dW t,
+
+we fix the initial value X0 = 0 .10 and sample the remaining parameters independently from the uniform distributions 
+
+κ ∼ U (1 .0, 3.0) , θ ∼ U (0 .05 , 0.15) ,
+
+while ν is sampled from a uniform distribution constrained by the Feller condition, 
+
+ν ∼ U  0.15 , min(0 .35 , ν max ),
+
+where νmax = 0 .95 √2κθ enforces the Feller condition with a 5% safety margin. For the Ornstein–Uhlenbeck process 
+
+dX t = κ(θ − Xt) dt + σ dW t,
+
+we fix X0 = 0 .10 and sample 
+
+κ ∼ U (1 .5, 3.5) , θ ∼ U (0 .10 , 0.20) , σ ∼ U (0 .05 , 0.30) .
+
+Finally, for the rough Bergomi model 
+
+Xt = ξ exp  ηW Ht − 12 η2t2H  ,
+
+we fix the initial value ξ = 0 .10 and sample 
+
+η ∼ U (0 .8, 2.0) .
+
+We do not randomize the initial value of the processes because signatures are constructed from iterated integrals of increments dX t, and therefore do not depend on the initial level X0. Fixing the initial value removes a source of variation that is irrelevant to model identification, allowing the classifier to focus on the properties of the trajectories. We emphasize that the same random realizations of η are reused across the rough Bergomi classes, so that they only differ through the Hurst parameter H, which controls the degree of path roughness. This ensures that any successful classification is attributable solely to differences in roughness rather than to differences in the sampled parameter values. Using independent 
+
+η-draws for each class would introduce an additional source of variation, making it impossible to determine whether the classifier distinguishes the models through their roughness or through incidental differences in η. We note that this design makes the identification problem strictly harder for the classifier as, conditioned on H, the two rough Bergomi classes are statistically identical. In subsequent experiments, where up to four rough Bergomi classes are included simultaneously, we maintain this principle of reusing the same realizations of η across all rough Bergomi classes. Our guess is that XGBoost should distinguish fairly well between the Markovian and non-Markovian settings. However, we harbor some doubts about its capacity to distinguish between the Heston and OU models, because both processes are driven by mean-reverting dynamics with Brownian noise and share similar local behavior, despite the nonlinear diffusion term in the Heston variance. We therefore expect some Heston volatility paths to be classified as OU, and vice versa. 16 The classification performance is summarized by the confusion matrix in Figure 6.1. Unlike Section 5, where the number of misclassified paths was extremely small and absolute counts were more informative, the confusion matrices in this section are reported in percentages in order to better highlight the classification rates across model classes. 
+
+Figure 6.1: Confusion matrix for Experiment 6.1 with randomly sampled model parameters (ntest = 50 ,000 ). Values are percentages. The results show that the classifier remains highly accurate even under parameter uncertainty. The Ornstein–Uhlenbeck process is classified with 100% accuracy, while the Heston class exhibits a misclassification rate of 3.4% , entirely due to confusion with the Ornstein–Uhlenbeck process. This point is examined further in a robustness check in Section 6.8. The classifier separates the two rough Bergomi classes with accuracy close to 99% , providing initial evidence that signature features capture differences in path roughness in a robust manner. 
+
+# 6.2 Experiment 2: Heston vs several rough Bergomi models 
+
+We now consider a more demanding classification problem involving the Heston model and three rough Bergomi classes with Hurst parameters H = 0 .1, H = 0 .2, and H = 0 .3. As the goal is to identify the underlying model class, parameters are sampled randomly within the prescribed ranges for each model. The classification performance is summarized in Figure 6.2. 
+
+Figure 6.2: Confusion matrix for Experiment 6.2 with randomly sampled model parameters (ntest = 50 ,000 ). Values are percentages. 17 The results show that the classification problem becomes substantially more challenging once parameter uncertainty is introduced and the rough Bergomi classes differ only through relatively close values of the Hurst parameter. Nevertheless, the classifier continues to exhibit strong perfor-mance. In particular, the Heston trajectories are perfectly identified, indicating that the distinction between Markovian and rough volatility dynamics remains geometrically pronounced even under random parameter sampling. As expected, the main source of confusion occurs between the rough Bergomi classes them-selves, especially between adjacent values of H. The model with H = 0 .2 is the most difficult to classify, as its trajectories naturally lie between the rougher regime ( H = 0 .1) and the smoother regime ( H = 0 .3). Misclassifications therefore occur symmetrically toward both neighboring classes. In contrast, the rough Bergomi models with H = 0 .1 and H = 0 .3 are identified with sub-stantially higher accuracy, reflecting the more distinctive geometry of trajectories at the extremes of the roughness range considered here. The classifier continues to exhibit good generalization properties. The gap between training and test accuracy remains small (approximately 0.5% ), indicating that the reduction in accuracy is not caused by overfitting but rather by the intrinsic difficulty of distinguishing between closely related rough volatility classes under parameter uncertainty. These results provide strong evidence that signature features encode information about path roughness that generalizes across parameter configurations. Even when the model parameters vary randomly from path to path, the classifier is still able to identify the underlying volatility class with high accuracy. 
+
+# 6.3 Experiment 3: Only rough Bergomi models 
+
+We now consider the most challenging classification problem, involving four rough Bergomi classes with Hurst parameters H = 0 .05 , H = 0 .15 , H = 0 .25 , and H = 0 .35 .Unlike Experiment 6.2, where the classifier distinguished between Markovian and rough volatil-ity dynamics, the present experiment focuses entirely on differences in roughness within the same model family. Successful classification relies solely on the ability of the signature features to cap-ture increasingly subtle differences in path regularity. 6 We therefore expect the classification task to become progressively harder as the values of H become closer. The corresponding confusion matrix is shown in Figure 6.3. 
+
+Figure 6.3: Confusion matrix for Experiment 6.3 with randomly sampled model parameters (ntest = 50 ,000 ). Values are percentages. The results confirm that the classification problem becomes substantially more challenging   
+
+> 6Recall that across the different rough Bergomi classes, the same parameter realizations are reused for ηso that the classes differ only through the Hurst parameter.
+
+18 when all classes belong to the same rough volatility family and the parameters are sampled ran-domly. In this setting, the classifier must distinguish between trajectories that differ only through relatively close values of the Hurst parameter. Nevertheless, the overall classification performance remains strong. The confusion matrix exhibits a clear structure: misclassifications occur almost exclusively between rough Bergomi classes with adjacent values of H. In particular, those with H = 0 .15 and 
+
+H = 0 .25 are the most difficult to distinguish, as their trajectories lie between the rougher regime (H = 0 .05 ) and the smoother regime ( H = 0 .35 ). By contrast, the extreme classes are identified with higher accuracy, reflecting the more distinctive geometry of trajectories at the ends of our roughness spectrum. The absence of significant long-range misclassifications is particularly noteworthy. For example, trajectories generated with H = 0 .05 are never classified as H = 0 .35 , and vice versa. This indicates that the signature features capture a coherent notion of path roughness, where nearby values of the Hurst parameter produce geometrically similar trajectories, while more distant values remain clearly separated. We also note that the classifier continues to generalize well despite the increased difficulty of the problem. The overall accuracy on the training and test sets is 84 .7% and 83 .9% , respectively, confirming that the reduction in accuracy relative to earlier experiments is driven by the intrinsic difficulty of distinguishing closely spaced roughness levels, rather than by overfitting. Overall, these results provide strong evidence that signature-based features are sensitive not only to broad differences between volatility models, but also to finer variations in path regularity within the same rough volatility class, even under substantial parameter uncertainty. 
+
+# 6.4 Feature importance and role of signature terms 
+
+An advantage of tree-based methods is that they provide a natural measure of feature im-portance, quantifying how much each feature contributes to the final classification. Since each feature corresponds to one coordinate of the truncated signature, the importance scores reflect how frequently and effectively these coordinates are used in the decision trees. After training the classifier in each experiment, we computed the built-in XGBoost feature importance scores. Across all experiments, order-1 and order-2 terms appear less frequently and with lower importance scores, while order-3 and order-4 terms dominate. In particular, the two most influential features are consistently sig_27 (order-4) and sig_13 (order 3), which together account for approximately 50 –60% of the total built-in importance. This suggests that higher-order iterated integrals capture the path properties most relevant for model discrimination. The key distinguishing characteristics of stochastic volatility models are precisely the fine-grained geometric properties of the trajectories—roughness, mean reversion, and volatility of volatility—which are naturally encoded in higher-order interactions between increments. It is therefore intuitive that order-3 and order-4 terms are more discriminative than lower-order terms, which mainly capture coarse features such as overall displacement and signed area. 
+
+Permutation Importance Analysis. We are aware that tree-based importance scores may partially favor higher-order terms due to scaling effects. To assess the robustness of our results, we complement the built-in XGBoost importance scores with scale-invariant measures based on permutation importance. The vectorized truncated signature of order 4 is represented as: 
+
+vec (S(X)≤4 
+
+> t
+
+) = ( sig_0 , sig_1 , sig_2 , sig_3 , . . . , sig_29 , sig_30 ) .
+
+In multi-index notation, where 0 denotes the time component and 1 the path component, the coordinates are: 
+
+vec (S(X)≤4 
+
+> t
+
+) =  1, S 0, S 1, S 00 , S 01 , S 10 , S 11 , S 000 , . . . , S 111 , S 0000 , . . . , S 1111  .
+
+Note that sig_2 corresponds to S1 = R t 
+
+> 0
+
+dX s = Xt − X0, the net increment of the path. 19 XGBoost measures feature importance through the reduction in loss achieved when a feature is used in a tree split. Higher-order signature terms typically exhibit larger variability across paths than lower-order terms: while lower-order terms capture simple path properties such as net dis-placement and signed area, higher-order terms encode complex interactions between increments at multiple time scales, leading to greater variability across paths from different model classes. Fea-tures with larger variability naturally provide more splitting opportunities, which may artificially inflate their importance scores in tree-based methods. To address this, we compute permutation importance (Breiman (2001)), a scale-invariant al-ternative that measures the decrease in accuracy when each feature is randomly permuted. We report both importance measures for Experiments 6.2 and 6.3, the two main experiments. The results are presented in Figure 6.4. 
+
+Figure 6.4: XGBoost built-in importance (left) and permutation importance (right) for Experi-ments 6.2 (top) and 6.3 (bottom). Features are truncated at 90% cumulative importance. Across both experiments, the two importance measures agree on the dominant role of sig_27 ,an order-4 signature element ( S1100 ), which accounts for approximately 50 –60% of the normalized permutation importance. A notable secondary feature under permutation importance is sig_19 
+
+(S0100 ), which ranks second in both experiments with approximately 12% of the importance, yet appears much lower in the built-in ranking. This divergence suggests that sig_19 is genuinely informative but suppressed in the built-in scores due to its smaller scale relative to higher-order terms. The built-in and permutation importances also diverge on sig_13 (S110 ): under the built-in measure it ranks among the top two features in both experiments, whereas under permutation importance it does not appear in the truncated list at all. This is consistent with the known 20 tendency of tree-based importance measures to favor features with larger variance. The feature sig_2 (S1 = Xt − X0) appears among the top features under permutation impor-tance in both experiments, suggesting that the net displacement of the volatility path contributes to model discrimination alongside higher-order regularity information. Intuitively, mean-reverting models such as Heston and the Ornstein–Uhlenbeck process tend to produce paths with net dis-placement close to zero, whereas rough Bergomi paths may exhibit more sustained excursions. We note that permutation importance is known to redistribute importance among correlated features, which signature terms of the same path inevitably are. The concentration of importance on sig_27 should therefore be interpreted with some caution, as correlated features may share discriminative information that is attributed entirely to the feature permuted first. 
+
+# 6.5 Robustness with respect to signature order 
+
+To further assess the role of the truncation level, we repeat Experiment 6.3 using signatures of order 3 and order 5. The corresponding confusion matrices are shown in Figure 6.5. For order 3, although errors occur exclusively between models with adjacent Hurst parameters, their frequency is noticeably higher than in the order-4 case. This confirms that lower-order signatures lack some of the finer geometric detail needed to distinguish between models with very similar roughness. 
+
+Figure 6.5: Confusion matrices for Experiment 6.3 using signatures of order 3 (left) and order 5
+
+(right) ( ntest = 50 ,000 ). Values are percentages. For order 5, the vectorized signature satisfies vec (S(X)≤5 
+
+> t
+
+) ∈ R63 , and the results show a slight improvement in accuracy relative to order 4, with a reduced number of misclassified paths. The improvement, however, remains modest. Although increasing the truncation level to order 5 yields a modest improvement in classifi-cation performance, it increases the computational time noticeably; see Table 6.1. This suggests that the essential geometric characteristics distinguishing these models are already well captured at order 4, which offers a good balance between accuracy and efficiency. 21 Total time Signature computation XGBoost training Experiment 6.1 0:08:16 0:07:55 0:00:21 Experiment 6.2 0:07:23 0:07:05 0:00:18 Experiment 6.3 0:09:40 0:09:16 0:00:24 Experiment 6.3 (order 3) 0:05:39 0:05:21 0:00:18 Experiment 6.3 (order 5) 0:15:27 0:15:03 0:00:24 Table 6.1: Running times for experiments with randomly sampled model parameters. 
+
+# 6.6 Robustness with respect to time horizon. 
+
+As an additional robustness check, we investigate the effect of the time horizon T on classi-fication performance. All previous experiments were conducted with T = 0 .1, a short-maturity for which rough volatility effects are most pronounced. We now repeat Experiment 3 with larger maturities, namely T = 0 .2 and T = 0 .4. The corresponding confusion matrices are shown in Figure 6.6. 
+
+Figure 6.6: Confusion matrices for Experiment 6.3 with T = 0 .2 (left) and T = 0 .4 (right). Values are percentages. We observe a noticeable improvement in classification accuracy for higher maturities, a be-havior that is consistent with the fact that roughness is primarily a short-time phenomenon, and differences in the Hurst parameter are most difficult to detect at small maturities. As the time horizon increases, the cumulative effect of the dynamics becomes more pronounced, making the distinction between models easier for the classifier. Trajectories corresponding to longer maturities seem to provide additional information that enhances separability between volatility regimes. 
+
+# 6.7 Comparison with neural networks 
+
+We perform a robustness check by replacing the XGBoost classifier with a standard fully con-nected neural network applied to the same signature features. After standardizing the inputs, we train a network with three hidden layers of sizes 128 , 64 , and 32 (a standard pyramidal architec-ture) using ReLU activations together with batch normalization and dropout regularization. The output layer uses a softmax activation for multi-class classification. The model is trained using the Adam optimizer with categorical cross-entropy loss. Since this is a one-off robustness check and the focus of the paper is on the XGBoost classifier, we do not perform hyperparameter tun-ing; a small validation split ( 10% of the training set) is used solely for early stopping to mitigate overfitting, and performance is reported on the test set. 22 We compare with Experiment 6.2, which involves the classification of a Heston model and three rough Bergomi models with different Hurst parameters. The confusion matrices for XGBoost and the neural network are shown side by side in Figure 6.7. 
+
+Figure 6.7: Confusion matrices for Experiment 6.2 using XGBoost (left) and a neural network (right). Values are percentages ( ntest = 50 ,000 ). The two classifiers achieve broadly comparable accuracy on this experiment. The Heston class is identified with 100% accuracy by XGBoost and 99 .6% by the neural network. Misclassifications occur exclusively between adjacent rough Bergomi classes in both cases, with the neural network showing slightly higher confusion for rB0.2 and slightly lower confusion for rB0.3. Overall, the differences in classification accuracy are modest, confirming that the signature features carry sufficient discriminative information regardless of the classifier used. The neural network is, however, significantly more expensive to train. While XGBoost required only 18 seconds, the neural network training with 40 epochs took more than 5 minutes under the same conditions. In addition, the neural network does not provide a direct measure of feature importance, in contrast to the tree-based approach. Overall, these results confirm that gradient boosting methods are well suited to this problem. In the present setting, where the input data are structured feature vectors derived from signatures, XGBoost provides comparable or superior accuracy, faster training, and greater interpretability than the neural network alternative. 
+
+# 6.8 A robustness check for Heston and Ornstein–Uhlenbeck model classes 
+
+To further stress-test the classifier, we consider an experiment in which the Heston and Ornstein–Uhlenbeck processes are simulated using identical parameter distributions. 7 In this set-ting, any successful classification must be attributed entirely to the structural difference in their diffusion terms: ν√Xt in the Heston model versus the constant coefficient σ in the Ornstein– Uhlenbeck process. The results are reported in Figure 6.8. As expected, the classification of the rough Bergomi classes remains essentially unaffected: both rB0.1 and rB0.3 are identified with 98 .9% accuracy, and no confusion occurs between the rough and non-rough classes. This confirms that the distinction between rough and Markovian volatility dynamics is robust to parameter uncertainty. The main challenge arises in distinguishing Heston from Ornstein–Uhlenbeck. When the two processes share the same parameter distributions, the Heston class is correctly identified only 
+
+64 .6% of the time, with 35 .4% of Heston paths misclassified as Ornstein–Uhlenbeck. Conversely,       
+
+> 7Both processes share identical distributions for the mean-reversion parameters κand θ.The diffusion co-efficients are sampled from comparable ranges, the Heston volatility-of-volatility parameter νbeing additionally constrained by the Feller condition.
+
+23 Figure 6.8: Confusion matrix for Experiment 6.1 with identical parameter distributions for the Heston and Ornstein–Uhlenbeck processes ( ntest = 50 ,000 ). Values are percentages. the Ornstein–Uhlenbeck class is identified with perfect accuracy, suggesting that the classifier has learned a decision boundary biased toward the Ornstein–Uhlenbeck class when the two processes become geometrically similar. This asymmetry is noteworthy. When model classes differ primarily through path regularity (as in rough Bergomi models with different Hurst parameters) the trajectories remain globally distinct, and the signature captures these differences through higher-order interactions. By contrast, when two processes can become locally equivalent, as in the present Heston/OU setting, the available geometric information is intrinsically limited. In this case, the challenge does not arise from a weakness of the signature representation, but from the genuine similarity between the underlying stochastic dynamics. To better understand the source of the misclassifications, we examine the distribution of model parameters for the Heston paths incorrectly classified as Ornstein–Uhlenbeck. Figure 6.9 compares the empirical distributions of the Heston parameters across all simulated paths (blue) with the corresponding distributions restricted to the subset of paths misclassified as Ornstein–Uhlenbeck (orange). 
+
+Figure 6.9: Empirical distributions of the Heston parameters θ, κ, and ν for all simulated Heston paths and for the subset misclassified as Ornstein–Uhlenbeck. As can be seen from the middle histogram, the mean-reversion speed κ exhibits no systematic difference between correctly classified and misclassified trajectories, confirming that it plays no role in the misidentification. In the left histogram, the mean value of θ is essentially identical across the two groups ( 0.157 for misclassified vs 0.150 for all Heston paths), indicating that the long-run mean plays no meaningful role. By contrast, data from the right histogram reveal a pronounced shift in the distribution of ν: misclassified paths have a substantially lower mean 24 volatility of volatility ( 0.120 vs 0.175 for all Heston paths). This identifies ν as the primary driver of the misclassification. The mechanism is intuitive. When ν is small, the diffusion term ν√Xt of the Heston vari-ance process contributes little to the path dynamics, which are then dominated by the drift term κ(θ − Xt) dt . In this regime, the Heston process behaves almost like a deterministic mean-reverting process perturbed by a small diffusion, making it geometrically indistinguishable from an Ornstein–Uhlenbeck process with the same drift parameters and a similarly small constant diffusion coefficient σ. The state-dependence of ν√Xt simply does not manifest when ν is too small for the signature to detect. To confirm that ν is the primary driver of the misclassification, we repeat the experiment twice with ν fixed at a low value ( ν ∼ U (0 .01 , 0.10) ) and at a high value ( ν = 0 .28 ), keeping all other parameters unchanged. The resulting confusion matrices are displayed in Figure 6.10. 
+
+Figure 6.10: Confusion matrices for the Heston/OU experiment with low ν ∼ U (0 .01 , 0.10) (left) and high ν = 0 .28 fixed (right) ( ntest = 50 ,000 ). Values are percentages. The results show that when ν is small, the diffusion component ν√Xt contributes little to the path dynamics, making the Heston process nearly indistinguishable from an Ornstein–Uhlenbeck process with the same drift parameters: Heston accuracy falls to 30 .1% , with 69 .8% of paths mis-classified as Ornstein–Uhlenbeck. Notably, the asymmetry partially breaks down in this regime, as the Ornstein–Uhlenbeck accuracy also deteriorates to 95 .4% , with 4.6% of OU paths misclassified as Heston, suggesting that when ν is very small the two processes become genuinely difficult to distinguish in both directions. By contrast, when ν = 0 .28 , the state-dependence of the diffusion term is geometrically pro-nounced and detectable from the signature: Heston accuracy recovers to 90 .9% and Ornstein– Uhlenbeck remains at 100% . The rough Bergomi classes are unaffected in both experiments (98 .9% in each case), confirming that ν influences only the Heston/OU boundary and has no bearing on the classification of rough volatility dynamics. The residual 9.1% misclassification rate in the high-ν case suggests that some geometric similarity between the two processes persists over short time horizons, even when the state dependence of the Heston diffusion is pronounced. To further confirm this interpretation, we partition the Heston test paths into three groups according to the value of ν, using the 1/3 and 2/3 quantiles of the empirical distribution as bin boundaries (see Appendix A for the exact boundaries and statistics). For each group, we compute the classification accuracy and the misclassification rate into the Ornstein–Uhlenbeck class. The results are shown in Figure 6.11, which confirms the theoretical interpretation. The misclassification rate decreases monotonically from 70 .7% in the low regime to 27 .0% in the medium regime and 8.2% in the high regime, while accuracy increases from 29 .3% to 73 .0% 
+
+and 91 .8% . This monotone relationship between ν and classification performance confirms that the volatility of volatility is the key parameter governing the difficulty of distinguishing Heston 25 Figure 6.11: Heston classification accuracy (left) and misclassification rate into the OU class (right) across three equal-sized empirical bins of the volatility of volatility parameter ν.from Ornstein–Uhlenbeck, and that the observed misclassifications arise from genuine geometric similarities between the two processes rather than from a limitation of the signature representation. 
+
+# 6.9 Sample size and computational trade-offs 
+
+All experiments presented in this paper were conducted using 250 ,000 simulated paths per model class. This large sample size ensures stable training and provides strong empirical support for the classification results. The trade-off, however, is an increase in computational time. To assess the sensitivity of the methodology to the sample size, we repeated the main experi-ments using only 50 ,000 paths per model class (that is, 200 ,000 paths per experiment instead of one million). The results are summarized in Table 6.2. Time (50K) Accuracy (50K) Time (250K) Accuracy (250K) Experiment 6.1 0:00:59 0.9846 0:08:16 0.9863 Experiment 6.2 0:01:28 0.8928 0:07:23 0.8956 Experiment 6.3 0:02:58 0.8364 0:09:40 0.8391 Table 6.2: Running times and test accuracies for different sample sizes. The results indicate that XGBoost maintains high classification accuracy even with substan-tially smaller training datasets. Although a slight reduction in performance is observed, the loss in accuracy remains modest relative to the significant reduction in computational time. The proposed framework therefore allows for a practical trade-off between computational speed and predictive accuracy, depending on the requirements of the application. 
+
+# 7 Conclusion 
+
+In this paper, we have proposed a signature-based framework for identifying volatility dynamics directly from path geometry, without relying on parametric calibration or prior knowledge of the underlying model parameters. In the first part of the paper, each model class is simulated with fixed parameter values. These experiments serve as a proof of concept showing that signatures distinguish path geometries with extremely high accuracy. In simple settings, where the models differ structurally, classification is essentially perfect. As the task becomes more challenging, with models differing only through the 26 degree of roughness, the method continues to perform robustly, with errors occurring primarily between trajectories generated with nearby values of the Hurst parameter. In the second part of the paper, we address the more demanding problem of model-class iden-tification under parameter uncertainty. Here, the classifier no longer distinguishes trajectories generated from fixed parameter configurations, but rather entire model classes whose parameters are sampled randomly within prescribed ranges. Although classification accuracy naturally de-creases in this setting, the results show that it remains high overall. In particular, the experiments reveal a fundamental distinction between two types of classification difficulty. Rough volatility models with nearby Hurst parameters become difficult to distinguish because their trajectories exhibit similar levels of roughness, whereas processes such as Heston and Ornstein–Uhlenbeck become increasingly difficult to separate as their diffusion structures become locally similar under low volatility of volatility regimes. The robustness analysis of the Heston/Ornstein–Uhlenbeck setting provides further insight into this phenomenon. Misclassification occurs predominantly when the volatility of volatility parameter ν is small: in this regime, the state-dependent diffusion term ν√Xt of the Heston model contributes little to the path dynamics, making the process geometrically indistinguishable from an Ornstein–Uhlenbeck process with the same drift parameters. This is confirmed by a monotone relationship between ν and classification accuracy: when the Heston test paths are partitioned into three equal-sized groups according to ν, the misclassification rate decreases from 70 .7% in the low-ν regime to 27 .0% and 8.2% in the medium- and high-ν regimes, respectively. These results suggest that the remaining classification errors reflect intrinsic geometric similarities between the underlying stochastic dynamics, rather than limitations of the signature representation itself. The analysis of feature importance provides additional insight into the mechanism underlying these results. Across all experiments, the most relevant features are consistently drawn from levels 3 and 4 of the signature, confirming that classification relies primarily on higher-order interactions between increments rather than on marginal path properties alone. Increasing the truncation level beyond order 4 yields only modest gains, indicating that the essential geometric characteristics distinguishing these models are already well captured by signatures truncated at order 4. From a computational perspective, the proposed methodology remains practical. The main computational cost lies in path simulation and signature computation; XGBoost training is com-paratively inexpensive and completes in seconds even for large datasets. Vectorized implemen-tations and GPU acceleration keep the total runtime within minutes, and the method maintains high accuracy even with substantially fewer simulated trajectories, allowing for a flexible trade-off between computational cost and predictive precision. Finally, the robustness analysis with respect to the time horizon highlights that rough volatility effects are most subtle at short maturities, where classification is most challenging. As the matu-rity increases, differences in path geometry become more pronounced and classification accuracy improves. In this sense, the short-maturity experiments considered throughout the paper may be regarded as a conservative scenario. Taken together, these results support the view that volatility dynamics can be effectively identified through the geometry of their sample paths, and suggest that signature features may provide a robust alternative to classical Hurst parameter estimation methods (Gatheral et al., 2018; Bennedsen et al., 2022) and to neural network approaches (Stone, 2020) within a general model-identification framework that does not require task-specific architectures or explicit parameter estimation. Our experiments suggest that signatures distinguish stochastic dynamics not merely through local statistical properties, but through the global geometric structure of the trajectories. The resulting framework is flexible, interpretable, and robust under parameter uncertainty. More generally, path signatures may serve as a general-purpose feature map for model identification in settings beyond stochastic volatility, wherever the relevant information is encoded in the geometry of observed paths. 27 A natural limitation of the present study is that the analysis is conducted entirely on simulated data. Extending the methodology to observed realized volatility series, and assessing whether the classifier trained on simulated paths generalizes to market data, is an important direction for future work. 
+
+# Appendix A Volatility of Volatility Bins for the Heston–OU Analysis 
+
+Table A.1 reports the quantile boundaries and summary statistics for the analysis of ν in Section 6.8. The bin boundaries are defined as the 1/3 and 2/3 percentiles of the empirical distribution of ν across all Heston paths, giving approximately equal group sizes. Bin N paths Accuracy Misclassification rate Mean ν
+
+Low (ν ≤ 0.1328 ) 16,625 29 .3% 70 .7% 0.0915 
+
+Medium ( 0.1328 < ν ≤ 0.2179 ) 16,934 73 .0% 27 .0% 0.1750 
+
+High (ν > 0.2179 ) 16,441 91 .8% 8.2% 0.2591 
+
+Table A.1: Accuracy and misclassification rate for Heston paths partitioned by the 1/3 and 2/3
+
+quantiles of the empirical distribution of ν (0.133 and 0.218 , respectively). 
+
+# References 
+
+Alòs, E., Burés, Ò., Santiago, R. D., and Vives, J. (2026). Volatility modeling in Markovian and rough regimes: Signature methods and analytical expansions. arXiv preprint arXiv:2507.23392 .Alòs, E., León, J., and Vives, J. (2007). On the short-time behavior of the implied volatility for jump-diffusion models with stochastic volatility. Finance and Stochastics , 11:571–589. Bayer, C., Friz, P., and Gatheral, J. (2016). Pricing under rough volatility. Quantitative Finance ,16(6):887–904. Bayer, C., Friz, P. K., Gulisashvili, A., Horvath, B., and Stemper, B. (2019a). Short-time near-the-money skew in rough fractional stochastic volatility models. Quantitative Finance , 19(5):779– 798. Bayer, C., Hager, P. P., Riedel, S., and Schoenmakers, J. (2023). Optimal stopping with signatures. 
+
+The Annals of Applied Probability , 33(1):238–273. Bayer, C., Horvath, B., Muguruza, A., Stemper, B., and Tomas, M. (2019b). On deep calibration of (rough) stochastic volatility models. arXiv preprint arXiv:1908.08806 .Bennedsen, M., Lunde, A., and Pakkanen, M. S. (2017). Hybrid scheme for brownian semista-tionary processes. Finance and Stochastics , 21(4):931–965. Bennedsen, M., Lunde, A., and Pakkanen, M. S. (2022). Decoupling the short- and long-term behavior of stochastic volatility. Journal of Financial Econometrics , 20(5):961–1006. First published online January 30, 2021. Breiman, L. (2001). Random forests. Machine Learning , 45(1):5–32. 28 Burés, J. and Larrosa, I. (2023). Organic reaction mechanism classification using machine learning. 
+
+Nature , 613(7945):689–695. Chen, K.-T. (1957). Integration of paths, geometric invariants and a generalized Baker–Hausdorff formula. Annals of Mathematics , 65(1):163–178. Chen, T. and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining ,pages 785–794. ACM. arXiv:1603.02754. Chevyrev, I. and Kormilitzin, A. (2016). A primer on the signature method in machine learning. 
+
+https://arxiv.org/abs/1603.03788 .Coutin, L. and Qian, Z. (2002). Stochastic analysis, rough path analysis and fractional brownian motions. Probability Theory and Related Fields , 122(1):108–140. Cuchiero, C., Gazzani, G., Möller, J., and Svaluto-Ferro, S. (2025). Joint calibration to SPX and VIX options with signature-based models. Mathematical Finance , 35(1):161–213. Friz, P. K. and Hairer, M. (2024). A Course on Rough Paths: With an Introduction to Regularity Structures . Universitext. Springer, 2nd, updated march 2024 edition. Last update: March 3, 2024. Friz, P. K. and Victoir, N. B. (2010). Multidimensional Stochastic Processes as Rough Paths: The-ory and Applications , volume 120 of Cambridge Studies in Advanced Mathematics . Cambridge University Press, Cambridge. Fukasawa, M. (2017). Short-time at-the-money skew and rough fractional volatility. Quantitative Finance , 17(02):189–198. Gatheral, J., Jaisson, T., and Rosenbaum, M. (2018). Volatility is rough. Quantitative Finance ,18(6):933–949. Geng, X. (2021). An introduction to the theory of rough paths. Lecture notes, University of Melbourne, August 2021. Available at Xi Geng’s website. Giannakas, F., Troussas, C., Krouska, A., Sgouropoulou, C., and Voyiatzis, I. (2021). XGBoost and deep neural network comparison: The case of teams’ performance. In Intelligent Tutoring Systems: 17th International Conference, ITS 2021, Virtual Event, June 7–11, 2021, Proceed-ings , volume 12675 of Lecture Notes in Computer Science , pages 343–349. Springer. Grinsztajn, L., Oyallon, E., and Varoquaux, G. (2022). Why tree-based models still outper-form deep learning on tabular data. In Advances in Neural Information Processing Systems ,volume 35, pages 507–520. Hernandez, A. (2017). Model calibration with neural networks. Risk , pages 1–5. Cutting Edge: Option Pricing. Horvath, B., Muguruza, A., and Tomas, M. (2021). Deep learning volatility: A deep neural net-work perspective on pricing and calibration in (rough) volatility models. Quantitative Finance ,21(1):11–27. Issa, Z., Horvath, B., Lemercier, M., and Salvi, C. (2023). Non-adversarial training of Neural SDEs with signature kernel scores. In Advances in Neural Information Processing Systems (NeurIPS) ,volume 37, pages 11102–11126. Curran Associates, Inc. Kalsi, J., Lyons, T., and Perez Arribas, I. (2020). Optimal execution with rough path signatures. 
+
+SIAM Journal on Financial Mathematics , 11(2):470–493. Kondratyev, A. (2018). Learning curve dynamics with artificial neural networks. SSRN Electronic Journal . SSRN Working Paper No. 3041232. 29 Livieri, G., Mouti, S., Pallavicini, A., and Rosenbaum, M. (2018). Rough volatility: Evidence from option prices. IISE Transactions , 50(9):767–776. Lyons, T. and Qian, Z. (2002). System control and rough paths . Oxford University Press. Lyons, T. J. (1998). Differential equations driven by rough signals. Revista Matemática Iberoamer-icana , 14(2):215–310. Lyons, T. J., Caruana, M., and Lévy, T. (2007). Differential Equations Driven by Rough Paths ,volume 1908 of Lecture Notes in Mathematics . Springer. Ecole d’Eté de Probabilités de Saint-Flour XXXIV-2004. McCrickerd, R. and Pakkanen, M. S. (2018). Turbocharging monte carlo pricing for the rough bergomi model. Quantitative Finance , 18(11):1877–1886. Shwartz-Ziv, R. and Armon, A. (2022). Tabular data: Deep learning is not all you need. In 
+
+Information Fusion , volume 81, pages 84–90. Elsevier. Stone, H. (2020). Calibrating rough volatility models: a convolutional neural network approach. 
+
+Quantitative Finance , 20(3):379–392. Wu, J., Li, Y., and Ma, Y. (2021). Comparison of XGBoost and the neural network model on the class-balanced datasets. In Proceedings of the 2021 International Conference on Future Trends in Intelligent Computing (ICFTIC) . IEEE. Wu, P., Muzy, J.-F., and Bacry, E. (2022). From rough to multifractal volatility: The log s-fbm model. Physica A: Statistical Mechanics and its Applications , 604:127919. 30

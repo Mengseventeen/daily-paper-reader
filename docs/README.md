@@ -6,47 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-07
-- 运行时间：2026-07-07 22:03:00 UTC
+- 最新运行日期：2026-07-08
+- 运行时间：2026-07-08 21:31:33 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：6
+- 本次总论文数：6
+- 精读区：3
 - 速读区：3
 
 ### 今日简报（AI）
-今日精读聚焦AI驱动投资与个性化税务组合管理，共9篇研究。最值得关注的是《AI Premium》与《A Three-Phase Foundation Model for Tax-Aware Personalized Portfolio Management》两篇高分论文。建议投资者关注AI在提升资产配置税务效率方面的应用，可辅助优化长线持有策略。
-- 详情：[/202607/07/README](/202607/07/README)
+今日精选6篇论文，精读聚焦SHAP可解释性风险模型（9.0分）与谱方差比因子模型（8.0分），均为金融风控与资产定价前沿方法。最值得关注：基于SHAP的监管资本可解释性框架（ICAAP/CCAR）和谱方差比推广的多记忆因子模型，可显著提升风险归因与长期协方差估计精度。建议普通读者优先阅读这两篇精读论文，并尝试将SHAP方法应用于自有风控模型验证。
+- 详情：[/202607/08/README](/202607/08/README)
 
 ### 精读区论文标签
-1. [AI Premium](/202607/07/2606.30583v2-ai-premium)  
+1. [SHARC: SHAP-Based Interpretability in Machine Learning Risk Models for Regulatory Capital under ICAAP and CCAR](/202607/08/2607.05484v1-sharc-shap-based-interpretability-in-machine-learning-risk-models-for-regulatory-capital-under-icaap-and-ccar)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用AI消费数据构建AI因子，展示股票收益中的AI溢价
-2. [A Three-Phase Foundation Model for Tax-Aware Personalized Portfolio Management](/202607/07/2606.30997v2-a-three-phase-foundation-model-for-tax-aware-personalized-portfolio-management)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：深度强化学习用于个性化投资组合管理
-3. [Trading Confidence: Comprehensive Uncertainty Estimation in Algorithmic Trading](/202607/07/2607.02864v1-trading-confidence-comprehensive-uncertainty-estimation-in-algorithmic-trading)  
+   evidence：基于SHAP的机器学习风险模型可解释性，用于监管资本
+2. [A Spectral Generalisation of the Variance Ratio: Eigenstructure of Long-Horizon Portfolio Covariance and a Multi-Memory Factor Model of U.S. Equity Returns](/202607/08/2607.03858v1-a-spectral-generalisation-of-the-variance-ratio-eigenstructure-of-long-horizon-portfolio-covariance-and-a-multi-memory-factor-model-of-us-equity-returns)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：基于不确定性感知的强化学习算法交易
-4. [Beyond Forecasting: The Belief-to-Trade Layer in Prediction-Market Agents](/202607/07/2607.03015v1-beyond-forecasting-the-belief-to-trade-layer-in-prediction-market-agents)  
+   evidence：股票收益分解的谱方差比
+3. [Can Reinforcement Learning Efficiently Discover Price Manipulation?](/202607/08/2607.06121v1-can-reinforcement-learning-efficiently-discover-price-manipulation)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：基于AI的预测市场自主交易代理
-5. [Governing Generative AI Across Financial Institutions: An SR 26-2-Compatible Framework for Generative AI Risk Control](/202607/07/2607.04103v1-governing-generative-ai-across-financial-institutions-an-sr-26-2-compatible-framework-for-generative-ai-risk-control)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融机构中生成AI治理框架
-6. [Dynamic Interest Rate Discovery in Decentralized Finance: A Reverse Kelly Automated Market Maker for Risk-Adjusted Lending](/202607/07/2607.04178v1-dynamic-interest-rate-discovery-in-decentralized-finance-a-reverse-kelly-automated-market-maker-for-risk-adjusted-lending)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：去中心化金融中基于AI的动态利率发现
+   evidence：强化学习在金融市场中发现价格操纵策略
 
 ### 速读区论文标签
-1. [Financial Epiplexity: A Theory of Learnable Market Structure under Bounded Computation](/202607/07/2607.02695v1-financial-epiplexity-a-theory-of-learnable-market-structure-under-bounded-computation)  
+1. [Leveraging Extragradient for Effective Sharpness-Aware Minimization in Deep Learning](/202607/08/2607.06151v1-leveraging-extragradient-for-effective-sharpness-aware-minimization-in-deep-learning)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：有限计算下可学习市场结构理论，适用于股票市场分析
-2. [Strategic Information Disclosure in Algorithmic Pricing](/202607/07/2607.04345v1-strategic-information-disclosure-in-algorithmic-pricing)  
+   evidence：通过外梯度技术提高泛化能力的新型深度学习优化器
+2. [Signature-based identification of volatility models from path geometry](/202607/08/2607.06340v1-signature-based-identification-of-volatility-models-from-path-geometry)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：AI定价算法中的信息披露策略
-3. [Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines](/202607/07/2607.04958v1-look-ahead-freedom-as-temporal-non-interference-a-verifiable-correctness-property-for-backtesting-and-agentic-trading-pipelines)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：回测和智能体交易管道的可验证正确性属性
+   evidence：使用路径签名和梯度提升分类器识别波动率模型
+3. [Strategic Bargaining in Multi-Buyer Markets: Reinforcement Learning from Verifiable Rewards for LLM Negotiations](/202607/08/2607.05863v1-strategic-bargaining-in-multi-buyer-markets-reinforcement-learning-from-verifiable-rewards-for-llm-negotiations)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：多买家市场中LLM谈判的强化学习方法
 
 
 <div class="dpr-home-promo-card">
