@@ -1,0 +1,1672 @@
+Title: Computing Monetary Risk Measures in Linear Time
+
+URL Source: https://arxiv.org/pdf/2607.05078v1
+
+Published Time: Tue, 07 Jul 2026 03:12:08 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Computing Monetary Risk Measures in Linear Time 
+
+Palash Agrawal ∗
+
+, Gersi Doko ∗
+
+, Maeve Burwell, Marek Petrik ∗
+
+## Abstract 
+
+Monetary risk measures have gained popularity for expressing decision-makers’ risk aver-sion. Value-at-Risk (VaR) and Conditional-Value-at-Risk (CVaR), in particular, are used commonly for this purpose. This paper proposes new efficient algorithms to compute these risk measures for a discrete random variable in expected linear time with respect to the size of its domain. First, we propose a QuickVaR algorithm that computes the VaR of a discrete random variable. Then, we leverage QuickVaR to propose Quick-Divergence, an algorithm for computing a class of φ-divergence risk measures, includ-ing the popular CVaR risk measure. The QuickVaR algorithm adapts the well-known Quickselect algorithm, while QuickDivergence builds on polymatroid optimization algo-rithms. Numerical results show that our new algorithms offer an order-of-magnitude speedup for large domains, and a library implementation of the algorithms is available at https://github.com/RiskAverseRL/RiskMeasures.jl .
+
+## 1 Introduction 
+
+Monetary measures of risk generalize the expectation operator to be able to represent the risk aversion of decision-makers in domains that range from robotics (Akella et al., 2024; Benrabah et al., 2024; Majumdar and Pavone, 2020) to finance (Follmer and Schied, 2016) to infrastructure maintenance (Inzunza et al., 2016) to disaster response (Barahona et al., 2013). Value-at-Risk (VaR) and Conditional-Value-at-Risk (CVaR) are the most popular risk measures and have made inroads in reinforcement learning, machine learning, and decision making (Petrik et al., 2024). Machine learning and reinforcement learning algorithms typically must compute the risk measures quickly for large discrete random variables. For example, in risk-averse reinforcement learning, one must evaluate the risk measure in every iteration of the algorithm, which can represent a significant computational bottleneck (Hau et al., 2023; 2025; Ho et al., 2018; 2021; 2022). In this paper, we propose linear-time algorithms for computing risk measures of discrete random variables. First, we develop QuickVaR , an algorithm that computes VaR in linear time and generalizes the well-known quickselect algorithm. Second, we develop QuickDivergence , an algorithm that computes, in linear time, 
+
+φ-divergence risk measures (Ahmadi-Javid, 2012) that satisfy a specific piecewise linearity property. This algorithm reduces φ-divergence risk measures to linear minimization problems over polymatroids (Follmer and Schied, 2016). We illustrate this algorithm for the well-known CVaR risk measure and a related TVaR risk measure. Both of these risk measures are in the φ-divergence family and satisfy the required linearity property. Our algorithms’ time complexity improves on the state of the art by a logarithmic factor. Virtually all implementations of VaR and CVaR algorithms require sorting the input arrays. Unbounded sorting requires 
+
+Ω( n log n) operations where n is the size of the probability space (Follmer and Schied, 2016). Our numerical results show that the logarithmic acceleration can lead to an order-of-magnitude speedup for realistic large problems without incurring any penalty for small problems. In addition, our linear-time algorithms have simple implementations that add minimal complexity over standard algorithms. Linear-time algorithms similar to our QuickVaR and QuickDivergence have been studied in many domains, and we summarize some of the most relevant. Some examples of such structured optimization problems are the projection onto the simplex (Adam and Mácha, 2019; Wang and Carreira-Perpiñán, 2013), projection onto 
+
+> ∗Equal contribution.
+
+1
+
+> arXiv:2607.05078v1 [cs.LG] 6 Jul 2026
+
+the k-capped simplex (Ang et al., 2021; Lim and Wright, 2016), linear optimization on the intersection of Lp
+
+or φ-divergence balls and the probability simplex in robust optimization (Ho et al., 2022), optimization for φ-divergence risk measures (Ahmadi-Javid, 2012), and on polymatroids (Korte and Vygen, 2012). While some of these papers discuss the possibility of designing linear-time algorithms, they usually do not study them, with a few exceptions (Condat, 2016; Lim and Wright, 2016). Finally, QuickVaR is closely related to the computation of the weighted quantile but returns the same value only when the quantile is unique (Cormen et al., 2009, chapter 9). The remainder of the paper is organized as follows. Section 2 describes the necessary background including risk measures, φ-divergence, and polymatroid optimization. Then, Section 3 proposes QuickVaR to compute VaR in linear time. Section 4 builds on QuickVaR to develop QuickDivergence that computes certain φ-divergence risk measures in linear time. We evaluate the algorithms numerically on synthetic and realistic problems in Section 5. 
+
+## 2 Preliminaries 
+
+Notation : We restrict our attention to random variables defined on finite probability spaces (Ω , 2Ω, p) where 
+
+Ω := {1, . . . , n }, p ∈ ∆n, and ∆n is the n-dimensional probability simplex. We use a tilde to indicate a random variable, such as ˜x : Ω → R. Vectors are denoted with a lower-case bold font, such as x ∈ Rn
+
+and indexed as xi for i = 1 , . . . , n . We use the function notation ˜x and vector notation x interchangeably, such that xω = x(ω), ∀ ω ∈ Ω. Sets are denoted with calligraphic letters, ¯R := R ∪ {−∞ , ∞} denotes the extended real line, and R≥0 are non-negative reals. The symbol N denotes all 0-based natural numbers and 
+
+a:b := a, a + 1 , . . . , b for a ≤ b ∈ N and the empty set otherwise. We use xa:b to denote a subset of elements of x and comparisons such as xa:b < y are interpreted element-wise. Finally, the symbol 1 ∈ Rn denotes a vector of all ones and 1O ∈ Rn for O ⊆ Ω is an indicator vector of the set O.
+
+Monetary risk measures ρ : ∆ n × Rn → ¯R are functions of a probability measure and a random variable that are monotone and translation invariant (Follmer and Schied, 2016). Risk measures generalize the expectation operator to account for uncertainty in a random variable’s distribution. We apply risk measures to random variables representing rewards and suppose that higher risk values are preferable. For the sake of streamlining the notation, we omit the probability measure when it is obvious from the context and only write ρ[˜ x] to compute the risk value. 
+
+Value-at-Risk (VaR) is a popular risk measure and is defined for α ∈ [0 , 1) and ˜x ∈ Rn as (Follmer and Schied, 2016; Shapiro et al., 2014) 
+
+VaR α [˜ x] := max {τ ∈ ¯R | P [˜ x < τ ] ≤ α} = max {τ ∈ ¯R | P [˜ x ≥ τ ] ≥ 1 − α} , (1) where the maximum exists because τ 7 → P [˜ x < τ ] is lower semi-continuous. One can readily see that 
+
+VaR 0[˜ x] = ess inf[˜ x], and typically the risk measure is extended as VaR 1[˜ x] = ∞.A φ-divergence risk measure DR φ,β : Rn → ¯R is defined for φ : ¯R → ¯R and β ∈ R≥0 as (Ahmadi-Javid, 2012) 
+
+DR φ,β [˜ x] := inf {qTx | q ∈ ∆n, H φ(q∥p) ≤ β, q ≪ p} (2) 
+
+= sup 
+
+> z∈R
+
+(
+
+z − inf  
+
+> t> 0
+
+t · E
+
+[
+
+φ⋆
+
+( z − ˜xt + β
+
+) ]) 
+
+, (3) where φ⋆(x) is the convex conjugate of φ(y), φ is a closed, convex function that satisfies φ(1) = 0 , and Hφ
+
+is a φ-divergence measure (Bayraksan and Love, 2015): 
+
+Hφ(q∥p) := ∑
+
+> ω∈Ω
+
+pω · φ
+
+( qω
+
+pω
+
+)
+
+,
+
+defined for q ≪ p. Here, q ≪ p denotes that q is absolutely continuous with respect to p, meaning that pω = 0 =⇒ qω = 0 for each ω ∈ 1: n. We also adopt the common convention that 1/0 = ∞
+
+and 0 · ∞ = 0 (Rockafellar and Wets, 1996). It is important to note that φ-divergence risk measures are 2Table 1: Parameters for relevant φ-divergence risk measures for α ∈ (0 , 1) .Risk measure φ(y) φ⋆(x) β
+
+E
+
+{
+
+0 if y = 1 
+
+∞ otherwise x 0CVaR α
+
+{
+
+0 if y ∈ [0 , 1 
+
+> α
+
+]
+
+∞ otherwise  
+
+> 1
+> α
+
+· max {0, x } 0EVaR α
+
+
+
+y log y if y > 00 if y = 0 
+
+∞ if y < 0exp (() x − 1) log 1
+
+> α
+
+TVaR α |y − 1|
+
+{
+
+x if |x| ≤ 1
+
+∞ otherwise min 
+
+{√ 
+
+2 log 1 
+
+> α
+
+, 2
+
+}
+
+coherent, which means they are concave and positively homogeneous. Any coherent risk measure ρ : Rn → ¯R
+
+satisfies that ρ[˜ x] = inf q∈Q qTx for some closed convex non-empty set Q ⊆ ∆n (Follmer and Schied, 2016, proposition 2.84). Table 1 summarizes several common φ-divergence risk measures; see Section 4.2 for the relevant definitions for α ∈ [0 , 1] . We focus on the Conditional-Value-at-Risk (CVaR), which is a φ-divergence risk measure and defined equivalently for ˜x ∈ Rn and α ∈ (0 , 1] as (Follmer and Schied, 2016) 
+
+CVaR α[˜ x] := max 
+
+> z∈R
+
+(
+
+z − 1
+
+α · E [ z − ˜x ]+
+
+)
+
+= min {xTq | q ∈ ∆n, q ≤ α−1p} , (4) and extended continuously to CVaR 0[˜ x] = ess inf[˜ x].We also study another φ-divergence risk measure, which we call Total-Value-at-Risk (TVaR) and which is defined for α ∈ (0 , 1] as 
+
+TVaR α[˜ x] := min 
+
+{
+
+xTq | q ∈ ∆n, ∥p − q∥1 ≤ min 
+
+{√ 
+
+2 log 1
+
+α , 2
+
+}
+
+, q ≪ p
+
+}
+
+, (5) and extended continuously to TVaR 0[˜ x] = ess inf[˜ x].We also refer to the Entropic-Value-at-Risk (EVaR), which is the φ-divergence risk measure obtained from 
+
+φ(y) := y log y for y > 0 and β = log 1 
+
+> α
+
+for α > 0 in Table 1. Because the corresponding φ-divergence is the Kullback–Leibler divergence Hφ(q∥p) = KL( q∥p) = ∑ 
+
+> ω∈Ω
+
+qω log qω 
+
+> pω
+
+, the EVaR is equivalently defined for 
+
+α ∈ (0 , 1] and ˜x ∈ Rn as (Ahmadi-Javid, 2012) 
+
+EVaR α[˜ x] := min 
+
+{
+
+xTq | q ∈ ∆n, KL( q∥p) ≤ log 1
+
+α , q ≪ p
+
+}
+
+, (6) and extended continuously to EVaR 0[˜ x] = ess inf[˜ x].An important property of TVaR is that it bounds EVaR (Ahmadi-Javid, 2012; Hau et al., 2023; Su et al., 2025) from below, as we show next and illustrate in Figure 1. 
+
+Proposition 2.1. For each ˜x ∈ Rn, the risk measures above extended to α ∈ [0 , 1] satisfy that 
+
+VaR α [˜ x] ≥ CVaR α [˜ x] ≥ EVaR α [˜ x] ≥ TVaR α [˜ x] .
+
+Proof. The inequality for VaR and CVaR is well known, and the inequality for CVaR and EVaR follows from (Ahmadi-Javid, 2012, proposition 3.2). Recall that Pinsker’s inequality (Boucheron et al., 2013, theo-rem 4.19) shows for p, q ∈ ∆n that ∥p − q∥1 ≤ √2 KL( q∥p). Then we prove that TVaR lower-bounds EVaR 30.00 0.25 0.50 0.75 1.00 
+
+> −4
+> −3
+> −2
+> −1
+> 0
+> 1
+> 2
+> α
+> Risk
+> VaR
+> CVaR
+> EVaR
+> TVaR
+
+Figure 1: Comparison of risk measure values for a normal distribution with mean 0 and standard deviation 
+
+1 as a function of the risk level α.as 
+
+EVaR α[˜ x] = inf 
+
+{
+
+qTx | q ∈ ∆n, KL( q∥p) ≤ log 1
+
+α , q ≪ p
+
+}
+
+≥ inf 
+
+{
+
+qTx | q ∈ ∆n, ∥p − q∥1 ≤
+
+√
+
+2 log 1
+
+α , q ≪ p
+
+}
+
+= inf 
+
+{
+
+qTx | q ∈ ∆n, ∥p − q∥1 ≤ min 
+
+{√ 
+
+2 log 1
+
+α , 2
+
+}
+
+, q ≪ p
+
+}
+
+= TVaR α[˜ x].
+
+We use the fact that ∥p − q∥1 ≤ 2.
+
+## 3 Computing VaR in Linear Time 
+
+We now describe the QuickVaR algorithm, show that it computes VaR, and show that it runs in linear expected time. The standard VaR algorithm for a discrete random variable x ∈ Rn with distribution p ∈ ∆n and risk level α proceeds as follows (see listing 6.25 (Privault, 2026)). It sorts the entries of x to get a permutation 
+
+σ : 1: n → 1: n such that i 7 → xσ(i) is monotone. Then, it finds an index i ∈ 1: n such that 
+
+> i−1
+
+∑
+
+> j=1
+
+pσ(j) < α ≤
+
+> i
+
+∑
+
+> j=1
+
+pσ(j).
+
+The value xσ(i) is the optimal solution in (1) by Lemma 3.2 below. The computational complexity of this algorithm is Ω( n log n) because its runtime is dominated by the need to sort the entries of x. For the sake of completeness, Algorithm A.1 in the appendix summarizes the standard greedy approach to computing VaR. 
+
+QuickVaR , described in Algorithm 3.1, computes VaR in O(n) time by avoiding the need to sort the elements of the input random variable x. In particular, QuickVaR partially sorts the indices of x, analogous to the quickselect algorithm (Horowitz et al., 1998). Algorithm 3.1 is recursive and applies to a random variable x with a distribution p ∈ ∆n as follows. In addition to the random variable, the input is f (front) and b (back), which delimit the indices of x it manipulates. The algorithm first picks a pivot element v uniformly at random from f :b. The random pivot selection is essential to achieve an average linear time complexity. Given a pivot, we use partition to partially sort the entries of x into three groups: 1. less than v: xf :( l−1) < v , 2. equal to v: xl:g = v, and 3. greater than v: x(g+1): b > v . Then, the algorithm checks for the conditions of Lemma 3.2 to determine which of the three groups contains the VaR value. Finally, if the VaR value is in group 1 or 3, the algorithm calls itself recursively with adjusted f , b, and α.4The partition procedure in Algorithm 3.1 uses the Dutch national flag algorithm to partition the input array into the three groups. The algorithm runs in linear time, and the properties of its output are given in Lemma A.3 below. For the sake of completeness, we provide the reader with the algorithm in Algorithm A.2 in Appendix A. We present Algorithm 3.1 recursively to simplify its analysis. However, a loop-based, non-recursive imple-mentation, such as Algorithm A.3 in Appendix A, typically performs better in imperative languages. 
+
+Algorithm 3.1: QuickVaR : Recursive VaR algorithm 
+
+Input : x ∈ Rn, p ∈ ∆n, α ∈ [0 , 1) , f, b ∈ 1: n such that f ≤ b and ∑bj=f pj > α 
+
+Output: VaR α[˜ x] 
+
+> 1
+
+v ← xrand( f :b) ; // Pivot  
+
+> 2
+
+l, g, x′, p′ ← partition( x, p, v, f, b ) ; // Algorithm A.2  
+
+> 3
+
+t ← ∑l−1 
+
+> j=f
+
+p′ 
+
+> j
+
+; // t = P [˜ x < v ] − ∑f −1 
+
+> i=1
+
+pi 
+
+> 4
+
+e ← ∑gj=l p′ 
+
+> j
+
+; // e = P [˜ x = v] 
+
+> 5
+
+if α < t then // α + ∑f −1 
+
+> i=1
+
+pi < P [˜ x < v ] 
+
+> 6
+
+return QuickVaR( x′, p′, α, f, l − 1)  
+
+> 7
+
+else if t + e ≤ α then // P [˜ x ≤ v] ≤ α + ∑f −1 
+
+> i=1
+
+pi 
+
+> 8
+
+return QuickVaR( x′, p′, α − t − e, g + 1 , b ) 
+
+> 9
+
+else return v ;The following theorem states the correctness of QuickVaR. 
+
+Theorem 3.1. Algorithm 3.1 executed with f = 1 and b = n and α ∈ [0 , 1) returns VaR α[˜ x].
+
+Before proving Theorem 3.1, we need to show several important lemmas. The following lemma, which holds only for discrete random variables, shows that the VaR value is the probability atom that satisfies specific probability properties. 
+
+Lemma 3.2. Assuming α ∈ [0 , 1) , there exists ω ∈ Ω with v := VaR α [˜ x] = xω and 
+
+P [˜ x < v ] ≤ α < P [˜ x ≤ v] . (7) 
+
+Proof. First, we show that any v that satisfies (7) solves (1) optimally. The implication P [˜ x < v ] ≤
+
+α =⇒ v ∈ { t ∈ R | P [˜ x < t ] ≤ α} follows immediately. Second, we prove α < P [˜ x ≤ v] =⇒ ∀t ∈{t ∈ R | P [˜ x < t ] ≤ α} , v ≥ t by contradiction. Suppose that ∃t ∈ { t ∈ R | P [˜ x < t ] ≤ α} , v < t . Then, by the monotonicity of the probability operator, we get a contradiction as 
+
+α < P [˜ x ≤ v] ≤ P [˜ x < t ] ≤ α. 
+
+Then, the existence of ω follows from Lemma A.1 because (7) implies that 
+
+P [˜ x = VaR α [˜ x]] = P [˜ x ≤ VaR α [˜ x]] − P [˜ x < VaR α [˜ x]] > α − α = 0 .
+
+The following lemma shows the recursive property of QuickVaR and is the main building block of Theorem 3.1. 
+
+Lemma 3.3. Suppose that the input conditions of Algorithm 3.1 hold and x ∈ Rn satisfies that 
+
+x1:( f −1) < x f , xf −1 < xf :b < x b+1 , xb < x(b+1): n, (8) 
+
+where x0 = −∞ and xn+1 = + ∞. Then Algorithm 3.1 returns xω , ω ∈ f :b such that 
+
+P [˜ x < x ω ] ≤ α + 
+
+> f−1
+
+∑
+
+> i=1
+
+pi < P [˜ x ≤ xω ] . (9) 5Proof. From (8) and Lemma A.3, t and e on lines 2 and 3 satisfy that 
+
+t = P [˜ x < v ] − 
+
+> f−1
+
+∑
+
+> i=1
+
+pi, e = P [˜ x = v] . (10) We proceed by induction on k = b − f . Base case : k = 0 . Since b = f , we have that v = xb and l = g = b,
+
+t = 0 , e = pb, and α ≥ t. The input condition implies that t + e = pb > α . Because t ≤ α < p b, the algorithm returns v on line 8 that satisfies 
+
+P [˜ x < v ] ≤ α + 
+
+> f−1
+
+∑
+
+> i=1
+
+pi < P [˜ x ≤ v] .
+
+Above, the first inequality follows from v = xf and 0 ≤ α. The second inequality follows from the algorithm’s input condition. 
+
+Inductive step . Suppose that k > 0 and that the result holds for each k′ < k . Then: (i) If α < t , the algorithm executes the first if statement on line 4. Because 0 ≤ α < t , the recursive call satisfies the required input conditions: f ≤ l − 1 and ∑l−1 
+
+> j=f
+
+pj = t > α . The recursive call also satisfies (8) by Lemma A.3, and we can conclude that (9) follows from the inductive hypothesis because 
+
+l − 1 − f ≤ b − 1 − f ≤ k − 1 < k .(ii) If t + e ≤ α, the algorithm executes the second if statement on line 6. We show that the input conditions for the recursive call are met. Because t + e = ∑gj=f pj ≤ α < ∑bj=f pj (the second inequality is the input condition), it must be that g < b and therefore g + 1 ≤ b. Also, by the algorithm’s input condition and algebraic manipulation, we get that 
+
+> b
+
+∑
+
+> j=g+1
+
+pj =
+
+> b
+
+∑
+
+> j=f
+
+pj − t − e > α − t − e, 
+
+and the input conditions hold. Because (8) follows from Lemma A.3 and b − g − 1 < b − f ≤ k, the inductive hypothesis implies that there exists xω such that 
+
+P [˜ x < x ω ] ≤ (α − t − e) + P [˜ x ≤ v] < P [˜ x ≤ xω ] .
+
+Then, (9) follows by algebraic manipulation after substituting t, e from (10). (iii) If t ≤ α < t + e, the algorithm executes the else statement on line 8, and the inequality (9) holds by substituting t, e from (10). We are now ready to prove the correctness of QuickVaR. 
+
+Proof of Theorem 3.1. With f = 1 and b = n, the condition in (8) holds vacuously, and the input condition ∑nj=1 pj = 1 > α holds since α ∈ [0 , 1) . Therefore, Lemma 3.3 shows that QuickVaR returns xω that satisfies 
+
+P [˜ x < x ω ] ≤ α < P [˜ x ≤ xω ] ,
+
+which satisfies (7) and, therefore, it equals the VaR value by Lemma 3.2. With the correctness of Algorithm 3.1 established in Lemma 3.3, we now show its computational complexity. 
+
+Theorem 3.4. Algorithm 3.1 runs in expected O(n) time. Proof. The proof is analogous to the standard quickselect algorithm, as in (Horowitz et al., 1998, theo-rem 3.3), except that we need to keep track of the risk level α. Fix some n ∈ N, x, and p, and we study the algorithm’s properties. Let T : 1: n → [0 , ∞] be the expected runtime of Algorithm 3.1 such that T (k) is the 6expected runtime when executed with k := b − f + 1 . To simplify the notation, we assume without loss of generality in the remainder of the proof that f = 1 and b = k. Then, let 
+
+l := |{ i ∈ 1: k | xi < VaR α[˜ x]}| .
+
+Note that by the assumption ∑bj=f pj > α , we have that k ≥ 1 and VaR α[˜ x] ≤ max i∈f :b xi. Therefore, 
+
+l ∈ 0:( k − 1) . The algorithm terminates in constant time when k = 1 , and we upper-bound the runtime for the worst-case choice of l for k > 1 as 
+
+T (k) ≤ d · k + max 
+
+> l∈0:( k−1)
+
+1
+
+k
+
+> k−1
+
+∑
+
+> i=0
+
+(T (i) · 1l<i + T (k − i − 1) · 1l>i )= d · k + max 
+
+> l∈0:( k−1)
+
+1
+
+k
+
+( k−1∑
+
+> i=l+1
+
+T (i) + 
+
+> l−1
+
+∑
+
+> i=0
+
+T (k − i − 1) 
+
+)
+
+= d · k + max 
+
+> l∈0:( k−1)
+
+1
+
+k
+
+( k−1∑
+
+> i=l+1
+
+T (i) + 
+
+> k−1
+
+∑
+
+> i=k−l
+
+T (i)
+
+)
+
+, (11) where d · k is the local runtime of the algorithm for some d > 0 and T (i) and T (k − i − 1) are the average runtimes of the recursive calls. The average over i corresponds to the uniformly random selection of the pivot with i = |{ j ∈ 1: k | xj < v }| in the first line of the inequality. The last two equalities follow by algebraic manipulation. Then, an argument identical to theorem 3.3 (Horowitz et al., 1998), since (11) is the same as equation (3.8) in Horowitz et al. (1998), shows that T (k) ≤ 4 · d · k for all k ≥ 1.
+
+Remark 3.5 . An attentive reader may notice that QuickVaR resembles the algorithm for computing the weighted median (Korte and Vygen, 2012, section 17). However, the weighted median algorithm does not, in general, compute VaR. Define the quantile qα, α ∈ (0 , 1) for ˜x as the closed set 
+
+qα[˜ x] := {z ∈ R | P [˜ x ≤ z] ≥ α, P [˜ x ≥ z] ≥ 1 − α} ,
+
+with bounds q+ 
+
+> α
+
+[˜ x] := max qα[˜ x] and q− 
+
+> α
+
+[˜ x] := min qα[˜ x]. One can readily show that VaR α[˜ x] = q+ 
+
+> α
+
+[˜ x].Although the precise definition of a weighted median varies, it is typically a value in q 12 [˜ x]. Because q+ 
+
+> α
+
+[˜ x]̸ =
+
+q− 
+
+> α
+
+[˜ x], in general, VaR also does not equal the median. A careful analysis shows that the weighted median algorithm in Korte and Vygen (2012, section 17) computes q−
+
+> 12
+
+[˜ x], which does not equal VaR 12 [˜ x].
+
+## 4 Computing φ-divergence Risk Measures in Linear Time 
+
+In this section, we describe and analyze QuickDivergence, a new linear-time framework for computing a class of φ-divergence risk measures, including CVaR and TVaR. QuickDivergence treats risk evaluation as a linear optimization over a polymatroid. Standard polymatroid optimization algorithms must sort their input, which requires Ω( n log n) runtime. We identify a structural condition of polymatroid risk measures that allows us to avoid sorting and instead use the linear-time QuickVaR algorithm described in Section 3. The remainder of the section is organized as follows. Section 4.1 describes a general linear-time algorithm suitable for φ-divergence risk measures that satisfy an EWS property. Then Section 4.2 shows that both CVaR and TVaR satisfy the EWS property and can be computed in linear time. Note that we use a fixed distribution p ∈ ∆n and omit it in the notation when it is obvious from the context. 
+
+4.1 QuickDivergence 
+
+We first recall the definition of a submodular function (Korte and Vygen, 2012, section 2.1) and a polyma-troid (Korte and Vygen, 2012, definition 14.9). 
+
+Definition 4.1. A function f : 2 1: n → R≥0 is submodular if 
+
+f (A) + f (B) ≥ f (A ∪ B ) + f (A ∩ B ), ∀A , B ⊆ 1: n. 
+
+7For a submodular f : 2 1: n → R≥0, a polymatroid Qf is a polytope defined as 
+
+Qf := {q ∈ Rn 
+
+> ≥0
+
+| 1TqU ≤ f (U), ∀ U ⊆ 1: n} ,
+
+and a normalized polymatroid is ̂ Qf := Qf ∩ ∆n.Polymatroids are useful in optimization because any coherent, comonotonic monetary risk measure can be formulated as linear optimization over a polymatroid (Follmer and Schied, 2016, corollary 4.89). A risk measure ρ is coherent if it is concave and positively homogeneous. A risk measure ρ is comonotonic if for any comonotone ˜x, ˜y: ρ[˜ x + ˜ y] = ρ[˜ x] + ρ[˜ y], where the random variables ˜x, ˜y ∈ Rn are comonotone if 
+
+˜x(i) ≥ ˜x(j) ⇔ ˜y(i) ≥ ˜y(j) for each i, j ∈ 1: n.
+
+Proposition 4.2. A monetary risk measure ρ : ∆ n × Rn → R is a coherent comonotonic risk measure if and only if 
+
+ρ[˜ x] = min 
+
+> q∈
+
+̂Qc
+
+qTx, where c(A) := −ρ[−˜1A], ∀A ⊆ 1: n, (12) 
+
+where ˜1 is an indicator random variable. Moreover, if the risk measure is law-invariant, then there exists 
+
+g : R → R such that c(A) = g(1TpA) for each A ⊆ 1: n.
+
+Proposition 4.2 follows from corollary 4.88 and theorem 4.94 in Follmer and Schied (2016). The standard solution to the polymatroid optimization problem in (12) is to use a greedy algorithm, such as Algorithm 4.1. This algorithm adapts the standard polymatroid optimization, such as Korte and Vygen (2012, section 14.9), to the normalized polymatroid ̂ Qf . See Proposition B.1 for the proof of correctness. Note that the greedy approach in Algorithm 4.1 requires sorting and, therefore, runs in Ω( n log n) time. 
+
+Algorithm 4.1: Linear minimization over polymatroids. 
+
+Input : submodular monotone function f : 2 1: n → R≥0, and an objective x ∈ Rn
+
+Output: ˆq ∈ arg min q∈̂ Qf
+
+xTq 
+
+> 1
+
+Use sort to get σ : 1: n → 1: n such that i > j =⇒ xσ(i) ≥ xσ(j), ∀i, j ∈ 1: n; 
+
+> 2
+
+for k ∈ 1: n do  
+
+> 3
+
+ˆqσ(k) ← f (σ(1: k)) − f (σ(1:( k − 1)))  
+
+> 4
+
+return ˆq
+
+We now define a special class of submodular functions, called EWS, that makes sorting unnecessary when optimizing a linear function over a polymatroid. 
+
+Definition 4.3. A function f : 2 1: n → R≥0 is EWS( μ, m, c ), or Element-Wise-Separable , for c ∈ R≥0,
+
+m ∈ R>0, such that c ≤ 1, c + m ≥ 1, and μ ∈ ∆n if f (A) := g(1TμA) for all A ⊆ 1: n and 
+
+g(x) := 
+
+{
+
+min {c + m · x, 1} if x > 0,
+
+0 otherwise . (13) EWS functions satisfy the properties necessary to define a polymatroid as we show next. 
+
+Proposition 4.4. An EWS function f : 2 Ω → R≥0 is submodular, monotone, and satisfies that f (∅) = 0 ,and f (Ω) = 1 .Proof. To show that f is submodular, it is sufficient, from Lemma B.2, to show that g is concave on [0 , 1] . The function g is concave on (0 , 1] because it is the minimum of two linear functions (Boyd and Vandenberghe, 2004). The concavity of g on [0 , 1] follows from the definition. Since g(0) = 0 , for each λ ∈ (0 , 1] and b ∈ (0 , 1] 
+
+we get that 
+
+(1 − λ)g(0) + λ · g(b) = λ · g(b) = min {λ · c + m · λ · b, λ } ≤ min {c + m · λ · b, 1} = g ((1 − λ) · 0 + λ · b) .
+
+Because the inequality also holds for λ = 0 , g is concave on [0 , 1] by the definition. The monotonicity, non-negativity and the boundary value conditions for f follow by algebraic manipulation from the assumptions on c and m.8Algorithm 4.2: QuickDivergence : Linear minimization over EWS polymatroids. 
+
+Input : x ∈ Rn, p ∈ ∆n, EWS( p, m, c ) function f : 2 1: n → R≥0
+
+Output: q⋆ ∈ arg min q∈̂ Qf
+
+xTq 
+
+> 1
+
+Choose kmin ∈ arg min i∈1: n xi s. t. p i > 0; break ties to choose the smallest i // Analogous to 
+
+ess inf  
+
+> 2
+
+v ←
+
+{
+
+QuickVaR( x, p, (1 − c)/m ), if (1 − c)/m < 1,
+
+∞, otherwise ; 
+
+> 3
+
+K<v ← { i ∈ 1: n | xi < v } ; K=v ← { i ∈ 1: n | xi = v} ; 
+
+> 4
+
+l ← |K <v ∪ { kmin }| ; 
+
+> 5
+
+θl ← 1 − min {c + m · 1TpK<v ∪{ kmin }, 1} ; 
+
+> 6
+
+for i ∈ 1: n do  
+
+> 7
+
+if i = kmin then q⋆i ← min {m · pi + c, 1} ; 
+
+> 8
+
+else if i ∈ K <v then q⋆i ← m · pi; 
+
+> 9
+
+else if i ∈ K =v then q⋆i ← min {θl, m · pi}; θl+1 ← θl − q⋆i ; l ← l + 1 ; 
+
+> 10
+
+else q⋆i ← 0; 
+
+> 11
+
+return q⋆
+
+Algorithm 4.2 describes QuickDivergence , an algorithm for polymatroid optimization. QuickDivergence differs from the standard linear polymatroid algorithm in Algorithm 4.1 in that it does not require sorting the input vector. Instead, the algorithm uses QuickVaR to partially sort the input vector. The following theorem states the correctness and runtime of Algorithm 4.2. 
+
+Theorem 4.5. Algorithm 4.2 solves (12) in expected O(n) runtime. Proof. To prove the correctness of Algorithm 4.2, we show that it returns q⋆ that equals ˆq returned by the standard Algorithm 4.1. Suppose that Algorithm 4.1 chooses a permutation σ : 1: n → 1: n such that 
+
+i ≤ j ⇒ xσ(i) ≤ xσ(j) and xσ(i) = xσ(j) ∧ i < j ⇒ σ(i) < σ (j) for each i, j ∈ 1: n. In other words, the permutation σ needs to be generated by a stable sort algorithm. We emphasize that the stability assumption is only needed for our proof technique; the actual implementation does not require it. We now prove that q⋆i = ˆ qi for each i ∈ 1: n by separately analyzing the following four cases. 
+
+(i) Suppose that i = kmin . Because pi > 0 from the construction of kmin then 
+
+q⋆i = min {m · pi + c, 1} = g(pi) = g(pi) − g(0) = f ({i} ∪ J ) − f (J ) = ˆ qi,
+
+where J := {j ∈ 1: n | σ−1(j) < σ −1(i)} and 1T 
+
+> J
+
+p = 0 by the construction of kmin .
+
+(ii) Suppose that i ∈ K <v ∧ i̸ = kmin . From Lemma 3.2, we get for each O ⊆ K <v that 
+
+1TpO ≤ P [˜ x < v ] ≤ 1 − cm , (14) and, hence, from (13): f (O) = g (1TpO
+
+) = c + m · 1TpO , when 1TpO > 0. Let k := σ−1(i) and note that 
+
+σ(1: k) ⊆ K <v because if l ∈ 1: k, then xσ(l) ≤ xσ(k) = xi < v and σ(l) ∈ K <v . Then, since i̸ = kmin :
+
+ˆqi = ˆ qσ(k) = f (σ(1: k)) − f (σ(1:( k − 1))) = m · 1Tpσ(1: k)\σ(1:( k−1)) = m · pσ(k) = m · pi = q⋆i .
+
+The third equality follows from i̸ = kmin and pkmin ̸ = 0 .
+
+(iii) Suppose that i ∈ K =v ∧ i̸ = kmin . Here, we use the assumption that σ is a stable sort and prove the claim by induction on l ∈ |K <v ∪ { kmin }| , . . . , |K <v ∪ { kmin }| + |K =v \ { kmin }| showing that 
+
+θl = 1 − f (σ(1: l)) , (15) 
+
+ˆqσ(l+1) = q⋆σ(l+1) . (16) 9To prove the base case, suppose that l = |K <v ∪{ kmin }| . The equality in (15) holds by algebraic manipulation from (13) since K<v ∪ { kmin } = σ(1: l). The equality in (16) follows from (13) and (14). First, assume that 
+
+θl > 0; then 
+
+ˆqi = ˆ qσ(l+1) = f (σ(1:( l + 1))) − f (σ(1: l)) = min {1, c + m · 1Tpσ(1:( l+1)) 
+
+} − c − m · 1Tpσ(1: l)
+
+= min {1 − c − m · 1Tpσ(1: l), m · pσ(l+1) 
+
+}
+
+= min {θl, m · pi} = q⋆i .
+
+(17) When θl = 0 , we get by algebraic manipulation that ˆqi = 0 = q⋆i .To prove the inductive case, suppose that (15) and (16) hold for l, and we prove it for l + 1 . The equality in (15) can be derived from (16) and the construction in Algorithm 4.1 as 
+
+θl+1 = θl − q⋆σ(l+1) = θl − ˆqσ(l+1) = 1 − f (σ(1: l)) − (f (σ(1:( l + 1))) − f (σ(1: l))) = 1 − f (σ(1:( l + 1))) .
+
+The equality in (16) follows analogously to (17) if θl+1 > 0:
+
+ˆqi = ˆ qσ(l+2) = f (σ(1:( l + 2))) − f (σ(1:( l + 1))) = min {1, c + m · 1Tpσ(1:( l+2)) 
+
+} − (1 − θl+1 )= min {θl+1 , c + m · 1Tpσ(1:( l+2)) − f (σ(1:( l + 1))) }
+
+= min {θl+1 , m · pσ(l+2) 
+
+} = q⋆i .
+
+(18) If θl+1 = 0 , we get by algebraic manipulation that ˆqi = 0 = q⋆i .
+
+(iv) Suppose that i ∈ K >v := {j ∈ 1: n | xj > v } and let k = σ−1(i). Then, using (7) we have that: 
+
+1 ≥ f (σ(1: k)) ≥ f (σ(1:( k − 1))) ≥ min {c + m · 1Tpσ(1:( k−1)) , 1} ≥ 1,
+
+since 1Tpσ(1:( k−1)) > 1−cm from Lemma 3.2 and the construction of v in Algorithm 4.2. Then 
+
+ˆqi = ˆ qσ(k) = f (σ(1: k)) − f (σ(1:( k − 1))) = 0 = q⋆i .
+
+4.2 Solving CVaR and TVaR in Linear Time 
+
+We show that CVaR and TVaR are two examples of φ-divergence risk measures that can be formulated as linear optimization over a polymatroid with an EWS capacity function and, therefore, can be solved in linear time. To formulate the CVaR polymatroid optimization, we define the capacity function f CVaR  
+
+> α
+
+: 2 Ω → R for each O ⊆ Ω and α ∈ [0 , 1] as 
+
+f CVaR  
+
+> α
+
+(O) := 
+
+
+
+min { 1 
+
+> α
+
+· P [O] , 1} if α ∈ (0 , 1] ,
+
+0 if α = 0 ∧ P [O] = 0 ,
+
+1 if α = 0 ∧ P [O] > 0.
+
+(19) The Choquet capacity function f CVaR  
+
+> α
+
+for CVaR defined in (19) is well known, but is usually restricted to 
+
+α ∈ (0 , 1) (Acerbi, 2002). The following proposition states its correctness. 
+
+Proposition 4.6. For each α ∈ [0 , 1] , ˜x : Ω → R, and p ∈ ∆n:
+
+CVaR α [˜ x] = min 
+
+> q∈
+
+̂ Qf CVaR 
+
+> α
+
+xTq. (20) 
+
+Moreover, f CVaR  
+
+> α
+
+is EWS( p, 1/α, 0) when α > 0, and EWS( p, 1, 1) when α = 0 .
+
+10 10 6.0 10 6.3 10 6.6 10 6.9   
+
+> 10 1
+> 10 2
+> 10 3
+> Size of Probability Space (n)
+> Time (ms)
+> CVaR
+> VaR
+> TVaR
+> QCVaR
+> QVaR
+> QTVaR
+> E10 6.010 6.310 6.610 6.9
+> 10 1
+> 10 2
+> 10 3
+> Size of Probability Space (n)
+> Time (ms)
+> CVaR
+> VaR
+> TVaR
+> QCVaR
+> QVaR
+> QTVaR
+> E
+
+Figure 2: Comparison of runtime of the algorithms for samples from a uniform random variable (left) and a sparse random variable (right). Shaded regions denote 95% confidence bands over the 10 runs. To compute TVaR, we define the capacity function f TVaR  
+
+> α
+
+: 2 Ω → R for each O ⊆ Ω and α ∈ [0 , 1] as 
+
+f TVaR  
+
+> α
+
+(O) := 
+
+
+
+min 
+
+{
+
+P [O] + min 
+
+{√ 12 log 1 
+
+> α
+
+, 1
+
+}
+
+, 1
+
+}
+
+if α ∈ (0 , 1] ∧ P [O] > 0,
+
+0 if P [O] = 0 ,
+
+1 if α = 0 ∧ P [O] > 0.
+
+(21) TVaR was first proposed in the context of φ-divergence risk measures (Kruse et al., 2021) as well as in the context of robust stochastic programming (Shapiro, 2017). TVaR is also very closely related to the L1 ball used in robust Markov decision processes (Ho et al., 2021; 2022). However, we are not aware of prior work that defines or uses the capacity function in (21). The following proposition shows that this function can be used to correctly formulate the TVaR evaluation using an EWS function. 
+
+Proposition 4.7. For each α ∈ [0 , 1] , ˜x : Ω → R, and p ∈ ∆n:
+
+TVaR α [˜ x] = min 
+
+> q∈
+
+̂Qf TVaR 
+
+> α
+
+xTq. (22) 
+
+Moreover, f TVaR  
+
+> α
+
+is EWS( p, 1, min 
+
+{√ 12 log 1 
+
+> α
+
+, 1
+
+}
+
+) when α > 0, and EWS( p, 1, 1) when α = 0 .
+
+## 5 Experiments 
+
+We evaluate the proposed algorithms empirically to confirm that their theoretical performance guarantees translate into faster practical runtimes. We compare each linear-time algorithm against its standard sorting-based counterpart. Throughout this section, we prefix the name of our linear-time implementation with a “Q” to distinguish it from the sorting-based baseline, giving QVaR, QCVaR, and QTVaR. We also report the runtime of computing the standard expectation E as a baseline. Our implementation, together with the code and data needed to reproduce all results, is available at https: //github.com/marekpetrik/paper_lineartime_risk , and the actual implementation of the risk measures can be found at https://github.com/RiskAverseRL/RiskMeasures.jl . All experiments were run on an AMD Ryzen Threadripper 3970X with 32 cores and 64 threads at 4.55 GHz with 256 GB of RAM using Julia 1.12.5. To reduce noise in the timing measurements, we disable the Julia garbage collector during each run. We begin with synthetic data drawn from a uniform distribution with n samples, varying n from 10 6 to 10 7.For each value of n we run every algorithm 10 times on independently generated samples and report the 11 Table 2: Mean runtime of algorithms in the stock market scenario. Method Mean (ms) St. dev. (ms) VaR 0.37 0.00 QVaR 0.13 0.02 CVaR 0.39 0.00 QCVaR 0.22 0.03 TVaR 0.40 0.01 QTVaR 0.25 0.05 
+
+E 0.01 0.00 Table 3: Mean runtime (ms) of algorithms on smaller sparse random domains. n E VaR QVaR CVaR QCVaR TVaR QTVaR 1000 0.00 0.03 0.01 0.03 0.02 0.03 0.02 2000 0.00 0.06 0.02 0.06 0.03 0.06 0.04 3000 0.01 0.09 0.04 0.10 0.05 0.10 0.07 4000 0.00 0.13 0.04 0.14 0.06 0.13 0.08 5000 0.01 0.16 0.05 0.17 0.10 0.18 0.10 6000 0.00 0.20 0.08 0.21 0.10 0.21 0.11 7000 0.00 0.23 0.08 0.25 0.12 0.24 0.13 8000 0.00 0.27 0.09 0.28 0.13 0.28 0.15 9000 0.01 0.30 0.09 0.32 0.12 0.31 0.17 10000 0.01 0.33 0.11 0.35 0.16 0.35 0.19 mean runtime. Figure 2 shows the results on a log-log scale for random variables with a uniform (left) and sparsely-supported (right) distributions. We fix the risk level to α = 0 .95 , though the results are similar for other levels except the degenerate cases α = 0 and α = 1 . The shaded regions denote 95% confidence bands over the 10 runs; the bands are tight because the measured runtimes vary little between runs. The results confirm that the quick algorithms are substantially faster than their sorting-based counterparts, with the gap widening as n grows. This behavior matches the theoretical analysis of Sections 3 and 4: the sorting-based methods require O(n log n) operations, whereas our algorithms run in O(n) expected time, so the logarithmic factor separating them grows with the size of the probability space. The acceleration is most consequential for VaR and CVaR, which are the most widely used risk measures in the applications discussed in Section 1 and are frequently evaluated on large random variables. To confirm the speedups persist beyond large synthetic inputs, we repeat the comparison on two more realistic settings. The first one is a Stock Market scenario, in which the random variable models the returns of a financial portfolio. Table 2 reports the mean runtime and standard deviation of each method. The second one is small-scale problems, where the asymptotic advantage is least pronounced but can be practically important when the risk measures must be computed repeatedly. Table 3 reports the mean runtime on sparse random variables over probability spaces of size n ranging from 1000 to 10 000 , using the same protocol as above but with 50 trials per configuration in place of 10 . Even at these sizes, the quick algorithms outperform their sorting-based counterparts for every method and every value of n, confirming that the linear-time algorithms deliver consistent improvements across the full range of input sizes without incurring any penalty on small inputs. 12 6 Conclusion 
+
+We propose and analyze new algorithms for computing several common risk measures, including VaR, CVaR, and TVaR, in O(n) expected time, where n is the size of the probability space. This compares favorably with the O(n log n) time required by sorting-based methods. This speedup is significant because risk measures are frequently evaluated on large random variables in applications such as robotics, finance, and infrastructure maintenance. An important direction for future work is to develop fast algorithms for other risk measures, such as EVaR and Expectile. 
+
+## References 
+
+C. Acerbi. Spectral measures of risk: A coherent representation of subjective risk aversion. Journal of Banking & Finance , 26(7):1505–1518, 2002. L. Adam and V. Mácha. Projections onto the canonical simplex with additional linear inequalities, 2019. A. Ahmadi-Javid. Entropic Value-at-Risk: A new coherent risk measure. Journal of Optimization Theory and Applications , 155(3):1105–1123, 2012. P. Akella, A. Dixit, M. Ahmadi, L. Lindemann, M. P. Chapman, G. J. Pappas, A. D. Ames, and J. W. Burdick. Risk-aware robotics: Tail risk measures in planning, control, and verification. arXiv preprint arXiv:2403.18972 , 2024. A. Ang, J. Ma, N. Liu, and K. Huang. Fast projection onto the capped simplex with applications to sparse regression in bioinformatics. In Conference on Neural Information Processing Systems , volume 35, 2021. F. Barahona, M. Ettl, M. Petrik, and P. M. Rimshnick. Agile logistics simulation and optimization for managing disaster responses. In Winter Simulation Conference , pages 3340–3351, 2013. G. Bayraksan and D. K. Love. Data-driven stochastic programming using phi-divergences. In The Operations Research Revolution , INFORMS TutORials in Operations Research, chapter 1, pages 1–19. INFORMS, 2015. M. Benrabah, C. Orou Mousse, E. Randriamiarintsoa, R. Chapuis, and R. Aufrère. A review on traversability risk assessments for autonomous ground vehicles: Methods and metrics. Sensors , 24(6):1909, 2024. J. Bilmes. Submodular functions, optimization, and applications to machine learning — spring quarter, lecture 4, 2018. S. Boucheron, G. Lugosi, and P. Massart. Concentration Inequalities: A Nonasymptotic Theory of Indepen-dence . Oxford University Press, 2013. S. P. Boyd and L. Vandenberghe. Convex Optimization . Cambridge University Press, 2004. L. Condat. Fast projection onto the simplex and the L1 ball. Mathematical Programming , 158(1-2):575–585, 2016. T. H. Cormen, C. E. Leiserson, R. L. Rivest, and C. Stein. Introduction to Algorithms . MIT Press, Cambridge, MA, third edition, 2009. E. W. Dijkstra. A Discipline of Programming . Prentice-Hall Series in Automatic Computation. Prentice-Hall, Englewood Cliffs, N.J, 1976. H. Follmer and A. Schied. Stochastic Finance: Introduction in Discrete Time . De Gruyter Graduate, fourth edition, 2016. J. L. Hau, E. Delage, M. Ghavamzadeh, and M. Petrik. On dynamic programming decompositions of static risk measures in Markov decision processes. In Neural Information Processing Systems (NeurIPS) , 2023. 13 J. L. Hau, E. Delage, E. Derman, M. Ghavamzadeh, and M. Petrik. Q-learning for quantile MDPs: Adecomposition, performance, and convergence analysis. In Artificial Intelligence and Statistics (AISTATS) ,2025. C. P. Ho, M. Petrik, and W. Wiesemann. Fast Bellman updates for robust MDPs. In International Conference on Machine Learning (ICML) , pages 1979–1988, 2018. C. P. Ho, M. Petrik, and W. Wiesemann. Partial policy iteration for L1-robust Markov decision processes. 
+
+Journal of Machine Learning Research , 22:1–46, 2021. C. P. Ho, M. Petrik, and W. Wiesemann. Robust phi-divergence MDPs. In Neural Information Processing Systems (NeurIPS) , 2022. E. Horowitz, S. Sahni, and S. Rajasekaran. Computer Algorithms . Computer Science Press, New York, 1998. A. Inzunza, R. Moreno, A. Bernales, and H. Rudnick. CVaR constrained planning of renewable genera-tion with consideration of system inertial response, reserve services and demand participation. Energy Economics , 59:104–117, 2016. B. Korte and J. Vygen. Combinatorial Optimization: Theory and Algorithms . Springer, fifth edition, 2012. T. Kruse, J. C. Schneider, and N. Schweizer. A toolkit for robust risk assessment using f-divergences. 
+
+Management Science , 67(10):6529–6552, 2021. C. H. Lim and S. J. Wright. Efficient Bregman projections onto the permutahedron and related polytopes. In 
+
+Proceedings of the 19th International Conference on Artificial Intelligence and Statistics , pages 1205–1213. PMLR, 2016. A. Majumdar and M. Pavone. How should a robot assess risk? towards an axiomatic theory of risk in robotics. In Robotics Research: The 18th International Symposium ISRR , pages 75–84. Springer, 2020. M. Petrik, G. Tennenholtz, and M. Ghavamzadeh. Bayesian regret minimization in offline bandits. In 
+
+Proceedings of the 41st International Conference on Machine Learning , pages 40502–40522. PMLR, 2024. N. Privault. Notes on financial risk and analytics with R and Python. Technical report, Nanyang Techno-logical University, 2026. R. T. Rockafellar and R. J.-B. Wets. Variational Analysis . Springer, 1996. A. Shapiro. Distributionally robust stochastic programming. SIAM Journal on Optimization , 27(4):2258– 2275, 2017. A. Shapiro, D. Dentcheva, and A. Ruszczynski. Lectures on Stochastic Programming: Modeling and Theory .SIAM, 2014. X. Su, J. Grand-Clement, and M. Petrik. Risk-averse total-reward MDPs with ERM and EVaR. In AAAI Conference on Artificial Intelligence , 2025. W. Wang and M. Á. Carreira-Perpiñán. Projection onto the probability simplex: An efficient algorithm with a simple proof, and an application, 2013. 
+
+## A Supplemental Results for Section 3 
+
+In this section, we summarize the standard and supporting algorithms for solving VaR. We also include the selected technical proofs for the correctness of the proposed algorithm. 
+
+Lemma A.1. For each t ∈ R:
+
+P [˜ x = t] > 0 = ⇒ ∃ ω ∈ Ω, x (ω) = t. 
+
+14 Algorithm A.1: Standard VaR algorithm 
+
+Input : x ∈ Rn, p ∈ ∆n, and α ∈ [0 , 1) 
+
+Output: VaR α[˜ x] 
+
+> 1
+
+Sort x indices to get σ : 1: n → 1: n such that i > j =⇒ xσ(i) ≥ xσ(j), ∀i, j ∈ 1: n; 
+
+> 2
+
+q0 ← 0 ; // qi = P [˜x ≤ xσ(i)
+
+] when xσ(i) unique  
+
+> 3
+
+for i ∈ 1: n do  
+
+> 4
+
+qi ← qi−1 + pσ(i) ; 
+
+> 5
+
+if qi > α then return xσ(i);
+
+Proof. The result follows by induction on the size |Ω|, dropping the constraint 1Tp = 1 .
+
+Proposition A.2. For each x ∈ Rn, p ∈ ∆n, and α ∈ [0 , 1) , Algorithm A.1 returns VaR α [˜ x].Proof. First, one can readily show by induction that for each i ∈ 1: n (note that values of x need not be unique): 
+
+P [˜x < x σ(i)
+
+] ≤ qi−1 ≤ qi ≤ P [˜x ≤ xσ(i)
+
+] . (23) Since α < 1 = qn, the algorithm is guaranteed to terminate with some i⋆ ∈ 1: n and return xσ(i⋆). Therefore, 
+
+qi⋆−1 ≤ α < q i⋆ and applying (23) gives us that 
+
+P [˜x < x σ(i⋆)
+
+] ≤ qi⋆−1 ≤ α < q i⋆ ≤ P [˜x ≤ xσ(i⋆)
+
+] ,
+
+and the result holds by Lemma 3.2. 
+
+Algorithm A.2: partition : Dutch national flag algorithm (Dijkstra, 1976, chapter 14) 
+
+Input : x ∈ Rn, p ∈ ∆n, pivot v ∈ R, and front and back f, b ∈ 1: n, f ≤ b
+
+Output: l, g ∈ f :b, x ∈ Rn, p ∈ ∆n such that Lemma A.3 holds  
+
+> 1
+
+l0 ← e0 ← f ; g0 ← b; k ← 0 ; 
+
+> 2
+
+while ek ≤ gk do  
+
+> 3
+
+if xek < v then  
+
+> 4
+
+swap: xek ↔ xlk and pek ↔ plk ; 
+
+> 5
+
+lk+1 ← lk + 1 ; ek+1 ← ek + 1 ; 
+
+> 6
+
+else if xek > v then  
+
+> 7
+
+swap: xek ↔ xgk and pek ↔ pgk ; 
+
+> 8
+
+gk+1 ← gk − 1; 
+
+> 9
+
+else ek+1 ← ek + 1 ; 
+
+> 10
+
+k ← k + 1  
+
+> 11
+
+return (lk, g k, x, p);The following lemma proves the properties of the partition operator defined in Algorithm A.2. 
+
+Lemma A.3. If (l, g, x′, p′) = partition( x, p, v, f, b ) for f ≤ b, then: 
+
+x′  
+
+> f:( l−1)
+
+< v, x′ 
+
+> l:g
+
+= v, x′ 
+
+> (g+1): b
+
+> v. (24) 
+
+Moreover, xf :b = x′ 
+
+> σ(f:b)
+
+, pf :b = p′  
+
+> σ(f:b)
+
+for some permutation σ : f :b → f :b, and x1:( f −1) =
+
+x′ 
+
+> 1:( f−1)
+
+, p1:( f −1) = p′ 
+
+> 1:( f−1)
+
+, and x(b+1): n = x′
+
+> (b+1): n
+
+, p(b+1): n = p′
+
+> (b+1): n
+
+. The elements outside of the range f :b are not modified. The algorithm runs in O(b − f + 1) time. Proof of Lemma A.3. Let v be an input to Algorithm A.2 and consider the following invariants. 
+
+xj < v, j ∈ fk:( lk − 1) , (25) 
+
+xj = v, j ∈ lk:( ek − 1) , (26) 
+
+xj > v, j ∈ (gk + 1): bk. (27) 15 Algorithm A.3: QuickVaR : Non-recursive adaptation of Algorithm 3.1 
+
+Input : vector x0, pmf p0 and α0 ∈ [0 , 1) 
+
+Output: VaR α[˜ x] 
+
+> 1
+
+f0 ← 1; b0 ← n; k ← 1 ; 
+
+> 2
+
+while bk−1 > f k−1 do  
+
+> 3
+
+vk ← xrand( fk−1:bk−1) ; // Pivot  
+
+> 4
+
+lk, g k, xk, pk ← partition( xk−1, pk−1, v k, f k−1, b k−1) ; // Alg. A.2, Lemma A.3  
+
+> 5
+
+tk ← ∑lk −1 
+
+> j=fk−1
+
+pkj ; // P [˜xk < v k
+
+] 
+
+> 6
+
+ek ← ∑gk 
+
+> j=lk
+
+pkj ; // P [˜xk = vk
+
+] 
+
+> 7
+
+if αk−1 < t k then fk ← fk−1; bk ← lk − 1; αk ← αk−1 ; 
+
+> 8
+
+else if tk + ek ≤ αk−1 then fk ← gk + 1 ; bk ← bk−1; αk ← αk−1 − tk − ek ; 
+
+> 9
+
+else fk ← gk; bk ← gk ; 
+
+> 10
+
+k ← k + 1 ; 
+
+> 11
+
+return xk−1 
+
+> bk−1
+
+;
+
+Initialization . For k = 0 , conditions (25), (26), (27) are true because the pertinent intervals are empty. 
+
+Maintenance . At each iteration of the loop that starts on line 2 of Algorithm A.2, there are 3 possible branches determined by the conditional logic: xek < v , xek > v , and xek = v. Since v, x ek ∈ R one of these branches must be executed for each iteration k.Each time the xek < v or xek > v branch is executed, conditions (25) and (27), respectively, remain true since in each case we swap the necessary elements to preserve each condition. Notice also that ek is incremented alongside lk to maintain ek − lk = ek+1 − lk+1 as is necessary for condition (26). When xek = v, ek is incremented; since e0 = l0, this creates a difference between ek+1 and lk+1 . The algorithm terminates when et = gt + 1 , so gt − lt = et − lt − 1 ≥ 0 and (26) remains true. 
+
+Termination . In the loop on line 2 there are 3 possible paths of execution determined by the conditional logic xek < v , xek > v , and xek = v. Each of these paths of execution decreases gk − ek by 1. This occurs on lines 5 and 9 by increasing ek by 1 and keeping gk the same, or on line 8 by decreasing gk by 1 and keeping 
+
+ek the same. Observe that g0 −e0 = b−f is non-negative since f ≤ b. The difference gk −ek decreases by 1 at each iteration, and each iteration requires constant time to complete. Because the algorithm returns when gt − et = −1, it finishes in O(b − f ) time. On the last iteration gt = et, therefore by the same reasoning as above gt+1 − et+1 = −1 and condition (26) holds for gt+1 = et+1 − 1.
+
+## B Supplemental Results for Section 4 
+
+The following proposition states the correctness of the standard polymatroid optimization algorithm when applied to a normalized polymatroid. 
+
+Proposition B.1. Suppose that f : 2 1: n → R is submodular, monotone, f (∅) = 0 and f (1: n) = 1 , and let 
+
+x ∈ Rn
+
+> ≥0
+
+. Then, Algorithm 4.1 computes ˆq such that 
+
+ˆq ∈ arg min 
+
+> q∈
+
+̂Qf
+
+xTq. (28) 
+
+Proof. First, we show that ˆq ∈̂ Qf . Because the construction of ˆq in Algorithm 4.1 matches the construction in proposition 14.10 in Korte and Vygen (2012), since f (∅) = 0 and ˆqσ(1) = f ({σ(1) }) − f (∅) = f ({σ(1) }),16 we have that ˆq ∈ Q f . In addition, 
+
+> n
+
+∑
+
+> i=1
+
+ˆqi =
+
+> n
+
+∑
+
+> i=1
+
+ˆqσ(i) = f (1: n) − f (∅) = 1 ,
+
+which implies that ˆq ∈ ∆n ∩ Q f =̂ Qf ,̂ Qf̸ = ∅, and the minimum (28) exists. To show that ˆq is optimal, we reduce the optimization in (28) to the standard linear polymatroid maximiza-tion problem with non-negative weights (Korte and Vygen, 2012, section 14.9) as follows: 
+
+min 
+
+> q∈
+
+̂Qf
+
+xTq = min 
+
+> q∈
+
+̂Qf
+
+(x − xmax · 1)Tq + xmax 
+
+= − max 
+
+> q∈
+
+̂Qf
+
+(xmax · 1 − x)Tq + xmax 
+
+≥ − max 
+
+> q∈Q f
+
+(xmax · 1 − x)Tq + xmax 
+
+= −(xmax · 1 − x)T ˆq + xmax 
+
+= xT ˆq.
+
+Here, xmax := max i∈1: n xi and the equalities follow because ̂ Qf is a normalized polymatroid and 1T ˆq = 1 .The second-to-last equality follows from theorem 14.11 in Korte and Vygen (2012) and the construction in the greedy polymatroid algorithm. The following lemma is folklore in submodular optimization (Bilmes, 2018, theorem 4.5.1). We state and prove it for completeness. 
+
+Lemma B.2. Suppose that μ ∈ Rn 
+
+> ≥0
+
+and g : R≥0 → R is concave and monotone. Then f (A) := g(1TμA) is a submodular monotone function. Proof. The fact that f is monotone follows from the composition of two monotone functions. To prove that 
+
+f is submodular, we use the following properties that hold for each A, B ⊆ 1: n:
+
+1TμA∩B ≤ 1TμA ≤ 1TμA∪B , 1TμA∩B ≤ 1TμB ≤ 1TμA∪B , (29) 
+
+1TμA + 1TμB = 1TμA∪B + 1TμA∩B . (30) The inequalities in (29) hold because μ ≥ 0 and the equality in (30) holds because A 7 → 1TμA is modular. Suppose that 1TμA∩B < 1TμA∪B ; otherwise the submodularity condition in (33) below holds with equality. Then, writing 1TμA and 1TμB as a convex combination of 1TμA∩B and 1TμA∪B using (29) and the concavity of g we get that 
+
+g(1TμA) ≥ 1TμA∪B − 1TμA
+
+1TμA∪B − 1TμA∩B 
+
+g(1TμA∩B ) + 1TμA − 1TμA∩B 
+
+1TμA∪B − 1TμA∩B 
+
+g(1TμA∪B ), (31) 
+
+g(1TμB) ≥ 1TμA∪B − 1TμB
+
+1TμA∪B − 1TμA∩B 
+
+g(1TμA∩B ) + 1TμB − 1TμA∩B 
+
+1TμA∪B − 1TμA∩B 
+
+g(1TμA∪B ). (32) Then summing (31) and (32) and algebraic manipulation yields that 
+
+f (A) + f (B) = g(1TμA) + g(1TμB) ≥ g(1TμA∩B ) + g(1TμA∪B ) = f (A ∩ B ) + f (A ∪ B ), (33) which proves that f is submodular. 
+
+Proof of Proposition 4.6. The function f CVaR  
+
+> α
+
+is EWS by algebraic manipulation. The equality (20) for 
+
+α = 0 follows by algebraic manipulation. To prove (20) for α > 0, we use Proposition 4.2 and show for each 
+
+O ⊆ Ω that 
+
+f CVaR  
+
+> α
+
+(O) = min {α−11T 
+
+> O
+
+p, 1} = max {1T 
+
+> O
+
+q | q ∈ ∆n, q ≤ α−1p} = − CVaR α
+
+[−˜1O
+
+] , (34) 17 using the dual CVaR formulation in (4). We prove (34) as two inequalities. (i) The inequality 
+
+min {α−11T 
+
+> O
+
+p, 1} ≥ max {1T 
+
+> O
+
+q | q ∈ ∆n, q ≤ α−1p} ,
+
+holds because q feasible in the right-hand side satisfies that 1T 
+
+> O
+
+q ≤ α−11T 
+
+> O
+
+p, and 1T 
+
+> O
+
+q ≤ 1Tq = 1 .
+
+(ii) To prove that 
+
+min {α−11T 
+
+> O
+
+p, 1} ≤ max {1T 
+
+> O
+
+q | q ∈ ∆n, q ≤ α−1p} , (35) we analyze the following two cases. (a) When 1T 
+
+> O
+
+p ≥ α, let q := ( 1T 
+
+> O
+
+p)−1 · p ⊙ 1O , which is feasible in the right-hand side of (35) and ⊙ is the Hadamard vector product. (b) When 1T 
+
+> O
+
+p < α , let q := α−1 · p ⊙ 1O + d · p ⊙ (1 − 1O ), which is feasible in the right-hand side of (35) and d ∈ R solves that d · 1Tp ⊙ (1 − 1O ) = 1 − α−11T 
+
+> O
+
+p. Such d always exists because 
+
+1Tp ⊙ (1 − 1O ) = 1 − 1T 
+
+> O
+
+p > 1 − α ≥ 0. It is easy to verify that q ≥ 0 and 1Tq = 1 . The condition q ≤ α−1p holds because d ≤ α−1 is satisfied by multiplying both sides of the inequality by 1Tp ⊙ (1 − 1O ):
+
+d · 1Tp ⊙ (1 − 1O ) ≤ 1 − 1
+
+α 1T 
+
+> O
+
+p ≤ 1
+
+α · 1Tp ⊙ (1 − 1O ).
+
+Proof of Proposition 4.7. The function f TVaR  
+
+> α
+
+is EWS by algebraic manipulation. The equality (22) for α
+
+such that 
+
+√ 12 log 1 
+
+> α
+
+≥ 1, including α = 0 , follows by algebraic manipulation. It remains to prove (22) when 
+
+√ 12 log 1 
+
+> α
+
+< 1. We use Proposition 4.2 and show for each O ⊆ Ω that 
+
+f TVaR  
+
+> α
+
+(O) = min 
+
+{
+
+1T 
+
+> O
+
+p +
+
+√ 12 log 1
+
+α , 1
+
+}
+
+= max 
+
+{
+
+1T 
+
+> O
+
+q | q ∈ ∆n, ∥p − q∥1 ≤
+
+√
+
+2 log 1
+
+α
+
+}
+
+= − TVaR α
+
+[−˜1O
+
+] ,
+
+(36) using the TVaR definition in (5). We need to handle two special cases first. When 1T 
+
+> O
+
+p = 0 , then we have that 0 = f TVaR  
+
+> α
+
+(O) = g(0) = − TVaR α[−˜1O ] since q ≪ p in the TVaR definition in (5). When 1T 
+
+> O
+
+p = 1 ,then we have that 1 = f TVaR  
+
+> α
+
+(O) = g(1) = − TVaR α[−˜1O ] since q ≪ p and 1Tq = 1 in the TVaR definition in (5). Finally, we prove (36) as two inequalities when 0 < 1T 
+
+> O
+
+p < 1. (i) To prove that 
+
+min 
+
+{
+
+1T 
+
+> O
+
+p +
+
+√ 12 log 1
+
+α , 1
+
+}
+
+≥ max 
+
+{
+
+1T 
+
+> O
+
+q | q ∈ ∆n, ∥p − q∥1 ≤
+
+√
+
+2 log 1
+
+α
+
+}
+
+,
+
+observe that q feasible in the right-hand side implies that ∥p−q∥1 = 1T 
+
+> O
+
+|p−q|+( 1−1O )T|p−q| ≤ 
+
+√
+
+2 log 1
+
+> α
+
+and (1 − 1O )T(p − q) = 1T 
+
+> O
+
+(q − p) since p, q ∈ ∆n. Then 
+
+1T 
+
+> O
+
+q = 1T 
+
+> O
+
+(q − p) + 1T 
+
+> O
+
+p = 12
+
+(1T 
+
+> O
+
+(q − p) + ( 1 − 1O )T(p − q)) + 1T 
+
+> O
+
+p
+
+≤ 12
+
+(1T 
+
+> O
+
+|q − p| + ( 1 − 1O )T|p − q|) + 1T 
+
+> O
+
+p =
+
+√ 12 log 1
+
+α + 1T 
+
+> O
+
+p,
+
+and 1T 
+
+> O
+
+q ≤ 1Tq = 1 .
+
+18 (ii) To prove that 
+
+min 
+
+{
+
+1T 
+
+> O
+
+p +
+
+√ 12 log 1
+
+α , 1
+
+}
+
+≤ max 
+
+{
+
+1T 
+
+> O
+
+q | q ∈ ∆n, ∥p − q∥1 ≤
+
+√
+
+2 log 1
+
+α
+
+}
+
+,
+
+we analyze the following two cases: 1. When 1T 
+
+> O
+
+p +
+
+√ 12 log 1 
+
+> α
+
+≥ 1, let q := ( 1T 
+
+> O
+
+p)−1 · p ⊙ 1O , where ⊙ is the Hadamard vector product. This q is feasible in the right-hand side and satisfies the inequality. 2. When 1T 
+
+> O
+
+p +
+
+√ 12 log 1 
+
+> α
+
+< 1, let 
+
+q := 1T 
+
+> O
+
+p +
+
+√ 12 log 1
+
+> α
+
+1T 
+
+> O
+
+p · p ⊙ 1O + (1 − 1O )Tp −
+
+√ 12 log 1
+
+> α
+
+(1 − 1O )Tp · p ⊙ (1 − 1O ),
+
+which is feasible in the right-hand side and satisfies the inequality. Neither one of the divisions is by 0 since 0 < 1T 
+
+> O
+
+p < 1.19
