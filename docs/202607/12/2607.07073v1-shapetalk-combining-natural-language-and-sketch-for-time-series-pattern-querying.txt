@@ -1,0 +1,1014 @@
+Title: ShapeTalk: Combining Natural Language and Sketch for Time-Series Pattern Querying
+
+URL Source: https://arxiv.org/pdf/2607.07073v1
+
+Published Time: Thu, 09 Jul 2026 00:42:12 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# ShapeTalk: Combining Natural Language and Sketch for Time-Series Pattern Querying 
+
+Guoruizhe Sun *, Yueqiao Chen *, Emily Guo, Yutong Yao, and Dongyu Liu 
+
+Fig. 1: User interface of ShapeTalk, shown with the Sacramento Weather dataset from 2006 to 2008. Control Panel (A), where users import a dataset and set the query window length. Chat View (B), which supports natural-language queries via an LLM; B1 is the input box for user queries. Query View by Text (C), which shows results for natural-language and feature-based queries; C1 is the Feature Panel for adjusting feature selections and C2 displays snapshots of matched time-series windows. Query View by Sketch (D), which supports sketch-based queries; D1 is the sketch canvas and D2 shows matched windows for the sketch. Full Time Series View (E), which provides an overview of the entire time series and highlights matches from each query modality. F1 presents the parameter-adjustment view for global feature, while F2 is for local feature. The figure also illustrates a typical exploration loop for finding suitable weather to visit Sacramento: 1. sketch to obtain initial matches, 2. ask the LLM to describe the sketch, and 3&4. refine queries using the resulting natural-language description. 
+
+Abstract —Searching for time-series segments that match user-defined patterns is important in domains such as finance, climate science, and healthcare. However, existing visual query tools often struggle to support vague, composite, or fuzzy pattern descriptions, often requiring users to express their intent through precise sketches or rigid structured filters. We present ShapeTalk, a coordinated natural-language and sketch-based querying system for univariate time-series pattern search. Rather than treating text and sketch as a fused input stream, ShapeTalk uses them as complementary representations of analytic intent: natural language supports semantic and compositional pattern descriptions, while sketching supports direct geometric refinement. The two modalities are linked through a shared visual context, editable feature representations, and synchronized result views, enabling users to move between text and sketch during iterative query formulation. At its core is an LLM-based semantic parsing pipeline that translates free-form natural-language queries into interpretable and editable shape-feature constraints. We evaluate ShapeTalk through two usage scenarios, a user study with failure-case analysis, and an assessment of the LLM-based semantic parsing pipeline. The results show that ShapeTalk supports effective time-series pattern search, with natural language serving as an accessible entry point and sketching providing a complementary mechanism for refinement and recovery when textual specifications are insufficient. 
+
+Index Terms —Time Series, Pattern Query, Natural Language, Sketch, Visual Analytics 
+
+• All authors are with the University of California at Davis. E-mail: {grzsun, yeqchen, emiguo, ytyao, dyuliu}@ucdavis.edu; • *Guoruizhe Sun and Yueqiao Chen contributed equally to this work. Manuscript received xx xxx. 202x; accepted xx xxx. 202x. Date of Publication xx xxx. 202x; date of current version xx xxx. 202x. For information on obtaining reprints of this article, please send e-mail to: reprints@ieee.org. Digital Object Identifier: xx.xxxx/TVCG.202x.xxxxxxx 
+
+1 INTRODUCTION 
+
+Time-series query refers to retrieving segments that match a user-defined temporal pattern and is a fundamental task in many domains. Analysts often search large time-series collections for specific patterns or anomalies in finance [16], transportation [29], climate science [35], healthcare [5], and beyond. For example, an investment analyst may ask for “ stocks that tanked in 2020 ,” seeking trajectories that exhibit a sharp drop during that period. Broadly, analysts across domains rely on arXiv:2607.07073v1 [cs.HC] 8 Jul 2026 pattern search to identify salient temporal behaviors in large datasets. A variety of interactive paradigms have been developed to support time-series pattern search, including query-by-sketch interfaces [14], visual query builders based on examples and constraint parameter or relation settings [11, 20, 32], and pattern-based search tools [28, 58]. These systems enable users to specify temporal patterns visually or through structured controls, but they often require users to translate their questions into precise sketches, parameterized filters, or low-level pattern specifications. This translation can be difficult when patterns are fuzzy, composite, or only partially formed in the user’s mind. Natural language (NL) offers a more flexible way to express such intent. A user can ask for “ segments that stay high for a while and then gradually decrease ” without knowing a query syntax or predefined parameter set. However, interpreting such queries remains challeng-ing because everyday language is often ambiguous or underspecified with respect to precise geometry. Terms such as “ gradual ,” “ bump ,” “spike ,” or “ tanking ” may imply different slopes, magnitudes, durations, or shapes depending on context. Mapping colloquial descriptions to rigorous time-series query constraints therefore requires both disam-biguation and contextual understanding. A common way to address this challenge is to define a controlled vocabulary and map NL queries to a predefined set of labels [6, 22, 43]. For example, SlopeSeeker [6] uses a crowdsourced lexicon that links linguistic descriptors to quantifiable slope and shape properties, and supports search over visually salient events annotated with these labels. While effective, this approach can still place a burden on users to ex-press their intent in terms the system already knows. In practice, users may describe temporal patterns using personal, domain-specific, or partially formed language, such as “heatwave-like,” or “mostly stable with a small bump,” which may not be within fixed set of labels. More-over, text-only interaction can be less intuitive than direct manipulation for iterative visual search. These limitations motivate a more flexible approach that supports open-ended pattern descriptions and iterative refinement across modalities. Recent advances in LLMs create new opportunities for time-series pattern search by enabling richer forms of query specification. LLMs can parse free-form textual descriptions and extract structured attributes, such as direction, magnitude, duration, and repetition, which can then be operationalized as pattern constraints over time series. In this work, we present ShapeTalk , a coordinated natural-language and sketch-based querying system for univariate time-series pattern search. Rather than forcing these modalities into a single retrieval pipeline, ShapeTalk uses two complementary query pipelines: NL queries are translated into editable shape-feature constraints, whereas sketch queries are matched through direct shape similarity. The two modalities are coordinated through a shared interaction context and multi-view visualization interface, allowing users to move fluidly between them during query formulation and refinement. In this work, we use the term multimodal to refer to a coordinated, cross-modal workflow rather than simultaneous multimodal fusion. ShapeTalk does not combine text and sketch into a single early-fusion model or require users to provide both inputs at the same time. In-stead, it treats natural language and sketch as complementary ways of externalizing pattern intent. Natural language is useful for expressing semantic, relative, and compositional constraints, whereas sketching is useful for directly specifying or correcting geometric details. This design intentionally keeps the two retrieval pipelines separate while tightly linking their outputs through shared context, editable constraints, and coordinated visual feedback. Thus, multimodality in ShapeTalk is optional and opportunistic rather than mandatory. This design reflects a key observation: specifying a desired pattern remains an interpretive task regardless of modality. Users may begin with an imprecise visual concept, a partial verbal description, or both. Natural language does not eliminate this difficulty, and sketching alone does not always provide sufficient precision. ShapeTalk therefore sup-ports pattern search as an iterative process of expressing, inspecting, and refining user intent across modalities. Users can begin with an NL query to obtain an initial set of candidate segments, then refine the results by editing extracted features or sketching over represen-tative examples. Conversely, users who start with query-by-sketch can ask the system to “describe my sketch” in words, turning a visual query into an interpretable and reusable textual specification. Unlike approaches that rely on predefined linguistic labels or offline event libraries, ShapeTalk directly maps user utterances to editable feature constraints through an LLM-driven semantic parsing pipeline. As a result, ShapeTalk is adaptable to new datasets without requiring a fixed pattern vocabulary or pre-annotated events, supports fine-grained combinations of local and global shape characteristics, and produces explicit query representations that users can inspect and revise. The key contributions of this work are as follows: • A coordinated natural-language and sketch-based interface for time-series pattern search that supports cross-modal query refinement. ShapeTalk links two complementary query pipelines through shared visual context, editable feature constraints, and synchronized result views. • An inspectable LLM-driven semantic parsing pipeline that translates free-form natural-language pattern descriptions into editable local and global shape-feature constraints, enabling users to review, correct, and refine the system’s interpretation during exploration. • An evaluation through usage scenarios, a user study, failure-case analysis, and parser assessment, showing how users employed natural language as an efficient entry point and used sketching or feature edits as complementary refinement mechanisms. 
+
+2 RELATED WORK 
+
+2.1 Time Series Query 
+
+Different interactive paradigms have been explored to specify queries for time-series retrieval. For example, visual query builders provide structured interactions such as “timeboxes” that constrain values over a time window, query-by-example systems that find patterns similar to a selected segment [11,20,32,39], and workflows in which users annotate a small number of segments of interest and algorithms recommend additional candidates [28, 58]. These approaches effectively leverage visual recognition, but they can make it difficult to specify complex, qualitative, or partially formed patterns when users cannot readily translate their intent into precise graphical constraints. 
+
+Sketch-based interfaces allow users to draw a desired pattern and retrieve similar shapes. This interaction is intuitive and direct, but sketches are inherently imprecise: the same drawing may admit mul-tiple interpretations, and robust matching remains challenging [26]. Researchers have explored a variety of query-matching methods, in-cluding distance-based measures (e.g., Euclidean distance, DTW) and perception-oriented approaches, to capture patterns that are tolerant to scale or shifts and yield useful results for users [7, 14, 17, 33, 60]. 
+
+Text- and natural-language-based interfaces provide a more flex-ible way to describe temporal patterns. Early systems such as Psaila et al. [2] supported declarative text-based queries, while more recent systems, including ShapeSearch [43], Qute [22], and SlopeSeeker [6], define a time-series vocabulary or shape algebra (which we refer to collectively as shape features ) and map user descriptions onto these pre-defined constructs. These systems demonstrate the promise of language-based querying, but they typically rely on manually specified lexical categories and rule-based mappings. As a result, they can be brittle when users describe patterns in open-ended, compositional, or dataset-specific ways, and they often provide limited support for revising the system’s interpretation once an initial query has been issued. Our work builds on this line of research but differs in two key re-spects. First, we use an LLM-driven parser to translate free-form natural-language descriptions into an explicit, interpretable, and ed-itable shape-feature representation, reducing reliance on manually enu-merated vocabularies and rigid parsing templates. Second, we do not treat language as a standalone query modality, but integrate it with sketch-based interaction in a shared workflow. We do not claim an unbounded feature space; rather, our contri-bution lies in enabling a more flexible specification and refinement process . Natural-language input is mapped to explicit feature con-straints, grounded in prior literature and calibrated through our pilot formative study, which users can inspect and edit. Sketch input then provides a complementary path for correcting or refining geometric details. 
+
+2.2 Multimodal Visualization Interfaces 
+
+Natural language interfaces (NLIs) have long been explored in vi-sualization [24, 36, 40, 53] to support tasks such as chart generation, filtering, and querying. Earlier systems typically relied on traditional NLP techniques, including rule-based or template-driven parsers, which limited the coverage and flexibility of user input. Recent advances in LLMs have expanded the role of language in visualization, enabling more open-ended, interactive, and assistive workflows [1, 21, 49, 57]. These systems support a wide range of tasks, including chart au-thoring, captioning, insight generation, and visual analytics assis-tance [12, 15, 27, 30, 37, 41, 42, 44 –46, 52, 55, 61, 62]. Our work con-tributes to this space by studying an LLM-powered language interface specialized for time-series pattern search and tightly coupling it with sketch-based interaction. More broadly, multimodal interaction has long been used to sup-port more natural and effective human-computer interaction by com-bining complementary input channels [47]. Early systems such as “Put-That-There” [8] demonstrated the value of integrating speech and pointing, and later work extended this idea through combinations of voice, gesture, gaze, and touch in mobile, immersive, and visualization settings [4, 10, 25, 56]. Recent LLM-based systems further suggest the potential of language-centered multimodal workflows [12, 34]. Our work extends this direction to time-series search by treating language and sketch not as redundant alternatives, but as complementary modali-ties for query specification and iterative refinement. 
+
+2.3 Time Series Visualization 
+
+A wide range of visualization techniques has been developed for time-series data, differing in how they encode temporal structure and support analytic tasks [3, 9]. Line and area charts remain the most common representations because they provide a direct view of temporal trends, while alternative designs support more specialized needs, such as re-vealing cyclic patterns with spiral layouts [54], emphasizing dates with calendar-based views [48], and comparing multiple series through superposed lines, braided graphs, or small multiples [23]. Other ap-proaches use glyphs to provide compact summaries of dynamic behav-ior [18] or employ multiple coordinated views to support interactive exploration from complementary perspectives [31]. Building on these foundations, visual analytics systems for time-series data further in-tegrate task-specific interactions to help users identify salient events, compare temporal patterns, and relate signals to contextual informa-tion [38, 51, 59]. Our work builds on this literature by focusing not on new visual encodings, but on multimodal query specification and refinement for time-series pattern search within a coordinated visualization interface. 
+
+3 DESIGN GOALS AND RATIONALE 
+
+The following design requirements were derived from three sources: limitations identified in prior time-series query and natural-language visualization systems, observations from two formative pilot studies (see Sec. 4), and iterative prototyping of ShapeTalk. We do not present these requirements as novel design principles in themselves. Rather, they specify the interaction and system properties needed to support inspectable natural-language and sketch-based pattern querying in our target setting. 
+
+DG1. Open-Ended Natural Language Pattern Queries. 
+
+ShapeTalk should allow users to describe desired time-series patterns in their own words, without requiring them to learn a fixed command syntax, select from a predefined vocabulary, or translate an early-stage idea into low-level parameter settings. This goal is motivated by prior text-based time-series query systems that rely on shape vocabularies or rule-based mappings [6,22,43]. These systems demonstrate the value of language for pattern search, but their coverage is bounded by manually specified labels and parsing rules; for example, SlopeSeeker [6] maps terms such as “tanking” and “spiking” to crowdsourced slope descrip-tors, but users may still express similar intent through domain-specific, metaphorical, or partially formed phrases. Our formative pilot further showed that participants used varied descriptions for visually similar patterns, including terms such as oscillating , sine wave , and keeps going up and down . DG1 therefore specifies the desired interaction property—open-ended linguistic specification—rather than a particular parsing method. In ShapeTalk, we later instantiate this goal with an LLM-based parser because it can map varied phrasings to an explicit feature representation while keeping the interpretation inspectable and editable. 
+
+DG2. Composite Pattern Specification Across Local and Global Characteristics. ShapeTalk should support pattern queries that com-bine local temporal behaviors with segment-level context when users need both. We use local characteristics to refer to behaviors over subre-gions of a query window, such as rising, falling, flattening, or changing curvature, and global characteristics to refer to properties of the whole retrieved segment, such as being generally high, low, typical, or unusual relative to the dataset. This goal is motivated by the representational limits of existing query paradigms rather than by the claim that every task requires both kinds of constraints. Sketch-based interfaces are effective for specifying approximate geometry, but they do not nat-urally expose dataset-relative constraints such as “high” or “typical.” Conversely, lexicon- or rule-based systems can support named shape features [6, 22, 43], but often make it cumbersome to combine ordered local stages with whole-window context. In our formative examples and pilot descriptions, users mixed these levels of intent, for example by describing a sequence such as “rise, plateau, then drop” while also wanting it to occur at a high temperature or within a typical range. DG2 therefore focuses on supporting this compositional form of pattern intent when it arises, while leaving the concrete feature vocabulary and matching strategy to the system implementation. 
+
+DG3. Cross-Modal and Iterative Refinement of Queries. 
+
+ShapeTalk should support iterative movement between natural-language and sketch-based query representations. We do not aim to enforce simultaneous text–sketch input or to fuse both modalities into a single interpretation model. Instead, our goal is to let users choose the modality that best matches their current state of intent: natural language for semantic and compositional descriptions, sketching for direct geo-metric specification, and feature editing for precise adjustment. This cross-modal workflow supports refinement when one representation is ambiguous, incomplete, or difficult to control. 
+
+DG4. Transparent and Editable Query Interpretation. 
+
+ShapeTalk should make its interpretation of user queries explicit, in-terpretable, and editable. Opaque handling of natural language can undermine trust and make it difficult for users to diagnose errors or refine their queries. Prior multimodal systems highlight the value of clearly linking user inputs to system outputs to improve interpretability and usability [12]. Accordingly, the system should expose an interme-diate query representation, such as shape features and constraints over trend direction, magnitude, duration, and segment-level context, that users can inspect and adjust. Treating this intermediate representation as a first-class artifact allows analysts to correct misinterpretations and better understand how the system operationalizes their descriptions, independent of the specific parsing technique used to produce it. 
+
+DG5. Coordinated Visual Feedback for Query and Results. 
+
+ShapeTalk should provide tightly coordinated textual and visual feed-back to help users interpret results and maintain context during refine-ment. Prior work shows that linking query specifications to highlighted patterns reduces cognitive effort and supports insight, for example by connecting textual trend labels to chart regions [6, 58]. Accord-ingly, ShapeTalk should coordinate feature controls, retrieved segments, sketch views, and the full time-series overview so that edits in one view are reflected immediately in the others. Such feedback gives users a clear mapping between their queries, the system’s interpretation, and the resulting matches. 4 LLM-DRIVEN SHAPE FEATURE EXTRACTION PIPELINE 
+
+This section describes the internal mechanism of the NL processing pipeline in detail. The pipeline translates free-form queries into ex-plicit, statistically defined shape features and then retrieves matching time-series segments (Figure 2). This pipeline operationalizes DG1 by allowing users to describe patterns in their own words, DG2 by sup-porting both local and global features within a query, and DG4 /DG5 
+
+by producing explicit feature constraints that are tightly coordinated with visual feedback in the interface. 
+
+Scope and assumptions. ShapeTalk targets fixed-window pattern retrieval over univariate time series, instead of general time-series ques-tion answering or event discovery with unknown temporal extent. We make this choice deliberately for three reasons. First, fixed-length windows make retrieved segments comparable across Query by Text and Query by Sketch. Second, they provide users with an explicit tem-poral scale, which is important because the same linguistic descriptor can refer to different patterns at different time scales. Third, they keep matching interpretable and responsive enough for interactive refinement. ShapeTalk therefore does not aim to answer arbitrary natural-language questions over time-series data; instead, it focuses on helping users express, inspect, and refine qualitative shape-pattern constraints within a user-controlled temporal window. 
+
+4.1 Data Preprocessing 
+
+Upon dataset upload, the system performs preprocessing that includes schema validation, data cleaning, and preparation for LLM-driven feature-threshold tuning. We assume a univariate time series with two columns: the first encodes the temporal index (e.g., date or timestamp), and the second contains the value of interest. The system verifies this schema and rejects incompatible inputs. To ensure consistent query behavior, rows with missing values in the target column are dropped. We also prepare the series for segmentation and statistical extraction used in our dynamic threshold inference step (Section 4.3). Specifically, we sort the time index and remove duplicates so that subsequent sliding-window operations yield well-defined, contiguous patches whose statistics summarize the underlying temporal structure. 
+
+4.2 LLM Query Interpretation 
+
+When a user issues a NL query, the system uses an LLM to translate the description into an intermediate representation consisting of global 
+
+and local shape features. This design addresses DG1 by avoiding a fixed query syntax and DG4 by surfacing the interpreted features for inspection and editing. Within this scoped formulation, the role of the LLM is not to re-place sketch-based search or to infer arbitrary temporal events from raw data. Rather, the LLM serves as a semantic compiler that maps colloquial pattern descriptions into explicit, editable constraints over a shape-feature space. This is useful even when some queries resemble sketchable shapes, because language can express aspects that are dif-ficult to specify through sketch alone, including dataset-relative level constraints (e.g., high, low, typical, unusual), ordered semantic compo-sitions, approximate durations, and reusable descriptions of a pattern. Sketching, in contrast, provides direct geometric control but does not by itself expose these semantic constraints. Formally, given a univariate time series {xt }Tt=1 and a user-specified window length L, we construct overlapping windows 
+
+wi = ( xi, xi+1, . . . , xi+L−1), i = 1, . . . , T − L + 1.
+
+Each window wi is evaluated against a set of shape features F =
+
+{ f1, . . . , fK }, where each feature fk is a predicate 
+
+fk(wi; θk) ∈ { 0, 1}
+
+parameterized by a threshold vector θk (e.g., slope cutoffs). A window is considered a match if it satisfies all active features: match (wi) = 1 ⇐⇒ ^ 
+
+> fk∈Factive
+
+fk(wi; θk) = 1.
+
+Here, Factive = ( f1, . . . , fm) is an ordered list of features derived from the user’s description. We enforce that these features occur in the same temporal order within the window. 
+
+LLM few-shot prompting. To derive Factive from a free-form query, we use a few-shot prompt that enumerates our shape-feature vocabulary and provides example query–feature pairs. We distinguish between 
+
+local features, which describe segment-level characteristics (e.g., “ris-ing,” “falling,” and “concave”; see the full set in Appendix A), and 
+
+global features, which describe overall segment-level classifications and are restricted to four labels: “high,” “low,” “typical,” and “unusual.” Users can phrase queries in colloquial language (e.g., “show me higher segments that increase and then stay steady,” Figure 2-B) without mem-orizing keywords or syntax ( DG1 ). Our initial shape-feature definitions are adapted from QUTE [22]. The LLM (GPT-4o in our case) returns a Python dictionary specifying global features (e.g., "typical" ) and 
+
+ordered groups of local features (e.g., ("smooth") , ("falling") ). This structure directly encodes composite, multi-stage patterns that combine local and global characteristics ( DG2 ). 
+
+Pilot study to refine prompts. We conducted a pilot study to refine our few-shot prompts. We recruited 9 participants. Two participants had few years of experience in visual analytics, while the remaining partici-pants had no prior experience. The survey presented participants with images of time-series patterns and asked them to describe each pattern in their own words. Participants used a wide range of terms; for exam-ple, a periodic weather pattern was described as oscillating , periodic ,
+
+sine wave , keeps going up and down , and regular seasonality . These observations support our decision to allow flexible, free-form queries rather than constraining users to a predefined vocabulary or syntax. Of the 9 participants, 3 continued to a second phase. Their NL de-scriptions from the first phase were processed through our LLM-based parsing pipeline to generate shape features. After being introduced to our shape-feature parser, these participants rated how strongly they agreed or disagreed with the LLM’s translations of their descriptions into formal features. Feedback from this study guided refinement of our few-shot examples in our LLM prompts. Originally, we proposed 20 examples; in the final version, 6 were edited, 3 were removed, and 8 were added. The edited examples tended to be overly complex, combining multiple shape features and specialized terminology that non-experts would be unlikely to use, which often confused the LLM’s classification process. The newly added examples were designed to better reflect users’ natural language. We also revised prompts to clarify distinctions among similar shape features such as “spiky,” “complex,” and “noisy,” improving the LLM’s consistency. Overall, these refinements improved the parser’s ability to translate free-form descriptions into our interpretable local and global feature set, enabling flexible specification and iterative refinement. We assess this capability in Section 6.3. 
+
+4.3 Dynamic Threshold Inference 
+
+A central challenge in operationalizing shape features is choosing thresholds that generalize across datasets with different magnitudes and volatilities. For example, a segment that appears “constant” in a highly volatile series may be considered “noisy” in a more stable one. Users may choose fixed thresholds when they have prior knowledge of a dataset or exact parameters for certain features; otherwise, the system can use the LLM to infer thresholds from dataset-level statistics rather than fixing them a priori. 
+
+Problem formulation. For each feature, we infer dataset-specific parameters so that predicates such as is_constant (wi; θconst ) : Var (wi) < θconst 
+
+reflect the local meaning of terms such as “constant” for the current dataset. Instead of hand-tuning these values, we estimate them from a compact statistical summary of the series. 
+
+Segmentation and statistical extraction. Sending the raw time series to the LLM is impractical because of context-window limits and the difficulty of reasoning over long numeric sequences. Instead, we adopt Fig. 2: NL Query Pipeline. The pipeline preprocesses the data (A), uses LLMs to extract shape features and infer dynamic feature thresholds from the query and processed data (B), retrieves matching time-series patterns (C), and visualizes the results in the frontend (D). 
+
+a patch-based summarization strategy inspired by ChartInsighter [50], which shows that LLMs can reason effectively over aggregated statisti-cal descriptors of chart regions. As shown in Figure 2-A, we segment the time series into patches using a sliding patch. For each patch, we compute descriptive statistics including the mean, median, standard de-viation, minimum, maximum, range, skewness, kurtosis, slope, volume, and length. Volume is used only for local features. To keep token usage manageable, we express numeric values in scientific notation with two decimal places and serialize each patch summary as a JSON object keyed by statistic name. Because LLMs have bounded context, we cap the number of summarized patches at 300 for local feature thresholding and 100 for global feature thresholding. For a given dataset, we choose the patch size and step size so that: (1) the step size equals the patch size, yielding non-overlapping patches and avoiding redundant, highly correlated inputs; and (2) the number of patches remains within the cap while still covering the full series. Using different patch budgets for local and global features reflects that global features depend more on coarse segment-level trends, whereas local features require finer-grained variation ( DG2 ). The capped patch budget also bounds token usage, helping keep LLM inference latency relatively stable across datasets of different sizes. 
+
+Prompting the LLM for thresholds. We then provide the patch sum-maries and the formal definitions of each feature to the LLM using two prompt templates, one for global thresholds and one for local thresholds (see Appendix A and B for details). The prompts describe the meaning of each parameter in natural language and ask the LLM to return a JSON dictionary of suggested thresholds. Because the input consists of structured statistics rather than raw sequences, the model can rea-son about relative variability, skewness, and magnitude at the dataset level. To further reduce ambiguity, we also express each local fea-ture as a small Python-style function, in addition to its NL description. This representation is inspired by Program-of-Thought prompting [13], which uses code-like structures to make linguistic descriptions more ex-plicit. In our setting, these code-style definitions anchor each feature in concrete statistical operations and yield more consistent, interpretable threshold proposals. The returned JSON is parsed to update the pa-rameter set used by the feature predicates. Threshold inference is performed only once offline for each dataset; under our maximum patch budgets, the global and local passes take on average 5 s and 14 s, respectively , with GPT-4o, making interactive ingestion of new datasets feasible. 
+
+Dynamic threshold comparison with fix percentiles. LLM-based dy-namic thresholding can offer practical advantages over fixed percentile thresholding in some cases, although we do not claim it is universally better. Because threshold selection itself rarely has a single ground truth, a meaningful cutoff often depends on the dataset, the query se-mantics, and the analyst’s domain understanding. Fixed percentile methods require users or analysts to choose a cutoff in advance (e.g., top 10%, 20%, or 30%), and this choice is often subjective and difficult to transfer across datasets. In contrast, our LLM-based approach infers thresholds from patch-level summary statistics together with the seman-tic definition of each feature, allowing the threshold to better reflect the data context without requiring manual tuning. This context sensi-tivity is especially useful when the same feature should be interpreted differently under different scales, levels of noise, or distributional char-acteristics. Percentile thresholds are tied to rank within a particular dataset and may therefore under-select or over-select relevant segments when applied to another dataset with different variance or structure. By contrast, LLM-inferred thresholds are statistically informed rather than rank-based, which can yield more meaningful cutoffs for the current dataset. For several features, dynamic thresholding tended to produce highlighted regions that more closely matched the intended patterns than fixed percentile-based thresholds. In a step-function case, for instance, percentile cutoffs required manual trial and error to achieve a comparable result. Additional examples are provided in Appendix G. At the same time, because LLM outputs can be imperfect, our system exposes the inferred thresholds for user inspection and manual adjust-ment whenever the suggested values do not match analyst expectations. 
+
+4.4 Pattern Retrieval and Display 
+
+Once the active feature sequence Factive = ( f1, . . . , fm) and their thresh-olds {θk} are determined, the system retrieves matching patterns via a sliding-window matcher (Figure 2-C). 
+
+Sliding-window-based matching. We apply a sliding window of length L with step size 1 to the time series, generating candidate win-dows {wi}. The default window length is L = 6 , which provides a practical balance between local detail and computational efficiency. Users can adjust L in the control panel to suit their task. When users are unsure what window length is appropriate, the system can also leverage the LLM-based query interpretation pipeline to recommend a suitable 
+
+L based on the described pattern and dataset context. Because temporal scale strongly affects the interpretation of shape features, we expose the query window length as an explicit user-controlled parameter rather than hiding it inside the model. Appendix H further illustrates that the same feature can retrieve substantially different patterns under dif-ferent window lengths, reinforcing the need to make temporal scale visible during interaction. We treat Factive as an ordered list of fea-tures derived from the user’s description (e.g., “rise then fall”). For each candidate window wi and m = |Factive | ordered local features, our default strategy partitions wi into m contiguous subsegments of equal length L/m. Subsegment j is then evaluated only against feature f j
+
+using its thresholds θ j, enforcing the specified temporal order. Global constraints (e.g., overall level or variance) are evaluated on the full window. A window is marked as a hit, match (wi) = 1, if all required local and global predicates are satisfied. Equal-length partitioning serves as a simple and interpretable default for multi-part queries. For cases requiring finer control over the dura-tion of individual stages (e.g., “3 days of increase followed by 5 days of decrease”), the system also allows users to specify per-feature durations through the chat interface (Section 5.3), which are extracted by the LLM and used to customize how each window wi is partitioned before matching. To prevent clutter and over-counting when many adjacent windows satisfy the same constraints, we apply an anti-collision algo-rithm (following [31]) that suppresses heavily overlapping windows and retains representative segments that best satisfy the feature criteria. This yields a cleaner, non-redundant set of result segments. 
+
+Pilot study on feature perception. We conducted an additional pilot study to evaluate whether the segments highlighted by our shape feature definitions aligned with users’ expectations. We recruited 6 participants, all of whom were college students or recent graduates with no prior experience in visual analytics research. The survey presented static time-series plots in which certain segments were highlighted by our system. Participants viewed the full time series with these highlighted regions, rated their agreement on a 5-point Likert scale (1 = strongly disagree, 5 = strongly agree), and later provided general comments. The highlighted results covered 29 examples selected to promote pattern diversity. Overall, participant feedback was positive, suggesting that the highlighted segments generally aligned with user expectations. The study further suggested that users expected multi-part queries such as “rise” then “fall” to correspond to distinct, temporally ordered subsegments rather than unconstrained matches anywhere within the window. This observation informed our ordered subsegment matching scheme and supported equal-length partitioning as the default interpre-tation for multi-part queries. For example, a “rise” then “fall” query over L = 6 is divided into two length-3 subsegments, which are passed in order to the “rise” and “fall” predicates. Because the highlighted examples in the pilot were generated using dynamically inferred thresholds rather than manually tuned rules, the results also provided an initial check that our LLM-inferred thresholds, combined with even partitioning, produced matches broadly consistent with user expectations. Participant feedback also motivated our support for explicit duration specifications through chat when users want finer-grained control over individual stages. Together, these design choices make the alignment between users’ descriptions and the resulting high-lights more predictable and interpretable, while leaving room for future work on more flexible alignment strategies. 
+
+Flexible alignment. Our default strategy—partitioning a window into equal-length subsegments for ordered local features—provides a simple and interpretable baseline, and our pilot study suggests that it often matches user expectations for descriptions such as “rise then fall.” However, it cannot fully capture queries with uneven, overlapping, or explicitly timed stages. Exhaustive search over all possible alignments is one alternative, but its cost grows quickly with window length and the number of features, making it poorly suited to interactive use. It can also return many candidate matches that satisfy some alignment mathematically but do not correspond well to the user’s intended pattern (appendix I). Our current design instead uses natural language to strike a practical middle ground: users can specify feature-specific durations through chat, allowing the system to customize subsegment lengths without brute-force search. 
+
+Frontend display of matches. Building on the retrieved matches, the frontend provides coordinated visual feedback across multiple views to support DG5 . As shown in Figure 2-D, the Full Time Series View marks each hit as a colored box on the global time series, while a small-multiples view presents each matched segment as a line chart with annotations indicating which subsegments correspond to which features. Additional interactions and coordination between views and queries are described in Section 5. 
+
+5 SHAPE TALK 
+
+Guided by our design goals (Section 3), we develop ShapeTalk, a univariate time-series querying system that coordinates free-form nat-ural language and sketch input for flexible pattern specification and refinement. For each NL query, the LLM backend derives explicit global and local shape features that users can inspect and edit, making query interpretation transparent and controllable. Although Query-by-Text ( QbT ) and Query-by-Sketch ( QbS ) are supported by distinct query pipelines, they are presented as coordinated views linked through synchronized multi-view interactions that preserve global context and provide immediate visual feedback (Figure 1). 
+
+5.1 Overview and Bidirectional Exploration Workflow 
+
+ShapeTalk comprises five coordinated views that support two comple-mentary exploration workflows: (1) starting from a sketch to obtain concrete examples and then generalizing through natural language, and (2) starting from natural language to construct a feature-based query and then refining it visually through sketching. In a sketch-first workflow, users draw a desired pattern in the QbS View (Figure 1-D1). The system returns matched windows in D2 and highlights their locations in the Full Time Series View (Figure 1-E), helping users assess how well the sketch captures their intent (DG2 , DG5 ). Users can then ask the LLM in the Chat View (Fig-ure 1-B1) to describe the sketch or selected matches. The resulting natural-language description is translated into an explicit feature set and corresponding QbT results (Figure 1-C), enabling users to generalize beyond a single sketch and refine the query through editable feature primitives ( DG2 , DG4 ). Conversely, in a text-first workflow, users begin by describing a desired temporal pattern in natural language in the Chat View. The system interprets the query, generates feature constraints, and displays matched examples in the QbT View (Figure 1-C2). Users can then select representative matches and overlay them in the sketch canvas (Figure 1-D1) to support further sketch-based refinement. This bidirectional linkage between QbT and QbS supports fluid movement between verbal and visual reasoning ( DG3 ) while maintaining global context in the Full Time Series View ( DG5 ). Sketch-based and NL-based queries are processed through distinct pipelines rather than serving as interchangeable frontends to a single backend. This design preserves the complementary strengths of each modality: geometric precision in sketch-based querying and seman-tic flexibility in natural-language querying. While the LLM-based language pipeline may introduce some variability due to probabilis-tic interpretation and adaptive thresholding, sketch-based matching remains deterministic given the same input and similarity metric. Main-taining separate pipelines therefore reflects the difference between geometric specifications and semantic descriptions, while supporting diverse user reasoning strategies without forcing both modalities into a unified retrieval process. In the following, we describe how this workflow is supported by three groups of views: (i) data-driven views that provide global context, (ii) NL-query-driven views that support feature-based querying, and (iii) sketch-query-driven views that support visual pattern specification. 
+
+5.2 Data–Driven Views 
+
+The data-driven views provide the global temporal context within which both NL and sketch queries operate. 
+
+Control Panel . The Panel (Figure 1-A) allows users to import a univariate time-series dataset and specify the query window length 
+
+L. The window length determines the granularity at which the series is segmented for both NL-based and sketch-based matching. Using a shared window length keeps candidate segments comparable and supports consistent retrieval across modalities. 
+
+Full Time Series View . The View (Figure 1-E) presents the com-plete time series as a single line chart and serves as the primary view for contextualizing results. Matched segments from NL-based queries are highlighted in grey (yellow when selected), and matched segments from sketch-based queries are highlighted in red (dark red when selected). Standard interactions such as zooming and panning allow users to in-spect surrounding context and understand what precedes and follows each match ( DG5 ). Because results from QbT and QbS appear on the same global timeline, users can directly compare how different query formulations retrieve similar or different patterns, supporting iterative refinement and cross-modal validation ( DG2 , DG3 ). 
+
+5.3 NL Query–Driven Views 
+
+ShapeTalk supports free-form textual descriptions of temporal behavior (DG1 ). Users enter an NL query in the Chat View, which is passed to the LLM-based interpretation module described in Section 4. The LLM parses the query into interpretable shape features and associated thresholds, taking into account both query semantics and dataset-level statistics. These features form a structured constraint set that can be inspected and refined in the Feature Panel (Figure 1-C1). The sys-tem then applies these constraints to the segmented dataset, retrieves windows that satisfy them, and displays the matched segments in the QbT result view (Figure 1-C2) and the Full Time Series View. This process operationalizes DG2 and DG4 by translating ambiguous natu-ral language into a transparent, editable representation that users can iteratively refine, while keeping LLM feedback, feature representations, and visual matches synchronized across views ( DG5 ). 
+
+Chat View . The Chat View (Figure 1-B) provides a text-based interface for specifying queries and obtaining explanations in natu-ral language ( DG1 ). Users may describe desired patterns or request descriptive or statistical summaries of the dataset. After a query is submitted, the system can suggest an overall window length L when users do not have a clear target. Users may also specify the duration of individual feature stages in natural language (e.g., “ 3 hours flat and then decreasing over the next 5 hours ”). The system extracts this duration information and uses it to determine an appropriate window length and feature partitioning (e.g., L = 8 when the unit is hours). Users can additionally ask the LLM to interpret selected sketch-based results or rephrase earlier queries, supporting progressive refinement through conversational interaction. By centralizing NL interaction in a familiar chat format, this view lowers the barrier to specifying complex temporal behavior without requiring formal query syntax. 
+
+Query View by Text (QbT View) and Feature Panel . NL queries issued in the Chat View are transformed by the LLM pipeline into a structured set of global and local features ( DG2 ). These features are displayed in the Feature Panel (Figure 1-C1), where each feature is associated with a threshold inferred by the LLM from the feature definition and dataset statistics, yielding a precise and editable specifi-cation of the pattern. The Feature Panel supports human-in-the-loop refinement ( DG4 ): users can toggle features on or off, adjust thresh-olds, inspect expanded definitions via hover (Figure 1-F1 and F2), reorder local features, and add or remove features using inline controls. These edits immediately update the matched windows shown in the QbT result view (Figure 1-C2), which presents matched segments as small-multiple line-chart cards annotated with the features they satisfy. This layout helps users assess how the interpreted feature set maps to concrete patterns and whether the NL query was interpreted as intended (DG2 , DG5 ), before optionally moving to sketch-based refinement. 
+
+5.4 Sketch Query–Driven Views 
+
+Complementing the NL query–driven views, the sketch query–driven views support visual pattern specification when users reason in terms of shapes rather than words. When users draw in the Sketch Canvas, ShapeTalk resamples both the sketch and candidate windows to the target window length and applies z-normalization so that matching focuses on shape rather than absolute magnitude, which is important when similar patterns occur at different value ranges across months or years. The normalized sketch is then compared against each candi-date window using Pruned Dynamic Time Warping (PDTW) with a Sakoe–Chiba band [19]. We use a warping window size of 5, which limits local temporal warping, and Euclidean distance as the point-wise cost metric. PDTW computes an alignment cost while pruning un-likely warping paths, improving efficiency while still accommodating local temporal misalignments. Its sensitivity to local slope allows it to capture rising, falling, and oscillatory structures that users often express visually. The resulting distances are used to rank candidate windows; the top-k matches are shown in the QbS result view and highlighted in the Full Time Series View. By emphasizing shape and local dynamics, this sketch-based matching complements feature-based NL querying ( DG2 ), DG3 ). 
+
+Query View by Sketch (QbS View) and Sketch Canvas . The Query View by Sketch (Figure 1-D) provides the main interface for sketch-based querying ( DG1 , DG3 ). The Sketch Canvas (Figure 1-D1) is an interactive drawing area in which user strokes appear in red. When users select segments from QbT, their normalized trajec-tories are overlaid as a dark gray band summarizing their variation, providing a concrete visual reference for the system’s current inter-pretation and guiding sketch refinement. The canvas supports basic editing operations (e.g., undo and clear) and controls for specifying the desired number of matches. The top-k results identified by sketch-based matching are shown as line-chart cards in the QbS result view (Fig-ure 1-D2) and are simultaneously highlighted in the Full Time Series View, allowing users to assess both global coverage and local detail in a coordinated manner ( DG5 ). 
+
+Matched Segments and Cross-View Coordination . Both QbT and QbS present matched windows in a consistent card-based layout, with linked interactions across views. Selecting a card in either QbT (Fig-ure 1-C2) or QbS (Figure 1-D2) highlights the corresponding segment in the Full Time Series View (Figure 1-E), supporting rapid assessment of match quality and context. Selected segments can also be sent back to the Sketch Canvas to guide new sketches or used as examples in follow-up NL queries. This tight coordination operationalizes DG3 and 
+
+DG5 by enabling users to move seamlessly between modalities while maintaining awareness of where and how patterns occur in the dataset. 
+
+6 EVALUATION 
+
+6.1 Usage Scenarios 
+
+Finding Suitable Weather for Grazing in the Summer A livestock farmer in the Sacramento region is planning when to schedule outdoor grazing for his herd. He wants to avoid periods of extreme heat, which can stress and dehydrate animals and reduce weight gain. The farmer is unsure which summer month typically experiences fewer heatwaves. Although he is not an expert at describing time-series patterns, he under-stands a heatwave as a period in which the daily maximum temperature starts lower, rises to a high level, remains high for several days, and then returns to lower values. To illustrate this pattern, he sketches a line that begins low, rises, stays high for a while, and then drops again (Figure 1-1). The sketch results display several segments that match this specific shape, but the farmer wants a more general query. He therefore asks the Chat View to describe his sketch so that he can learn appropriate terms for searching similar patterns more broadly (Figure 1-2). Based on the generated description, he submits a textual query in the QbT view (Figure 1-3): “ show me all segments that rise at first, then go into a plateau, and then drop. ” The system translates this description into the shape features rising , constant , and falling , where the local feature constant captures the plateau portion (Figure 1-F2). The QbT matched-segments panel (Figure 1-C2) displays a grid of candidate windows, allowing the farmer to quickly assess how well the retrieved segments align with his notion of a heatwave. The farmer notices that several matches occur during cooler seasons and therefore would not pose heat risks to the animals. To focus on genuinely hot periods, he refines his query by emphasizing high temper-atures, modifying it to “ [original query] that remains generally high ”(Figure 1-4). This refinement adds a global feature, high , requiring the segment mean to exceed a threshold before the segment is considered hot (Figure 1-C1). The farmer then tightens this threshold using the corresponding control (Figure 1-F1). After updating the matches, the QbT results become concentrated in summer months. In the Full Time Series View (Figure 1-E), June shows fewer highlighted segments than later months, leading the farmer to conclude that June is the better time for grazing. 
+
+Weekly Air Quality. A climate scientist studying urban climate change examines short-term air pollution patterns in Los Angeles, California. Her goal is to identify weekly patterns of rising and falling PM2.5 concentrations. Previously, she manually inspected plots of the data, but she now seeks a more efficient way to find recurring temporal Fig. 3: Exploring weekday–weekend PM2.5 patterns in Los Angeles. 
+
+patterns. She begins by uploading her dataset and setting the query window length to 7 days ( L = 7) to focus on within-week behavior (Figure 3-1). Using the chat interface, she issues an initial NL query (Figure 3-2): “ Show me all segments that remain constant initially and then decline .” Her goal is to identify weeks in which PM2.5 levels stay high from Monday to Friday because of commuting, then decrease on Saturday and Sunday when fewer people travel to work. The system initially applies the default even-split interpretation of the query window, which does not match her intended weekday–weekend structure. She therefore refines the query to: “ Show me all segments that remain constant for 5 days and then decline for 2 days .” In the QbT results, she notices that some matched segments are anomalous and do not fit her intent. To filter out these atypical patterns, she adds typical as a global feature, which retains segments whose mean falls within a central band. However, this setting yields too few matches, so she relaxes typical feature’s thresholds by setting the lower and upper bounds to 0.005 and 0.15, respectively. She also adjust the constant 
+
+feature by setting is_constant to 0.005, allowing small fluctuations while still capturing near-flat behavior (Figure 3-3). After updating the matches, many segments follow the expected pattern: pollution starts of constant during Mondays and Tuesdays and declines during weekends, aligning with her commuting hypothesis. At the same time, she also notices some segments in which pollution remain stable during the weekend and starts declining during weekdays. To investigate this alternative pattern, she selects the example of interest and turns to Query-by-Sketch (Figure 3-4). She traces the example (Figure 3-5) and submits it as a sketch query. The QbS results reveal additional segments matching this visual pattern, which she inspects in the Full Time Series View alongside the QbT matches (Figure 3-6). These findings prompt her to further investigate possible explanations for weekend pollution episodes like special events or atypical traffic patterns. 
+
+> Fig. 4: Post-study survey results. Each cell shows the number of partici-pants selecting that score for each question.
+
+6.2 User Study 
+
+We recruited 13 participants (P1–P13) for our user study. The study was determined to be exempt by the IRB at our institution. All participants provided informed consent prior to participation. Participation was vol-untary, and participant anonymity was maintained. Participants had 1–6 years of experience using visualization tools and, on average, 2 years of experience with conversational LLMs. The study aimed to evaluate the effectiveness of Query-by-Text and sketch-based refinement, as well as the overall usability of the system. 
+
+Tasks and procedure: The study was conducted in person using the same device and environment to reduce variability. After a brief 10-minute hands-on training session, participants completed a pre-study survey to provide demographic information. In Task 1, each participant used ShapeTalk to answer eight analytical questions on the APPLE stock dataset (four easy and four hard), with question order counterbalanced across participants to assess task performance. Task 2 involved open-ended exploration of local city weather data, in which participants searched for self-defined interesting patterns to evaluate the flexibility and diversity of supported queries. This task emphasized more complex, fine-grained, and personally meaningful temporal behaviors. After both tasks, participants completed a post-study usability questionnaire. Full setup and results details are provided in Appendix C and D. 
+
+Results. At the participant level, most participants used both QbT and QbS at least once during the study: 92% of participants used both in Task 1, and 85% did so in Task 2. This suggests that both modalities were available and useful within the overall workflow. Participants also described the modalities as complementary. As P1 noted, “It can use both modes to refine the search ... I say they enhance each other.” 
+
+P12 similarly highlighted the value of sketching: “The query-by-sketch thing is pretty convenient to craft a query if you don’t know what you are doing.” 
+
+Participants completed Task 1 questions in 1.36 minutes on average. In Task 2, participants identified an average of 3.3 interesting or per-sonally meaningful patterns within a 10-minute window. These results suggest that ShapeTalk supports both efficient task-oriented search and more open-ended pattern exploration. In Task 1, participants were generally able to translate their intent into queries and locate target pat-terns quickly; in Task 2, they were able to use the system to iteratively explore and refine self-defined patterns in a less structured setting. Regarding query behavior in Task 1, 84% of participants began their search with QbT, using natural language, feature selection, or both. However, at the trial level, participants often relied on QbT alone: across the eight structured questions in Task 1, 68% of trials were completed using only QbT. We interpret this result not as evidence that both modalities are equally necessary for every query, but as ev-idence that natural language and feature-based querying provide an efficient default entry point for many structured pattern-search tasks. Among text-based queries, 57% were made using natural language alone, while 32% relied solely on feature selection. Sketching was used more selectively, particularly when participants wanted to express a geometric shape directly, refine an example, or recover from an unsatis-factory textual query. Thus, ShapeTalk’s multimodality is opportunistic rather than mandatory: users can complete simple or well-specified queries through text alone, while still having access to sketch-based refinement when textual descriptions become ambiguous or insufficient. For example, P8 used only natural-language queries to complete all Task 1 questions successfully. At the same time, more experienced users valued direct feature control: P3, who had extensive experience with time-series data and visualization, preferred feature selection for clearer exploration, and P13 remarked that the feature panel “actually grounds you by showing the local features, so you can be sure that your prompt described the right thing.” 
+
+The post-study survey included 12 questions (see Appendix C for details), each rated on a 5-point Likert scale (1 = strongly disagree, 5 = strongly agree). The questions covered comfort with describing patterns in natural language (Q1), confidence in sketching patterns (Q2), perceived accuracy of text (Q3) and sketch translation (Q4), ease of use (Q5), interface intuitiveness (Q6), ease of learning (Q7), efficiency of sketching for certain queries (Q8), ease of adjusting feature parameters (Q9), effectiveness of combining language and sketching (Q10), per-ceived consistency (Q11), and support for iterative refinement (Q12). The score distribution (Figure 4) was consistently positive: participants found natural language intuitive, sketches reliable, and the cross-modal workflow effective. Ratings for usability and learnability were also high, and participants agreed that the system provided consistent feedback and supported iterative refinement—two properties that are especially important for open-ended pattern discovery. 
+
+6.3 Analysis of LLM Parsing Quality 
+
+To evaluate the quality of LLM-based parsing from natural language to shape features, we collected 138 real human queries describing time-series patterns and generated 42 synthetic queries. The synthetic queries, produced with GPT-5, were designed to broaden linguistic coverage beyond typical user inputs by including more complex adjec-tives, less common formulations, and feature descriptions that rarely appeared in the human-authored queries. One example is “ Find parts with almost no jaggedness .” We manually annotated both the human and synthetic queries according to our shape-feature framework and compared these annotations with the features produced by the LLM from the corresponding natural-language inputs. We ran the evaluation twice: once with few-shot prompting and once without. Accuracy was used as the evaluation metric, where a prediction was counted as correct only if the LLM output exactly matched the human annotation. For real human queries, accuracy improved from 64% without few-shot prompting to 86% with few-shot prompting. For synthetic queries, accuracy improved from 62% to 83% . These results indicate that the LLM parser can reliably translate a wide range of natural-language descriptions into our shape-feature representation, and that few-shot prompting plays an important role in improving robustness and con-sistency. In particular, the gains on synthetic queries suggest that the parser generalizes beyond the phrasing patterns observed in everyday user input. Without few-shot prompting, errors more often arose from format inconsistencies, unnecessary insertion of global features such as 
+
+typical , and confusion between related feature concepts such as high-amplitude and spiky . Few-shot examples help anchor both the expected output structure and the intended semantics of our feature vocabulary, leading to more stable and accurate translations. 
+
+6.4 Analysis of Failure Cases 
+
+For Task 1, we identified 27 individual failure cases across 103 trials. We define a failure case as an operation that did not immediately pro-duce the outcome intended by the participant, requiring them to refine the query, retry the operation, or switch modalities to complete the task. Of these 27 cases, 14 involved unsatisfactory QbT results related to dynamic thresholding. Among these 14 cases, 8 returned no results because of a combination of overly large window lengths and overly strict thresholds. The remaining 6 returned results, but participants did not prefer the initial outputs. We also identified 3 cases involving errors in translating natural language into shape features, 4 cases in which the natural-language query fell outside the system’s supported capabilities, 1 case with unsatisfactory sketch-based results, and 5 cases involving initial misinterpretation of the task. These cases suggest that difficulties arose not only from model interpretation, but also from the inherent ambiguity of open-ended pattern specification and the challenge of se-lecting thresholds that match user expectations in a dataset-dependent setting. The QbT-related cases mainly fell into three categories: in some instances, participants issued queries that did not fully match the task they intended to solve; in others, the LLM’s interpretation did not completely capture the intended pattern; and in some cases, the parsed features were appropriate but the inferred thresholds were relatively restrictive, yielding fewer matching results. Importantly, participants were usually able to recover from these situations through the system’s cross-modal and editable workflow. In 15 failure cases, they switched modalities (e.g., from QbT to QbS or vice versa) to continue the task, whereas in the other 12 cases they iteratively refined the original modality. On average, failure cases required 1.63 more operations than non-failure cases. This recovery behavior reinforces one of our central motivations: when a single query formulation does not work as intended, users can inspect, revise, and re-express their intent through another modality rather than restarting from scratch. The task that required narrowing a large set of retrieved results exhibited the highest failure rate: 10 of the 13 participants encountered difficulty with Task 1 Q5, which was classified as hard. This finding suggests that result filtering and refinement in QbT may still require some user expertise and points to a promising direction for future work: supporting more direct natural-language control over result refinement (e.g., “filter these results down to at most one”). The failure cases also clarify the role of sketching in the current workflow. Sketch was not used equally often across all tasks, nor was it required for many well-specified textual queries. Instead, it func-tioned as a complementary recovery and refinement mechanism. When QbT produced overly broad, overly strict, or semantically mismatched results, users could switch to QbS to re-express the desired geometry more directly. This suggests that the value of sketching lies less in replacing natural language and more in providing an alternative rep-resentation of intent when textual descriptions are difficult to specify precisely. 
+
+6.5 Analysis of Latency 
+
+Our latency analysis suggests that ShapeTalk is practical for interactive use. Dynamic threshold inference is performed once offline for each dataset and, under capped patch budgets, takes about 5 s for global thresholds and 14 s for local thresholds with GPT-4o. Because the number of summarized patches is bounded, this offline cost remains stable even as the raw dataset grows. For online QbT queries, including both LLM parsing and matching, GPT-4o achieved the best latency among the tested models, averaging 651 ms on the Sacramento dataset, compared with 1745 ms for DeepSeek Rover V2 and 1620 ms for Devstral-Small-2505. This keeps typical NL query latency for medium-sized datasets well below one second. Latency increases with dataset size and window configuration, but the trade-offs are predictable. Using GPT-4o, average QbT latency was 670 ms on the 1,977-point Sacramento weather dataset, 855 ms on the 2,713-point Bitcoin dataset, and 4027 ms on the 145,367-point energy dataset, where post-processing became more expensive because more candidate matches survived to anti-collision filtering. Window length showed a related effect on both latency and match count. On the Sacramento dataset, a broad query with a very small window ( L = 2)produced 946 matches and 936 ms latency, while L = 4 and L = 8reduced this to 199 and 123 matches, with latency dropping to 662 ms and 666 ms, respectively. Under more realistic weekly-to-monthly set-tings, L = 7 returned 131 matches at 766 ms, whereas L = 14 returned only 8 matches at 568 ms. Once the window became too large for the queried pattern ( L ≥ 21 in this experiment), no matches were returned, and latency was dominated primarily by the scan over candidate win-dows rather than anti-collision filtering. Overall, these results suggest that very small windows tend to produce many overlapping matches and higher post-processing cost, whereas moderate window lengths (L = 6 –14 ) provide a more practical balance between responsiveness and expressive coverage for interactive query refinement. Full results are reported in Appendix E. 
+
+7 DISCUSSION 
+
+Our findings highlight several design implications in NL+X time-series querying and suggest directions for future work. 
+
+Limits of the current multimodal integration. ShapeTalk currently supports coordinated cross-modal refinement rather than simultaneous multimodal fusion. Users can move between text, editable features, and sketches, but the system does not jointly infer a single query from concurrent text and sketch input, nor does it allow users to explicitly weight the relative influence of the two modalities. This design was intentional for the present system: natural language and sketch encode different forms of intent, and keeping their pipelines separate makes each interpretation inspectable and easier to revise. However, this choice also limits the kinds of multimodal ambiguity resolution that ShapeTalk can support. Future work could explore joint text–sketch interpretation, user-controlled modality weighting, and interaction tech-niques where a sketch constrains the geometric space while language specifies semantic filters or exceptions. 
+
+Ambiguity and underspecification in pattern queries. Some of the observed failure cases reflect limitations of the current system, but oth-ers stem from a more fundamental challenge: users’ intended patterns are often ambiguous, incomplete, or context-dependent. For example, NL queries may admit multiple plausible interpretations, and users may implicitly expect the system to focus on specific temporal regions, such as winter months, even when this is not explicitly stated. These ob-servations suggest that future systems should support more interactive disambiguation, for example by surfacing alternative interpretations, clarifying implicit assumptions, or allowing users to add contextual filters over time ranges or value ranges. More explicit support for con-straint diagnosis could also help users understand why a query returns too many, too few, or no results, and how to relax or revise it. 
+
+Matching as an iterative, inspectable process. Our results also suggest that pattern retrieval should not be treated as a one-shot match-ing problem. When users requested strict patterns over long windows, the system sometimes returned approximate matches or none at all, making it difficult to distinguish between mismatched intent, overly restrictive constraints, and genuine absence of the pattern in the data. This points to the need for more informative feedback about which constraints were satisfied or violated, and for interaction techniques that support progressive relaxation, reformulation, and comparison of alternative query specifications. In this sense, one important lesson is that successful time-series querying depends not only on matching quality, but also on how well the system helps users inspect and revise the interpretation of their queries. 
+
+Toward more robust sketch-based interaction. Sketch-based querying introduced a different but important challenge. Because sketches are normalized, resampled, and matched using a similarity metric, small drawing imperfections can lead to unintended shape dif-ferences. Participants therefore expressed a desire for more support when authoring sketches, such as smoothing, snapping, or template-based guides. This suggests that future work should improve sketch-based querying not only through stronger matching algorithms, but also through richer interaction design. In particular, perception-oriented similarity metrics from prior work could be combined with drawing aids and editable intermediate representations to better align sketch input with users’ intended shapes. Such support may make sketching more robust, interpretable, and complementary to NL querying. 
+
+Lessons of using LLMs. Our findings suggest that the value of LLMs in ShapeTalk lies less in perfectly resolving user intent than in making open-ended NL pattern specification practical within an interac-tive workflow. Our goal is not to show that natural language uniformly outperforms sketch-based querying. Instead, ShapeTalk explores how language and sketch can support different stages of pattern specification: language provides a flexible entry point for semantic and compositional intent, while sketching supports direct geometric refinement. By trans-lating free-form queries into visible shape features and corresponding matches, the system allows users to inspect, validate, and revise the model’s interpretation rather than treating it as a black box. Because LLM-based parsing remains imperfect (hallucinations still exist) and can misread ambiguous or uncommon phrasing, it is most effective when paired with complementary, more controllable interaction mech-anisms such as sketching. More broadly, this points to a key design principle for future systems: LLMs should function as interpretable and revisable mediators of user intent, embedded within cross-modal interfaces that support verification, correction, and iterative refinement. 
+
+Making temporal scale visible to users. Our results suggest that temporal scale is not merely a backend parameter, but an important part of how users formulate and interpret pattern queries. The same description can imply different intended behaviors depending on the time span over which it is applied. For example, a user asking for a 
+
+complex pattern may be looking for short-term fluctuations, broader multi-stage variation, or a long-term irregular trend. In our experiments, querying complex with different window lengths produced substantially different results (Appendix H): smaller windows emphasized localized variation and sometimes returned no matches, whereas larger windows captured broader segment-level structures. This sensitivity highlights why temporal scale must be surfaced as an explicit design consideration in pattern search, rather than treated as a hidden implementation detail. In ShapeTalk, we address this tension by allowing users to adjust L directly and by using the LLM pipeline to suggest an initial window length when users do not have a clear target. This design lowers the barrier for novice users while preserving explicit user control. More broadly, our experience suggests that future time-series query systems should make temporal scale more visible and explorable, for example by recommending several plausible window lengths or allowing users to compare results across candidate scales within the same interface. 
+
+8 CONCLUSION 
+
+We presented ShapeTalk, a coordinated natural-language and sketch-based querying system for retrieving fixed-window patterns in uni-variate time series. By exposing an interpretable shape-feature space and linking Query-by-Text with Query-by-Sketch through coordinated visual feedback, ShapeTalk enables expressive pattern search without requiring strict syntax or advanced domain expertise, while keeping query representations transparent and editable. Our studies show that participants used natural language as an efficient entry point and used sketching or feature editing as complementary mechanisms for re-finement and recovery. Overall, ShapeTalk offers a practical balance between usability, accuracy, and efficiency in interactive time-series pattern search and points toward future cross-modal visual querying systems powered by LLMs. 
+
+ACKNOWLEDGMENTS 
+
+This work was supported in part by the U.S. National Science Founda-tion under Grant No. IIS-2427770. 
+
+REFERENCES         
+
+> [1] N. S. Agarwal and S. K. Sonbhadra. A review on large language models for visual analytics. ArXiv , abs/2503.15176, 2025. doi: 10.48550/arXiv. 2503.15176 3 [2] R. Agrawal, G. Psaila, E. L. Wimmers, and M. Zaït. Querying shapes of histories. In Proceedings of 21th International Conference on Very Large Data Bases , pp. 502–514, 1995. 2 [3] W. Aigner, S. Miksch, H. Schumann, and C. Tominski. Visualization of time-oriented data , vol. 4. Springer, 2011. doi: 10.1007/978-1-4471-7527 -8 3 [4] A. Alhargan, N. Cooke, and T. Binjammaz. Multimodal affect recognition in an interactive gaming environment using eye tracking and speech signals. In Proceedings of the 19th ACM International Conference on Multimodal Interaction , pp. 479–486. Association for Computing Machinery, 2017. doi: 10.1145/3136755.3137016 3
+
+[5] M. Amini, F. Zayeri, and M. Salehi. Trend analysis of cardiovascular disease mortality, incidence, and mortality-to-incidence ratio: results from global burden of disease study 2017. BMC public health , 21(1):401, 2021. doi: 10.1186/s12889-021-10429-0 1 [6] A. Bendeck, D. Bromley, and V. Setlur. Slopeseeker: A search tool for exploring a dataset of quantifiable trends. In Proceedings of the 29th International Conference on Intelligent User Interfaces , pp. 817–836, 2024. doi: 10.1145/3640543.3645208 2, 3 [7] D. J. Berndt and J. Clifford. Using dynamic time warping to find patterns in time series. In Proceedings of the 3rd international conference on knowledge discovery and data mining , pp. 359–370, 1994. 2 [8] R. A. Bolt. “put-that-there”: Voice and gesture at the graphics interface. 
+
+SIGGRAPH Computer Graphics , 14(3):262–270, 1980. doi: 10.1145/ 965105.807503 3 [9] M. Brehmer, B. Lee, B. Bach, N. H. Riche, and T. Munzner. Timelines revisited: A design space and considerations for expressive storytelling. 
+
+IEEE Transactions on Visualization and Computer Graphics , 23(9):2151– 2164, 2016. doi: 10.1109/TVCG.2016.2614803 3 [10] G. Brône and B. Oben. Mobile eye-tracking FOR multimodal interaction analysis. In The Routledge Handbook of Experimental Linguistics , pp. 283–298. Routledge, 2023. doi: 10.4324/9781003392972-21 3 [11] P. Buono, A. Aris, C. Plaisant, A. Khella, and B. Shneiderman. Interactive pattern search in time series. In Visualization and Data Analysis 2005 , vol. 5669 of SPIE Proceedings , pp. 175–186, 2005. doi: 10.1117/12.587537 2 [12] J. Chen, J. Wu, J. Guo, V. Mohanty, X. Li, J. P. Ono et al. Interchat: Enhancing generative visual analytics using multimodal interactions. In 
+
+Computer Graphics Forum , p. e70112. Wiley Online Library, 2025. doi: 10.1111/cgf.70112 3 [13] W. Chen, X. Ma, X. Wang, and W. W. Cohen. Program of thoughts prompting: Disentangling computation from reasoning for numerical reasoning tasks. Transactions on Machine Learning Research , 2023, 2023. doi: 10.48550/arXiv.2211.12588 5 [14] M. Correll and M. Gleicher. The semantics of sketch: Flexibility in visual query systems for time series data. In 2016 IEEE Conference on Visual Analytics Science and Technology (VAST) , pp. 131–140. IEEE, 2016. doi: 10.1109/VAST.2016.7883519 2 [15] V. Dibia. LIDA: A tool for automatic generation of grammar-agnostic visualizations and infographics using large language models. In Proceed-ings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 3: System Demonstrations) , pp. 113–126, 2023. doi: 10.18653/v1/2023.acl-demo.11 3 [16] R. D. Edwards, J. Magee, and C. B. W. H.˙ Technical Analysis of Stock Trends . CRC Press, Boca Raton, 11th ed., 2018. doi: 10.4324/ 9781315115719 1 [17] C. Fan, K. Matkovi´ c, and H. Hauser. Sketch-based fast and accurate querying of time series using parameter-sharing lstm networks. IEEE Transactions on Visualization and Computer Graphics , 27(12):4495–4506, 2021. doi: 10.1109/TVCG.2020.3002950 2 [18] J. Fuchs, F. Fischer, F. Mansmann, E. Bertini, and P. Isenberg. Evaluation of alternative glyph designs for time series data in a small multiple setting. In Proceedings of the CHI Conference on Human Factors in Computing Systems , pp. 3237–3246, 2013. doi: 10.1145/2470654.2466443 3 [19] Z. Geler, V. Kurbalija, M. Ivanovi´ c, M. Radovanovi´ c, and W. Dai. Dy-namic time warping: Itakura vs sakoe-chiba. In 2019 IEEE International Symposium on INnovations in Intelligent SysTems and Applications (IN-ISTA) , pp. 1–6. IEEE, 2019. doi: 10.1109/INISTA.2019.8778300 7 [20] H. Hochheiser. Interactive querying of time series data. In Extended abstracts of the 2002 Conference on Human Factors in Computing Systems, CHI 2002 , pp. 552–553. ACM, 2002. doi: 10.1145/506443.506477 2 [21] E. Hoque and M. S. Islam. Natural language generation for visualizations: State of the art, challenges and future directions. In Computer Graphics Forum , vol. 44, p. e15266. Wiley Online Library, 2025. doi: 10.1111/cgf. 15266 3 [22] S. Imani, S. Alaee, and E. Keogh. Qute: Query by text search for time series data. In Proceedings of the Future Technologies Conference (FTC) 2020, Volume 2 , pp. 412–427. Springer International Publishing, 2021. doi: 10.1007/978-3-030-63089-8_27 2, 3, 4 [23] W. Javed, B. McDonnel, and N. Elmqvist. Graphical perception of multiple time series. IEEE Transactions on Visualization and Computer Graphics ,16(6):927–934, 2010. doi: 10.1109/TVCG.2010.162 3 [24] E. Kavaz, A. Puig, and I. Rodríguez. Chatbot-based natural language interfaces for data visualisation: A scoping review. Applied Sciences ,13(12), 2023. doi: 10.3390/app13127025 3 [25] Y.-H. Kim, B. Lee, A. Srinivasan, and E. K. Choe. Data@Hand: Fostering visual exploration of personal data on smartphones leveraging speech and touch interaction. In Proceedings of the CHI Conference on Human Factors in Computing Systems . Association for Computing Machinery, 2021. doi: 10.1145/3411764.3445421 3 [26] D. J.-L. Lee, J. Lee, T. Siddiqui, J. Kim, K. Karahalios, and A. Parameswaran. You can’t always sketch what you want: Understanding sensemaking in visual query systems. IEEE transactions on visualization and computer graphics , 26(1):1267–1277, 2019. doi: 10.1109/TVCG. 2019.2934666 2 [27] S. Y.-T. Lee, C. Ji, S. Wen, L. Huang, D. Liu, and K.-L. Ma. Videe: Visual and interactive decomposition, execution, and evaluation of text analytics with intelligent agents. arXiv preprint arXiv:2506.21582 , 2025. doi: 10. 48550/arXiv.2506.21582 3 [28] F. Lekschas, B. Peterson, D. Haehn, E. Ma, N. Gehlenborg, and H. Pfister. Peax: Interactive visual pattern search in sequential data using unsuper-vised deep representation learning. In Computer Graphics Forum , vol. 39, pp. 167–179. Wiley Online Library, 2020. doi: 10.1111/CGF.13971 2 [29] L. Li, X. Su, Y. Zhang, Y. Lin, and Z. Li. Trend modeling for traffic time series analysis: An integrated study. IEEE Transactions on Intelligent Transportation Systems , 16(6):3430–3439, 2015. doi: 10.1109/TITS.2015 .2457240 1 [30] S. Li, X. Chen, Y. Song, Y. Song, and C. Zhang. Prompt4vis: Prompting large language models with example mining and schema filtering for tabular data visualization, 2024. doi: 10.48550/arXiv.2402.07909 3 [31] D. Liu, S. Alnegheimish, A. Zytek, and K. Veeramachaneni. MTV: visual analytics for detecting, investigating, and annotating anomalies in multi-variate time series. Proc. ACM Hum. Comput. Interact. , 6(CSCW1):103:1– 103:30, 2022. doi: 10.1145/3512950 3, 6 [32] S. Liu, Y. Tian, Z. Deng, W. Cui, H. Zhang, D. Weng et al. Relation-driven query of multiple time series. IEEE Transactions on Visualization and Computer Graphics , 2024. doi: 10.1109/TVCG.2024.3397554 2 [33] M. Mannino and A. Abouzied. Expressive time series querying with hand-drawn scale-free sketches. In Proceedings of the 2018 CHI Conference on Human Factors in Computing Systems , pp. 1–13, 2018. doi: 10.1145/ 3173574.3173962 2 [34] D. Masson, S. Malacria, G. Casiez, and D. Vogel. DirectGPT: A direct manipulation interface to interact with Large Language Models. In Pro-ceedings of the 2024 CHI Conference on Human Factors in Computing Systems (CHI ’24) , art. no. 975, 16 pages, 2024. doi: 10.1145/3613904. 3642462 3 [35] M. Mudelsee. Trend analysis of climate time series: A review of methods. 
+
+Earth-Science Reviews , 190:310–322, 2019. doi: 10.1016/j.earscirev.2018 .12.005 1 [36] A. Narechania, A. Srinivasan, and J. Stasko. Nl4dv: A toolkit for gener-ating analytic specifications for data visualization from natural language queries. IEEE Transactions on Visualization and Computer Graphics ,27(2):369–379, 2021. doi: 10.1109/TVCG.2020.3030378 3 [37] T. Qiu, F. Wang, S. Huang, M. Guo, Y. Zhao, J. Li et al. Smartmlvs: Llm-enabled multiple linked views generation for interactive visualization. 
+
+2025 IEEE 18th Pacific Visualization Conference (PacificVis) , pp. 58–68, 2025. doi: 10.1109/PacificVis64226.2025.00012 3 [38] N. Ruta, N. Sawada, K. McKeough, M. Behrisch, and J. Beyer. Sax navigator: Time series exploration through hierarchical clustering. In 
+
+2019 IEEE Visualization Conference (VIS) , pp. 236–240. IEEE, 2019. doi: 10.1109/VISUAL.2019.8933618 3 [39] K. Ryall, N. Lesh, T. Lanning, D. Leigh, H. Miyashita, and S. Makino. Querylines: approximate query for visual browsing. In CHI ’05 Extended Abstracts on Human Factors in Computing Systems , pp. 1765–1768, 2005. doi: 10.1145/1056808.1057017 2 [40] L. Shen, E. Shen, Y. Luo, X. Yang, X. Hu, X. Zhang et al. Towards natural language interfaces for data visualization: A survey. IEEE Transactions on Visualization and Computer Graphics , 29(6):3121–3144, 2023. doi: 10 .1109/TVCG.2022.3148007 3 [41] L. Shen, Y. Zhang, H. Zhang, and Y. Wang. Data player: Automatic gener-ation of data videos with narration-animation interplay. IEEE Transactions on Visualization and Computer Graphics , 30(1):109–119, 2024. doi: 10. 1109/TVCG.2023.3327197 3 [42] C. Shi, W. Cui, C. Liu, C. Zheng, H. Zhang, Q. Luo et al. Nl2color: Refining color palettes for charts with natural language. IEEE Transactions on Visualization and Computer Graphics , 30(1):814–824, 2024. doi: 10. 1109/TVCG.2023.3326522 3 [43] T. Siddiqui, P. Luh, Z. Wang, K. Karahalios, and A. Parameswaran. Shape-search: A flexible and efficient system for shape-based exploration of trendlines. In Proceedings of the 2020 ACM SIGMOD International Con-ference on Management of Data , SIGMOD ’20, pp. 51–65, 2020. doi: 10. 1145/3318464.3389722 2, 3 [44] N. Sultanum and A. Srinivasan. Datatales: Investigating the use of large language models for authoring data-driven articles. In 2023 IEEE Visu-alization and Visual Analytics (VIS) , pp. 231–235. IEEE, 2023. doi: 10. 1109/VIS54172.2023.00055 3 [45] B. Tang, A. Boggust, and A. Satyanarayan. VisText: A benchmark for semantically rich chart captioning. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics , pp. 7268–7298, 2023. doi: 10.18653/v1/2023.acl-long.401 3 [46] Y. Tian, W. Cui, D. Deng, X. Yi, Y. Yang, H. Zhang et al. Chartgpt: Leveraging llms to generate charts from abstract natural language. IEEE Transactions on Visualization and Computer Graphics , 31(3):1731–1745, 2025. doi: 10.1109/TVCG.2024.3368621 3 [47] M. A. Turk. Multimodal interaction: A review. Pattern Recognition Letters , 36:189–195, 2014. doi: 10.1016/J.PATREC.2013.07.003 3 [48] J. J. Van Wijk and E. R. Van Selow. Cluster and calendar based visu-alization of time series data. In 1999 InfoVis , pp. 4–9, 1999. doi: 10. 1109/INFVIS.1999.801851 3 [49] P.-P. Vázquez. Are llms ready for visualization? In 2024 IEEE 17th Pacific Visualization Conference (PacificVis) , pp. 343–352, 2024. doi: 10. 1109/PacificVis60374.2024.00049 3 [50] F. Wang, B. Wang, X. Shu, Z. Liu, Z. Shao, C. Liu et al. Chartinsighter: An approach for mitigating hallucination in time-series chart summary generation with a benchmark dataset. IEEE Transactions on Visualization and Computer Graphics , 2025. doi: 10.1109/TVCG.2025.3567122 5 [51] J. Wang, S. Liu, and W. Zhang. Visual analytics for machine learning: A data perspective survey. IEEE Transactions on Visualization and Computer Graphics , 30(12):7637–7656, 2024. doi: 10.1109/TVCG.2024.3357065 3 [52] L. Wang, S. Zhang, Y. Wang, E.-P. Lim, and Y. Wang. Llm4vis: Explain-able visualization recommendation using chatgpt. pp. 675–692, 01 2023. doi: 10.18653/v1/2023.emnlp-industry.64 3 [53] Y. Wang, Z. Hou, L. Shen, T. Wu, J. Wang, H. Huang et al. Towards natural language-based visualization authoring. IEEE Transactions on Visualization and Computer Graphics , 29(1):1222–1232, 2023. doi: 10. 1109/TVCG.2022.3209357 3 [54] M. Weber, M. Alexa, and W. Müller. Visualizing time-series on spirals. In 
+
+2001 InfoVis , vol. 1, pp. 7–14, 2001. doi: 10.1109/INFVIS.2001.963273 3[55] S. Xiao, S. Huang, Y. Lin, Y. Ye, and W. Zeng. Let the chart spark: Embedding semantic context into chart with text-to-image generative model. IEEE Transactions on Visualization and Computer Graphics ,30(1):284–294, 2024. doi: 10.1109/TVCG.2023.3326913 3 [56] J. J. Yang, T. Chen, F. Qin, M. S. Lam, and J. A. Landay. HybridTrak: Adding full-body tracking to vr using an off-the-shelf webcam. In Pro-ceedings of the CHI Conference on Human Factors in Computing Sys-tems . Association for Computing Machinery, 2022. doi: 10.1145/3491102 .3502045 3 [57] Y. Ye, J. Hao, Y. Hou, Z. Wang, S. Xiao, Y. Luo et al. Generative ai for visualization: State of the art and future directions. Visual Informatics ,8(2):43–66, 2024. doi: 10.1016/j.visinf.2024.04.003 3 [58] Y. Yu, T. Becker, P. Schichtel, W. Aigner, A. Telea, and M. Behrisch. Noops: Nonmyopic feedback-driven pattern search in multivariate time series. Available at SSRN 5193693 , 2025. doi: 10.2139/ssrn.5180352 2, 3 [59] Y. Yu, Y. Wang, Y. Zhang, H. Qu, and D. Liu. Inclusiviz : Visual analytics of human mobility data for understanding and mitigating urban segregation. 
+
+IEEE Transactions on Visualization and Computer Graphics , 31(6):3836– 3849, 2025. doi: 10.1109/TVCG.2025.3567117 3 [60] Z. Zhang, Z. Shao, and A. Crotty. Deepsketch: A query sketching interface for deep time series similarity search. Proc. VLDB Endow. ,17(12):4369–4372, Aug. 2024. doi: 10.14778/3685800.3685877 2 [61] Y. Zhao, J. Wang, L. Xiang, X. Zhang, Z. Guo, C. Turkay et al. LightVA: Lightweight visual analytics with LLM agent-based task planning and execution. IEEE Transactions on Visualization and Computer Graphics ,pp. 1–13, 2024. doi: 10.1109/TVCG.2024.3496112 3 [62] Y. Zhao, Y. Zhang, Y. Zhang, X. Zhao, J. Wang, Z. Shao et al. Leva: Using large language models to enhance visual analytics. IEEE Transactions on Visualization and Computer Graphics , pp. 1–17, 2024. doi: 10.1109/ TVCG.2024.3368060 3 Appendix Table of Contents Appendix A: Prompt Design . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 
+
+# Appendix B: Feature Definition . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 
+
+# Appendix C: User Study Setup . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22 
+
+# Appendix D: User Study Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 
+
+# Appendix E: Latency Analysis . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .24 
+
+# Appendix F: Code for Review . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27 
+
+# Appendix G: Dynamic Threshold Comparison With Fix Percentile Threshold . . . . 28 
+
+# Appendix H: Different Window Length Comparison . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 
+
+# Appendix I: Latency evaluation across different sub-feature splitting techniques .32 Appendix A: Prompt Design 
+
+# Prompt for natural language query to formal features 
+
+1 You are an AI assistant designed to support analysts and researchers in interpreting complex time series data from natural language queries . 
+
+2 Your only task is to extract relevant time series features explicitly or implicitly described in the input query. 
+
+3 Do not generate new queries , rephrase the input , or infer beyond what is provided . Return only the extracted features . 
+
+45 You must identify both local and global features as follows : 
+
+67 Local features ( describing segment -level characteristics ): 
+
+8 "rising ", " falling ", " concave ", "convex", "linear", "non -linear", " constant ", "smooth", "noisy", "complex ", "simple", "spiky", " dropout ", " periodic ", " aperiodic ", " symmetric ", " asymmetric ", "step ", "no -step", "high - amplitude ", "low - amplitude ", "high -volume", "low -volume ". 
+
+910 Global features ( describing overall segment classification ): 
+
+11 "high", "low", " typical ", " unusual ". 
+
+12 13 14 Example inputs and expected outputs for few -shot learning : [EXAMPLES (Few Shot Prompting Examples below)] 
+
+15 16 Your next response must be a valid Python dictionary in the format shown above. 
+
+17 18 Important Instructions : 
+
+19 1. Global features MUST be placed only in the "global" key in the dictionary at most 1 feature per query: "high", "low", " typical ", " unusual " 
+
+20 2. Local features MUST be placed only in the "local" key in the dictionary : "rising", " falling ", "concave ", "convex", "linear", "non -linear", " constant ", "smooth", "noisy", " complex ", "simple", "spiky", " dropout ", " periodic ", " aperiodic ", " symmetric ", " asymmetric ", "step", "no -step", "high -amplitude ", "low - amplitude ", "high - volume", "low -volume ". 
+
+21 3. Global features must only appear under the ’global ’ key , and local features must only appear under the ’local ’ key. 
+
+22 "high", "low", " typical ", " unusual " CANNOT appear in ’local ’ key like the following 
+
+23 4. Do not include any explanations , commentary , or reasoning . 
+
+24 5. Do not wrap the dictionary in any formatting (e.g., no triple backticks , no python label , no quotation marks around the entire dictionary ). 
+
+25 26 After reading this instruction , do not generate new queries or paraphrase the input. 
+
+27 Your response must consist of only a valid Python dictionary containing the extracted features . Nothing more. 
+
+28 29 Query: [INSERT USER QUERY] 
+
+30 Expected Features : 
+
+# Few Shot Prompting Examples 
+
+1 [
+
+2 {
+
+3 "query ": "I need to pinpoint where trading volume spikes and then quickly drops within the same session . Show me those segments .", 
+
+4 " features ": {" global ": (), "local ": ((" high -volume", "spiky "), (" falling ",))} 
+
+5 }, 
+
+6 {
+
+7 "query ": "I’m examining temperature trends and need to identify phases where temperatures are unusually high but then show a steady decline over several days. Can you locate these for me?", 
+
+8 " features ": {" global ": (" high ",), "local ": ((" rising ",) ,(" falling ",))} 
+
+9 }, 
+
+10 {
+
+11 "query ": "Track periods of high consumer interest followed by a sudden drop in engagement . These shifts are critical for our strategy adjustments .", 
+
+12 " features ": {" global ": (), "local ": ((" high -volume ",), (" falling ",))} 
+
+13 }, 
+
+14 {
+
+15 "query ": " Identify when energy consumption are stable or constant ", 
+
+16 " features ": {" global ": (), "local ": ((" constant ",) ,)} 
+
+17 }, 
+
+18 {
+
+19 "query ": " Identify segments with low volume", 
+
+20 " features ": {" global ": (), "local ": (("low -volume ",) ,)} 
+
+21 }, 
+
+22 {23 "query ": "Show me the parts where there is a symmetrical increase and symmetric decrease with high amplitude .", 
+
+24 " features ": {" global ": (), "local ": ((" symmetric ", "rising "), (" symmetric ", " falling ", "high -amplitude "))} 
+
+25 }, 
+
+26 {
+
+27 "query ": " Highlight all the segments that are high relative to the data", 
+
+28 " features ": {" global ": (" high ",), "local ": ()} 
+
+29 }, 
+
+30 {
+
+31 "query ": "Choose the lines that are comparatively low in the dataset ", 
+
+32 " features ": {" global ": (" low",), "local ": ()} 
+
+33 }, 
+
+34 {
+
+35 "query ": "Find lines with low fluctuation or noise that is also relatively high", 
+
+36 " features ": {" global ": (" high ",), "local ": ((" smooth ",) ,)} 
+
+37 }, 
+
+38 {
+
+39 "query ": "smooth line throughout the segment with downward trend then upward trend", 
+
+40 " features ": {" global ": (), "local ": ((" smooth "," falling ",) ,(" smooth "," rising ",))} 
+
+41 }, 
+
+42 {
+
+43 "query ": " Identify segments that are quiet in amplitude .", 
+
+44 " features ": {" global ": (), "local ": (("low - amplitude ",) ,)} 
+
+45 }, 
+
+46 {
+
+47 "query ": "Lines that create a upside down U shape", 
+
+48 " features ": {" global ": (), "local ": ((" concave ",) ,)} 
+
+49 }, 
+
+50 {
+
+51 "query ": "U shape or parabolic shape or parabola ", 
+
+52 " features ": {" global ": (), "local ": ((" convex ",) ,)} 
+
+53 }, 
+
+54 {
+
+55 "query ": "Select all segments that are typical ", 
+
+56 " features ": {" global ": (" typical ",), "local ": ()} 
+
+57 }, 
+
+58 {
+
+59 "query ": "A sudden drop or V shape or outlier or straight line with a V decline ", 
+
+60 " features ": {" global ": (), "local ": ((" dropout ",) ,)} 
+
+61 }, 
+
+62 {
+
+63 "query ": "Detect segments with high variability and a lack of symmetry ", 
+
+64 " features ": {" global ": (), "local ": ((" complex "," asymmetric ",) ,)} 
+
+65 }, 
+
+66 {
+
+67 "query ": "Search for regions with no repeating patterns , which are then followed by convex trends ", 
+
+68 " features ": {" global ": (), "local ": ((" aperiodic ",) ,(" convex ",))} 
+
+69 }, 
+
+70 {
+
+71 "query ": "Select regions with continuous changes , elevated variance , and curvature that deviates from a straight line", 
+
+72 " features ": {" global ": (), "local ": (("no -step "," noisy ","non -linear ",) ,)} 
+
+73 }, 
+
+74 {
+
+75 "query ": " Identify segments that are flat and lack any noticeable peaks or fluctuations ", 
+
+76 " features ": {" global ": (), "local ": ((" simple ",) ,)} 
+
+77 }, 
+
+78 {
+
+79 "query ": "A high rise followed by decline ", 
+
+80 " features ": {" global ": (" high ",), "local ": ((" rising ",) ,(" falling ",))} 
+
+81 }, 
+
+82 {
+
+83 "query ": "Can you find me a pattern that is high low high", 
+
+84 " features ": {" global ": (" high ",), "local ": ()} 
+
+85 }, 
+
+86 {
+
+87 "query ": "A line that rises then falls repeating this trend", 
+
+88 " features ": {" global ": (), "local ": ((" periodic ",) ,)} 
+
+89 }, 
+
+90 {
+
+91 "query ": "Many spikes with a falling tendency ", 92 " features ": {" global ": (), "local ": ((’spiky ’, ’falling ’) ,)} 
+
+93 }, 
+
+94 {
+
+95 "query ": "A straight line", 
+
+96 " features ": {" global ": (), "local ": ((’linear ’,) ,)} 
+
+97 }, 
+
+98 {
+
+99 "query ": "stable , then rise , then stable , then rise", 
+
+100 " features ": {" global ": (), "local ": ((’rising ’,’step ’) ,)} 
+
+101 }, 
+
+102 ]
+
+# Dynamic Threshold Inference 
+
+Local Shape Feature Prompt 
+
+1 You are an AI assistant designed to support analysts and researchers in interpreting time series data from natural language queries . 
+
+23 Your ONLY task is to compute dynamic threshold values for key statistical features based on the provided data and suggest a window size for each feature . The window size is an integer . Do NOT generate or reformulate queries . Do NOT modify the input. 
+
+45 The input is a list of dictionaries , where each dictionary represents one segment of a time series with the following numerical features : 
+
+6 "mean", "median", "std", "min", "max", "range", " skewness ", " kurtosis ", "slope", volume 
+
+78 Here are the helper functions : 
+
+9 def slope( segment ): 
+
+10 return np.diff( segment ) 
+
+11 12 def variance ( segment ): 
+
+13 return np.var( segment ) 
+
+14 15 def amplitude ( segment ): 
+
+16 return np.max( segment ) - np.min( segment ) 
+
+17 18 def volume ( segment ): 
+
+19 return np.sum(np.abs( segment )) 
+
+20 21 Your job is to dynamically determine VALUE based on the definition of these functions : 
+
+22 The function is_linear identifies segments where the rate of change varies very little compared to other segments , suggesting a relatively consistent and straight trend. 
+
+23 def is_linear ( segment ): 
+
+24 return variance (slope( segment )) < is_linear_VALUE 
+
+25 26 The function is_constant identifies segments where the values show minimal variation compared to other segments , indicating a relatively flat or unchanging pattern . 
+
+27 def is_constant ( segment ): 
+
+28 return variance ( segment ) < is_constant_VALUE 
+
+29 30 The function is_smooth identifies segments with relatively low variation in values compared to others , indicating a gentle and stable pattern without sharp fluctuations . 
+
+31 def is_smooth ( segment ): 
+
+32 return variance ( segment ) < is_smooth_VALUE 
+
+33 34 The function is_noisy identifies segments with relatively high variation in values compared to others , indicating a pattern with frequent or abrupt fluctuations . 
+
+35 def is_noisy ( segment ): 
+
+36 return variance ( segment ) > is_noisy_VALUE 
+
+37 38 The function is_complex identifies segments that show both high variability and multiple peaks compared to other segments , indicating a pattern with rich or intricate fluctuations . 
+
+39 def is_complex ( segment ): 
+
+40 return variance ( segment ) > is_complex_VALUE and len( find_peaks ( segment )[0]) > 2
+
+41 42 The function is_simple identifies segments with low variability and no prominent peaks compared to other segments , indicating a relatively plain and uniform pattern . 
+
+43 def is_simple ( segment ): 
+
+44 return variance ( segment ) < is_simple_VALUE and len( find_peaks ( segment )[0]) == 0
+
+45 46 The function is_spiky identifies segments that contain at least one peak and show sudden sharp changes in value. It identifies segments that contain sudden , isolated spikes. 
+
+47 def is_spiky ( segment ): 48 peaks , _ = find_peaks ( segment ) 
+
+49 return len(peaks) > 0 and np.any(np.abs(np.diff( segment )) > is_spiky_VALUE ) 
+
+50 51 The function is_dropout identifies segments that contains at least one point x such that x is significantly smaller than the typical magnitude of the data 
+
+52 def is_dropout ( segment ): 
+
+53 return any(x < is_dropout_VALUE for x in segment ) 
+
+54 55 The function is_periodic identifies segments that exhibit noticeable repeating frequency components , indicating a relatively regular or cyclical pattern compared to other segments . 
+
+56 def is_periodic ( segment ): 
+
+57 freq = np.abs(fft( segment )) 
+
+58 return np.any(freq > is_periodic_VALUE ) 
+
+59 60 The function is_step identifies segments that contain at least one sudden and significant jump in value , indicating a relatively abrupt change or shift in the data. 
+
+61 def is_step ( segment ): 
+
+62 return any(np.abs(np.diff( segment )) > is_step_VALUE ) 
+
+63 64 The function is_high_amplitude identifies segments with relatively large differences between their highest and lowest values , indicating strong fluctuations or pronounced peaks and troughs . 
+
+65 def is_high_amplitude ( segment ): 
+
+66 return amplitude ( segment ) > is_high_amplitude_VALUE 
+
+67 68 The function is_high_volume detects segments that exhibit relatively strong intensity or activity , based on their overall magnitude or energy being higher than typical segments . 
+
+69 def is_high_volume ( segment ): 
+
+70 return volume( segment ) > is_high_volume_VALUE 
+
+71 72 The function is_low_volume identifies segments with a relatively small magnitude or energy , indicating a weak or subdued pattern compared to other segments . 
+
+73 def is_low_volume ( segment ): 
+
+74 return volume( segment ) < is_high_volume_VALUE 
+
+75 76 Checks whether the values in the segment consistently increase over time ( overall upward trend). 
+
+77 def is_rising ( segment ): 
+
+78 return all(slope( segment ) > 0) 
+
+79 80 Checks whether the values in the segment consistently decrease over time ( overall downward trend). 
+
+81 def is_falling ( segment ): 
+
+82 return all(slope( segment ) < 0) 
+
+83 84 Checks whether the slope of the segment steadily decreases , forming a curve that bends downward (concave shape). 
+
+85 def is_concave ( segment ): 
+
+86 return np.all(np.diff(slope( segment )) < 0) 
+
+87 88 Checks whether the slope of the segment steadily increases , forming a curve that bends upward ( convex shape). 
+
+89 def is_convex ( segment ): 
+
+90 return np.all(np.diff(slope( segment )) > 0) 
+
+91 92 Checks whether the segment is mirror - symmetric around its center by comparing the first half with the reversed second half. 
+
+93 def is_symmetric ( segment ): 
+
+94 n = len( segment ) 
+
+95 return np. allclose ( segment [:n // 2], segment [-(n // 2) :][:: -1]) 
+
+96 97 Checks whether the segment is not symmetric around its center (i.e., it does not mirror itself ). 
+
+98 def is_asymmetric ( segment ): 
+
+99 return not is_symmetric ( segment ) 
+
+100 101 All thresholds must be derived directly from the provided feature values using consistent statistical logic. 
+
+102 All window must be derived directly based on provided feature functions and data. Try to suggest window size so apparent patterns show up. 
+
+103 104 Return your output as a plain dictionary . Do NOT use markdown , code formatting , or any extra text. 
+
+105 106 Use the following format exactly : 
+
+107 108 {" is_linear ": is_linear_VALUE , " is_linear_explanation ": " Explain your choice in one sentence using only words .", " linear_window_size ": integer suggestion for is_linear feature , 109 " is_constant ": is_constant_VALUE , " is_constant_explanation ": " Explain your choice in one sentence using only words .", " constant_window_size ": integer suggestion for is_constant feature , 
+
+110 " is_smooth ": is_smooth_VALUE , " is_smooth_explanation ": " Explain your choice in one sentence using only words .", " smooth_window_size ": integer suggestion for is_constant feature , 
+
+111 " is_noisy ": is_noisy_VALUE , " is_noisy_explanation ": " Explain your choice in one sentence using only words .", " noisy_window_size ": integer suggestion for is_noisy feature , 
+
+112 " is_complex ": is_complex_VALUE , " is_complex_explanation ": " Explain your choice in one sentence using only words .", " complex_window_size ": integer suggestion for is_complex feature , 
+
+113 " is_simple ": is_simple_VALUE , " is_simple_explanation ": " Explain your choice in one sentence using only words .", " simple_window_size ": integer suggestion for is_simple feature , 
+
+114 " is_spiky ": is_spiky_VALUE , " is_spiky_explanation ": " Explain your choice in one sentence using only words .", " spiky_window_size ": integer suggestion for is_spiky feature , 
+
+115 " is_dropout ": is_dropout_VALUE , " is_dropout_explanation ": " Explain your choice in one sentence using only words .", " dropout_window_size ": integer suggestion for is_dropout feature , 
+
+116 " is_periodic ": is_periodic_VALUE , " is_periodic_explanation ": " Explain your choice in one sentence using only words .", " periodic_window_size ": integer suggestion for is_periodic feature , 
+
+117 " is_step ": is_step_VALUE , " is_step_explanation ": " Explain your choice in one sentence using only words .", " step_window_size ": integer suggestion for is_step feature , 
+
+118 " is_high_amplitude ": is_high_amplitude_VALUE , " is_high_amplitude_explanation ": " Explain your choice in one sentence using only words .", " high_amplitude_window_size ": integer suggestion for is_high_amplitude feature , 
+
+119 " is_high_volume ": is_high_volume_VALUE , " is_high_volume_explanation ": " Explain your choice in one sentence using only words .", " high_volume " _window_size ": integer suggestion for is_high_volume " feature , 
+
+120 " is_low_volume ": is_low_volume_VALUE , " is_low_volume_explanation ": " Explain your choice in one sentence using only words .", " low_volume_window_size ": integer suggestion for is_low_volume feature , 
+
+121 " rising_window_size ": integer suggestion for is_rising feature , 
+
+122 " asymmetric_window_size ": integer suggestion for is_asymmetric feature , 
+
+123 " falling_window_size ": integer suggestion for is_falling feature , 
+
+124 " concave_window_size ": integer suggestion for is_concave feature , 
+
+125 " convex_window_size ": integer suggestion for is_convex feature , 
+
+126 " symmetric_window_size ": integer suggestion for is_symmetric feature } 
+
+127 128 129 Here is the data: [INSERT STATISTICAL SUMMARY] 
+
+Global Shape Feature Prompt 
+
+1 You are an AI assistant designed to support analysts and researchers in interpreting time series data from natural language queries . 
+
+23 Your ONLY task is to compute dynamic threshold values for key statistical features based on the provided data. Do NOT generate or reformulate queries . Do NOT modify the input. 
+
+45 The input is a list of dictionaries , where each dictionary represents one segment of a time series with the following numerical features : 
+
+6 "mean", "median", "std", "min", "max", "range", " skewness ", " kurtosis ", and "slope ". 
+
+78 Your job is to determine : 
+
+9 "high ": a threshold such that approximately 70% of all "mean" values are below this value. 
+
+10 "low ": a threshold such that approximately 30% of all "mean" values are below this value. 
+
+11 " variance ": a threshold based on "std" that distinguishes segments with tightly clustered values from the rest. 
+
+12 13 All thresholds must be derived directly from the provided feature values using consistent statistical logic (e.g., percentiles or variance spread). 
+
+14 15 Return your output as a plain dictionary . Do NOT use markdown , code formatting , or any extra text. 
+
+16 17 Use the following format exactly : 
+
+18 19 {" high ": VALUE , " high_explanation ": " Explain your choice of high in one sentence using only words .", 
+
+20 "low ": VALUE , " low_explanation ": " Explain your choice of low in one sentence using only words .", 
+
+21 " variance ": VALUE , " variance_explanation ": " Explain your choice of variance in one sentence using only words ."} 
+
+22 23 Here is the data: [INSERT STATISTICAL SUMMARY] 
+
+Statistical Summary Example 
+
+1 [{ 
+
+2 ’segment 0’: {
+
+3 ’mean ’: 0.00353 , 4 ’median ’: 0.00344 , 
+
+5 ’std ’: 0.000272 , 
+
+6 ’min ’: 0.00322 , 
+
+7 ’max ’: 0.00414 , 
+
+8 ’range ’: 0.000928 , 
+
+9 ’skewness ’: 0.951 , 
+
+10 ’kurtosis ’: -0.00107 , 
+
+11 ’slope ’: -3.06e-05, 
+
+12 ’volume ’: 0.0353 , 
+
+13 ’length ’: 6} 
+
+14 }, 
+
+15 {
+
+16 ’segment 1’: {
+
+17 ... 
+
+18 ... 
+
+19 ... Appendix B: Feature Definition 
+
+All features inferred through dynamic thresholding include an additional parameter, VALUE, in the function call. This VALUE is determined by the LLM inference pipeline. 
+
+> Table 1: Local Feature Definitions
+
+Feature Shape Segment Explanation Code 
+
+Rising Segments that rise monotonically d e f i s _ r i s i n g ( s e g m e n t ) : r e t u r n a l l ( s l o p e ( s e g m e n t ) > 0 ) Falling Segments that rise monotonically d e f i s _ f a l l i n g ( s e g m e n t ) : r e t u r n a l l ( s l o p e ( s e g m e n t ) < 0 ) Concave Segments that are curving downward d e f i s _ c o n c a v e ( s e g m e n t ) : r e t u r n np . a l l ( np . d i f f ( s l o p e ( s e g m e n t ) ) < 0 ) Convex Segments that are curving upward d e f i s _ c o n v e x ( s e g m e n t ) : r e t u r n np . a l l ( np . d i f f ( s l o p e ( s e g m e n t ) ) > 0 ) Linear 
+
+Segments where the rate of change varies very little compared to others d e f i s _ l i n e a r ( segment , VALUE ) : r e t u r n v a r i a n c e ( s l o p e ( s e g m e n t ) ) < VALUE Non Linear 
+
+Segments where the rate of change varies a lot compared to others d e f i s _ n o n _ l i n e a r ( segment , VALUE ) : r e t u r n v a r i a n c e ( s l o p e ( s e g m e n t ) ) > VALUE Constant 
+
+Segments where the values show minimal variation d e f i s _ c o n s t a n t ( segment , VALUE ) : r e t u r n v a r i a n c e ( s e g m e n t ) < VALUE Smooth 
+
+Segments with relatively low variation in values compared to others d e f i s _ s m o o t h ( segment , VALUE ) : r e t u r n v a r i a n c e ( s e g m e n t ) < VALUE Noisy 
+
+Segments with relatively high variation in values compared to others d e f i s _ n o i s y ( segment , VALUE ) : r e t u r n v a r i a n c e ( s e g m e n t ) > VALUE Complex 
+
+segments that show both high variability and multiple peaks d e f i s _ c o m p l e x ( segment , VALUE ) : r e t u r n v a r i a n c e ( s e g m e n t ) > VALUE and \l e n ( f i n d _ p e a k s ( s e g m e n t ) [ 0 ] ) > 2Simple 
+
+segments with low variability and no prominent peaks d e f i s _ s i m p l e ( segment , VALUE ) : r e t u r n v a r i a n c e ( s e g m e n t ) < VALUE and \l e n ( f i n d _ p e a k s ( s e g m e n t ) [ 0 ] ) == 0Spiky 
+
+segments that contain at least one peak and show sudden sharp changes in value d e f i s _ s p i k y ( segment , VALUE ) : p e a k s , _ = f i n d _ p e a k s ( s e g m e n t ) r e t u r n l e n ( p e a k s ) > 0 and \np . any ( np . a b s ( np . d i f f ( s e g m e n t ) ) > VALUE) Dropout 
+
+segments that contains at least one point x such that x is significantly smaller than the rest of the data in that segment d e f i s _ d r o p o u t ( segment , VALUE ) : r e t u r n any ( x < VALUE f o r x i n s e g m e n t ) Periodic 
+
+segments that exhibit noticeable repeating frequency components d e f i s _ p e r i o d i c ( segment , VALUE ) : f r e q = np . a b s ( f f t ( s e g m e n t ) ) r e t u r n np . any ( f r e q > VALUE) Aperiodic 
+
+segments that does not exhibit noticeable repeating frequency components d e f i s _ a p e r i o d i c ( segment , VALUE ) : f r e q = np . a b s ( f f t ( s e g m e n t ) ) r e t u r n np . a l l ( f r e q < VALUE) Symmetric segment mirrors itself around the center d e f i s _ s y m m e t r i c ( s e g m e n t ) : n = l e n ( s e g m e n t ) r e t u r n np . a l l c l o s e ( s e g m e n t [ : n / / 2 ] , s e g m e n t [ − ( n / / 2 ) : ] [ : : − 1 ] ) Asymmetric 
+
+segment does not mirrors itself around the center d e f i s _ a s y m m e t r i c ( s e g m e n t ) : r e t u r n n o t i s _ s y m m e t r i c ( s e g m e n t ) Step 
+
+segments that contain at least one sudden and significant jump in value d e f i s _ s t e p ( segment , VALUE ) : r e t u r n any ( np . a b s ( np . d i f f ( s e g m e n t ) ) > VALUE) No Step 
+
+segments that does not contain at sudden and significant jump in value d e f i s _ n o _ s t e p ( segment , VALUE ) : r e t u r n a l l ( np . a b s ( np . d i f f ( s e g m e n t ) ) < VALUE) High Ampli-tude 
+
+segments with relatively large differences between their highest and lowest values d e f i s _ h i g h _ a m p l i t u d e ( segment , VALUE ) : r e t u r n a m p l i t u d e ( s e g m e n t ) > VALUE Low Ampli-tude 
+
+segments with relatively large small between their highest and lowest values d e f i s _ l o w _ a m p l i t u d e ( segment , VALUE ) : r e t u r n a m p l i t u d e ( s e g m e n t ) < VALUE High Volume 
+
+segments that exhibit relatively strong intensity, based on their overall magnitude d e f i s _ h i g h _ v o l u m e ( segment , VALUE ) : r e t u r n volume ( s e g m e n t ) > VALUE Low Volume 
+
+segments that exhibit relatively small magnitude d e f i s _ l o w _ v o l u m e ( segment , VALUE ) : r e t u r n volume ( s e g m e n t ) < VALUE Appendix C: User Study Setup 
+
+Before the users official begin their tasks, we ask them to fill out a pre user study survey which includes numerical answers as well as rating from 1-5. 1 being strongly disagree while 5 is strongly agree. 
+
+# Pre User Study Questions 
+
+Q1. Years of experience using data visualization tools [Numeric Answer] 
+
+Q2. Years of experience using ChatGPT or other AI dialogue systems [Numeric Answer] 
+
+Q3. I frequently work with time-series data [Rating 1-5] 
+
+Q4. I feel comfortable describing patterns or shapes in natural language [Rating 1-5] 
+
+Q5. I feel confident sketching patterns or shapes(e.g., rising, falling, U-shapes, peaks). [Rating 1-5] 
+
+# Task 1 
+
+Users are provided with the AAPL stock price of the last 3 years and were asked to use our system to answer the following questions. 
+
+Q1. Count the number of 6 day periods where AAPL’s price increases consecutively each day 
+
+Q2. Locate a three-day window during which AAPL’s prices are relatively high compared to the rest of the time series 
+
+Q3. Locate a pattern with a window size of 10 in AAPL stock have a pattern that looks like a wave 
+
+Q4. Suppose you are going to buy AAPL stocks and sell them after a week. Show me segments where it would be a bad time to buy them 
+
+Q5. Select a continuous 30-day window where the stock price remains mostly steady over time. Follow up, Now there are many results. Can you narrow down the results to 1 result? 
+
+Q6. Find me segments of length 5 that are shaped like a V and in a good time to buy in 
+
+Q7. Find out whether AAPL has more 7-day streaks of price increases or 7-day streaks of price declines. 
+
+Q8. Find all 5-day segments where AAPL’s price continuously declines. Then choose one interesting pattern. Then, identify another 5-day pattern looks similar to the chosen one. 
+
+# Task 2 
+
+Users are provided with the daily temperature of [our local city] since 2021 and were asked to perform free exploration to find anything that seems interesting to them. 
+
+Q1. Your job is to do free exploration and find anything that seems interesting or is a fact 
+
+# Post User Study Questions 
+
+After users completed the 2 tasks, they will conclude their user study by filling out a post user study survey. All questions on this survey are rating based from 1 to 5. 1 being strongly disagree and 5 being strongly agree. 
+
+Q1. I feel comfortable describing patterns or shapes in natural language using ShapeTalk 
+
+Q2. I feel confident sketching patterns or curves using ShapeTalk(e.g., rising, falling, U-shapes, peaks). 
+
+Q3. I felt the system translated my text query into visual results accurately 
+
+Q4. The sketch input matched the results I expected 
+
+Q5. I thought the system was easy to use 
+
+Q6. The interface was intuitive and well-organized. 
+
+Q7. I would imagine that most people would learn to use this system very quickly. 
+
+Q8. I felt sketching was more efficient for certain types of queries 
+
+Q9. I found it easy to adjust the feature parameters 
+
+Q10. I think that using natural language to generate trends and sketching to refine results is effective 
+
+Q11. I thought there was very few inconsistency in this system 
+
+Q12. I can iteratively refine my query whenever the initial query does not return the expected results Appendix D: User Study Results 
+
+# Pre User Study Results 
+
+Participants Q1 Q2 Q3 Q4 Q5 1 2 1 1 4 52 5 3 2 3 43 5 2 5 3 44 6 2 4 5 55 6 2.5 3 4 56 5 2 2 4 47 1 2 3 4 48 4 2 5 4 49 2 3 5 4 410 2 3 3 4 411 3 3 1 4 412 4 3 4 4 413 4 3 4 4 5
+
+# Post User Study Results 
+
+PID Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8 Q9 Q10 Q11 Q12 1 3 5 4 5 4 4 4 5 4 4 5 52 4 4 4 4 3 3 3 4 3 4 4 53 4 4 4 4 5 5 4 4 4 3 3 44 5 5 3 4 5 4 4 4 4 5 3 45 5 3 3 3 4 4 4 3 4 3 4 36 4 4 4 4 4 4 5 5 4 4 3 47 4 5 2 3 3 4 5 5 3 2 5 58 5 5 4 5 5 5 5 5 5 5 4 59 5 4 4 5 5 4 5 5 4 5 4 510 4 5 3 4 5 4 4 5 4 4 3 411 5 5 4 5 4 3 4 5 3 4 4 212 4 5 4 4 5 5 5 5 4 5 5 513 5 5 5 4 4 5 5 5 5 4 5 5
+
+# Task 1 Modality 
+
+Participants Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8 1 NL NL Feature NL NL, Sketch, Feature NL NL NL, Sketch 2 NL NL NL NL, Feature NL, Sketch, Feature NL NL, Feature NL 3 Feature Feature Sketch Feature Feature Sketch Feature Feature 4 Feature NL, Feature Sketch Sketch Feature, Sketch Feature, Sketch Feature Feature, Sketch 5 NL Feature NL NL Feature, Sketch Sketch Feature Feature, Sketch 6 NL Feature NL Feature NL, Sketch NL, Feature NL NL, Sketch 7 NL NL, Feature Sketch NL NL, Sketch Sketch NL NL 8 NL NL NL NL NL NL NL NL 9 NL Feature NL NL Feature, Sketch NL NL NL, Sketch 10 NL NL Feature NL, Sketch Feature, Sketch Feature, Sketch Feature Feature 11 Feature Feature Feature, Sketch NL Feature, Sketch NL, Feature, Sketch Feature Feature, Sketch 12 NL NL NL NL NL, Sketch, Feature NL NL NL, Sketch 13 NL, Sketch NL Sketch Sketch NL, Sketch Sketch NL NL Appendix E: Latency Analysis 
+
+Latency Testing and Analysis These experiments focus on the efficiency and responsiveness of the LLM-driven shape feature extraction (QbT) pipeline (Figure 2) under different model choices, dataset sizes, and window lengths. Together, they answered: What is the system’s latency performance across different models and dataset sizes, and is it sufficient for real-time interaction? 
+
+Experimental Considerations All performance tests were conducted on a standard personal laptop equipped with an AMD Ryzen 7 5800HS CPU, an NVIDIA GeForce RTX 3060 GPU, 32 GB RAM, and a stable internet connection for all model API calls. We report backend latency measured from the time a natural-language query is submitted to the time the matched segments are returned from the server, including both LLM calls and the NL-to-segment matching pipeline. We compare three language models: GPT-4o (our default), DeepSeek Rover V2, and Devstral-Small-2505. Each model is queried through the same backend API and receives identical few-shot prompts for feature extraction, ensuring that differences in latency reflect model and infrastructure behavior rather than prompt design. For datasets, we use three univariate time series: monthly maximum temperature in Sacramento from 1743–2013, daily Bitcoin closing prices from 2014–2022, and hourly energy consumption data with 145,367 observations. These datasets span different magnitudes, seasonal behaviors, and lengths, providing a range of realistic usage scenarios. Detailed descriptions are as follows: • Sacramento weather. This dataset captures a historical record of monthly temperature (in Celsius) from January 1849 to September 2013. The original dataset contains entries from multiple cities worldwide; we filter and preprocess it to retain only the 1,977 entries corresponding to Sacramento, CA. • Bitcoin. This dataset records daily Bitcoin closing prices in USD, with 2,713 observations. The original data are multivariate, including open, high, low, close, adjusted close, and volume. For our experiments, we preprocess the dataset to a univariate series containing only the closing price. • Energy consumption. This time series consists of hourly energy load measurements from PJM Interconnection LLC, a regional transmission organization that manages electrical transmission systems across Delaware, Illinois, Indiana, Kentucky, Maryland, Michigan, New Jersey, North Carolina, Ohio, Pennsylvania, Tennessee, Virginia, West Virginia, and the District of Columbia. Energy consumption is measured in megawatts (MW), with 145,367 observations in total. 
+
+Model Comparison Latency Test The first experiment compares the response times of different language models in the QbT pipeline. For each model, we measure how quickly it can extract shape feature specifications for the following natural-language queries: 1. Find segments where volume is high and then falls. 2. Identify phases of steady temperature rise followed by a sudden drop. 3. Track periods of high consumer interest followed by a sudden drop. 4. Identify when energy consumption spikes to high levels and stabilizes. 5. Show parts where there is a symmetrical rise and fall. We use a medium-sized time-series dataset, Sacramento weather dataset. Each query is executed four times per model (20 runs per model in total). We record the total end-to-end latency per run and then compute the mean, minimum, maximum, and standard deviation (SD). 
+
+> Table 2: Model comparison results for NL query latency (20 trials per model).
+
+Model Avg Latency (ms) Min Latency (ms) Max Latency (ms) SD (ms) 
+
+GPT-4o 651.59 481.78 992.97 137.93 DeepSeek Rover V2 1745.00 535.27 2474.68 359.95 Devstral-Small-2505 1620.73 1281.08 2052.86 186.25 As shown in Table 2, GPT-4o consistently achieves the lowest latency across all queries, with a mean of 651.59 ms and latencies ranging from 481.78 to 992.97 ms. The largest latencies occur for broader queries that generate many candidate segments prior to anti-collision filtering, which must be resolved before results can be returned. For this experiment, we fix the window length at L = 5 to isolate model-level differences. The relatively small SD for GPT-4o indicates that its latencies are tightly clustered around the mean, yielding predictable and stable behavior. DeepSeek Rover V2 and Devstral-Small-2505 are both slower than GPT-4o but complete all queries without failures. DeepSeek Rover V2 exhibits the highest average latency and the largest SD, with occasional spikes up to 2474.68 ms, indicating less stable performance for real-time interaction. Devstral-Small-2505 has a lower SD than DeepSeek but a higher mean latency than GPT-4o, placing it between the two in terms of the trade-off between speed and stability. Overall, these results confirm that GPT-4o is a suitable default for interactive use in our system, and we use it for the remaining experiments in this appendix. At the same time, the architecture supports swapping models when users or deployments prioritize other criteria such as cost or on-premise hosting. 
+
+Dataset Scalability Test The second experiment evaluates how the QbT pipeline scales with increasing dataset size. We use GPT-4o and the fixed query: 
+
+“Find segments where data is generally low with an increase and then a decrease.” 
+
+For each dataset, we hold the window length and query constant, and we measure: • Average latency (ms) over 20 runs, • Average number of matched segments returned per run, Table 3: Dataset scaling performance results for the QbT pipeline (20 trials per dataset). 
+
+Dataset Dataset Size Avg Latency (ms) Avg Matches SD (ms) 
+
+Sacramento Weather 1,977 670.95 1 143.81 Bitcoin 2,713 855.78 298 188.10 Energy Consumption 145,367 4027.66 1938 238.99 • Standard deviation of latency (ms). Table 3 shows a clear trend: larger datasets lead to higher average latency. The Sacramento weather and Bitcoin series have comparable lengths, and their mean latencies are also of similar magnitude. In contrast, the energy consumption dataset is orders of magnitude longer and produces substantially more initial matches (on average 1938 segments), resulting in a mean latency of about 4 s. The growth in latency is not strictly linear in the number of points. A substantial factor is the cost of post-processing, particularly the anti-collision routine that suppresses heavily overlapping segments. When many windows satisfy the feature predicates, this overlap resolution step becomes more expensive, as seen in the Bitcoin and energy consumption datasets. Despite this increase in absolute latency, the SD remains relatively small across all datasets, indicating that latency per dataset is stable and predictable rather than erratic. For our target real-time analysis scenarios, this behavior is desirable: users can anticipate a consistent level of responsiveness given a dataset of similar size and complexity. These results suggest that our pipeline can handle datasets with tens of thousands of points while still providing interactive feedback, especially for medium-sized datasets. 
+
+Window Length Sensitivity Analysis Finally, we investigate how the window length L influences latency and the number of matches in the QbT pipeline. Although our system also exposes a top-k parameter in the sketch-based (QbS) pipeline, in practice we observe that window length is a primary driver of performance for NL-based matching because it directly controls the number and size of candidate segments. Using the Sacramento weather dataset, we consider two sets of window lengths: • Realistic window lengths: L ∈ { 7, 14 , 21 , 30 , 60 }, corresponding to weekly to roughly bi-monthly periods. • Exponentially scaling window lengths: L ∈ { 2, 4, 8, 16 , 32 , 64 }.For both sets, we reuse a single query: 
+
+“Find segments where there is an increase and then a decrease.” 
+
+As before, we measure the average latency and the number of matched segments returned by the backend. 
+
+> Table 4: Latency and match count for realistic window lengths on the Sacramento weather dataset.
+
+Window Length Latency (ms) Matches 
+
+7 766.33 131 14 567.71 821 873.21 030 545.31 060 1176.81 0
+
+> Table 5: Latency and match count for exponentially scaling window lengths on the Sacramento weather dataset.
+
+Window Length Latency (ms) Matches 
+
+2 936.40 946 4 661.62 199 8 666.17 123 16 624.82 032 564.09 064 1226.96 0As shown in Table 4, realistic window sizes (7–60 days) exhibit two notable behaviors. First, there are no rising-and-falling patterns that span 21 days or longer for this dataset under our feature thresholds, resulting in zero matches for L ≥ 21 and correspondingly lower costs in collision handling. Second, latency is driven by a combination of the number of candidate windows and the number of matches: for L = 7 , the query produces 131 matches and a latency of 766.33 ms, whereas for L = 14 the match count drops to 8 and latency decreases accordingly. A similar trend appears in Table 5. The smallest window length ( L = 2 ) yields 946 matches, leading to higher latency (936.40 ms) than L = 4or L = 8 , despite the shorter window size. This is because the broad query combined with tiny windows produces many overlapping hits that must be filtered by the anti-collision routine. As L increases beyond 8, the pattern becomes harder to satisfy within a single window, the match count drops to zero, and latency is dominated by a single pass over the candidate windows. These findings highlight a trade-off: very small windows can produce many broad matches and higher post-processing costs, whereas very large windows may miss shorter structures entirely but offer faster matching. In practice, we observe that moderate window sizes (e.g., 6–14 points) balance expressiveness and performance for interactive exploration. The ability to adjust L directly in the control panel allows users to tune this trade-off based on their analysis goals. Discussion and Experimental Implications Across the three experiments—model comparison, dataset scaling, and window-length sensitiv-ity—our system demonstrates robust and predictable latency for the NL-based QbT pipeline under a range of technical and user-configurable parameters. The results show that, with GPT-4o as the underlying model, typical end-to-end query latencies for medium-sized datasets remain well below one second, while even very large datasets produce stable, though higher, response times. These quantitative findings complement our qualitative evaluation and support that ShapeTalk can sustain near-real-time interaction for interactive time-series exploration across different models, dataset sizes, and window settings. They also illustrate how system parameters (e.g., model choice, dataset size, and window length) influence the trade-off between responsiveness and coverage, reinforcing our modular design that encourages users to explore and adapt these configurations to their analytic needs. We do not benchmark Query-by-Sketch (QbS) latency separately in this appendix. Our backend implementation uses Pruned Dynamic Time Warping (PDTW) with a Sakoe–Chiba band for sketch matching, a method that is widely regarded as efficient and robust for time-series similarity search in visualization and data mining research. Given this well-established behavior, we choose to focus on the LLM-driven NL pipeline. 
+
+Dynamic Threshold Latency Test Runs (ms) Sacramento Weather Bitcoin Power Consumption 
+
+Run 1 19928.261 3378.066 10426.545 Run 2 3770.389 4660.419 3477.049 Run 3 3534.618 3481.128 3582.057 Run 4 3658.744 3776.069 4034.661 Run 5 3595.858 4228.401 3635.872 Run 6 4498.815 3874.44 4451.632 Run 7 8962.33 3764.074 3898.044 Run 8 3786.021 3965.911 4123.548 Run 9 3367.199 4012.65 5833.246 Run 10 3919.085 3831.468 4029.175 Avg (ms) 5902.132 3897.2626 4749.1829 Std (ms) 5200.468268 363.6385863 2104.51757 
+
+> Table 6: Global Feature Dynamic Threshold Inference Latency Test
+
+Runs (ms) Sacramento Weather Bitcoin Power Consumption 
+
+Run 1 47585.769 8463.898 15427.556 Run 2 10024.17 10984.649 8468.051 Run 3 8439.493 8397.402 8395.343 Run 4 9099.21 8278.842 13259.835 Run 5 21419.721 9249.771 8019.842 Run 6 28655.181 14858.809 10278.496 Run 7 14592.406 8975.597 9383.246 Run 8 14947.945 39282.809 12714.622 Run 9 11146.323 7700.612 11727.422 Run 10 9436.645 10887.378 10369.598 Avg (ms) 17534.6863 12707.9767 10804.4011 Std (ms) 12355.16908 9570.244789 2435.952977 
+
+> Table 7: Local Feature Dynamic Threshold Inference Latency Test
+
+Discussion on LLM based Dynamic Threshold Inference Latency We conducted experiments on three datasets of varying sizes using GPT-4o. Patch size affects computational cost: for example, using 100 patches for global feature inference is faster than using 300 patches for local feature inference. While patch size contributes to performance differences, our results indicate that the primary factor influencing computation time for both global and local feature threshold inference is not the dataset size itself, but the network latency involved in sending data to and receiving responses from the LLM. We observed several instances in which response times were unusually long, even for smaller datasets, suggesting that latency variability dominates overall runtime. These findings imply that network latency, rather than dataset size, is the main bottleneck for this part in our system. Appendix F: Code 
+
+link: https://github.com/via-cs/shape-talk Appendix G: Dynamic Threshold Comparison With Fix Percentile Threshold 
+
+Comparison of LLM derived threshold vs Fix Percentile using Step function on Federal Reserve Interest Rates 
+
+Comparison of LLM derived threshold vs Fix Percentile using Step function on Electricity Consumption 
+
+The highlighted regions in red indicate segments that satisfy the definition of a step function. LLM-derived thresholds provide both contextual and statistical awareness, whereas fixed percentile thresholds do not. In the Federal Reserve example, using fixed thresholds of 70% and 90% results in both over-selected and missed regions. In contrast, the LLM initially proposes a reasonable threshold that effectively highlights step-function segments. This does not imply that fixed percentiles such as 70% or 90% are inherently incorrect; rather, it shows that selecting an appropriate percentile often requires domain expertise. Furthermore, a single fixed threshold does not generalize well across datasets. Although an 80% threshold appears reasonable for the Federal Reserve dataset, applying the same threshold to an electricity consumption dataset causes several relevant regions to be missed. This limitation highlights the advantage of LLM-derived thresholds, which adapt to the statistical characteristics of the data distribution and provide more context-aware thresholding. We also provide some further comparisons between LLM derived threshold and fix percentile threshold in the table below. The dataset used for the table below is the price of bitcoin. Percentile were fixed 80% or its negation 20%. Feature LLM Derived Threshold Fix Percentile Threshold 
+
+Linear 
+
+Constant 
+
+Noisy 
+
+Complex 
+
+Step 
+
+Simple High Amplitude Appendix H: Different Window Length Comparison 
+
+Comparison of "Complex" for Different Window Size using Bitcoin Price Data Window Length Highlighted Regions 
+
+# 5
+
+# 10 
+
+# 25 
+
+# 50 
+
+# 100 
+
+# 200 
+
+Discussion of Window Length Sensitivity To illustrate this sensitivity, we queried the pattern "complex" using window sizes of 5, 10, 25, 50, 100, and 200. The table above presents the corresponding results, where highlighted regions indicate segments that match the query. Overall, the outcomes are highly sensitive to the chosen window size. When the window size is small, few or no matched segments are returned because the segments are too short to exceed the thresholds required to be classified as “complex,” as observed for window sizes of 5 and 10. As the window size increases, the results become more stable, with more consistent segments being identified. Larger window sizes (e.g., 100 and 200) tend to capture more global patterns, including broader fluctuations such as the Bitcoin price trends around 2018–2019, whereas smaller windows emphasize localized variations. In summary, certain features are inherently better suited for global querying and may not perform well when the window size is too small. Appendix I: Latency evaluation across different sub-feature splitting techniques 
+
+Algorithm Average Computational Time (s) Segments Found Window Length 
+
+Current (Rising, Constant) 0.021044 34 10 Current (Rising, Constant) 0.0172704 0 100 Current (Rising, Constant, Falling) 0.0294498 44 10 Current (Rising, Constant, Falling) 0.0164898 0 100 Bruteforce (Rising, Constant) 0.079317 99 10 Bruteforce (Rising, Constant) 0.6703432 5 100 Bruteforce (Rising, Constant, Falling) 0.199478 104 10 Bruteforce (Rising, Constant, Falling) 32.549883 5 100 We evaluated this approach on a Bitcoin price dataset using 2 and 3 features: (rising), (constant) and (falling). The threshold for detecting a constant segment was set to 0.000001. We compared two strategies. Our current default strategy is even Subsegment Split which divides the query window evenly into n subsegments (where n is the number of features) and evaluates each subsegment against its assigned feature. In contrast, Exhaustive Search generates all possible valid splits of the window and evaluates every resulting subsegment configuration against the two features. To reduce computation, we implemented early stopping: once a matching segment is found, the algorithm terminates without evaluating the remaining partitions. This evaluation was run on a Mac Air M4. 
+
+Discussion between even split and brute force The two approaches—simple even splitting and brute-force exhaustive search—each present distinct trade-offs. Even splitting is computationally efficient but may miss valid segments, whereas exhaustive search identifies more qualifying segments at the cost of significantly higher computation time. Interestingly, when no segments are found, the computation time can be lower than in comparable cases with shorter window sizes for the current implementation. This is likely because larger windows result in fewer sliding iterations, and the absence of matches reduces I/O overhead for storing results. In our current implementation, the number of matched segments is the primary factor driving computation time. This is evidenced by the observation that experiments yielding matches incur higher computational costs than those with no matches, even when the latter use larger window sizes. In contrast, for the brute-force approach, computational cost is dominated by the window size and the number of features, since all possible segment partitions must be evaluated. We observe that with three features and a window size of 100, the average computation time reaches 32 seconds, rendering the system practically unusable for interactive use.

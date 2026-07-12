@@ -1,0 +1,1717 @@
+Title: Robust Human-AI Complementarity under Uncertainty
+
+URL Source: https://arxiv.org/pdf/2607.06656v1
+
+Published Time: Thu, 09 Jul 2026 00:03:25 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Robust Human-AI Complementarity under Uncertainty 
+
+Yewon Byun 1 Bryan Wilder 1
+
+# Abstract 
+
+Machine learning models are often intended to augment rather than replace human decision mak-ers, by providing information that is complemen-tary to human judgement. Yet, in practice, hu-man decision makers routinely fail to realize such complementary gains, even when models provide useful signal. In this work, we study how asym-metric information about the quality of informa-tion available to a human decision maker vs. an AI impacts the ability of a decision maker to ex-tract complementary value from AI predictions. We show that a key factor is the error correla-tion structure between human and AI predictions. In particular, when the AI’s prediction errors are 
+
+negatively correlated with those of the human, the decision maker can construct robust strategies which guarantee improvements in expected utility. We empirically investigate whether these condi-tions for complementarity arise in practice, using real-world forecasting benchmarks. 
+
+# 1. Introduction 
+
+Many hope that machine learning models will augment hu-man decision making without replacing it by providing deci-sion makers with complementary information. For instance, in scientific settings, LLMs are increasingly imagined as tools for forecasting promising experiments or screening hypotheses. However, attempting to rely appropriately on machine learning outputs can be difficult; human decision makers routinely fail to benefit from complementary signal in AI predictions (Vaccaro et al., 2024) even when such signal is available (Guo et al., 2024). Previous work has hypothesized that people may struggle to update their be-liefs appropriately in light of AI predictions (Agarwal et al., 2023) or identify what new information the AI model pro-vides (Guo et al., 2025). Here, we document another kind of limitation that makes it difficult for even a rational decision     
+
+> 1Machine Learning Department, Carnegie Mellon University. Correspondence to: Yewon Byun <yewonb@cs.cmu.edu >.
+> Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s).
+
+maker to benefit from complementary information: uncer-tainty about the quality of AI predictions. Such uncertainty is a recurring feature of many settings: models constantly change, new use cases emerge, and some use cases (e.g., sci-entific discovery) by nature demand using models in settings that are outside of the distribution of instances previously seen (Bommasani et al., 2021). It is often difficult for peo-ple to credibly know the joint distribution of model inputs and ground truth for the specific task they are solving (Vafa et al., 2024). We study how asymmetric information about the quality of information available to a human decision maker vs an AI impacts the ability of a decision maker to extract com-plementary value from the AI. We start by introducing a formal model based on statistical decision theory in which the human does not know the exact joint distribution over AI predictions and ground truth. Instead, they have an uncer-tainty set which formalizes their beliefs about the model’s quality and seek to ensure robust performance over that set. For example, a decision maker using AI likely believes that the AI has at least some level of correlation with the ground truth, even if the full joint distribution is unknown. We ask: what conditions must the decision maker be willing to impose about the performance of the AI in order to ensure that they benefit from using it? It turns out that the presence of uncertainty substantially changes the answer. If the decision maker knows the true joint distribution, they benefit from using the AI if its predic-tion carries any signal in excess of what is already observed by the decision maker (essentially the condition tested in previous work). However, under uncertainty, it becomes much harder for the decision maker to construct a rule which makes nontrivial use of AI input and guarantees that the de-cision maker benefits compared to ignoring the AI entirely. A key factor turns out to be whether the errors in the AI’s predictions are negatively correlated with the errors in the human’s predictions. If this condition is satisfied, the deci-sion maker can construct robust strategies which guarantee an improvement in expected utility. If it is not satisfied, the window for robust complementarity is much narrower: decisions to use the AI essentially reflect a weakness of the human’s ability. In stylized terms, we interpret this as a movement towards automation instead of complementarity. We then use empirical data from real-world forecasting and 1arXiv:2607.06656v1 [cs.LG] 7 Jul 2026 Robust Human-AI Complementarity under Uncertainty 
+
+social science benchmarks that compare predictions from humans to those from LLMs. We compare human and LLM prediction errors and find that they are positively correlated, putting us in the “difficult” setting for complementarity. Alternative prompting strategies (e.g., instructing the LLM to focus on factors others may have missed) meaningfully reduce but fail to consistently eliminate positive correlations in errors. We suggest that explicitly optimizing for ability to provide complementary information should be a principle for LLM training and evaluation in the future, in order to ensure that they can be robustly used by humans to improve their own decision making. 
+
+# 2. Related Work 
+
+Human-AI Decision Making. A large literature examines joint decision making by humans and AI, often with a focus on when joint decision making can improve over either party individually (“complementarity”). Perhaps most related to our work, Steyvers et al. (2022) propose a generative model for combining human and AI confidences and show that the model theoretically implies conditions under which a human-AI team outperforms a team of multiple humans or multiple models. Our work differs in that we compare the human-AI combination to the single human alone, but focus on the role of uncertainty (where (Steyvers et al., 2022) as-sume in their theoretical analysis that the model parameters are known). Also related is (Donahue et al., 2022), who analyze a theoretical model of human decisions about when to rely on AI to identify conditions for complementarity, though without focusing on the role of uncertainty. More broadly, there is a large algorithmic literature on struc-tures for human-AI decision making, for example learning to defer (Madras et al., 2018; Mozannar & Sontag, 2020), triage decisions (Raghu et al., 2019; Okati et al., 2021), learning models that complement human decision makers (Wilder et al., 2020), and using AI to shape human choice sets (Straitouri et al., 2023). Nevertheless, a significant empirical literature typically fails to find evidence of com-plementarity between humans and AI (see Vaccaro et al. (2024) for a review). Our work theoretically explores one mechanism that could make complementarity more difficult to realize in real-world settings and explores its impact in real world data on human-LLM predictions. 
+
+LLMs for Prediction. A key motivation for our work is the growing interest in using LLMs to provide predictions that could augment human decision making. Since LLMs can be applied to new tasks in a zero-shot manner, humans are often faced with uncertainty about how an LLM will perform for a specific prediction task at hand. Existing work has begun to evaluate the performance of LLMs at forecast-ing future events (Karger et al., 2025; Yang et al., 2025; Ye et al., 2024; Halawi et al., 2024) and shown that they com-pare favorably with many humans. In scientific applications, several works have evaluated using LLMs to forecast the results of scientific experiments, for example in the social sciences (Hewitt et al., 2024; Park et al., 2024) or neuro-science (Luo et al., 2025). They similarly find that LLMs perform competitively with human forecasters. As a result, there is interest in using outputs from LLMs to “screen” potential experiments, using LLM predictions of effects as a sort of pilot study to decide which experiments to pursue (Anthis et al., 2025). This is the motivation for our “binary decisions” setting below, where we analyze conditions for LLMs to improve human decision making at such a task. We also use datasets from both forecasting and scientific settings to study the correlation between LLM and human errors and impact on complementary performance; existing work has focused mostly on comparing LLM and human accuracy and less on the relative distribution of errors be-tween the two (though Hewitt et al. (2024) confirm that both human and AI information contain independent information predictive of true effects). 
+
+# 3. Model for Human-AI Complementarity 
+
+We assume that there is a ground-truth state of the world θ
+
+which the decision maker aims to infer. The decision maker observes a signal ϕH corresponding to their prior belief as well as a signal ϕAI generated by the machine learning system (e.g., an LLM). They then make a decision d ∈ D .Their goal is to minimize a loss ℓ(d, θ ) which depends on the unknown state and on the decision. We study a generative process in which the signals are noisy measurements of the ground truth state. We start with a stylized, linear-Gaussian version of the model which im-poses normally distributed errors in the signals observed by each of the agents. This setting turns out to be sufficient to illustrate much of the intuition behind the problem structure, which we later show generalizes considerably. Formally, we start with the model 
+
+θ ∼ N (0 , σ 2 
+
+> θ
+
+)
+
+ϕH = λH θ + ϵH
+
+ϕAI = λAI θ + ϵAI 
+
+ϵH , ϵ AI ∼ N (0 , Σϵ)
+
+where ϵH and ϵAI are mean-zero Gaussian noise. This im-plies the joint distribution [θ ϕ H ϕAI ] ∼ N (0 , Σ) . The core of the problem is encapsulated in the covariance matrix 
+
+Σ. We start with this formalization and provide an essen-tially complete characterization when the decision maker provides a prediction of θ (d ∈ R) and is evaluated via the mean squared error ℓ(d, θ ) = ( d − θ)2. We then show that the qualitative conclusions generalize in two directions: a more complex decision making task in the Gaussian setting and predictions in a non-Gaussian generative model. Note 2Robust Human-AI Complementarity under Uncertainty 
+
+that the main analysis assumes Gaussianity principally in the 
+
+errors from the two signals: the human or AI may react in a complex, nonlinear fashion to whatever information they observe, and we simply model the deviation between their predictions and the ground truth as normally distributed. The expected loss under a particular distribution parameter-ized by Σ is 
+
+LΣ(d) = Eθ,ϕ H ,ϕ AI ∼N (0 ,Σ) [ℓ(d(ϕH , ϕ AI ), θ )] .
+
+If the decision maker knew (or had samples from) the full joint distribution, they could simply minimize the expected loss over d. This is the setting discussed in a great deal of previous work about optimal human-AI decision mak-ing. The key feature of our formal model is to introduce uncertainty about the quality of the AI signal. In particu-lar, our decision maker will stipulate that Σ belongs to an uncertainty set U which pins down all features of the joint distribution except for the correlation of the AI signal with 
+
+θ.
+
+Assumption 3.1. Every Σ ∈ U agrees on all entries except for Cov (ϕAI , θ ).As we will see, uncertainty about Cov (ϕAI , θ ) is the core mechanism that generates a substantial difference in optimal policies. Additionally, in many settings, it may be reason-able to view the other entries of Σ as known because it is cheap to generate samples of ϕAI , which the decision maker can compare to their own belief; it is obtaining observations of the true state θ that is expensive. For example, a scientist can easily ask a language model for its forecast ϕAI about the results of many possible experiments, but the bottle-neck is in actually performing experiments to observe θ and learn how accurate ϕAI really was. We expect that many of our conclusions (e.g., about the difficulty of achieving robust complementarity) would grow stronger if the model included uncertainty in other aspects of Σ as well. Our uncertainty-set formulation is compatible with richer models of uncertainty. For example, if the decision maker has a prior over possible AI signal qualities, model param-eters, or data-generating processes, this uncertainty can be integrated out. From the perspective of the downstream de-cision problem, the relevant object is the induced predictive posterior over the state given the observed human and AI sig-nals. Thus, uncertainty over intermediate quantities affects the analysis only through the posterior distribution it induces. When this induced posterior satisfies the structural condi-tions assumed in our analysis—for example, the Gaussian covariance restrictions in Section 3, or the finite-moment and negative-dependence conditions in Section 3.2—the corresponding results apply without further modification. The same observation applies to estimation error in the hu-man signal or in the joint distribution of human and AI signals. If realizations of the state are costly, the decision maker may place a prior over these quantities and update after observing samples of the true state. After this update, the decision-relevant object is again the post-update predic-tive posterior. Our framework can therefore be viewed as placing a credal set over plausible predictive posteriors and asking when complementarity is guaranteed uniformly over that set. In order to restrict to more interesting cases, we will also im-pose the assumption that neither agent observes a noiseless measurement of θ:
+
+Assumption 3.2. Var (ϕH |θ) and Var (ϕAI |θ) are both strictly greater than 0. Finally, we will impose without loss of generality that ϕH
+
+is scaled so that λH = Cov (θ,ϕ H )  
+
+> Var (ϕH)
+
+= 1 , i.e., the linear re-gression coefficient of θ on ϕH is 1. This is simply a nor-malization that does not further restrict the set of U under consideration. We study: under what conditions is there a rule d which makes nontrivial use of ϕAI and which guarantees better value than one which uses only ϕH ? Let dH denote the optimal decision rule which is a function only of ϕH . Since the class of uncertainty sets we consider fully specify the 
+
+(θ, ϕ H ) distribution, dH can be characterized explicitly for many decision problems. We study when it is possible to exhibit another joint decision rule dJ which is a function of 
+
+ϕAI as well as ϕH and which satisfies 
+
+LΣ(dJ ) ≤ LΣ(dH ) ∀Σ ∈ U 
+
+and there exists at least one Σ ∈ U for which the inequality is strict. We start by exploring this question for prediction under mean squared error. Here, the action taken by the decision maker is to produce a prediction d ∈ R which is evaluated according to the loss ℓ(d, θ ) = ( d − θ)2. For example, this setting could model a forecaster who seeks to make accurate predictions about an unknown event, as in efforts to use LLMs for forecasting (where MSE, aka Brier score, is a common metric). As a starting point, we show that it suffices to confine our-selves to decision rules that can be represented as linear functions d = aϕ H + bϕ AI . This is intuitive because con-ditional expectations are linear in the signals under joint normality. The only subtlety is ensuring that the desire for robust performance simultaneously across many distribu-tions does not create the need for nonlinear decision rules. We prove that this is not the case: 
+
+Proposition 3.3. Given any decision rule d, there exists a linear decision rule ˜d such that LΣ( ˜d) ≤ LΣ(d) for all 
+
+Σ ∈ U .
+
+Further, our normalization ensures that a = 1 in the optimal decision rule, i.e., without any additional information, the 3Robust Human-AI Complementarity under Uncertainty 
+
+decision maker simply forecasts dH (ϕH ) = ϕH as their prediction of θ. We are interested in conditions under which there exists a decision rule db(ϕH , ϕ AI ) = ϕH + bϕ AI for 
+
+b̸ = 0 which provably dominates dH across U. We show that the following two conditions suffice: 
+
+Proposition 3.4. Suppose that all Σ ∈ U satisfy the fol-lowing two additional conditions: (1) Cov (ϕAI , θ ) > δ for some δ > 0. (2) Cov (ϕH , ϕ AI |θ) ≤ 0. Then, there exists a 
+
+b̸ = 0 such that db strictly dominates dH over U.
+
+Intuitively, (1) is a minimal belief for the decision maker to hold: to rationalize using the machine signal, they must believe that it is positively correlated with θ by at least some amount. (2) is equivalent to ϵH and ϵAI being negatively correlated, i.e., negative correlation in the errors. We now provide the intuition behind the construction of the decision rule, which will also underlie results for the gen-eralized settings discussed in later sections. Define the AI residual r by regressing out the portion of ϕAI predictable from ϕH
+
+r ≜ ϕAI − Cov (ϕH , ϕ AI )
+
+Var (ϕH ) ϕH . (1) By construction, r now satisfies Cov (ϕH , r ) = 0 . For each 
+
+Σ ∈ U , define the regression coefficient of r on θ:
+
+β(Σ) ≜ Cov Σ(r, θ )
+
+Var (r) , (2) We can show that the regression coefficient is strictly posi-tive under the same hypotheses for Proposition 3.4 (positive marginal correlation of ϕAI combined with negative corre-lation of errors): 
+
+Lemma 3.5. Under the conditions of Proposition 3.4, for all Σ ∈ U , β(Σ) ≥ b = δ Var (ϕH |θ)  
+
+> Var (ϕH)Var (r)
+
+> 0,
+
+Effectively, the strictly improving decision rule corresponds to the prediction ϕH + b · r. Since the true regression coefficient under any Σ ∈ U is guaranteed to be at least b,this corresponds to a conservative counterpart of the ideal linear regression of θ on (ϕAI , ϕ H ), which is guaranteed to improve performance in mean squared error. We then ask whether a weaker version of Condition 2 suf-fices. For example, what if the errors are only modestly positively correlated? We give an exact characterization, showing that in the positive correlation regime, the exis-tence of an improving decision rule requires that the de-cision maker’s error ϵH grow in direct proportion to the amount of positive correlation: 
+
+Proposition 3.6. Define the extremal values 
+
+δ := inf  
+
+> Σ∈U
+
+Cov Σ(θ, ϕ AI ), γ := sup 
+
+> Σ∈U
+
+Cov Σ(ϕH , ϕ AI | θ).
+
+Then there exists a coefficient b⋆ > 0 such that db⋆ strictly dominates dH over U if and only if 
+
+γ < δ Var (ϕH | θ)
+
+Var (ϕH ) .
+
+The maximal possible improvement in loss for any db over 
+
+dH , which is guaranteed for every Σ ∈ U is given by 
+
+
+
+δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+− γ
+
+2
+
+Var (ϕAI ) .
+
+Intuitively, any positive correlation in errors ( γ) must be matched by a combination of higher absolute perfor-mance for the AI signal ( δ) and noise in the human signal (Var (ϕH |θ)). Rationalizing nontrivial dependence on the AI signal in the positive correlation case thus requires that the AI perform better and the human perform worse in direct proportion to the amount of positive correlation. By contrast, no such dilemma appears without the presence of uncertainty. For any fixed Σ, the decision maker can ben-efit from both signals whenever the information contained in ϕAI is not completely redundant with ϕH :
+
+Proposition 3.7. For any fixed covariance structure Σ, so long as β(Σ) ̸ = 0 , there is a joint decision rule db, b̸ = 0 ,which satisfies LΣ(db) < L Σ(dH ).
+
+Effectively, the presence of uncertainty about the AI signal significantly shrinks the region for complementarity: instead of any new information being useful, the decision maker requires enough structure to guarantee that the new infor-mation contributed by the AI (the residual) is correlated in a known way with the ground truth θ.
+
+3.1. Binary Decisions 
+
+We next study a setting in which a decision maker takes a binary action d ∈ { 0, 1} after observing signals. The inter-pretation is that d = 1 corresponds to investing in a project (e.g. pursuing an experiment), while d = 0 corresponds to not investing. The state of the world is θ, and investing is desirable precisely when θ exceeds a fixed quality threshold 
+
+τ . Investing incurs a cost c ∈ (0 , 1) , while a successful investment yields a unit payoff (without loss of generality). Thus the decision maker’s utility is 
+
+u(d, θ ) ≜ d · 1{θ ≥ τ } − c · d, (3) and the corresponding loss is ℓ(d, θ ) = −u(d, θ ). Because 
+
+d is binary, the optimal action is to invest if and only if the posterior success probability exceeds the cost: 
+
+P(θ ≥ τ ) ≥ c. 
+
+4Robust Human-AI Complementarity under Uncertainty 
+
+In particular, under our standing normalization E[θ | ϕH ] = 
+
+ϕH and Var (θ | ϕH ) = σ2 
+
+> H
+
+, the expert-only posterior suc-cess probability is, for every Σ ∈ U ,
+
+pH (x) ≜ P(θ ≥ τ | ϕH = x) = Φ 
+
+ x − τσH
+
+
+
+,
+
+which is strictly increasing in x. Let xH be the unique threshold satisfying pH (xH ) = c, and define the human-only optimal decision rule 
+
+dH (ϕH ) ≜ 1{ϕH ≥ xH }. (4) Our goal is to construct a decision rule that uses both signals 
+
+(ϕH , ϕ AI ) and robustly improves upon dH over the uncer-tainty set U. The starting point is the same construction used in the previous section, based on the residual AI signal and its regression coefficient β(Σ) for θ under a given distri-bution Σ. Lemma 3.5 lower bounds the value of β(Σ) under negative correlation of errors. Our strategy will be to use this lower bound on the regression coefficient to form a “pes-simistic” estimate of the mean and variance of θ conditional on (ϕH , ϕ AI ). Define 
+
+μb(ϕH , r ) ≜ ϕH + br, σ2 
+
+> b
+
+≜ σ2 
+
+> H
+
+− b2Var (r), (5) While it would be tempting to simply construct an analogy to the human-only rule dH using μb and σb, this neglects the fact that decision-making depends on the entire distribution of θ in this setting, not only on its mean as before. For example, it is possible for observing a positive residual to increase the posterior mean of θ but actually decrease the posterior Pr( θ ≥ τ ). To circumvent this, we define conservative bounds on the success probability which are guaranteed to hold across the entirety of U:
+
+Plow (x, y ) ≜
+
+
+
+Φ
+
+ μb(x, y ) − τσb
+
+
+
+y ≥ 0 ∧ μb(x, y ) ≥ τ
+
+0, otherwise ,Phigh (x, y ) ≜
+
+
+
+Φ
+
+ μb(x, y ) − τσH
+
+
+
+μb(x, y ) < τ ∧ y < 01, otherwise. We will use these conservative bounds on the success proba-bility to construct a new rule that overrules the human-only decision rule whenever doing so is guaranteed to improve across the entirety of U. Formally we define 
+
+dJ (ϕH , ϕ AI ) ≜
+
+
+
+1, if Plow (ϕH , r ) ≥ c, 
+
+0, if Phigh (ϕH , r ) ≤ c, dH (ϕH ), otherwise, (6) 
+
+Proposition 3.8. Under the same assumptions as Proposi-tion 3.4, the joint rule dJ weakly dominates the expert-only optimal rule dH in expected utility: 
+
+EΣ
+
+u(dJ (ϕH , ϕ AI ), θ ) ≥ EΣ
+
+u(dH (ϕH ), θ ) ∀Σ ∈ U .
+
+Moreover, the inequality is strict for any Σ ∈ U such that 
+
+β(Σ) > b .
+
+This shows that the basic conclusion from the mean squared error setting generalizes to a more complex problem with binary decisions: joint decision rules can ensure robust improvements in utility when errors between the AI and human signals are negatively correlated. We next ask what remains possible when human and AI errors are allowed to be positively correlated. Similarly to the case for mean squared error, positively correlated errors are not necessarily fatal, but it reduces the amount of residual AI signal that can be used safely. 
+
+Proposition 3.9. Define the extremal values 
+
+δ ≜ inf  
+
+> Σ∈U
+
+s(Σ) , γ ≜ sup 
+
+> Σ∈U
+
+Cov Σ(ϕH , ϕ AI | θ),
+
+where s(Σ) = Cov Σ(θ, ϕ AI ). Assume the strict inequality 
+
+γ < δ Var (ϕH | θ)
+
+Var (ϕH ) .
+
+Define the positive-correlation margin and the correspond-ing pessimistic regression lower bound 
+
+κγ ≜ δ Var (ϕH | θ)
+
+Var (ϕH ) − γ, bpos ≜ κγ
+
+Var (r) > 0.
+
+Then β(Σ) ≥ bpos for all Σ ∈ U . Consequently, the sym-metric robust investment rule dJ constructed using b = bpos 
+
+weakly dominates the expert-only rule dH in expected util-ity: 
+
+EΣ[u(dJ (ϕH , ϕ AI ), θ )] ≥ EΣ[u(dH (ϕH ), θ )] ∀Σ ∈ U .
+
+Moreover, the inequality is strict for any Σ ∈ U for which 
+
+β(Σ) > b pos (on a set of positive probability in (ϕH , r )). 
+
+For binary decision-making, robust complementarity again hinges on the AI signal being informative about the hu-man residual rather than merely replicating the expert’s mistakes. A similar condition κγ = δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+− γ gov-erns feasibility: δ must outweigh the worst-case shared-error term γ after scaling by the human-uncertainty factor Var (ϕH | θ)/Var (ϕH ). When κγ is small, the lower bound of bpos collapses toward 0, and the symmetric policy cannot have enough uniformly safe evidence to overrule dH .
+
+3.2. Beyond the Gaussian model 
+
+We finally show that the core results on conditions for im-provement in mean squared error extend beyond the linear-Gaussian model to a substantially more general class of 
+
+nonlinear but monotone signal structures which do not as-sume joint normality. We generalize the model as follows. 5Robust Human-AI Complementarity under Uncertainty 
+
+Let θ be a real-valued random variable with E[θ] = 0 and Var (θ) < ∞. The signals follow the generative model 
+
+ϕH = f (θ) + εH , ϕAI = g(θ) + εAI ,
+
+where f, g : R → R are strictly increasing and contin-uously differentiable and ϵH and ϵAI are random vari-ables with expectation 0. We assume that (ϵH , ϵ AI ) ⊥ θ
+
+and that both have finite second moments. Monotonicity of f and g implies that each agent’s signal will increase in expectation with the ground truth state, an analogue of positive correlation in the Gaussian state. The joint distribution (θ, ϕ H , ϕ AI ) is fully specified by the tuple 
+
+ξ = ( f, g, P (θ), P (ϵH , ϵ AI )) . An uncertainty set U is thus a set of potential values for ξ. In analogy to the uncertainty sets defined earlier for the Gaussian case, we will consider U
+
+for which all ξ ∈ U agree on the distributions P (θ, ϕ H ) and 
+
+P (ϕH , ϕ AI ). Uncertainty lies in the relationship between the AI signal and the truth, reflected in g and the distribution of ϵAI .We study conditions in this model where a decision rule that uses ϕAI has robustly lower mean squared error. We show that conditions analogous to those in the Gaussian case suffice: the AI signal must be sufficiently informative about θ, and the errors must be negatively dependent. To formalize the first condition, we assume that the AI signal has a uniformly bounded-below derivative: 
+
+g′(t) ≥ k > 0 for all t ∈ R. (7) This captures the idea that the AI is uniformly sensitive to changes in θ, in the sense that increasing θ always pushes 
+
+ϕAI up at least at rate k.To formalize the idea of negative dependence in errors, we consider the condition that 
+
+E[εAI | εH ] is nonincreasing in εH almost surely , (8) so that errors in the positive direction for the human im-ply that the AI will, on average, have smaller errors. This condition is satisfied by negative conditional covariance in the Gaussian case but now allows us to extend the results without distributional assumptions. The core of the strategy we use to construct a loss-improving decision rule is the nonlinear residual of the AI signal after conditioning on the human’s signal: 
+
+˜r(ϕH , ϕ AI ) ≜ ϕAI − E[ϕAI | ϕH ]. (9) Our goal is to show that under the structural assumptions above, ˜r is still positively correlated with θ, and that this can be uniformly exploited to improve squared-error risk over any predictor that uses only ϕH .1.0 0.5 0.0 0.5 1.0  
+
+> Error Correlation
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> MSE
+> Expert-only
+> Robust
+> Figure 1. MSE of the expert-only estimator and our robust estima-tor as we vary the correlation in expert and LLM errors (lower is better). The MSE of our estimator strongly dominates the expert-only baseline when errors are negatively correlated.
+
+Proposition 3.10. If Equations 7 and 8 hold for all ξ ∈ U ,
+
+˜r satisfies Cov (˜ r, θ ) ≥ k EVar (θ | ϕH ).
+
+for all ξ ∈ U as well. 
+
+When the residual is guaranteed to have positive correlation with θ, we can construct a decision rule using a strategy very similar to the Gaussian case: start with the regression of θ on ϕH and then add b · ˜r for an appropriately chosen coefficient b.
+
+Proposition 3.11. Consider the optimal human-only deci-sion rule dH (ϕH ) = E[θ|ϕH ] and the class of joint decision rules db(ϕH , ϕ AI ) = E[θ|ϕH ] + b · ˜r(ϕH , ϕ AI ). Whenever the conditions of Equations 7 and 8 hold for all ξ ∈ U ,and E[Var (θ | ϕH )] > 0, there exists a b > 0 such that 
+
+Lξ (db) < L ξ (dH ) for all ξ ∈ U .
+
+That is, negative dependence in errors is sufficient to ensure robust complementarity under mean squared error in a much broader class of non-Gaussian settings. 
+
+# 4. Synthetic Experiments 
+
+We start by using simulation to illustrate how the perfor-mance of the robust decision rules constructed above com-pares to human-only decision making as the joint distribu-tion of errors varies. We simulate data from the Gaussian measurement model, which allows us to directly control the error correlation structure by modifying the covariance matrix between human and AI signals. We defer specific details about the dataset to Appendix B.2. 
+
+4.1. Synthetic Experiments for MSE Varying human and AI error correlations. Figure 1 reports the MSE of both estimators as a function of the error 6Robust Human-AI Complementarity under Uncertainty 1.0 1.5 2.0 2.5 3.0 
+
+> Expert Standard Deviation
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> MSE
+> Expert-only
+> Robust
+
+Figure 2. MSE of the expert-only estimator and our robust estima-tor as we vary the expert uncertainty under the positive correlation setting. Our robust estimator begins to dominate the expert-only baseline when human uncertainty exceeds that of the AI signal. The vertical dotted line denotes the AI signal standard deviation. 1.0 0.5 0.0 0.5 1.0 
+
+> Error Correlation
+> 0.24
+> 0.25
+> 0.26
+> 0.27
+> 0.28
+> Average utility
+> Expert-only
+> Robust
+
+Figure 3. Average utility of the expert-only investment policy dH
+
+and the robust symmetric policy dsym as we vary the correlation ρ
+
+between human and AI errors (higher is better). Shaded regions indicate ±1 standard deviation across seeds. 
+
+correlation ρ. Consistent with our theoretical analysis, the robust estimator yields the largest gains when errors are negatively correlated. As ρ becomes large, the improvement over the human-only baseline diminishes: despite the fact that the AI signal contains useful information, it becomes difficult to robustly benefit from. 
+
+Varying human uncertainty under positive correlation. 
+
+We next fix the errors to be positively correlated ( ρ = 0 .8)while varying the expert uncertainty. Figure 2 shows that under positive correlation, the robust estimator outperforms the expert-only baseline only when the uncertainty in the human signal exceeds that of the AI signal, with significant gains limited to the case where the human signal is highly noisy. 1.0 1.5 2.0 2.5 3.0 
+
+> Expert Standard Deviation
+> 0.20
+> 0.21
+> 0.22
+> 0.23
+> 0.24
+> 0.25
+> Average utility
+> Expert-only
+> Robust
+
+Figure 4. Average utility of the expert-only investment policy dH
+
+and the robust symmetric policy dsym as we vary expert uncertainty 
+
+σh under positive correlation (we fix ρ = 0 .8 and σa = 1 .5). Shaded regions indicate ±1 standard deviation across seeds. The vertical dotted line denotes the AI signal standard deviation. 
+
+4.2. Synthetic Experiments for Investment Decisions Varying human and AI error correlations. Figure 3 re-ports the average utility as a function of the error correlation 
+
+ρ. Consistent with our theory, the robust symmetric policy yields the largest gains when errors are negatively corre-lated; in this regime, the residual r is informative about the human residual uncertainty, and incorporating it improves decisions relative to dH . As ρ becomes large, the residual-ized machine signal becomes less complementary, and the robust policy reverts to the expert-only rule. 
+
+Varying human uncertainty under positive correlation. 
+
+We next fix a positive correlation level ( ρ = 0 .75 ) while varying the expert uncertainty. Figure 4 shows that when the human signal is already precise (small σh), the robust procedure matches the human-only policy, reflecting limited complementarity from the AI under strong positive correla-tion. As the human signal becomes noisier, the incremental information in the residualized AI signal becomes more valuable, and dsym begins to dominate dH in average utility. 
+
+# 5. Real World Experiments 
+
+Datasets and Models. We conduct experiments on two real-world forecasting benchmarks. The first is Forecast-Bench (Karger et al., 2025), which provides human forecasts (n=7,383) for prediction questions drawn from time series datasets and prediction market platforms. The second is a suite of 43 different social science survey experiments conducted via the Time-Sharing Experiments for the So-cial Sciences (TESS) project (Time-sharing Experiments for the Social Sciences) between 2016 and 2022, for which Hewitt et al. (2024) collected human and LLM forecasts of effect sizes. We conduct all experiments with GPT-5 and GPT-5-mini (Singh et al., 2025). 7Robust Human-AI Complementarity under Uncertainty 1.0 0.5 0.0 0.5 1.0     
+
+> Human error (estimate - human forecast)
+> 1.00
+> 0.75
+> 0.50
+> 0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> LLM error (estimate - LLM forecast)
+> Perfect correlation
+> Linear fit (r = 0.951) 0.50 0.25 0.00 0.25 0.50
+> Human error (estimate - human forecast)
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> LLM error (estimate - LLM forecast)  Perfect correlation
+> Linear fit (r = 0.216)
+
+Figure 5. Correlation of errors of LLM forecasts vs. human forecasts on ForecastBench (left) and TESS studies (right). We find that 
+
+errors are positively correlated , which is the difficult setting for complementarity. 
+
+Table 1. We report the MSE and correlation structure resulting from various prompting strategies. Human MSE denotes the human signal MSE. LLM MSE denotes the LLM signal MSE. Calibrated Human MSE denotes the optimal predictor’s MSE based on the human signal. 
+
+ρ(ϵH , ϵ AI ) denotes the Pearson correlation coefficient over the human error and the LLM error. Robust MSE represents the performance of the robust combination of the LLM and human signal. Note that human rationale and additional context fields are not available for the TESS studies. Therefore, we only run the Human-Divergent Reasoning and Restricted Context strategies for ForecastBench. 
+
+Dataset/Prompting Strategy Human MSE LLM MSE Calibrated Human MSE ρ(ϵH , ϵ AI ) Robust MSE ForecastBench 
+
+Baseline 0.514 0.451 0.154 0.963 0.154 Direct Error Correction 0.514 0.506 0.154 0.995 0.154 Contrarian Reasoning 0.514 0.216 0.154 0.498 0.153 Self-Divergent Reasoning 0.514 0.461 0.154 0.966 0.154 Human-Divergent Reasoning 0.514 0.453 0.154 0.985 0.154 Restricted Context 0.514 0.439 0.154 0.967 0.154 
+
+TESS Studies 
+
+Baseline 0.0104 0.0285 0.00524 0.216 0.00510 Direct Error Correction 0.0104 0.0230 0.00524 0.175 0.00520 Contrarian Reasoning 0.0104 0.0351 0.00524 -0.338 0.00490 Self-Divergent Reasoning 0.0104 0.0185 0.00524 0.213 0.00519 
+
+5.1. Real-World Empirical Results 
+
+We ask whether current models naturally satisfy conditions on the error structure in real-world forecasting experiments. In Figure 5, we find that contrary to this requirement, human and LLM errors are positively correlated, quite strongly for ForecastBench (Karger et al., 2025) and more modestly (but still non-trivially) for the TESS studies. This raises the question of whether such patterns are easily modifiable by changes in prompting to the model, or whether deeper interventions would be required to surface complementary information. 
+
+5.2. Potential Mitigation Strategies 
+
+We investigate whether post-hoc prompting strategies can induce negative correlation in prediction errors by encour-aging: (i) explicit prediction and correction of human er-rors; (ii) divergent or contrarian reasoning, either relative to provided human rationales or to the model’s own initial reasoning traces; and (iii) reliance on different information sets, forcing the model to attend to different signals. Details of each prompt strategy are provided in Appendix B.4 (see Figures 6 and 7). Critically, while a shift in correlation is evident for sev-eral strategies, we observe only a single instance (out of 12 combinations of prompting strategies × tasks) in which cor-relation shifts from positive to negative (see Figures 6 and 7). This suggests that enforcing the error structures required for complementarity via prompting alone is nontrivial and unreliable. More broadly, these results suggest that post-hoc interventions are unlikely to consistently induce the error structure necessary for robust human-AI complementarity. 8Robust Human-AI Complementarity under Uncertainty 
+
+This highlights the necessity for new training methods or objectives to optimize for outputs in this manner, when predictions will be used to complement human signals. In Table 1, we observe that very few prompting strategies lead to gains of the combined robust MSE over the optimal human MSE on the forecasting task. This is explained by the fact that all cases remain in the positively correlated error regime, where our theory expects to have no or little improvement, with the sole exception of Contrarian Rea-soning on TESS. In this particular case, we see a slight improvement in MSE for our robust combination estimator. We note that improvements are small as the human signal is substantially stronger than the LLM signal (optimal fit MSE 0.0052 vs. 0.0285). 
+
+# 6. Conclusion 
+
+In this work, we take a step towards understanding the conditions under which human-AI collaboration provably improves upon either agent alone. Our theoretical analysis reveals that complementarity is not guaranteed by predic-tive accuracy alone, but that the error correlation structure between human and model predictions plays a significant role in determining whether collaboration yields better per-formance. We derive precise conditions on this structure that must be satisfied for complementary gains to emerge, and show that these conditions can be surprisingly stringent in practice. Empirically, we find that current models do not naturally satisfy these conditions across a range of real-world forecasting benchmarks. Simple post-hoc mitigation strategies–including prompting interventions designed to induce negative error correlation–show limited effectiveness in enforcing the required error structure. These findings sug-gest that achieving genuine complementarity may require more fundamental interventions, potentially in earlier stages of the training paradigm. Our work highlights an important gap between the promise of human-AI collaboration and its current realization. We hope these theoretical and empirical observations motivate further investigation into strategies that explicitly optimize for and prioritize complementarity. 
+
+# Impact Statement 
+
+This work characterizes the conditions under which human-AI collaboration yields robust improvements, aiming to support more informed deployment of AI systems in conse-quential domains. Our framework provides decision makers with principled guidance on when and how AI predictions can complement human judgment, rather than simply re-place it. More broadly, we hope this work motivates further investigation into methods that prioritize complementarity. 
+
+# Acknowledgments 
+
+This material is based upon work supported by the AI Re-search Institutes Program funded by the National Science Foundation under AI Institute for Societal Decision Making (AI-SDM), Award No. 2229881. 
+
+# References 
+
+Agarwal, N., Moehring, A., Rajpurkar, P., and Salz, T. Com-bining human expertise with artificial intelligence: Ex-perimental evidence from radiology. Technical report, National Bureau of Economic Research, 2023. Anthis, J. R., Liu, R., Richardson, S. M., Kozlowski, A. C., Koch, B., Brynjolfsson, E., Evans, J., and Bernstein, M. S. Position: Llm social simulations are a promising research method. In Forty-second International Conference on Machine Learning Position Paper Track , 2025. Bommasani, R., Hudson, D. A., Adeli, E., Altman, R. B., Arora, S., von Arx, S., Bernstein, M. S., Bohg, J., Bosse-lut, A., Brunskill, E., Brynjolfsson, E., Buch, S., Card, D., Castellon, R., Chatterji, N. S., Chen, A. S., Creel, K., Davis, J. Q., Demszky, D., Donahue, C., Doum-bouya, M., Durmus, E., Ermon, S., Etchemendy, J., Etha-yarajh, K., Fei-Fei, L., Finn, C., Gale, T., Gillespie, L. E., Goel, K., Goodman, N. D., Grossman, S., Guha, N., Hashimoto, T., Henderson, P., Hewitt, J., Ho, D. E., Hong, J., Hsu, K., Huang, J., Icard, T., Jain, S., Jurafsky, D., Kalluri, P., Karamcheti, S., Keeling, G., Khani, F., Khat-tab, O., Koh, P. W., Krass, M. S., Krishna, R., Kudi-tipudi, R., and et al. On the opportunities and risks of foundation models. CoRR , abs/2108.07258, 2021. URL 
+
+https://arxiv.org/abs/2108.07258 .Donahue, K., Chouldechova, A., and Kenthapadi, K. Human-algorithm collaboration: Achieving complemen-tarity and avoiding unfairness. In Proceedings of the 2022 ACM Conference on Fairness, Accountability, and Transparency , pp. 1639–1656, 2022. Grootendorst, M. Bertopic: Neural topic modeling with a class-based tf-idf procedure. arXiv preprint arXiv:2203.05794 , 2022. Guo, Z., Wu, Y., Hartline, J. D., and Hullman, J. A deci-sion theoretic framework for measuring ai reliance. In 
+
+Proceedings of the 2024 ACM Conference on Fairness, Accountability, and Transparency , pp. 221–236, 2024. Guo, Z., Wu, Y., Hartline, J., and Hullman, J. The value of information in human-ai decision-making. In The Fourteenth International Conference on Learning Repre-sentations , 2025. Halawi, D., Zhang, F., Yueh-Han, C., and Steinhardt, J. Ap-proaching human-level forecasting with language models. 9Robust Human-AI Complementarity under Uncertainty 
+
+Advances in Neural Information Processing Systems , 37: 50426–50468, 2024. Hewitt, L., Ashokkumar, A., Ghezae, I., and Willer, R. Predicting results of social science experiments using large language models. Preprint , 2024. Karger, E., Bastani, H., Yueh-Han, C., Jacobs, Z., Halawi, D., Zhang, F., and Tetlock, P. Forecastbench: A dy-namic benchmark of ai forecasting capabilities. In The Thirteenth International Conference on Learning Repre-sentations , 2025. Luo, X., Rechardt, A., Sun, G., Nejad, K. K., Y ´a ˜nez, F., Yil-maz, B., Lee, K., Cohen, A. O., Borghesani, V., Pashkov, A., et al. Large language models surpass human experts in predicting neuroscience results. Nature human behaviour ,9(2):305–315, 2025. Madras, D., Pitassi, T., and Zemel, R. Predict responsibly: improving fairness and accuracy by learning to defer. 
+
+Advances in neural information processing systems , 31, 2018. Mozannar, H. and Sontag, D. Consistent estimators for learning to defer to an expert. In International conference on machine learning , pp. 7076–7087. PMLR, 2020. Okati, N., De, A., and Rodriguez, M. Differentiable learning under triage. Advances in Neural Information Processing Systems , 34:9140–9151, 2021. Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., and Bernstein, M. S. Generative agent simulations of 1,000 people. arXiv preprint arXiv:2411.10109 , 2024. Raghu, M., Blumer, K., Corrado, G., Kleinberg, J., Ober-meyer, Z., and Mullainathan, S. The algorithmic automa-tion problem: Prediction, triage, and human effort. arXiv preprint arXiv:1903.12220 , 2019. Singh, A., Fry, A., Perelman, A., Tart, A., Ganesh, A., El-Kishky, A., McLaughlin, A., Low, A., Ostrow, A., Ananthram, A., et al. Openai gpt-5 system card. arXiv preprint arXiv:2601.03267 , 2025. Steyvers, M., Tejeda, H., Kerrigan, G., and Smyth, P. Bayesian modeling of human–ai complementarity. Pro-ceedings of the National Academy of Sciences , 119(11): e2111547119, 2022. Straitouri, E., Wang, L., Okati, N., and Rodriguez, M. G. Improving expert predictions with conformal prediction. In International Conference on Machine Learning , pp. 32633–32653. PMLR, 2023. Time-sharing Experiments for the Social Sciences. Time-sharing experiments for the social sciences (tess). 
+
+https://www.tessexperiments.org . NSF-funded survey experiment platform. Vaccaro, M., Almaatouq, A., and Malone, T. When com-binations of humans and ai are useful: A systematic re-view and meta-analysis. Nature Human Behaviour , 8(12): 2293–2303, 2024. Vafa, K., Rambachan, A., and Mullainathan, S. Do large language models perform the way people expect? mea-suring the human generalization function. In Forty-first International Conference on Machine Learning , 2024. Wilder, B., Horvitz, E., and Kamar, E. Learning to comple-ment humans. International Joint Conference on Artifi-cial Intelligence , 2020. Yang, Q., Mahns, S., Li, S., Gu, A., Wu, J., and Xu, H. Llm-as-a-prophet: Understanding predictive intelligence with prophet arena. arXiv preprint arXiv:2510.17638 ,2025. Ye, C., Hu, Z., Deng, Y., Huang, Z., Ma, M. D., Zhu, Y., and Wang, W. Mirai: Evaluating llm agents for event forecasting. arXiv preprint arXiv:2407.01231 , 2024. 10 Robust Human-AI Complementarity under Uncertainty 
+
+# A. Proofs 
+
+A.1. Proof of Proposition 3.3 
+
+Fix a covariance matrix Σ for (θ, ϕ H , ϕ AI ) and write X := ( ϕH , ϕ AI )⊤. A (deterministic) decision rule is a measurable function d : R2 → R, and its mean-squared prediction loss under Σ is 
+
+LΣ(d) = EΣ
+
+(θ − d(X)) 2.
+
+Note that by Assumption 3.1, the marginal law of X = ( ϕH , ϕ AI ) is the same for all Σ ∈ U . Denote this common marginal distribution by PX and write ⟨f, g ⟩ := EPX [f (X)g(X)] for the L2(PX ) inner product. Let S := span {ϕH , ϕ AI } ⊂ 
+
+L2(PX ) be the two-dimensional linear subspace of (square-integrable) linear functions of X. Given any decision rule 
+
+d ∈ L2(PX ), let dlin ∈ S be its orthogonal projection onto S; equivalently, dlin is the unique linear function adϕH + bdϕAI 
+
+that minimizes EPX [( d(X) − aϕ H − bϕ AI )2]. Define the residual u := d − dlin . By the characterization of orthogonal projections in Hilbert spaces, u is orthogonal to S, i.e., 
+
+EPX [u(X)ϕH ] = 0 and EPX [u(X)ϕAI ] = 0 . (10) Fix any Σ ∈ U . Since (θ, X ) is jointly Gaussian under Σ, the conditional mean μΣ(X) := EΣ[θ | X] is an element of S;that is, μΣ(X) = aΣϕH + bΣϕAI for some coefficients depending on Σ. The tower property gives 
+
+EΣ[u(X)θ] = EΣ
+
+u(X) EΣ[θ | X] = EPX [u(X)μΣ(X)] .
+
+But μΣ ∈ S and u ⊥ S by (10) , hence EPX [uμ Σ] = 0 and therefore EΣ[uθ ] = 0 . Similarly, since dlin ∈ S, we have 
+
+EPX [ud lin ] = 0 and thus EΣ[ud lin ] = 0 . Expanding the squared loss and using these orthogonality relations yields 
+
+LΣ(d) = EΣ
+
+(θ − dlin (X) − u(X)) 2
+
+= EΣ
+
+(θ − dlin (X)) 2 + EPX [u(X)2] − 2EΣ
+
+u(X)θ + 2 EΣ
+
+u(X)dlin (X)
+
+= LΣ(dlin ) + EPX [u(X)2]
+
+≥ LΣ(dlin ).
+
+Thus, for every Σ ∈ U , the linear projection dlin weakly improves on d.
+
+A.2. Auxiliary Lemmas for MSE Proofs 
+
+We record two elementary lemmas that will be used repeatedly in the proofs of Propositions 3.4–3.6. All expectations, variances, and covariances are taken with respect to the joint Gaussian law N (0 , Σ) under the covariance matrix currently under discussion. 
+
+Lemma A.1 (Loss gap for linear aggregation) . Fix any covariance matrix Σ for (θ, ϕ H , ϕ AI ). Let dH (ϕH ) := ϕH and, for any b ∈ R, define db(ϕH , ϕ AI ) := ϕH + bϕ AI . Under mean squared error loss ℓ(d, θ ) = ( d − θ)2, the difference in expected losses satisfies 
+
+LΣ(db) − LΣ(dH ) = b2Var (ϕAI ) − 2b Cov (θ − ϕH , ϕ AI ). (11) 
+
+Proof. Define the human prediction error eH := θ − ϕH . Then for any real b we have 
+
+LΣ(db) = E(θ − db(ϕH , ϕ AI )) 2 = E(θ − ϕH − bϕ AI )2
+
+= E(eH − bϕ AI )2.
+
+We now expand the square deterministically and then take expectations: 
+
+(eH − bϕ AI )2 = e2 
+
+> H
+
++ b2ϕ2 
+
+> AI
+
+− 2b e H ϕAI .
+
+Taking expectations and using E[ϕ2 
+
+> AI
+
+] = Var (ϕAI ) and E[eH ϕAI ] = Cov (eH , ϕ AI ) (all variables are mean-zero) yields 
+
+LΣ(db) = E[e2 
+
+> H
+
+] + b2Var (ϕAI ) − 2b Cov (eH , ϕ AI ).
+
+On the other hand, 
+
+LΣ(dH ) = E(θ − ϕH )2 = E[e2 
+
+> H
+
+].
+
+Subtracting LΣ(dH ) from LΣ(db) and recalling eH = θ − ϕH gives exactly (11). 11 Robust Human-AI Complementarity under Uncertainty 
+
+Lemma A.2. Assume (θ, ϕ H , ϕ AI ) ∼ N (0 , Σ) . Then the covariance between the machine signal and the human prediction error satisfies the identity Cov (θ − ϕH , ϕ AI ) = Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) − Cov (ϕH , ϕ AI | θ). (12) 
+
+In particular, if Cov (ϕH , ϕ AI | θ) ≤ γ then Cov (θ − ϕH , ϕ AI ) ≥ Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) − γ, (13) 
+
+and if additionally Cov (θ, ϕ AI ) ≥ δ then Cov (θ − ϕH , ϕ AI ) ≥ δ Var (ϕH | θ)
+
+Var (ϕH ) − γ. (14) 
+
+Proof. 
+
+Step 1: decompose Cov (ϕH , ϕ AI ) using the law of total covariance. Since θ is one-dimensional, the law of total covariance gives Cov (ϕH , ϕ AI ) = ECov (ϕH , ϕ AI | θ) + Cov  E[ϕH | θ], E[ϕAI | θ]. (15) Under joint Gaussianity, the conditional covariance Cov (ϕH , ϕ AI | θ) is almost surely constant as a function of θ, so the first term reduces to Cov (ϕH , ϕ AI | θ) itself. Moreover, again by joint Gaussianity (and mean-zero), 
+
+E[ϕH | θ] = Cov (ϕH , θ )
+
+Var (θ) θ, E[ϕAI | θ] = Cov (ϕAI , θ )
+
+Var (θ) θ. 
+
+Substituting these linear regressions into the second term of (15) yields Cov  E[ϕH | θ], E[ϕAI | θ] = Cov 
+
+ Cov (ϕH , θ )
+
+Var (θ) θ, Cov (ϕAI , θ )
+
+Var (θ) θ
+
+
+
+(16) 
+
+= Cov (ϕH , θ )Cov (ϕAI , θ )
+
+Var (θ)2 Var (θ) = Cov (ϕH , θ )Cov (ϕAI , θ )
+
+Var (θ) .
+
+Combining (15) and (16) gives the identity Cov (ϕH , ϕ AI ) = Cov (ϕH , ϕ AI | θ) + Cov (ϕH , θ )Cov (ϕAI , θ )
+
+Var (θ) . (17) 
+
+Step 2: rewrite Cov (θ − ϕH , ϕ AI ) in terms of conditional covariance. By bilinearity of covariance, Cov (θ − ϕH , ϕ AI ) = Cov (θ, ϕ AI ) − Cov (ϕH , ϕ AI ). (18) Substituting (17) into (18) and using symmetry Cov (θ, ϕ AI ) = Cov (ϕAI , θ ) yields Cov (θ − ϕH , ϕ AI ) = Cov (θ, ϕ AI ) − Cov (ϕH , ϕ AI | θ) − Cov (ϕH , θ )Cov (θ, ϕ AI )
+
+Var (θ) (19) 
+
+= Cov (θ, ϕ AI )
+
+
+
+1 − Cov (ϕH , θ )
+
+Var (θ)
+
+
+
+− Cov (ϕH , ϕ AI | θ).
+
+Step 3: use normalization to identify the multiplicative factor. By our normalization choice, Cov (ϕH , θ ) = Var (ϕH ).For a jointly Gaussian pair (ϕH , θ ), the conditional variance is Var (ϕH | θ) = Var (ϕH ) − Cov (ϕH , θ )2
+
+Var (θ) . (20) 12 Robust Human-AI Complementarity under Uncertainty 
+
+Substituting Cov (ϕH , θ ) = Var (ϕH ) into (20) gives Var (ϕH | θ) = Var (ϕH ) − Var (ϕH )2
+
+Var (θ) = Var (ϕH )
+
+
+
+1 − Var (ϕH )
+
+Var (θ)
+
+
+
+. (21) Dividing (21) by Var (ϕH ) > 0 yields 
+
+1 − Cov (ϕH , θ )
+
+Var (θ) = 1 − Var (ϕH )
+
+Var (θ) = Var (ϕH | θ)
+
+Var (ϕH ) . (22) Substituting (22) into (19) proves (12). 
+
+Step 4: inequalities. If Cov (ϕH , ϕ AI | θ) ≤ γ, then (12) implies Cov (θ − ϕH , ϕ AI ) ≥ Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) − γ, 
+
+which is (13). If in addition Cov (θ, ϕ AI ) ≥ δ, then replacing Cov (θ, ϕ AI ) by δ in the right-hand side yields (14). 
+
+A.3. Proof of Proposition 3.4 
+
+Fix an uncertainty set U as in the main text: all Σ ∈ U agree on every entry of the covariance matrix of (θ, ϕ H , ϕ AI ) except possibly on the single entry Cov (θ, ϕ AI ). In particular, Var (ϕAI ) is the same for all Σ ∈ U .Recall that the human-only decision rule is dH (ϕH ) = ϕH (this uses our normalization Cov (θ, ϕ H )/Var (ϕH ) = 1 , so that 
+
+E[θ | ϕH ] = ϕH under joint normality). For any b ∈ R define 
+
+db(ϕH , ϕ AI ) := ϕH + bϕ AI .
+
+We will exhibit a nonzero coefficient b such that db strictly dominates dH over U. First, note that by Lemma A.2, Cov (θ − ϕH , ϕ AI ) = Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) − Cov (ϕH , ϕ AI | θ).
+
+Condition (2) states that Cov (ϕH , ϕ AI | θ) ≤ 0, hence for every Σ ∈ U ,Cov (θ − ϕH , ϕ AI ) ≥ Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) . (23) Condition (1) gives Cov (θ, ϕ AI ) ≥ δ, so combining with (23) yields the uniform bound Cov (θ − ϕH , ϕ AI ) ≥ κ for all Σ ∈ U , where κ := δ Var (ϕH | θ)
+
+Var (ϕH ) . (24) Note that κ > 0 whenever δ > 0 and Var (ϕH | θ) > 0. Since Var (ϕAI ) is common across Σ ∈ U , choose the nonzero coefficient 
+
+b⋆ := κ
+
+Var (ϕAI ) .
+
+Accordingly, we have that for every Σ ∈ U ,
+
+LΣ(db⋆ ) − LΣ(dH ) = ( b⋆)2Var (ϕAI ) − 2b⋆ Cov (θ − ϕH , ϕ AI ) (Lemma A.1) 
+
+≤ (b⋆)2Var (ϕAI ) − 2b⋆ κ
+
+= κ2
+
+Var (ϕAI ) − 2 κ2
+
+Var (ϕAI ) = − κ2
+
+Var (ϕAI ) < 0.
+
+Hence LΣ(db⋆ ) < L Σ(dH ) for all Σ ∈ U , so db⋆ strictly dominates dH over U.13 Robust Human-AI Complementarity under Uncertainty 
+
+A.4. Proof of Proposition 3.6 
+
+Fix an uncertainty set U as in the statement of Proposition 3.6. In particular, all entries of Σ are fixed across U except 
+
+s(Σ) := Cov Σ(θ, ϕ AI ).
+
+Define 
+
+δ := inf  
+
+> Σ∈U
+
+s(Σ) and γ := sup 
+
+> Σ∈U
+
+Cov Σ(ϕH , ϕ AI | θ).
+
+Recall that dH (ϕH ) = ϕH and that for any b ∈ R we write 
+
+db(ϕH , ϕ AI ) := ϕH + bϕ AI .
+
+We prove both directions. 
+
+Sufficiency. Assume first that γ < δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+. We will show that every b in the stated interval satisfies LΣ(db) < L Σ(dH )
+
+uniformly over Σ ∈ U .
+
+Necessity. Conversely, assume that γ ≥ δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+and fix an arbitrary coefficient b > 0. We will use only the one-free-entry structure of U (together with the fact that conditional covariances are affine in s(Σ) ) to select some Σ ∈ U for which 
+
+LΣ(db) > L Σ(dH ).
+
+Step 0: conditional covariance is affine decreasing in s(Σ) . Since all entries of Σ except s(Σ) = Cov Σ(θ, ϕ AI ) are fixed across U, the (unconditional) covariance 
+
+c := Cov (ϕH , ϕ AI )
+
+is constant over Σ ∈ U . By the covariance decomposition (17) established in the proof of Lemma A.2, Cov Σ(ϕH , ϕ AI ) = Cov Σ(ϕH , ϕ AI | θ) + Cov (ϕH , θ )Cov Σ(ϕAI , θ )
+
+Var (θ) .
+
+Rearranging and using symmetry Cov Σ(ϕAI , θ ) = Cov Σ(θ, ϕ AI ) = s(Σ) gives Cov Σ(ϕH , ϕ AI | θ) = c − Cov (ϕH , θ )
+
+Var (θ) s(Σ) . (25) Since under our normalization, Cov (ϕH , θ ) = Var (ϕH ), so if we define the (fixed) constant 
+
+κ := Var (ϕH )
+
+Var (θ) > 0,
+
+then (25) becomes Cov Σ(ϕH , ϕ AI | θ) = c − κ s (Σ) . (26) In particular, Cov Σ(ϕH , ϕ AI | θ) is an affine (indeed, strictly) decreasing function of s(Σ) .
+
+Step 0a: the maximizer of Cov (ϕH , ϕ AI | θ) corresponds to the minimizer of s(Σ) . Since s(Σ) ≥ δ for all Σ ∈ U and (26) is decreasing in s(Σ) , we have for every Σ ∈ U that Cov Σ(ϕH , ϕ AI | θ) ≤ c − κ δ. 
+
+Taking the supremum over Σ ∈ U yields 
+
+γ ≤ c − κ δ. (27) For the reverse inequality, fix any ε > 0. By definition of δ as an infimum, there exists some Σε ∈ U such that 
+
+s(Σ ε) < δ + ε. (28) 14 Robust Human-AI Complementarity under Uncertainty 
+
+Applying (26) at Σ = Σ ε and using (28) gives Cov Σε (ϕH , ϕ AI | θ) = c − κ s (Σ ε) > c − κ(δ + ε) = ( c − κδ ) − κε. 
+
+Taking the supremum over Σ ∈ U shows that γ ≥ (c − κδ ) − κε for every ε > 0. Letting ε ↓ 0 yields 
+
+γ ≥ c − κ δ. 
+
+Combining this with (27) yields the identity 
+
+γ = c − κ δ. (29) Moreover, the construction above shows that for each ε > 0 we can choose Σε ∈ U such that (28) holds and, simultaneously, Cov Σε (ϕH , ϕ AI | θ) > γ − κε. (30) 
+
+Step 1: an exact loss gap formula. Fix Σ ∈ U . Lemma A.1 gives 
+
+LΣ(db) − LΣ(dH ) = b2Var (ϕAI ) − 2b Cov (θ − ϕH , ϕ AI ). (31) 
+
+Step 2: a uniform lower bound on Cov (θ − ϕH , ϕ AI ). Lemma A.2 implies that, for every Σ ∈ U ,Cov (θ − ϕH , ϕ AI ) = Cov (θ, ϕ AI ) Var (ϕH | θ)
+
+Var (ϕH ) − Cov (ϕH , ϕ AI | θ).
+
+By definition of δ and γ we have, for every Σ ∈ U ,Cov (θ, ϕ AI ) = s(Σ) ≥ δ and Cov (ϕH , ϕ AI | θ) ≤ γ. 
+
+Substituting these bounds into the preceding identity yields the uniform inequality Cov (θ − ϕH , ϕ AI ) ≥ κγ for all Σ ∈ U , where κγ := δ Var (ϕH | θ)
+
+Var (ϕH ) − γ. (32) Under the hypothesis of the sufficiency direction, κγ > 0.
+
+Step 3: choosing b and verifying strict dominance (sufficiency). Assume κγ > 0. Fix any coefficient b satisfying 
+
+0 < b < 2κγ
+
+Var (ϕAI ) .
+
+Since Var (ϕAI ) > 0, combining (31) with (32) yields, for every Σ ∈ U ,
+
+LΣ(db) − LΣ(dH ) = b2Var (ϕAI ) − 2b Cov (θ − ϕH , ϕ AI )
+
+≤ b2Var (ϕAI ) − 2b κ γ
+
+= b Var (ϕAI )
+
+
+
+b − 2κγ
+
+Var (ϕAI )
+
+
+
+< 0,
+
+where the final strict inequality uses b > 0 and b < 2κγ /Var (ϕAI ). Thus LΣ(db) < L Σ(dH ) for all Σ ∈ U . This establishes the sufficiency direction (and the “moreover” part) of the proposition. 
+
+Step 4: necessity of the threshold (the “only if” direction for b > 0). Assume now that γ ≥ δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+, equivalently 
+
+κγ ≤ 0. Fix any coefficient b > 0.
+
+Step 4a: selecting an adversarial Σ ∈ U . Choose ε > 0 small enough that 
+
+κγ + ε < b
+
+2 Var (ϕAI ). (33) Such an ε exists because κγ ≤ 0 while the right-hand side is strictly positive. Let Σε ∈ U be the covariance matrix guaranteed by Step 0a, i.e., satisfying both (28) and (30). Write Σ := Σ ε for brevity. 15 Robust Human-AI Complementarity under Uncertainty 
+
+Step 4b: bounding Cov Σ(θ − ϕH , ϕ AI ) from above. Applying Lemma A.2 at Σ gives Cov Σ(θ − ϕH , ϕ AI ) = s(Σ) Var (ϕH | θ)
+
+Var (ϕH ) − Cov Σ(ϕH , ϕ AI | θ).
+
+Using s(Σ) < δ + ε from (28) and Cov Σ(ϕH , ϕ AI | θ) > γ − κε from (30) yields Cov Σ(θ − ϕH , ϕ AI ) < (δ + ε) Var (ϕH | θ)
+
+Var (ϕH ) − (γ − κε )=
+
+
+
+δ Var (ϕH | θ)
+
+Var (ϕH ) − γ
+
+
+
++ ε
+
+ Var (ϕH | θ)
+
+Var (ϕH ) + κ
+
+
+
+= κγ + ε
+
+ Var (ϕH | θ)
+
+Var (ϕH ) + κ
+
+
+
+.
+
+We now simplify the coefficient of ε. By (22) in the proof of Lemma A.2, Var (ϕH | θ)
+
+Var (ϕH ) = 1 − Var (ϕH )
+
+Var (θ) = 1 − κ, 
+
+hence Var (ϕH |θ)  
+
+> Var (ϕH)
+
++ κ = 1 . Therefore, Cov Σ(θ − ϕH , ϕ AI ) < κ γ + ε. (34) Combining (34) with (33) yields Cov Σ(θ − ϕH , ϕ AI ) < b
+
+2 Var (ϕAI ). (35) 
+
+Step 4c: concluding that db cannot uniformly dominate dH . Finally, combining (31) with (35) gives 
+
+LΣ(db) − LΣ(dH ) = b2Var (ϕAI ) − 2b Cov Σ(θ − ϕH , ϕ AI )
+
+> b 2Var (ϕAI ) − 2b · b
+
+2 Var (ϕAI ) = 0 .
+
+Thus, for this (adversarial) covariance matrix Σ ∈ U , the decision rule db performs strictly worse than dH under mean squared error. Since b > 0 was arbitrary, it follows that when γ ≥ δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+there is no positive coefficient b for which db
+
+strictly dominates dH over U. This establishes the necessity direction. 
+
+Deriving the maximum improvement in loss. Next, we move on to discussing the maximum improvement in loss under the setting of positive correlation. Lemma A.1 (Eq. (11)) gives us that for every Σ ∈ U ,
+
+LΣ(dH ) − LΣ(db) = 2 b Cov (θ − ϕH , ϕ AI ) − b2Var (ϕAI ).
+
+Using Lemma A.2 (Eq. (14)), we have the lower bound Cov (θ − ϕH , ϕ AI ) ≥ δ Var (ϕH | θ)
+
+Var (ϕH ) − γ for all Σ ∈ U .
+
+Substituting in this bound results in 
+
+inf 
+
+> Σ∈U
+
+n
+
+LΣ(dH ) − LΣ(db)
+
+o
+
+≥ 2b
+
+
+
+δ Var (ϕH | θ)
+
+Var (ϕH ) − γ
+
+
+
+− b2 Var (ϕAI ). (36) Next, we can note that the choice of 
+
+b⋆ ≜ δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+− γ
+
+Var (ϕAI ) (37) 16 Robust Human-AI Complementarity under Uncertainty 
+
+lies in the admissible interval from Proposition 3.6. We can note that right-hand side of (36) is a concave quadratic in b,which is maximized at b = b⋆ in (37). Thus, using this value guarantees that 
+
+LΣ(db⋆ ) ≤ LΣ(dH ) −
+
+
+
+δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+− γ
+
+2
+
+Var (ϕAI ) ∀Σ ∈ U . (38) With (δ, γ, Var (ϕH ), Var (ϕAI )) fixed, the expression in (38) is the square of an affine function of Var (ϕH | θ) with positive slope δ/ Var (ϕH ). Hence it is strictly increasing in Var (ϕH | θ) on the region where the strict inequality in Proposition 3.6 holds. 
+
+A.5. Proof of Proposition 3.7 
+
+Fix a covariance matrix Σ. By the definition of r and the normalization Cov (θ, ϕ H ) = Var (ϕH ),Cov Σ(r, θ ) = Cov Σ(ϕAI , θ ) − Cov (ϕH , ϕ AI )
+
+Var (ϕH ) Cov (ϕH , θ )= Cov Σ(ϕAI , θ ) − Cov (ϕH , ϕ AI ) = Cov Σ(θ − ϕH , ϕ AI ).
+
+Thus β(Σ) ̸ = 0 implies Cov Σ(θ − ϕH , ϕ AI )̸ = 0 whenever Var (r)̸ = 0 . We assume this non-redundancy condition; otherwise, the AI signal contains no linear component beyond ϕH . Lemma A.1 gives, for any b ∈ R,
+
+LΣ(db) − LΣ(dH ) = b2Var (ϕAI ) − 2b Cov Σ(θ − ϕH , ϕ AI ).
+
+This is a strictly convex quadratic in b with minimizer 
+
+b⋆ ≜ Cov Σ(θ − ϕH , ϕ AI )
+
+Var (ϕAI ) ,
+
+Since Cov Σ(θ − ϕH , ϕ AI )̸ = 0 , we have b⋆̸ = 0 . Plugging b⋆ into the loss gap yields 
+
+LΣ(db⋆ ) − LΣ(dH ) = − Cov Σ(θ − ϕH , ϕ AI )2
+
+Var (ϕAI ) < 0.
+
+Therefore db⋆ strictly improves upon dH under Σ, proving the proposition. 
+
+A.6. Proof of Proposition 3.8 
+
+We first provide some additional notation and supporting lemmas. Using joint normality and the definition of the residual r,for any fixed covariance matrix Σ we have 
+
+θ | (ϕH , r ) ∼ N μΣ(ϕH , r ), σ 2Σ(ϕH , r ), (39) 
+
+μΣ(ϕH , r ) = ϕH + β(Σ) r, σ2Σ(ϕH , r ) = σ2 
+
+> H
+
+− β(Σ) 2 Var (r).
+
+so that for all Σ ∈ U and all (ϕH , r ),
+
+μΣ(ϕH , r )
+
+(≥ μb(ϕH , r ) if r ≥ 0,
+
+≤ μb(ϕH , r ) if r ≤ 0, 0 < σ 2Σ(ϕH , r ) ≤ σ2 
+
+> b
+
+< σ 2 
+
+> H
+
+. (40) For any fixed covariance matrix Σ and any pair (x, y ) ∈ R2, write 
+
+PΣ(x, y ) ≜ PΣ
+
+ θ ≥ τ ϕH = x, r = y.
+
+Using (39) we may express this as 
+
+PΣ(x, y ) = Φ 
+
+ μΣ(x, y ) − τσΣ(x, y )
+
+
+
+.
+
+We will bound PΣ(x, y ) uniformly over Σ ∈ U using the pessimistic mean–variance bounds (40). 17 Robust Human-AI Complementarity under Uncertainty 
+
+Proof of Lemma 3.5. Using (1) and Cov (θ, ϕ H ) = Var (ϕH ),Cov Σ(r, θ ) = Cov Σ(ϕAI , θ ) − Cov (ϕH , ϕ AI )
+
+Var (ϕH ) Cov (ϕH , θ ) = Cov Σ(ϕAI , θ ) − Cov (ϕH , ϕ AI ).
+
+Moreover, the Gaussian identity for conditional covariance gives Cov Σ(ϕH , ϕ AI | θ) = Cov (ϕH , ϕ AI ) − Cov (ϕH , θ )Cov Σ(ϕAI , θ )
+
+Var (θ) = Cov (ϕH , ϕ AI ) − Var (ϕH )Cov Σ(ϕAI , θ )
+
+Var (θ) .
+
+Thus the assumption Cov Σ(ϕH , ϕ AI | θ) ≤ 0 implies Cov (ϕH , ϕ AI ) ≤ Var (ϕH )
+
+Var (θ) Cov Σ(ϕAI , θ ),
+
+and therefore Cov Σ(r, θ ) ≥ Cov Σ(ϕAI , θ )
+
+
+
+1 − Var (ϕH )
+
+Var (θ)
+
+
+
+= Cov Σ(ϕAI , θ ) Var (ϕH | θ)
+
+Var (ϕH ) ≥ δ Var (ϕH | θ)
+
+Var (ϕH ) .
+
+Define the corresponding pessimistic lower bound on the regression coefficient, 
+
+b ≜ δ Var (ϕH | θ)
+
+Var (ϕH )Var (r) > 0, (41) so that β(Σ) ≥ b for all Σ ∈ U by (2). 
+
+Lemma A.3. Fix τ ∈ R and define F (μ, σ ) ≜ Φ  μ−τσ
+
+ for σ > 0.1. For every σ > 0, F (·, σ ) is strictly increasing in μ.2. For every μ > τ , F (μ, ·) is strictly decreasing in σ.3. For every μ < τ , F (μ, ·) is strictly increasing in σ.Proof of Lemma A.3. Write z(μ, σ ) ≜ (μ − τ )/σ . Then 
+
+F (μ, σ ) = Φ( z(μ, σ )) .
+
+Since Φ′(z) = φ(z) > 0 for all z, it suffices to examine ∂z/∂μ and ∂z/∂σ . A direct calculation gives 
+
+∂z ∂μ = 1
+
+σ > 0,
+
+which yields (1). Next, 
+
+∂z ∂σ = − μ − τσ2 .
+
+If μ > τ , then μ − τ > 0, so ∂z/∂σ < 0 and hence ∂F/∂σ = φ(z) ∂z/∂σ < 0, proving (2). If μ < τ , then μ − τ < 0, so 
+
+∂z/∂σ > 0 and therefore ∂F/∂σ > 0, proving (3). 
+
+Lemma A.4 (Worst-case lower bound for positive residuals) . For every Σ ∈ U and every (x, y ) with y ≥ 0,
+
+PΣ(x, y ) ≥ Plow (x, y ).
+
+Proof of Lemma A.4. Fix (x, y ) with y ≥ 0 and Σ ∈ U . From (40) we have 
+
+μΣ(x, y ) = x + β(Σ) y ≥ x + by = μb(x, y ), 0 < σ Σ(x, y ) ≤ σb.
+
+18 Robust Human-AI Complementarity under Uncertainty 
+
+If μb(x, y ) < τ , then Plow (x, y ) = 0 by definition and PΣ(x, y ) ≥ 0 trivially, so the inequality holds. If instead 
+
+μb(x, y ) ≥ τ , then by Lemma A.3(1)–(2) the map F (μ, σ ) = Φ(( μ − τ )/σ ) is increasing in μ and decreasing in σ on the domain {μ ≥ τ, σ > 0}. Since (μΣ(x, y ), σ Σ(x, y )) lies in this domain and satisfies 
+
+μΣ(x, y ) ≥ μb(x, y ), σΣ(x, y ) ≤ σb,
+
+we obtain 
+
+PΣ(x, y ) = F (μΣ(x, y ), σ Σ(x, y )) ≥ F (μb(x, y ), σ b) = Plow (x, y ),
+
+as claimed. 
+
+Lemma A.5 (Worst-case upper bound for negative residuals) . For every Σ ∈ U and every (x, y ) with y < 0,
+
+PΣ(x, y ) ≤ Phigh (x, y ).
+
+Proof of Lemma A.5. Fix (x, y ) with y < 0 and Σ ∈ U . Then β(Σ) ≥ b implies 
+
+μΣ(x, y ) = x + β(Σ) y ≤ x + by = μb(x, y ),
+
+and we always have 0 < σ Σ(x, y ) ≤ σH because conditioning on (ϕH , r ) cannot increase the variance beyond Var (θ |
+
+ϕH ) = σ2 
+
+> H
+
+.Consider first the case μb(x, y ) ≥ τ . Then Phigh (x, y ) = 1 , and trivially PΣ(x, y ) ≤ 1 = Phigh (x, y ).Now suppose μb(x, y ) < τ . For any covariance structure consistent with our uncertainty set we can write 
+
+PΣ(x, y ) = F  μΣ(x, y ), σ Σ(x, y ) ≤ sup  
+
+> μ≤μb(x,y ),0<σ ≤σH
+
+F (μ, σ ),
+
+where again F (μ, σ ) = Φ(( μ − τ )/σ ). By Lemma A.3(1), F is increasing in μ for fixed σ, so the supremum over 
+
+μ ≤ μb(x, y ) is attained at μ = μb(x, y ). Since now μb(x, y ) < τ , Lemma A.3(3) implies that F (μb(x, y ), σ ) is increasing in σ, so the supremum over σ ≤ σH is obtained at σ = σH . Thus 
+
+sup  
+
+> μ≤μb(x,y ),0<σ ≤σH
+
+F (μ, σ ) = F  μb(x, y ), σ H
+
+ = Φ 
+
+ μb(x, y ) − τσH
+
+
+
+= Phigh (x, y ).
+
+Since (μΣ(x, y ), σ Σ(x, y )) satisfies the constraints μΣ(x, y ) ≤ μb(x, y ) and 0 < σ Σ(x, y ) ≤ σH , we conclude 
+
+PΣ(x, y ) ≤ Phigh (x, y ),
+
+as claimed. 
+
+Proof of Proposition 3.8. Fix Σ ∈ U . Recall the utility from (3), 
+
+u(1 , θ ) = 1 {θ ≥ τ } − c, u(0 , θ ) = 0 .
+
+For any decision rule d and any realization (ϕH , r ) = ( x, y ), taking conditional expectations yields 
+
+EΣ[u(d, θ ) | ϕH = x, r = y] =  PΣ(x, y ) − c d(x, y ),
+
+where PΣ(x, y ) = PΣ(θ ≥ τ | ϕH = x, r = y). Therefore, 
+
+EΣ
+
+u(dJ (ϕH , ϕ AI ), θ ) − EΣ
+
+u(dH (ϕH ), θ )
+
+= EΣ
+
+h PΣ(ϕH , r ) − c   dJ (ϕH , ϕ AI ) − dH (ϕH )i
+
+.
+
+Define the (deterministic) regions on which dJ differs from dH :
+
+A+ ≜ {dJ (ϕH , ϕ AI ) = 1 , d H (ϕH ) = 0 }, A− ≜ {dJ (ϕH , ϕ AI ) = 0 , d H (ϕH ) = 1 }.
+
+19 Robust Human-AI Complementarity under Uncertainty 
+
+On the complement of A+ ∪ A−, the two rules coincide and the integrand is zero. Hence 
+
+EΣ
+
+u(dJ (ϕH , ϕ AI ), θ ) − EΣ
+
+u(dH (ϕH ), θ )
+
+= EΣ
+
+(PΣ(ϕH , r ) − c) 1 {(ϕH , r ) ∈ A+} + EΣ
+
+(c − PΣ(ϕH , r )) 1 {(ϕH , r ) ∈ A−}. (42) 
+
+Step 1: Added-action region A+. By definition (6) , A+ can occur only if Plow (ϕH , r ) ≥ c. In particular, this implies r ≥ 0,so Lemma A.4 applies and yields 
+
+PΣ(ϕH , r ) ≥ Plow (ϕH , r ) ≥ c on A+.
+
+Thus PΣ(ϕH , r ) − c ≥ 0 on A+, and therefore the first term in (42) is nonnegative. 
+
+Step 2: Removed-action region A−. By definition (6) , A− can occur only if dH (ϕH ) = 1 , r < 0, and Phigh (ϕH , r ) ≤ c.Since r < 0, Lemma A.5 applies and gives 
+
+PΣ(ϕH , r ) ≤ Phigh (ϕH , r ) ≤ c on A−.
+
+Hence c − PΣ(ϕH , r ) ≥ 0 on A−, and the second term in (42) is also nonnegative. Combining Steps 1–2 shows that the right-hand side of (42) is nonnegative for every Σ ∈ U , proving weak dominance. 
+
+Step 3: Strict improvement under β(Σ 0) > b . Now suppose there exists Σ0 ∈ U such that β(Σ 0) > b . Since (ϕH , r ) is jointly normal with a nondegenerate covariance matrix and r is independent of ϕH , there exists ε > 0 such that 
+
+PΣ0
+
+ ϕH ∈ (xH − ε, x H ) > 0.
+
+Moreover, because r has unbounded support, we can choose R > 0 sufficiently large so that for every x ∈ (xH − ε, x H )
+
+and every y ≥ R we have both μb(x, y ) ≥ τ and Plow (x, y ) ≥ c.Define the event 
+
+B ≜ {ϕH ∈ (xH − ε, x H ), r ≥ R}.
+
+By independence of ϕH and r and the positivity of both marginal probabilities, we have PΣ0 (B) > 0. On B we have 
+
+dH (ϕH ) = 0 (since ϕH < x H ) and Plow (ϕH , r ) ≥ c, hence dJ (ϕH , ϕ AI ) = 1 by (6). That is, B ⊆ A+.Fix now any realization (ϕH , r ) = ( x, y ) ∈ B. By construction y > 0 and μb(x, y ) ≥ τ , and since β(Σ 0) > b we have 
+
+μΣ0 (x, y ) = x + β(Σ 0)y > x + by = μb(x, y ), σΣ0 (x, y ) < σ b,
+
+where the strict inequality for σΣ0 (x, y ) follows from σ2Σ0 (x, y ) = σ2 
+
+> H
+
+−β(Σ 0)2Var (r) and β(Σ 0)2 > b 2. By Lemma A.3(1)– (2), F (μ, σ ) = Φ(( μ − τ )/σ ) is strictly increasing in μ and strictly decreasing in σ on {μ > τ, σ > 0}, so we obtain the strict inequality 
+
+PΣ0 (x, y ) = Φ 
+
+ μΣ0 (x, y ) − τσΣ0 (x, y )
+
+
+
+> Φ
+
+ μb(x, y ) − τσb
+
+
+
+= Plow (x, y ) ≥ c. 
+
+In particular, PΣ0 (ϕH , r ) − c > 0 on the event B, and since B ⊆ A+ and PΣ0 (B) > 0, the first term in (42) is strictly positive under Σ0. The second term is nonnegative by Step 2, and therefore 
+
+EΣ0
+
+u(dJ (ϕH , ϕ AI ), θ ) > EΣ0
+
+u(dH (ϕH ), θ ).
+
+This completes the proof. 
+
+A.7. Proof of Proposition 3.9 
+
+Proof. Fix Σ ∈ U . By the definition of r and the normalization Cov (θ, ϕ H ) = Var (ϕH ),Cov Σ(r, θ ) = Cov Σ(ϕAI , θ ) − Cov (ϕH , ϕ AI ).
+
+Under joint Gaussianity, the law of total covariance yields Cov (ϕH , ϕ AI ) = Cov Σ(ϕH , ϕ AI | θ) + Cov (ϕH , θ ) Cov Σ(ϕAI , θ )
+
+Var (θ) = Cov Σ(ϕH , ϕ AI | θ) + Var (ϕH ) Cov Σ(ϕAI , θ )
+
+Var (θ) .
+
+20 Robust Human-AI Complementarity under Uncertainty 
+
+Substituting and simplifying gives Cov Σ(r, θ ) = Cov Σ(ϕAI , θ )
+
+
+
+1 − Var (ϕH )
+
+Var (θ)
+
+
+
+− Cov Σ(ϕH , ϕ AI | θ).
+
+Finally, the conditional-variance identity and Cov (ϕH , θ ) = Var (ϕH ) imply Var (ϕH | θ) = Var (ϕH ) − Cov (ϕH , θ )2
+
+Var (θ) = Var (ϕH )
+
+
+
+1 − Var (ϕH )
+
+Var (θ)
+
+
+
+,
+
+so  1 − Var (ϕH )/Var (θ) = Var (ϕH | θ)/Var (ϕH ). Hence Cov Σ(r, θ ) = Cov Σ(ϕAI , θ ) Var (ϕH | θ)
+
+Var (ϕH ) − Cov Σ(ϕH , ϕ AI | θ) ≥ δ Var (ϕH | θ)
+
+Var (ϕH ) − γ = κγ .
+
+Dividing by Var (r) yields β(Σ) = Cov Σ(r, θ )/Var (r) ≥ κγ /Var (r) = bpos . With this uniform lower bound in hand, the dominance argument for the symmetric rule dJ (given conservative bounds Plow and Phigh ) applies verbatim, proving 
+
+EΣ[u(dJ , θ )] ≥ EΣ[u(dH , θ )] for all Σ ∈ U . Strictness holds whenever β(Σ) > b pos on a set of positive probability. □
+
+In the decision-making setting, robust complementarity for investment decisions again hinges on the AI signal being informative about the human residual rather than merely replicating the expert’s mistakes. A similar condition κγ =
+
+δ Var (ϕH |θ)  
+
+> Var (ϕH)
+
+− γ governs feasibility: δ must outweigh the worst-case shared-error term γ after scaling by the human-uncertainty factor Var (ϕH | θ)/Var (ϕH ). When κγ is small, the lower bound of bpos collapses toward 0, and the symmetric policy cannot have enough uniformly safe evidence to overrule dH .
+
+A.8. Proof of Proposition 3.10 
+
+We begin with a basic monotonicity lemma that holds for arbitrary distributions. 
+
+Lemma A.6 (Monotone covariance) . Let X be any real-valued random variable with E[X2] < ∞, and let u, v : R → R be nondecreasing functions such that u(X) and v(X) are square-integrable. Then Cov  u(X), v (X) ≥ 0,
+
+with strict inequality whenever u and v are strictly increasing on a set of positive probability under the law of X.Proof. Let X′ be an independent copy of X, defined on the same probability space. Then Cov (u(X), v (X)) = Eu(X)v(X) − E[u(X)] E[v(X)] = 12 E(u(X) − u(X′))( v(X) − v(X′)) .
+
+The equality in the last line is a standard polarization identity: expanding the right-hand side and using independence of X
+
+and X′ yields exactly the covariance. Since u and v are nondecreasing, for every pair (x, x ′) we have 
+
+(u(x) − u(x′))( v(x) − v(x′)) ≥ 0.
+
+Thus the integrand in the last display is almost surely nonnegative, and hence its expectation is nonnegative: Cov (u(X), v (X)) ≥ 0.
+
+If u and v are strictly increasing on a set A with P(X ∈ A) > 0, then there is a set of pairs (x, x ′) of positive probability with x̸ = x′ and (u(x) − u(x′))( v(x) − v(x′)) > 0, implying strict inequality in the covariance. We now apply Lemma A.6 conditionally to obtain a lower bound on the conditional covariance Cov (ϕAI , θ | ϕH ).
+
+Lemma A.7. Under the assumptions of this section, for every value x of ϕH for which Var (θ | ϕH = x) < ∞ we have Cov  ϕAI , θ | ϕH = x ≥ k Var (θ | ϕH = x).
+
+21 Robust Human-AI Complementarity under Uncertainty 
+
+Proof. Fix x and consider the conditional distribution of θ given ϕH = x. Since ϕH = f (θ) + ϵH with (ϵH , ϵ AI )
+
+independent of θ, this conditional distribution is well-defined and has finite variance by assumption. From the additive signal structure we have 
+
+ϕAI = g(θ) + ϵAI .
+
+Conditioning on ϕH = x yields Cov (ϕAI , θ | ϕH = x) = Cov  g(θ) + ϵAI , θ | ϕH = x
+
+= Cov  g(θ), θ | ϕH = x + Cov  ϵAI , θ | ϕH = x.
+
+We lower bound the second term using the assumption that m(e) ≜ E[ϵAI | ϵH = e] is nonincreasing. First observe that, given (θ, ϕ H = x), the value of ϵH is pinned down deterministically as 
+
+ϵH = x − f (θ).
+
+Since (ϵH , ϵ AI ) is independent of θ, the conditional distribution of ϵAI given ϵH does not depend on θ, and therefore 
+
+E[ϵAI | θ, ϕ H = x] = E[ϵAI | ϵH = x − f (θ)] = m x − f (θ).
+
+We now compute Cov (ϵAI , θ | ϕH = x) by conditioning on θ. By the tower property, 
+
+E[ϵAI θ | ϕH = x] = E E[ϵAI θ | θ, ϕ H = x] ϕH = x
+
+= E θ E[ϵAI | θ, ϕ H = x] ϕH = x
+
+= E θ m (x − f (θ)) ϕH = x,
+
+where the second equality uses that conditioning on θ makes θ constant. Similarly, 
+
+E[ϵAI | ϕH = x] = E E[ϵAI | θ, ϕ H = x] ϕH = x = E m(x − f (θ)) ϕH = x.
+
+Combining the last two displays yields Cov (ϵAI , θ | ϕH = x) = E[ϵAI θ | ϕH = x] − E[ϵAI | ϕH = x] E[θ | ϕH = x]= E θ m (x − f (θ)) ϕH = x − E m(x − f (θ)) ϕH = xE[θ | ϕH = x]= Cov  m(x − f (θ)) , θ | ϕH = x.
+
+Because f is strictly increasing, the mapping θ 7 → x − f (θ) is nonincreasing. Because m is nonincreasing by assumption, the composition θ 7 → m(x − f (θ)) is therefore nondecreasing. Note that m(ϵH ) = E[ϵAI | ϵH ] is square-integrable by Jensen’s inequality, since E[ϵ2 
+
+> AI
+
+] < ∞. Consequently m(x − f (θ)) is square-integrable under the conditional law of 
+
+θ | ϕH = x. Applying Lemma A.6 conditionally (with X = θ | ϕH = x, u(θ) = m(x − f (θ)) and v(θ) = θ) yields Cov  m(x − f (θ)) , θ | ϕH = x ≥ 0,
+
+and hence Cov (ϵAI , θ | ϕH = x) ≥ 0.
+
+Combining the last two equations with the earlier decomposition gives Cov (ϕAI , θ | ϕH = x) ≥ Cov  g(θ), θ | ϕH = x.
+
+Next, use the derivative lower bound (7) to decompose g as 
+
+g(t) = kt + h(t),
+
+where h′(t) = g′(t) − k ≥ 0 for all t. Hence h is nondecreasing. For the conditional law of θ | ϕH = x we therefore have Cov (g(θ), θ | ϕH = x) = Cov  kθ + h(θ), θ | ϕH = x
+
+= k Var (θ | ϕH = x) + Cov  h(θ), θ | ϕH = x.
+
+22 Robust Human-AI Complementarity under Uncertainty 
+
+Applying Lemma A.6 conditionally (with X = θ | ϕH = x, u = h and v = id , both nondecreasing) shows that Cov  h(θ), θ | ϕH = x ≥ 0.
+
+Combining the last two displays yields Cov (g(θ), θ | ϕH = x) ≥ k Var (θ | ϕH = x).
+
+Finally, combining this inequality with Cov (ϕAI , θ | ϕH = x) ≥ Cov (g(θ), θ | ϕH = x) gives Cov  ϕAI , θ | ϕH = x ≥ k Var (θ | ϕH = x),
+
+as claimed. We now integrate these conditional covariances over the marginal distribution of ϕH to obtain a lower bound on Cov (˜ r, θ ).First, observe that by definition, 
+
+˜r = ϕAI − E[ϕAI | ϕH ],
+
+so E[˜ r | ϕH ] = 0 and hence E[˜ r] = 0 . Using the law of total covariance we can write Cov (˜ r, θ ) = E˜r θ  − E[˜ r] E[θ]= E E[˜ r θ | ϕH ]  − 0 · E[θ]= E Cov (˜ r, θ | ϕH ) ,
+
+where in the last step we have used the fact that E[˜ r | ϕH ] = 0 implies 
+
+E[˜ r θ | ϕH ] = Cov (˜ r, θ | ϕH ) + E[˜ r | ϕH ] E[θ | ϕH ] = Cov (˜ r, θ | ϕH ).
+
+Next, note that for each fixed value ϕH = x,Cov (˜ r, θ | ϕH = x) = Cov  ϕAI − E[ϕAI | ϕH = x], θ | ϕH = x
+
+= Cov (ϕAI , θ | ϕH = x) − Cov  E[ϕAI | ϕH = x], θ | ϕH = x.
+
+The second term vanishes because E[ϕAI | ϕH = x] is a constant (given ϕH = x), so Cov (˜ r, θ | ϕH = x) = Cov (ϕAI , θ | ϕH = x).
+
+Applying Lemma A.7 to the right-hand side yields Cov (˜ r, θ | ϕH = x) ≥ k Var (θ | ϕH = x),
+
+for every x with finite conditional variance. Taking expectations over ϕH gives Cov (˜ r, θ ) = E Cov (˜ r, θ | ϕH )  ≥ k E Var (θ | ϕH ) ,
+
+as claimed. If Var (θ | ϕH ) > 0 on a set of positive probability and k > 0, then E[Var (θ | ϕH )] > 0 and hence Cov (˜ r, θ ) > 0.
+
+A.9. Proof of Proposition 3.11 
+
+Fix any ξ ∈ U . Let m(ϕH ) ≜ E[θ | ϕH ], so that dH (ϕH ) = m(ϕH ). Define the human-only residual 
+
+eH ≜ θ − m(ϕH ).
+
+By the defining property of conditional expectation, eH is orthogonal in L2 to every square-integrable function of ϕH :
+
+EeH h(ϕH ) = 0 for all h(ϕH ) ∈ L2. (43) 23 Robust Human-AI Complementarity under Uncertainty 
+
+Also, by construction of the nonlinear residual, E[˜ r | ϕH ] = 0 and hence E[˜ r] = 0 . Under squared-error loss, with 
+
+db = m(ϕH ) + b˜r we have 
+
+Lξ (db) = E(θ − m(ϕH ) − b˜r)2 = E(eH − b˜r)2
+
+= E[e2 
+
+> H
+
+] + b2E[˜ r2] − 2b E[eH ˜r].
+
+Since Lξ (dH ) = E[( θ − m(ϕH )) 2] = E[e2 
+
+> H
+
+], subtracting yields 
+
+Lξ (db) − Lξ (dH ) = b2Var ξ (˜ r) − 2b Cov ξ (eH , ˜r). (44) as in the Gaussian case. Using eH = θ − m(ϕH ) and bilinearity of covariance, Cov ξ (eH , ˜r) = Cov ξ (θ, ˜r) − Cov ξ (m(ϕH ), ˜r).
+
+But Cov ξ (m(ϕH ), ˜r) = E[m(ϕH )˜ r] because both terms are mean-zero, and 
+
+E[m(ϕH )˜ r] = EE[m(ϕH )˜ r | ϕH ] = Em(ϕH )E[˜ r | ϕH ] = 0 .
+
+Therefore Cov ξ (eH , ˜r) = Cov ξ (θ, ˜r). (45) By Proposition 3.10, for every ξ ∈ U ,Cov ξ (˜ r, θ ) ≥ k EVar (θ | ϕH ).
+
+The right-hand side depends only on (θ, ϕ H ) and k, which are fixed across ξ ∈ U by construction of the uncertainty set. Define 
+
+κ ≜ k EVar (θ | ϕH ).
+
+By assumption E[Var (θ | ϕH )] > 0 and k > 0, hence κ > 0. Thus, Cov ξ (θ, ˜r) ≥ κ ∀ ξ ∈ U . (46) Moreover, Var (˜ r) is fixed over U, as by construction of U, the joint distribution over P (ϕH , ϕ AI ), and consequently, of 
+
+˜r = ϕAI − E[ϕAI |ϕH ] is fixed. Therefore, since Cov (θ, ˜r) ≥ κ > 0, we have that Var (˜ r) > 0.Accordingly, we have 
+
+Lξ (db) − Lξ (dH ) ≤ b2Var (˜ r) − 2b κ = bVar (˜ r)
+
+
+
+b − 2κ
+
+Var (˜ r)
+
+
+
+.
+
+Thus, for every b satisfying 0 < b < 2κ/ Var (˜ r), the right-hand side is strictly negative, and therefore Lξ (db) < L ξ (dH )
+
+holds for all ξ ∈ U .
+
+# B. Additional Experimental Results & Details 
+
+B.1. Additional Synthetic Figures 
+
+We present our result on varying the expert uncertainty in the setting of positive correlation in Figure 4. 
+
+B.2. Synthetic Experiment Details 
+
+We present more details for our synthetic experiments, including the dataset generation process and model implementation details. B.2.1. S YNTHETIC DATASET 
+
+We use the same synthetic data for both MSE and investment decision experiments. For each unit i = 1 , . . . , n , we generate a synthetic ground truth 
+
+θi ∼ N (0 , σ 2 
+
+> θ
+
+),
+
+and two observed signals (i.e., human and AI-generated) 
+
+Hi = θi + εH,i , Ai = θi + εA,i ,
+
+24 Robust Human-AI Complementarity under Uncertainty 
+
+where the noise terms are jointly Gaussian with mean zero and covariance 
+
+εH,i 
+
+εA,i 
+
+
+
+∼ N 
+
+ 00
+
+
+
+,
+
+ σ2 
+
+> h
+
+ρ σ hσa
+
+ρ σ hσa σ2
+
+> a
+
+ 
+
+.
+
+The parameter ρ ∈ [−1, 1] controls the correlation between human and machine errors. We generate n = 10000 samples for a held-out evaluation set and a calibration set Ical of size ncal = 500 . All quantities that use the latent θ (e.g., calibration of 
+
+ϕH and estimation of κlb ) are computed using only {(θi, H i, A i) : i ∈ I cal }, and all reported MSEs are evaluated on the held-out eval set. For the sweeps over ρ, we set σθ = σh = σa = 1 .5. For the sweeps over σh, we set σθ = 1 .0, σ a = 1 .5.B.2.2. M ETHOD IMPLEMENTATIONS FOR MSE 
+
+Expert-only baseline. We construct a calibrated expert predictor using a linear conditional mean model, 
+
+ϕH,i ≡ E[θi | Hi] ≈ α H i, ˆα = dCov( θ, H )
+
+dVar( H) .
+
+Thus, ϕH is the best linear predictor of θ based on the expert signal H. Here and throughout, empirical moments dCov (·, ·)
+
+and cVar (·) are computed on the calibration split Ical .
+
+Robust linear estimator. We implement the one-parameter linear family studied in our analysis, db(ϕH,i , A i) =
+
+ϕH,i + b A i. For this family, the MSE gap relative to the expert-only baseline depends on the cross-moment 
+
+κ ≡ Cov (θ − ϕH , A ).
+
+In the synthetic experiments, we obtain a conservative shrunken plug-in estimate computed on the calibration split: 
+
+ˆκ ≡ dCov (θ − ϕH , A ), κlb ≡ s · max {0, ˆκ},
+
+with a fixed conservativeness parameter s ∈ [0 , 1] (we use s = 0 .5 in the main sweep). We estimate Var (A) empirically on 
+
+Ical as well. Given a lower bound κlb ≤ κ, the MSE theory implies uniform improvement of db over ϕH for any 
+
+0 < b < 2 κlb 
+
+Var (A) ,
+
+and the corresponding robust choice is 
+
+b⋆ = κlb 
+
+Var (A) .
+
+In our implementation, we estimate Var (A) empirically and set b⋆ = 0 whenever κlb ≤ 0 (in which case the theory does not certify improvement and the robust rule reverts to the expert-only baseline). We use the same synthetic data-generating process from the MSE experiments above to draw (θi, H i, A i)ni=1 , and we evaluate policies under the binary investment utility (3) with (τ, c ) = (0 , 0.3) . We generate a calibration/evaluation split similarly as above: all nuisance quantities that involve θ are estimated on Ical , policies are applied to the held-out split Ieval ,and we report the empirical average utility 1
+
+> neval
+
+P 
+
+> i∈I eval
+
+u(di, θ i).B.2.3. M ETHOD IMPLEMENTATIONS FOR INVESTMENT DECISIONS 
+
+Expert-only baseline. As in the MSE experiments, we first calibrate the raw expert signal H into a posterior-mean proxy by a linear regression on the (simulated) ground truth: 
+
+ϕH,i ≡ bE[θi | Hi] = ˆα H i, ˆα = dCov (θ, H )
+
+cVar (H) .
+
+We also estimate the corresponding posterior variance by 
+
+ˆσ2 
+
+> H
+
+= 1
+
+n
+
+> n
+
+X
+
+> i=1
+
+(θi − ϕH,i )2.
+
+Given (ˆ σH , τ, c ), the expert-only investment rule dH (ϕH ) is the threshold policy from (4) (with xH computed using ˆσH ). All quantities (ˆ α, ˆσ2 
+
+> H
+
+) are computed on Ical , and the resulting policy dH is evaluated on Ieval .25 Robust Human-AI Complementarity under Uncertainty 
+
+Robust symmetric policy. We form the residualized machine signal by projecting A onto the calibrated human signal: 
+
+ri = Ai − ˆβ ϕ H,i , ˆβ = dCov (ϕH , A )
+
+cVar (ϕH ) .
+
+We compute ˆβ on Ical and then form ri for all i ∈ I eval using the same ˆβ (with ϕH,i = ˆ αH i applied to the evaluation split). To use the covariance uncertainty, we shrink the plug-in estimate of the regression coefficient of θ on r toward 0:
+
+bβθr = dCov (θ, r )
+
+cVar (r) , blower = s · max {0, bβθr },
+
+with a fixed conservativeness parameter s ∈ [0 , 1] (we use s = 0 .5 in the main sweep). When blower ≤ 0 the method defaults to dH . Finally, we instantiate the symmetric robust decision rule dsym from (6) using the pessimistic posterior mean/variance from (5) with b = blower (and the corresponding envelopes Plow , P high defined in the theory section). 
+
+B.3. Real-World Dataset Details 
+
+We use the 181 unique questions in ForecastBench (n=7,383), which has a human forecast and ground-truth resolution associated with it. The benchmark provides forecasts from expert (human) forecasters and the general public; we use the expert (human) forecasters’ responses as our human signals, and LLM forecasts as our AI signal. We use a suite of 43 different social science survey experiments conducted via the Time-Sharing Experiments for the Social Sciences (TESS) project (Time-sharing Experiments for the Social Sciences) between 2016 and 2022, for which Hewitt et al. (2024) collected human and LLM forecasts of effect sizes. 
+
+B.4. Potential Mitigation Strategies 
+
+We use GPT-5 (ForecastBench) and GPT-5-mini (TESS Studies) for all experiments. The specific prompting strategies and prompt templates we use are as follows. 
+
+Error Prediction and Correction. These prompting strategies aim to explicitly model human error and adjust forecasts accordingly. • Direct error correction : Instruct the model to make an initial estimate, predict whether human forecasts are too high or too low, and adjust in the opposite direction. • Explicit negative correlation objective : Instruct the model that its goal is to produce forecasts whose errors are negatively correlated with human errors. • Two-stage error correction : First prompt the model to predict the direction and magnitude of human forecast error; then, in a separate call, prompt the model to make a forecast and adjust by the predicted error. Error Prediction and Correction. 
+
+Direct error correction 
+
+You are a forecaster asked to correct human predictions. You are given a summary of human forecasts for this question. Estimate the likely human error (ground truth - human forecast). Adjust by double that amount in the opposite direction. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences and mention the adjustment. 
+
+Explicit negative correlation objective 
+
+You are a forecaster whose errors should be negatively correlated with human forecast errors. You are given a sum-mary of human forecasts for this question. Determine whether humans are likely underestimating or overestimating the true probability for this question. If humans are likely underestimating, your forecast should be ABOVE the true probability (deliberately too high). If humans are likely overestimating, your forecast should be BELOW the true probability (deliberately too low). Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences and mention the opposite adjustment. 26 Robust Human-AI Complementarity under Uncertainty 
+
+Error Prediction and Correction (continued). 
+
+Two-stage error correction 
+
+You are a forecaster. Provide a probability between 0 and 1. Form your own best forecast of the true probability. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences. (Separate call) You are a forecaster asked to produce predictions with negatively correlated errors relative to human forecasts. You are given an initial forecast and the predicted human forecast error direction and magnitude, defined as (truth - human mean) Adjust the initial forecast so your error is likely to have the opposite sign. If human error is predicted POSITIVE (humans too low), adjust your forecast UP by scale × magnitude. If human error is predicted NEGATIVE (humans too high), adjust your forecast DOWN by scale × magnitude. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences and mention the adjustment. 
+
+Divergent Reasoning. These strategies aim to induce reasoning traces that differ systematically from typical reasoning of human forecasters, with the hope that different reasoning produces differently-distributed errors. • Contrarian reasoning : Instruct the model to adopt an adversarial or contrarian stance, or to make an initial estimate and deliberately move away from it. • Self-divergent reasoning : Elicit an initial reasoning trace from the model, then prompt it to generate a forecast using substantially different reasoning from the given trace. • Human-divergent reasoning : When human reasoning traces are available, provide these to the model and instruct it to follow a different reasoning process. Divergent Reasoning. 
+
+Contrarian reasoning 
+
+You are a forecaster asked to give an unreasonable prediction. Deliberately choose a forecast that is in the opposite direction from typical forecasters. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences. 
+
+Self-divergent reasoning 
+
+You are a forecaster. Provide a forecast (probability between 0 and 1) and reasoning trace for this question. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0,1]. reasoning should be 2–4 concise sentences. (Separate call) You are a forecaster. You are given a prior reasoning trace. Your task is to produce a forecast using a substantially different reasoning approach. Do not use the same points from the prior reasoning to make your forecast. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences and must differ from the prior reasoning. 
+
+Human-divergent reasoning 
+
+You are a forecaster. You are given a human reasoning trace. Your task is to produce a forecast using a substantially different reasoning approach. Do not use the same points from the human reasoning to make your forecast. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences and must differ from the human reasoning. Human reasoning: 
+
+Different Information Sets. These strategies restrict the information available to the LLM to reduce overlap with the information set available to human forecasters, increasing the potential for orthogonal errors. • Restricted context : Withhold background information or resolution criteria that humans had access to, forcing the model to rely on different signals. 27 Robust Human-AI Complementarity under Uncertainty       
+
+> (a) Contrarian Reasoning. (b) Direct Error Correction. (c) Self-Divergent Reasoning.
+> Figure 6. TESS Studies Prompting Experiments.
+
+Different Information Sets. 
+
+Restricted context 
+
+You are a forecaster. Provide a probability between 0 and 1. Do not look at background and resolution criteria fields. Return JSON only with keys: forecast, reasoning. forecast must be a number in [0, 1]. reasoning should be 1–3 concise sentences. 
+
+B.5. Distribution Shift Setting 
+
+A natural question is whether the covariance structure between expert and model predictions, once estimated, can be reused for future prediction tasks. For instance, having expended the cost to collect forecasts on a certain domain, one might hope to learn the empirical relationship between human and LLM prediction errors and then apply it to new studies. However, this assumes that the expert-model relationship is stable across settings. This is especially relevant in settings, such as scientific discovery, where researchers study novel phenomena and the degree to which a specific area constitutes a coherent domain with stable prediction error correlations is unclear. Even within a single field, the relationship between expert and model signals may shift as the nature of the forecasting task changes. We investigate this via leave-one-topic-out evaluation, evaluating the performance of models to generalize out-of-distribution across topics. For ForecastBench, we induce topic clusters using BERTopic (Grootendorst, 2022); for TESS, we use the native study categories (e.g., framing, immigration attitudes, gender norms). In each fold, we fit a linear combination 
+
+ˆθ = β0 + β1ϕH + β2ϕAI on in-distribution data and evaluate on the held-out topic. We report the MSE on a held-out set from the target topic/group. We also compare Cov (ϕH ,ϕ AI )  
+
+> V ar (ϕAI )
+
+across settings, which is an observable metric that characterizes the human-AI relationship without using ground truth θ.The results reveal substantial heterogeneity (Table 2). Some topics show little or no OOD degradation: on ForecastBench, “price/close” questions show ∆ = −0.165 , meaning the out-of-distribution estimator actually performs better (perhaps due to more training data). Others fail dramatically: on TESS, “sexual misconduct credibility” exhibits ∆ = +7 .18 × 10 −3, a large increase in MSE. On ForecastBench, transfer differences sometimes coincide with large shifts in the coupling statistic Cov (ϕH , ϕ AI )/Var (ϕAI ), suggesting that instability in the human–model relationship may contribute to distribution-shift behavior. However, this pattern is not monotone and does not hold consistently on TESS. Overall, these findings complicate naive deployment of models based on human-AI collaboration across different scientific topics. These results suggest that the human–AI relationship relevant to complementarity can vary with the task distribution in ways that are difficult to anticipate. 28 Robust Human-AI Complementarity under Uncertainty 
+
+Table 2. Distribution shift on ForecastBench and TESS. Mean squared error (MSE) on distribution shift (i.e., generalizing to a new topic) and in-distribution (i.e., training on the same topic and evaluating on a test split). MSEs on TESS are reported in units of 10 −3.Values are mean ± std across random splits. ∆ is OOD MSE - Target ID MSE (positive indicates degradation under shift). The rightmost column reports a metric that characterizes the difference in human-AI signal relationship Cov (ϕH , ϕ AI )/Var (ϕAI ) on OOD and ID data. 
+
+Dataset Topic (Keywords)/Group OOD MSE Target ID MSE ∆ MSE ∆ Cov (ϕH , ϕ AI )
+
+Var (ϕAI )
+
+ForecastBench (data, series) 0.152 ± 0.041 0.182 ± 0.066 -0.031 -0.021 (price, close) 0.178 ± 0.012 0.343 ± 0.151 -0.165 -0.948 (violence, events) 0.121 ± 0.029 0.111 ± 0.041 +0.010 +0.126 (market, prediction) 0.170 ± 0.045 0.137 ± 0.035 +0.032 -0.110 TESS Studies agenda setting 4.13 ± 0.55 4.12 ± 0.30 +0.01 -0.13 framing 12.26 ± 0.55 12.01 ± 0.90 +0.24 +0.18 gender norms 14.03 ± 2.30 14.40 ± 2.12 -0.37 +0.43 immigration attitudes 2.94 ± 0.81 0.47 ± 0.18 +2.47 +0.34 international rights 3.65 ± 0.64 2.66 ± 0.27 +0.99 -0.21 partisanship polarization 0.83 ± 0.16 0.53 ± 0.13 +0.30 -0.36 race ethnicity 2.62 ± 0.65 0.39 ± 0.08 +2.23 +0.40 representation 0.06 ± 0.05 0.20 ± 0.33 -0.14 +0.77 sexual misconduct credibility 20.46 ± 4.17 13.28 ± 3.91 +7.18 +0.28 transgender rights 1.00 ± 0.12 1.04 ± 0.14 -0.05 +0.21 
+
+B.6. Distribution Shift Experiment Details Topic Modeling for ForecastBench We induce topic clusters using BERTopic (Grootendorst, 2022) with 
+
+all-MiniLM-L12-v2 embeddings. We set min topic size = 5 and allow BERTopic to determine the number of topics automatically. Instances assigned to the outlier topic ( −1) are excluded. Each question is represented by concatenating the question text, background context, resolution criteria, and source introduction, joined by newlines. 
+
+Topic Categories for TESS For TESS, we use the dataset’s native study categories: agenda setting, framing, gender norms, immigration attitudes, international rights, partisanship polarization, race ethnicity, representation, sexual misconduct credibility, and transgender rights. 
+
+Evaluation Protocol We perform leave-one-topic-out evaluation. For each topic t, let Bt denote the instances assigned to 
+
+t and At the remainder. We partition At into source training (80%) and source test (20%) sets, and partition Bt into target training (50%) and target test (50%) sets. The linear model ˆθ = β0 + β1ϕH + β2ϕAI is fit via OLS on the source training set. When multiple human forecasts exist for a question, we average them to obtain ϕH . To reduce variance, we repeat each split 5 times with seeds seed = t × 1000 + i for i ∈ { 0, . . . , 4} and report means and standard deviations. 
+
+Metrics We report MSE on the source training set (in-sample), source test set (out-of-sample, same distribution), and target test set (out-of-distribution). We also compute target in-domain MSE by fitting a separate model on the target training set and evaluating on the target test set; the gap ∆ = Target Test MSE − Target In-Domain MSE quantifies degradation due to shift. We compute the statistic Cov (ϕH , ϕ AI )/Var (ϕAI ) on the held-out and source domains, and report their difference to measure whether the expert–model relationship changes across topics. 29 Robust Human-AI Complementarity under Uncertainty 
+
+(a) Direct Error Correction (b) Explicit Negative Correlation (c) Two-Stage Error Correction 
+
+(d) Contrarian Reasoning (e) Self-Divergent Reasoning (f) Human Divergent Reasoning 
+
+(g) Restricted Context (h) Contrarian Reasoning (v2) (i) Contrarian Reasoning (v3) 
+
+Figure 7. ForecastBench Prompting Experiments. 
+
+30

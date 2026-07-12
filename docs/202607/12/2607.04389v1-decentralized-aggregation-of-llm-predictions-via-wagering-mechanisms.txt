@@ -1,0 +1,2356 @@
+Title: Decentralized Aggregation of LLM Predictions via Wagering Mechanisms
+
+URL Source: https://arxiv.org/pdf/2607.04389v1
+
+Published Time: Tue, 07 Jul 2026 02:29:31 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# Decentralized Aggregation of LLM Predictions via Wagering Mechanisms 
+
+Yuhong Luo ∗ David M. Pennock † Xintong Wang ‡
+
+July 7, 2026 
+
+Abstract 
+
+It is increasingly common to aggregate predictions from multiple LLMs, each with domain expertise or access to private tools and data, to improve collective prediction performance. In decentralized settings, aggregation weights need to be determined without access to models’ private information and should remain robust to strategic reporting. We propose a family of advantage-aligned wagering mechanisms for LLM aggregation (WALLA), in which each model reports a prediction and a learned wager, and predictions are aggregated using wagers as weights. WALLA introduces a leave-one-out baseline into the net payout function, yielding three desirable properties: (1) dominant-strategy incentive compatibility of prediction under arbitrary belief structure, (2) advantage–wager alignment, where the optimal wager is proportional to the model’s expected score advantage, and (3) prediction-agnostic wager optimization, enabling decentralized learning of wager policies without requiring optimal predictions. We further instantiate two mechanism variants that trade off normality and no-arbitrage while maintaining a bounded worst-case deficit for the mechanism. Experiments on question-answering and forecasting benchmarks across heterogeneous models and private-information settings show that WALLA matches centralized aggregation methods in predictive performance, while simultaneously achieving decentralized learning, advantage-aligned aggregation weights, uncertainty awareness, and incentive-compatible prediction. 1
+
+## 1 Introduction 
+
+Having different large language models—each with distinct capabilities, domain expertise, or access to private tools and data—collaborating on complex tasks is becoming increasingly common. When no single model dominates across domains, a natural objective is to combine their complementary strengths. For prediction tasks such as forecasting and question answering, this amounts to aggregating their probabilistic predictions. A central challenge in aggregating LLM predictions is determining how much influence or weight each model should have on each question. In centralized systems, question-dependent aggregation weights can be learned directly from models’ hidden representations or private contexts [ 1 , 2, 3, 4, 5]. In decentralized deployments, however, models’ private signals are unavailable to the aggregator. Existing decentralized approaches either assign fixed weights [ 6, 7, 8] or derive weights from reported confidence [ 9] or input perplexity [ 10 ]. However, aggregation weights based on these heuristic signals may be unreliable when models are miscalibrated and may also be strategically exaggerated by independent LLM services seeking greater influence or rewards. We propose designing decentralized mechanisms whose incentives align aggregation weights with models’ expected contribution to the aggregated prediction. Ideally, for each domain-specific question, models that expect to outperform the rest of the pool should participate and receive greater aggregation weights, while models that expect to be outperformed should receive little or no weight in the aggregation. We propose to address this challenge through wagering mechanisms [ 11 , 12 , 13 , 14 ], in which each participant reports a prediction and places a wager—a stake reflecting its confidence in that prediction. The     
+
+> ∗Rutgers University, y.luo@rutgers.edu
+> †DIMACS, Rutgers University, dpennock@dimacs.rutgers.edu
+> ‡Rutgers University, xintong.wang@rutgers.edu
+> 1The source code is provided in https://github.com/chailab-rutgers/WALLA .
+
+1
+
+> arXiv:2607.04389v1 [cs.AI] 5 Jul 2026
+
+mechanism then evaluates predictions using proper scoring rules and allocates payouts based on these scores relative to others, with rewards scaled by the size of the wagers. By interpreting wagers as aggregation weights, the mechanism simultaneously incentivizes truthful predictions and elicits how much influence each model should have in the final aggregated prediction. The canonical weighted-score wagering mechanism (WSWM) [ 12 ] satisfies key incentive properties, but two aspects limit its applicability to learning-based agents. First, its incentive-compatibility guarantee relies on immutable beliefs —the assumption that agents would not revise their posteriors upon observing others’ reports. Second, because of the form of WSWM’s net payout, a rational agent’s optimal wager always lies at the boundaries, producing a binary signal that is insufficiently informative for weighted aggregation or for learning wagering strategies that reflect an agent’s comparative advantage on domain-specific questions. 
+
+Our contribution. We propose a family of wagering mechanisms referred to as advantage-aligned wager-ing mechanisms for LLM aggregation (WALLA) that resolve both limitations through a single structural modification to the net payout function. This modification yields three properties that make the mechanism well-suited to learning-based agents: (1) dominant-strategy incentive compatibility under arbitrary belief structures : truthful prediction remains optimal regardless of opponents’ strategies or how agents’ beliefs are formed; (2) advantage–wager alignment : the best-response wager is proportional to the agent’s expected score advantage; and (3) prediction-agnostic wager optimization : for any fixed prediction, the best-response wager remains well defined, enabling agents to learn wagering strategies without requiring optimal predic-tions. Unlike heuristic confidence measures, the equilibrium wager has a precise interpretation as an agent’s expected score advantage, arising as the equilibrium outcome of a net payout function that aligns wagers with comparative advantage. We further instantiate the proposed net payout function with two variants, where the first satisfies 
+
+normality but admits arbitrage [13 ], while the second sacrifices normality but guarantees no-arbitrage. We prove that the mechanism’s worst-case deficit is a tunable design choice independent of both the number of participants and the amount wagered. Empirically, we conduct experiments on decentralized prediction aggregation in which LLM agents use their model hidden states to learn a wager network. We evaluate WALLA across three scenarios: homogeneous models with private contexts, heterogeneous models, and heterogeneous models with private contexts, demonstrating that the wager network learns to identify comparative advantage from diverse sources: context assignment, domain expertise, and their combination. WALLA matches centralized aggregation baselines (stacked generalization, learned routers) on QA benchmarks (MMLU, MedMCQA, ARC-Challenge, PubMedQA) and a forecasting benchmark (BayesX), while being the only method that simultaneously achieves weighted aggregation, uncertainty awareness, and fully decentralized learning with incentive-compatibility guarantees. 
+
+1.1 Related Work 
+
+Aggregating LLM predictions. The aggregation of LLM predictions has been studied extensively [ 15 ]. Equal-weighted aggregation, such as self-consistency [ 6], majority vote [ 16 , 17 , 8], or multi-agent debate [ 7] is shown to be effective. However, these methods implicitly assume that models have comparable capabilities across tasks, an assumption that may fail when tasks require specialized knowledge. Recent work shows that LLM hidden representations encode uncertainty and confidence [ 18 , 19 , 20 ], motivating training-free methods that estimate aggregation weights from model uncertainty [ 10 , 9]. While computationally efficient, these methods rely on accurate confidence estimates and can be vulnerable to miscalibration or strategic manipulation. More general approaches learn aggregation weights in a centralized supervised manner. A stream of work studies pre-inference routing, where a centrally trained routing model selects which LLM should answer a query, without accessing model predictions or hidden representations at inference time [ 1, 21 , 2, 3, 4]. Another line adopts stacked generalization [ 5 ], which learns aggregation weights from model hidden representations. Finally, several methods train external reward models to evaluate generated outputs and determine aggregation weights [ 22 , 23 , 24 ], which can be computationally expensive. In contrast, our method supports fully decentralized learning, where aggregation weights emerge as equilibrium wagers with a precise interpretation as agents’ expected score advantages. 2A series of recent works studies mechanism designs for LLM aggregation [ 25 , 26 , 27 , 28 ]. Rather than improving the aggregated prediction performance, these mechanisms primarily elicit truthful reports of preferences (e.g., bids for tokens) for applications such as online advertising. Our work here uses mechanism design to elicit aggregation weights (reflecting prediction advantage) for decentralized prediction aggregation. 
+
+LLM forecasting. Forecasting has emerged as an important benchmark for evaluating LLMs’ world knowledge and uncertainty-estimation capabilities [ 29 , 30 ]. Existing work has focused on improving the forecasting performance of language-model-based forecasting systems [31, 32] and on designing benchmarks for LLM forecasters [ 33 , 34 , 35 , 36 , 37 , 38 , 39 ]. Schoenegger et al. [40] showed that aggregating forecasts from multiple LLMs can rival the accuracy of human crowds. 
+
+Wagering mechanisms and prediction markets. Wagering mechanisms are designed to elicit proba-bilistic predictions from strategic forecasters [ 11 , 13 , 12 , 41 , 42 ]. These mechanisms are proposed to satisfy desirable properties, including incentive compatibility, budget balance, individual rationality, normality, and no-arbitrage. Our work builds on this literature by designing wagering mechanisms for decentralized aggregation of LLM predictions. A closely related line of work studies prediction markets [ 43 , 44 , 45 , 46 , 47 ], which aggregate beliefs through market prices in dynamic environments where participants continuously update their positions as new information arrives. In contrast, we consider a static information setting in which each agent reports a prediction and a wager only once. 
+
+## 2 Preliminaries 
+
+This section introduces preliminaries underlying our proposed mechanism and analysis. We first review proper scoring rules and the canonical weighted-score wagering mechanism on which we build, then discuss desirable properties, and motivate additional ones for extending the framework to LLM agents. 
+
+Scoring rules and wagering mechanisms. We consider a probabilistic prediction setting, where a mechanism elicits predictions on uncertain outcomes from multiple agents and evaluates them based on the quality of their predictions. Let M = {1, 2, . . . , M } denote a set of M agents. A wagering mechanism 
+
+operates in two stages. In the first stage, given a question x ∈ X with an unknown outcome y ∈ Y , each agent i submits a prediction pi ∈ ∆( Y) and wagers some non-negative amount wi ∈ R≥0 on her prediction. We denote the resulting prediction and wager profiles by p := ( p1, . . . , p M ) and w := ( w1, . . . , w M ), and write p−i and w−i for the corresponding profiles excluding agent i. In the second stage, after the outcome is revealed, the mechanism determines the net payout to each agent, denoted πi(p, w, y ) ∈ R, based on the quality of her prediction and the amount wagered. The quality of a prediction is measured by a scoring rule : s : ∆( Y) × Y → R, which assigns a numerical score s(p, y ) to a probabilistic forecast p upon realization of outcome y. A strictly proper scoring rule 
+
+incentivizes a risk-neutral agent to predict according to her true belief. 
+
+Definition 2.1 (Strictly Proper Scoring Rule) . A scoring rule s is strictly proper if and only if for all 
+
+p, q ∈ ∆( Y) and p̸ = q,
+
+EY ∼q [s(q, Y )] > EY ∼q [s(p, Y )] .
+
+A prediction of p = q is truthful , as the agent simply reports her belief q.
+
+Example 2.1 (Brier Score [ 48 , 49 ]) . s(p, y ) = c1 − c2∥p − δy ∥22, where c1 ∈ R, c2 ∈ R+, and δy ∈ ∆( Y)
+
+denotes the Dirac measure at y, the indicator vector of the realized outcome y.
+
+The Brier score, also known as the quadratic score, is a simple and widely used strictly proper scoring rule; it is bounded and has the property that for an agent with belief q, the expected score EY ∼q [s(p, Y )] 
+
+is monotonically decreasing in ∥p − q∥22, the squared distance between the prediction p and the belief q. A scoring rule is then used in the mechanism’s payout function π : (∆( Y) × R≥0)M × Y → RM .3Definition 2.2 (Weighted-Score Wagering Mechanism (WSWM) [ 12 ]) . Given a scoring rule s, the WSWM specifies the net payout to agent i as the difference between her score and the wager-weighted average of all agents’ scores, scaled by her own wager, i.e.,           
+
+> πWSWM
+> i(p,w, y ) = wis(pi, y )−
+> PMj=1 wjs(pj, y )
+> PMj=1 wj
+> !
+> .(1)
+
+The WSWM based on a Brier score is also referred to as the Brier betting mechanism. 
+
+Desirable properties of wagering mechanisms. Following Lambert et al. [12] and Chen et al. [13] ,we introduce a set of properties that wagering mechanism designers typically aim to satisfy and that are particularly relevant in our setting: (a) incentive compatibility (Def. 2.3), (b) individual rationality (Def. 2.4), (c) weak budget balance (Def. 2.5), (d) normality (Def. 2.6), and (e) no arbitrage (Def. 2.7). 
+
+Definition 2.3 (Incentive Compatibility (IC)) . A wagering mechanism is incentive-compatible if all players maximize their expected net payout when predicting their true beliefs. Formally, ∀i ∈ M , qi ∈ ∆( Y) which reflects agent i’s true belief, pi ∈ ∆( Y) where qi̸ = pi, p−i ∈ ∆( Y)M −1, and w ∈ RM 
+
+> ≥0
+
+with wi > 0,
+
+EY ∼qi [πi(( qi, p−i), w, Y )] > EY ∼qi [πi(( pi, p−i), w, Y )] .
+
+The mechanism is dominant-strategy incentive-compatible (DSIC) if truthful prediction is optimal regardless of other agents’ reports, for any wi > 0.
+
+Definition 2.4 (Individual Rationality (IR)) . Every agent prefers participating to not participating in the mechanism (i.e., the expected net payoff of participating is nonnegative). Formally, ∀i ∈ M , qi ∈ ∆( Y) which reflects agent i’s true belief and wi ∈ R≥0, there exists some pi ∈ ∆( Y) such that for all p−i ∈ ∆( Y)M −1 and 
+
+w−i ∈ RM −1 
+
+> ≥0
+
+,
+
+EY ∼qi [πi(( pi, p−i), (wi, w−i), Y )] ≥ 0.
+
+Definition 2.5 (Weak Budget Balance) . The mechanism does not lose money but can potentially make a profit. Formally, ∀p ∈ ∆( Y)M , w ∈ RM 
+
+> ≥0
+
+and y ∈ Y ,
+
+> M
+
+X
+
+> i=1
+
+πi(p, w, y ) ≤ 0.
+
+Definition 2.6 (Normality) . If from agent i’s perspective the prediction of another agent j improves, then agent i’s expected net payoff decreases. Formally, for every i̸ = j ∈ M , qi ∈ ∆( Y) which reflects agent i’s true belief, w ∈ RM 
+
+> ≥0
+
+and p ∈ ∆( Y)M , defining p′ by p′ 
+
+> j
+
+= qi and p′ 
+
+> k
+
+= pk for k̸ = j,
+
+EY ∼qi [πi(p, w, Y )] ≥ EY ∼qi [πi(p′, w, Y )] ,
+
+with strict inequality whenever pj̸ = qi, wi > 0 and wj > 0.
+
+Definition 2.7 (No-Arbitrage [ 13 ]) . No agent can guarantee a strictly positive payout regardless of the realized outcome. Formally, a mechanism is arbitrage-free if there exists no agent i ∈ M , prediction profile 
+
+p ∈ ∆( Y)M , and w ∈ RM 
+
+> ≥0
+
+such that πi(p, w, y ) > 0 for all y ∈ Y .
+
+WSWM is well-suited for human forecasters, satisfying the above properties except for no-arbitrage, but can fall short for learning-based agents. First, a rational agent’s best-response wager is extreme: zero when she expects to underperform the pool average, and as large as permitted otherwise. It yields only coarse, binary feedback for weighted aggregation and learning wagering strategies. Second, its IC relies on immutable beliefs [ 12 ]; when agents update beliefs after observing others’ reports, truthful prediction may no longer be optimal. We aim to close both gaps by designing a mechanism suitable for both human and learning-based participants (e.g., LLMs): the best-response wager reflects expected score advantage, and DSIC holds under an arbitrary belief structure. 4Warm-up: WSWM with non-strategic agents. We analyze the wagering mechanism in a simplified, non-strategic setting where agents report truthful predictions and reinvest their cumulative payoffs as wagers. We consider a variant of WSWM with a scaled linear scoring rule and linear pooling, and show that the resulting dynamics admit connections to gradient-based learning, including equivalence to multiplicative weights updates, and that the induced aggregation recovers Bayesian model averaging [ 50 ] with improved regret guarantees over standard WSWM formulations [ 41 ]. The formal statements and proofs are deferred to Appendix A. 
+
+## 3 Design of Wagering Mechanisms for LLM Aggregation 
+
+This section presents our proposed advantage-aligned wagering mechanism for LLM aggregation (WALLA) .We start by analyzing our mechanism under the one-shot, single-question setting (Sections 3.1–3.2), where each agent holds a belief and acts to maximize her expected net payoff. We characterize the equilibrium prediction and wager, and establish incentive and structural properties of the mechanism. Section 3.3 then extends to the multiple-question setting, formalizing how LLM agents can learn wager policies from observed payouts as a function of their hidden states, which encode the question and any context. 
+
+3.1 Setting, Information Model, and Strategies 
+
+We now formalize the setting, information model, and agent strategy. Let (Ω , F) be a measurable space, where Ω is the set of possible states of the world and F is the σ-algebra of measurable events. Each state 
+
+ω ∈ Ω encodes the question X, the outcome Y ∈ Y , and all agents’ private signals (S1, . . . , S M ). The private signal Si represents additional information available to agent i beyond the question itself, such as outputs from tool calls or extra context. The information available to agent i is captured by Fi = σ(X, S i) ⊆ F : all agents observe the question X, but may differ in their private signals Si. Each agent i holds a prior belief 
+
+Qi, a probability measure on (Ω , F) that may differ from the data-generating probability measure P. When agents share a common prior, we write Qi = Q for all i.A strategy for agent i is a pair (pi, w i), where pi : Ω → ∆( Y) is a probabilistic prediction and wi : Ω → R≥0
+
+is a wager. Both are required to be Fi-measurable: they depend on ω only through the question X and agent 
+
+i’s private signal Si.2 All agents are assumed risk-neutral , optimizing expected net payout on each individual question. For notational simplicity, we suppress the explicit dependence on ω ∈ Ω where the context is clear, using pi, wi, and y to denote the prediction pi(ω), wager wi(ω), and realized outcome Y (ω) respectively. 
+
+3.2 Advantage-Aligned Wagering Mechanisms 
+
+We discuss three components of our design of mechanisms: (1) a scoring rule s that evaluates individual prediction, (2) a net payout function that determines each agent’s net payoff, and (3) an aggregation rule that combines predictions into a single forecast. The net payout function is the main object of design. 
+
+Definition 3.1 (Net Payout Function) . Given a strictly proper scoring rule s and a constant c3 > 0, the net payout to agent i upon the realization of outcome y ∈ Y is 
+
+πi(p, w, y ) := wi(s(pi, y ) − b−i(p−i, w−i, y ) − c3wi) , (2) 
+
+where b−i : ∆( Y)M −1 × RM −1 
+
+> ≥0
+
+× Y → R is a baseline score: it depends only on other agents’ predictions and wagers, not on (pi, w i). We refer to b−i as the leave-one-out baseline and s(pi, y ) − b−i as the comparative advantage. 
+
+The specific form of b−i(·) is left free; Section 3.2.1 instantiates two concrete choices that trade off normality with no-arbitrage. Since wi is Fi-measurable, it factors out of E[· | F i] under any probability measure. The expected net payout decomposes as 
+
+EQi [πi | F i] = wi
+
+
+
+EQi [s(pi, Y ) | F i]
+
+| {z }
+
+> self-score
+
+− EQi [b−i | F i]
+
+| {z }
+
+> leave-one-out baseline
+
+
+
+− c3 w2
+
+> i
+
+| {z } 
+
+> regularization
+
+. (3)   
+
+> 2For LLMs, Fi-measurability is automatic: for fixed model weights (e.g., during inference), the model’s output depends only on input (X, S i).
+
+5We show the other two main properties of this net payout function: the first establishes the optimal prediction for any wager; the second establishes that the best-response wager elicits the agent’s expected score advantage .
+
+Theorem 3.2 (DSIC of Prediction) . Under the net payout function (2) , truthful prediction is a dominant strategy: each agent maximizes her expected net payoff by reporting her own belief about Y , regardless of opponents’ strategies and her own wager. Formally, for any belief Qi held by agent i, any wager profile 
+
+w ∈ RM
+
+> ≥0
+
+, and any p−i ∈ ∆( Y)M −1,
+
+p∗ 
+
+> i
+
+:= Qi(Y = · | F i) ∈ arg max  
+
+> pi∈∆( Y)
+
+EQi [πi(( pi, p−i), w, Y ) | F i] ,
+
+and the maximizer is unique when wi > 0.Proof. From the decomposition (3) , since b−i does not depend on pi, when wi > 0, the optimization reduces to 
+
+p∗ 
+
+> i
+
+∈ arg max  
+
+> pi∈∆( Y)
+
+EQi [s(pi, Y ) | F i].
+
+By strict properness of s, this is uniquely attained at p∗ 
+
+> i
+
+:= EQi [δY | F i] = Qi(Y = · | F i), the agent’s belief about Y given her observation of the question X and private signal Si. When wi = 0 , the payout is identically zero regardless of the prediction. Two features deserve emphasis. First , our DSIC holds under any belief structure, including mutable beliefs: if an agent revises Qi after observing others’ reports, the updated posterior remains optimal. This contrasts with WSWM, where the scaling factor P  
+
+> j̸=i
+
+wj / P 
+
+> j
+
+wj correlates with Y under mutable beliefs, producing an O(1 /M ) bias [ 12 ]. Second , the optimal prediction does not depend on the agent’s own wager (wi > 0), so a learned (or even suboptimal) wager does not distort the prediction incentive. Together with the property that the best-response wager is well defined for any fixed prediction (Theorem 3.3), this decoupling enables the learning pipeline of Section 3.3. 
+
+Theorem 3.3 (Advantage–Wager Alignment) . Under the net payout function (2) , the best-response wager is proportional to the agent’s expected score advantage. Formally, for any belief Qi held by agent i, any 
+
+p ∈ ∆( Y)M , and any w−i ∈ RM −1 
+
+> ≥0
+
+, the best-response wager for agent i is 
+
+w∗ 
+
+> i
+
+(pi) = 
+
+ Ai
+
+2c3
+
++
+
+; Ai := EQi [s(pi, Y ) − b−i | F i], (4) 
+
+where (x)+ := max( x, 0) and Ai denotes agent i’s expected score advantage over the baseline. Proof. For any fixed pi, p−i, and w−i, the expected net payout (3) as a function of wi ∈ R≥0 is EQi [πi |Fi] = wi Ai − c3 w2 
+
+> i
+
+.
+
+Since ∂2
+
+> ∂w 2
+> i
+
+EQi [πi | F i] = −2c3 < 0, this is strictly concave. The unique unconstrained maximizer is 
+
+wi = Ai/(2 c3), and the constrained maximizer over wi ≥ 0 is w∗ 
+
+> i
+
+(pi) = ( Ai/(2 c3)) +.Three features follow from Theorem 3.3. First , agents with Ai ≤ 0 wager zero and are automatically excluded from aggregation. Second , the best-response wager is well defined for any prediction pi, not just the optimal one, allowing the wagers to be learned separately without altering the base model’s predictions (more in Section 3.3). Third , under the Brier score and truthful prediction, EQi [s(pi, Y ) | F i] = c1 −c2 Var Qi (δY | F i),so higher predictive uncertainty reduces the expected self-score and hence the wager. 3
+
+Furthermore, our mechanism satisfies individual rationality in the interim sense: after observing the question and her private signal, an agent prefers participating to not participating. 
+
+Definition 3.4 (Interim Individual Rationality) . The expected net payoff of participating upon receiving the question and private signal is nonnegative. Formally, ∀i ∈ M , any Qi and Fi, there exist some pi ∈ ∆( Y)
+
+and wi ∈ R≥0 such that for all p−i ∈ ∆( Y)M −1 and w−i ∈ RM −1 
+
+> ≥0
+
+,
+
+EQi [πi(( pi, p−i), (wi, w−i), Y ) | F i] ≥ 0.
+
+Interim IR (Def. 3.4) is satisfied because for arbitrary pi, w∗ 
+
+> i
+
+(pi) guarantees non-negative expected net payout EQi [πi | F i] = Aiw∗ 
+
+> i
+
+(pi) − c3(w∗ 
+
+> i
+
+(pi)) 2 = ( A2 
+
+> i
+
+/(4 c3)) +.
+
+> 3Overconfident models underestimate this variance and may over-wager; calibration on realized outcomes can help (Sec. 4.6).
+
+6Equilibrium Characterization. Heterogeneous predictions can stem from two sources: differences in information and differences in beliefs. We use Theorems 3.2 and 3.3 to characterize the equilibrium in each extreme case. In practice, both sources often appear together. 
+
+Example 3.1 (Homogeneous agents with private signals) . Consider M homogeneous agents sharing a common prior Q over (Ω , F). Each agent i observes a private signal Si, giving rise to distinct private information Fi = σ(X, S i)̸ = Fj when Si̸ = Sj . Agents differ not in their priors but in what they observe: heterogeneous predictions arise from heterogeneous information. In LLM settings, this corresponds to M
+
+copies of the same base model, each receiving a different context for the same question. 
+
+Corollary 3.5 (BNE under common prior) . Suppose agents share a common prior Q (Example 3.1). Let 
+
+p∗ 
+
+> i
+
+= Q(Y = · | F i) (Theorem 3.2) and w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+ with Ai = E[s(p∗ 
+
+> i
+
+, Y ) − b−i | F i] (Theorem 3.3). The strategy profile {(p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) }Mi=1 is a Bayes–Nash equilibrium: for every agent i and every alternative strategy (˜ pi, ˜wi),
+
+EQ
+
+πi
+
+ (p∗ 
+
+> i
+
+, p∗−i), (w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+), w∗−i), Y  | F i
+
+ ≥ EQ
+
+πi
+
+ (˜ pi, p∗−i), ( ˜ wi, w∗−i), Y  | F i
+
+ .
+
+Proof. See Appendix B.1. 
+
+Example 3.2 (Heterogeneous agents) . Consider M agents holding beliefs Q1, . . . , QM that may differ. No assumptions are made regarding their relationship; the measures are permitted to be mutually singular, perfectly absolutely continuous, or anywhere in between. Agent i does not know agent j’s belief Qj . Heterogeneous predictions arise not from different information but from different perspectives on the same input. In the LLM setting, this corresponds to M distinct models—differing in architecture, training data, or fine-tuning procedure—each observing the same question with no additional context ( Si = ∅, so Fi = σ(X) = Fj ). 
+
+Corollary 3.6 (NE under heterogeneous beliefs) . Suppose each agent i holds her own belief Qi (Example 3.2). Let p∗ 
+
+> i
+
+= Qi(Y = · | F i) (Theorem 3.2) and w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+ with Ai = EQi [s(p∗ 
+
+> i
+
+, Y ) − b−i | F i]
+
+(Theorem 3.3). The strategy profile {(p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) }Mi=1 is a Nash equilibrium: for every agent i and every alternative strategy (˜ pi, ˜wi),
+
+EQi
+
+πi
+
+ (p∗ 
+
+> i
+
+, p∗−i), (w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+), w∗−i), Y  | F i
+
+ ≥ EQi
+
+πi
+
+ (˜ pi, p∗−i), ( ˜ wi, w∗−i), Y  | F i
+
+ .
+
+Proof. See Appendix B.2. 
+
+3.2.1 Two Variants of Leave-One-Out Score Baseline 
+
+Theorems 3.2 and 3.3 hold for any leave-one-out baseline b−i that does not depend on (pi, w i). We first instantiate two concrete choices that make different design tradeoffs, and then show that both variants admit a worst-case deficit bound independent of the number of participants and the amount wagered. 
+
+Definition 3.7 (Weighted-Score Baseline of WALLA I) . The baseline is the wager-weighted average of other agents’ scores: 
+
+bI
+
+> −i
+
+(p−i, w−i, y ) := 
+
+P  
+
+> j̸=i
+
+wj s(pj , y )
+
+P  
+
+> j̸=i
+
+wj
+
+. (5) 
+
+Definition 3.8 (Weighted-Prediction Baseline of WALLA II) . The baseline evaluates the scoring rule at the wager-weighted pool of other agents’ predictions: 
+
+bII 
+
+> −i
+
+(p−i, w−i, y ) := s(q−i, y ), q−i := 
+
+P  
+
+> j̸=i
+
+wj pj
+
+P  
+
+> j̸=i
+
+wj
+
+∈ ∆( Y). (6) In short, WALLA I averages scores, whereas WALLA II scores an average prediction. The two variants trade off normality (Def. 3.9) and no-arbitrage (Def. 2.7). These two properties are in tension under known wagering mechanism designs. Lambert et al. [12] showed that WSWM satisfies normality, while Chen et al. [13] showed it admits arbitrage and proposed the no-arbitrage wagering mechanism (NAWM), which eliminates arbitrage but sacrifices normality. Our two variants exhibit the same tradeoff. We first adapt the definition of normality (Def. 2.6) for our information model. 7Definition 3.9 (Normality) . A mechanism satisfies normality if, for every i̸ = j ∈ M , any belief Qi over the measurable space (Ω , F), Fi ∈ F , w ∈ RM 
+
+> ≥0
+
+and p ∈ ∆( Y)M , defining p′ by p′ 
+
+> j
+
+= p∗ 
+
+> i
+
+:= Qi(Y = · | F i)
+
+and p′ 
+
+> k
+
+= pk for k̸ = j,
+
+EQi [πi(p, w, Y ) | F i] ≥ EQi [πi(p′, w, Y ) | F i],
+
+with strict inequality whenever pj̸ = Qi(Y = · | F i), w i > 0, and wj > 0. That is, if from agent i’s perspective (i.e., Qi), the prediction of another agent j improves, then agent i’s expected net payoff does not increase. 
+
+We defer proofs of this section to Appendix B.3. 
+
+Proposition 3.10 (Normality of WALLA I) . WALLA I satisfies normality. 
+
+Proposition 3.11 (Arbitrage in WALLA I) . WALLA I does not satisfy no-arbitrage. When predictions from other agents are not all identical, there exists a report ˆpi and a sufficiently small wager wi such that πi > 0
+
+for all outcomes y ∈ Y .
+
+Proposition 3.12 (No-Arbitrage of WALLA II) . WALLA II satisfies no-arbitrage. 
+
+Proposition 3.13 (Normality Failure of WALLA II) . WALLA II does not satisfy normality: by adopting p∗ 
+
+> i
+
+,agent j can change the pooled baseline q−i in a direction that increases player i’s expected net payoff. 
+
+Both variants satisfy DSIC under any belief structure (Theorem 3.2), advantage–wager alignment at best response (Theorem 3.3), and prediction-agnostic wager optimization, and the choice between variants is a design decision, depending on the presence of strategic behavior. However, both compromise the budget balance. We show below that the worst-case deficit of our mechanism is bounded and is independent of the number of participants M . For our net payout function using the Brier score (Def. 2.1), the worst-case deficit is c22/c 3.
+
+Proposition 3.14 (Bounded Worst-Case Deficit) . Under the net payout function (2) with a bounded scoring rule ( s ∈ [s, s ]) for WALLA I, or a bounded and concave scoring rule for WALLA II (e.g., the Brier score), the total net payout satisfies 
+
+> M
+
+X
+
+> i=1
+
+πi ≤
+
+ s − sW − c3
+
+ MX
+
+> i=1
+
+w2 
+
+> i
+
+≤ (s − s)2
+
+4c3
+
+(7) 
+
+where W = P 
+
+> i
+
+wi, for any prediction profile p ∈ ∆( Y)M , any wager profile w ∈ RM
+
+> ≥0
+
+, and realized outcome 
+
+y ∈ Y .
+
+Compared to WSWM with a global average baseline [ 12 ], which achieves exact budget balance, our leave-one-out baseline inflates each agent’s deviation by W/W −i, producing the leave-one-out inflation term in (12) . The regularization c3
+
+P 
+
+> i
+
+w2 
+
+> i
+
+serves to offset this inflation (e.g., by taxing wagers). The regularization constant c3 is the designer’s lever: a larger c3 reduces the worst-case deficit at the cost of suppressing wagers. 
+
+3.2.2 Aggregation 
+
+After eliciting predictions {pi}Mi=1 and wagers {wi}Mi=1 , the platform aggregates individual reports into a single probabilistic forecast ˆp ∈ ∆( Y) using wagers as weights. 
+
+Linear pooling. The wager-weighted arithmetic mean 
+
+ˆplin := 
+
+PMi=1 wi pi
+
+W ∈ ∆( Y) (8) is the unique minimizer of the wager-weighted sum of squared Euclidean distances P 
+
+> i
+
+wi∥q − pi∥22 over 
+
+q ∈ ∆( Y), or equivalently, the minimizer of the wager-weighted KL divergence P 
+
+> i
+
+wi KL (pi∥q). Linear pooling is computationally simple and tends to preserve disagreement among forecasters. 8Logarithmic pooling. The wager-weighted geometric mean 
+
+ˆplog [y] ∝
+
+> M
+
+Y
+
+> i=1
+
+pi[y]wi/W , y ∈ Y , (9) minimizes the wager-weighted reverse KL divergence P 
+
+> i
+
+wi KL (q∥pi). It is externally Bayesian and satisfies marginalization consistency [ 51 ], but emphasizes regions of consensus among forecasters, typically yielding a sharper aggregated distribution and exhibiting sensitivity to probabilities near zero. 
+
+3.3 Learning a Wager Policy from Payouts 
+
+Consider the repeated, multiple-question setting, where questions x(t) arrive sequentially and net payouts 
+
+π(t) 
+
+> i
+
+are realized after each round t under the true data-generating probability measure P. By observing these net payouts, an agent can learn her comparative advantage, continuously updating her wager policy to approximate the best response. 
+
+Learning procedure. We consider LLM agents, where each model i has a forward pass fi that maps input (X(t), S (t) 
+
+> i
+
+) to a hidden state h(t) 
+
+> i
+
+:= fi(X(t), S (t) 
+
+> i
+
+) where h(t) 
+
+> i
+
+∈ H . At each round, agent i produces (1) a prediction p(t) 
+
+> i
+
+= Qi(Y (t) | X(t), S (t) 
+
+> i
+
+) = gϕi (h(t) 
+
+> i
+
+) from the model’s output layer gϕi : H → ∆( Y) and (2) a wager w(t) 
+
+> i
+
+= gθi (h(t) 
+
+> i
+
+) from a learned wager network gθi : H → R≥0 that maps the hidden state h(t)
+
+> i
+
+to a non-negative scalar. Specifically, the wager network is trained to minimize the negative empirical net payout: L(θi) = − 1
+
+> T
+
+PTt=1 
+
+h
+
+gθi (h(t) 
+
+> i
+
+)
+
+
+
+s(t) 
+
+> i
+
+− b(t)
+
+> −i
+
+
+
+− c3 gθi (h(t) 
+
+> i
+
+)2
+
+i
+
+, where s(t) 
+
+> i
+
+= s(p(t) 
+
+> i
+
+, y (t)) and b(t) 
+
+> −i
+
+is the realized leave-one-out baseline at round t. As agents update their wager policies simultaneously, this is a non-stationary multi-agent learning environment. The realized score differential s(t) 
+
+> i
+
+− b(t) 
+
+> −i
+
+serves as a noisy sample of the comparative advantage, where randomness comes from the data-generating process and opponents’ wager policies. 
+
+Why learn wagers rather than improve predictions? Improving predictions requires approximating 
+
+P(Y | X, S i), a task constrained by the model’s architecture, training data, and capacity. Learning wagers is comparatively lightweight: it requires only a small network operating on the hidden state to learn when and to what extent the model possesses a comparative advantage, rather than how to generate better predictions. This is possible precisely because of prediction-agnostic wager optimization. By separating wager optimization from prediction, WALLA allows smaller models to focus on domains of comparative advantage, rather than competing with larger generalist models across all tasks. 
+
+Will agents learn to stop participating? In the extreme, if one model dominates or each model perfectly identifies its best instances, the mechanism reduces to single-model prediction or per-question routing. In practice, non-stationarity—through model updates, evolving query distributions, and retrieval augmentation—prevents comparative advantages from being perfectly learned, helping sustain multi-model participation and meaningful aggregation. 
+
+## 4 Empirical Evaluation: Eliciting and Aggregating LLM Predictions 
+
+In this section, we first introduce the experiment setup, including participating agents, datasets, evaluation metrics, and baselines. After detailing the decentralized learning procedures of LLM participants in WALLA, we present results across three scenarios: homogeneous models with private contexts, heterogeneous models, and heterogeneous models with private contexts. 
+
+4.1 Experiment Setup: Agents, Datasets, Evaluation Metrics, and Baselines 
+
+Participating agents. We draw participants from a pool of four LLMs spanning general-purpose and domain-specialized capabilities: Gemma-2-9B (Gemma2) [ 52 ], Llama3.1-8B (Llama3.1) [ 53 ], Llama3-Aloe-8B 9(Aloe) [ 54 ], a medical domain fine-tuned model, and BioMistral-7B (BioMistral) [ 55 ], pre-trained on biomedical corpora. Each model produces a probability distribution over the outcome space from its output token logits, following standard practice for multiple-choice and forecasting evaluations. 
+
+Datasets. We evaluate on five datasets covering question answering and event forecasting: PubMedQA [56 ], MedMCQA [ 57 ], MMLU [ 58 ], ARC-Challenge [ 59 ], and BayesX, a synthetic Bayesian forecasting dataset we construct. Existing QA datasets primarily evaluate whether additional context or expert knowledge improves prediction accuracy. Forecasting presents a different challenge: additional information may reduce epistemic uncertainty about the world while simultaneously revealing greater aleatoric uncertainty in the outcome-generating process. BayesX is designed to capture this phenomenon. Its priors can be highly concentrated, but private context often shifts the posterior toward a more uniform distribution, reflecting a better-informed yet less confident prediction. As a result, BayesX tests whether an aggregation method can recognize the informed model even when additional information makes its forecast appear less certain. PubMedQA and BayesX include question-related contexts that may be selectively revealed to a subset of participants, enabling experiments with heterogeneous information. Details about datasets are provided in Appendix C.1. 
+
+Metrics. Beyond standard predictive performance metrics—area under the ROC curve (AUC) and accuracy (ACC)—and expected calibration error (ECE), we evaluate whether the aggregation weights identify high-performing experts on each question. Since WALLA uses the Brier score as its scoring rule, we additionally evaluate whether the aggregation weights align with per-question Brier-score performance using three metrics: 
+
+• Kendall’s Tau (K-Tau): Rank correlation between the ordering of models by their wagers and by their per-question Brier scores; higher values indicate the wagers correctly order models by quality. 
+
+• Mean Reciprocal Rank (MRR): Average inverse rank of the best-performing model under the ordering induced by aggregation weights; MRR = 1 means the best model always receives the highest weight. 
+
+• Dynamic Regret (D-Regret): Per-question Brier-score gap between the aggregated prediction and the best individual model; lower values indicate the aggregation is closer to oracle per-question model selection. Formal definitions are in Appendix C.2. All reported metrics in tables are scaled by ×100 , and all reported intervals ( ±) are 95% confidence intervals over five independent runs. Table 1: Categorization of baselines. See Sec. 4.1 for discussion.                             
+
+> Methods Uncertainty-Aware Decentralized Learning IC / Manipulation-Resistant Pre-inference Router [1, 2, 3, 4] ✗✗✓–Stacked Generalization [5] ✓✗✓–Uniform Averaging [6, 16, 17] ✗✓✗✗
+> Weight by Model Confidence [9] ✓✓✗✗
+> Weight by Context Perplexity [10] ✓✓✗✗
+> WALLA (Ours) ✓✓✓✓
+
+Baselines. We consider seven baselines spanning pre-inference routers [ 2, 4, 3], learning-free ensembling [ 10 ,9, 6], and learning-based ensembling with LLM hidden states [ 5]. Table 1 categorizes all methods along four axes: uncertainty-awareness, decentralized aggregation, learned weights, and incentive compatibility. Among learning-free methods , UniformAvg performs equally weighted aggregation. SelfCertainty [ 9 ] uses the predicted distribution to estimate confidence and treats it as the aggregation weight. PackLLM [ 10 ] uses the inverse perplexity on input tokens as weights, requiring access to model parameters. These methods can be considered decentralized, and some are uncertainty-aware, but they do not learn from data, may be sensitive to miscalibrated confidence estimates, and are not incentive-compatible—participants can misreport confidence or perplexity to gain disproportionate weight. 10 Learning-based methods , including pre-inference routers [ 2, 3, 4] and StackedGen [ 5], require centralized control to train routing or aggregation networks. Pre-inference routers learn weights conditional on input features but do not capture each model’s internal uncertainty on the specific question. StackedGen trains on concatenated hidden states and is therefore uncertainty-aware, but requires centralized access to all models’ internals. Since StackedGen has access to all models’ hidden states, it serves a strong centralized reference point, with more information than any decentralized method. WALLA simultaneously achieves all four properties (Table 1). Detailed descriptions of baselines are in Appendix C.3. Other experiment setup details are provided in Appendix C.4. 
+
+4.2 Decentralized Learning of Wager Policies for LLMs 
+
+In WALLA, LLM participants produce predictions via their forward passes and learn wager policies as described in Section 3.3. The base model parameters are frozen while only the wager network is trained. Specifically, we extract the last-layer hidden state after processing input tokens (i.e., question X and context 
+
+S) and pass it to a two-layer perceptron (MLP) to output a non-negative scalar wager. The goal is for each agent to learn her comparative advantage: on which or what type of questions it is likely to outperform the pool, and by how much . We allow all participants’ wager networks to be trained simultaneously without assuming that opponents’ strategies are fixed. This procedure simulates how, in a multi-agent system, each LLM participant would independently learn to wager in a deployed wagering mechanism, using only her own model’s hidden states and observed payouts. A key property of the payout function (2) is that each agent can recover the hindsight optimal wager from her own payout alone: since πi = wi(si − b−i − c3wi), the realized comparative advantage si − b−i = πi/w i + c3wi and thus the hindsight optimal wager is computable from the agent’s observed payout and wager, without access to other agents’ predictions, wagers, or scores. The wager network is trained to approximate the resulting target w∗ = (( si − b−i)/2c3)+, so that the learned wager approximates the best-response wager to the data-generating distribution P and opponents’ wager policies conditioned on the model’s hidden state. To preserve the feasible range of w∗ while improving numerical stability, we apply a sigmoid transformation to the output of the wager head. Training minimizes the mean squared error (MSE) between the predicted wager w and the hindsight target w∗.4 The mechanism parameters and learning hyperparameters are reported in Table 8. Table 2: Homogeneous models (Aloe) on PubMedQA with private contexts. For each question, one of 
+
+M ∈ { 4, 8, 12 } models is randomly selected to receive a relevant abstract; the rest receive none. 5                                                                                                                                                                                      
+
+> 4812 Method AUC ↑ACC ↑ECE ↓MRR ↑DRegret ↓AUC ↑ACC ↑ECE ↓MRR ↑DRegret ↓AUC ↑ACC ↑ECE ↓MRR ↑DRegret ↓
+> UniformAvg 70.29 71.66 2.27 -20.80 64.85 67.20 3.12 -25.35 63.10 66.17 4.49 -27.30 SelfCertainty 71.78 79.23 2.67 86.76 13.62 69.31 76.92 3.33 84.73 16.50 68.05 75.66 3.65 84.07 18.12 PackLLM 78.23 85.22 10.23 88.64 8.01 75.65 81.71 9.38 87.85 11.99 73.65 78.97 7.44 87.67 14.64 RouterDC w/ context 69.36 ±13.24 72.12 ±25.21 2.58 ±20.64 61.24 ±351.39 20.82 ±20.95 65.17 ±3.02 67.51 ±1.47 3.10 ±1.97 47.36 ±125.47 25.46 ±2.19 63.35 ±4.16 66.17 ±0.42 4.75 ±2.33 41.58 ±174.74 27.20 ±1.31
+> NIRTRouter w/ context 70.19 ±1.32 71.71 ±0.63 2.15 ±1.17 52.26 ±14.97 20.80 ±0.01 64.85 ±0.00 67.53 ±0.00 3.18 ±0.00 33.38 ±24.19 25.57 ±0.00 63.10 ±0.01 66.17 ±0.00 4.91 ±0.19 24.29 ±1.11 27.30 ±0.00
+> RouteLLM w/ context 82.32 ±0.07 87.48 ±0.06 7.24 ±0.07 87.81 ±0.83 3.51 ±0.08 82.22 ±0.04 87.50 ±0.03 7.21 ±0.02 85.77 ±1.05 3.54 ±0.02 82.52 ±0.05 87.39 ±0.03 7.17 ±0.02 84.15 ±0.99 3.55 ±0.02
+> RouteLLM w/o context 69.49 ±0.39 72.01 ±0.19 2.43 ±0.70 52.07 ±0.11 20.64 ±0.00 65.08 ±0.38 67.44 ±0.19 3.24 ±0.49 33.29 ±1.65 25.63 ±0.01 63.85 ±0.35 65.80 ±0.17 4.72 ±0.14 28.31 ±2.59 27.34 ±0.02
+> StackedGen 81.99 ±0.28 87.76 ±0.11 7.53 ±0.11 88.01 ±0.25 3.29 ±0.13 82.65 ±0.74 87.44 ±0.18 7.48 ±0.38 85.25 ±1.20 3.49 ±0.25 82.26 ±0.32 87.36 ±0.29 7.29 ±0.09 83.76 ±1.05 3.66 ±0.31
+> WALLA I 81.07 ±0.58 87.00 ±0.47 9.76 ±0.33 86.97 ±1.89 5.19 ±0.64 84.47 ±0.28 87.09 ±0.14 8.35 ±0.48 81.90 ±0.86 9.32 ±0.22 82.10 ±0.35 86.66 ±0.32 10.89 ±0.80 77.14 ±1.94 12.06 ±0.62
+> WALLA II 81.07 ±0.19 86.68 ±0.11 9.83 ±0.14 88.46 ±0.22 5.49 ±0.05 79.85 ±0.34 85.95 ±0.39 10.45 ±0.29 85.07 ±1.39 7.15 ±0.33 78.65 ±0.60 85.17 ±0.45 10.61 ±0.37 83.84 ±0.57 8.46 ±0.26
+
+4.3 Scenario I: Homogeneous Models with Private Contexts 
+
+In this setting, all participants are copies of the same LLM; heterogeneous predictions arise from private information (mirroring Example 3.1). For each question, one randomly selected model receives relevant context; the rest receive none. We use Aloe on PubMedQA and Gemma2 on BayesX, scaling participants from 4 to 12. 
+
+4This objective is equivalent to minimizing the hindsight regret of failing to play w∗ in each round when w∗ > 0. When 
+
+w∗ = 0 , the MSE objective yields a less aggressive update toward zero than direct regret minimization, as the penalty is quadratic rather than linear, thereby encouraging continued participation. 
+
+5Aloe achieves AUC=82.39, ACC=87.57, ECE=7.38 with abstract and AUC=60.65, ACC=63.10, ECE=7.83 without. 
+
+6Gemma2 achieves KLD=3.24 and TVD=10.27 with evidence, and KLD=78.30 and TVD=45.46 without. 
+
+11 Table 3: Homogeneous models (Gemma2) on BayesX with private contexts. For each question, one of 
+
+M ∈ { 4, 8, 12 } models is randomly selected to receive evidence. 6
+
+4 8 12 Method KLD ↓ TVD ↓ MRR ↑ DRegret ↓ KLD ↓ TVD ↓ MRR ↑ DRegret ↓ KLD ↓ TVD ↓ MRR ↑ DRegret ↓
+
+UniformAvg 25.64 32.96 - 19.65 41.09 38.93 - 28.79 48.67 40.76 - 32.02 SelfCertainty 61.44 43.99 25.00 37.37 68.46 44.58 12.50 38.74 70.80 44.59 8.33 38.93 PackLLM 21.58 30.70 100.00 16.66 37.36 37.75 100.00 26.75 45.32 39.93 100.00 30.60 RouterDC w/ context 22.88 ±0.26 30.00 ±0.38 65.55 ±12.27 16.77 ±0.18 39.96 ±14.38 38.38 ±6.81 39.01 ±64.03 28.02 ±9.66 48.96 ±0.60 40.73 ±0.12 26.15 ±3.64 32.00 ±0.22 
+
+NIRTRouter w/ context 22.49 ±17.12 30.72 ±16.17 52.11 ±0.32 17.11 ±15.72 40.50 ±0.49 38.76 ±0.03 33.97 ±0.00 -0.35 ±1.46 45.18 ±0.11 38.97 ±0.02 25.91 ±0.11 29.74 ±0.11 
+
+RouteLLM w/ context 0.64 ±0.07 3.75 ±0.92 100.00 ±0.00 -2.31 ±0.07 0.83 ±2.32 4.67 ±13.61 100.00 ±0.00 -2.12 ±2.25 0.93 ±2.46 5.27 ±10.68 100.00 ±0.00 -2.02 ±2.40 
+
+RouteLLM w/o context 25.67 ±0.22 32.96 ±0.01 52.08 ±0.00 19.66 ±0.08 41.11 ±0.20 38.92 ±0.00 33.97 ±0.00 28.78 ±0.01 48.68 ±0.15 40.76 ±0.06 25.91 ±0.05 32.01 ±0.10 
+
+StackedGen 1.27 ±0.04 6.45 ±0.11 100.00 ±0.00 -1.69 ±0.04 1.51 ±0.03 7.06 ±0.08 100.00 ±0.00 -1.46 ±0.03 1.82 ±0.04 7.93 ±0.10 100.00 ±0.00 -1.13 ±0.04 
+
+WALLA I 2.22 ±0.11 8.69 ±0.22 100.00 ±0.00 -0.74 ±0.11 5.87 ±0.50 15.97 ±0.82 100.00 ±0.00 2.86 ±0.49 12.59 ±0.98 24.01 ±0.90 100.00 ±0.00 9.19 ±0.88 
+
+WALLA II 2.22 ±0.07 8.68 ±0.14 100.00 ±0.00 -0.74 ±0.07 5.91 ±0.08 16.05 ±0.12 100.00 ±0.00 2.90 ±0.08 13.20 ±1.26 24.57 ±1.13 100.00 ±0.00 9.74 ±1.12 
+
+Table 4: Heterogeneous models without context on three datasets. MedMCQA and MMLU are in-distribution; ARC-Challenge is out-of-distribution, with MMLU as the training set. 
+
+MedMCQA (i.d.) MMLU (i.d.) ARC-Challenge (o.o.d.) Method ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+Gemma2 62.90 25.28 64.99 5.93 47.28 87.18 8.72 82.80 32.61 12.94 90.43 7.55 89.18 38.43 10.67 Aloe 79.77 3.18 59.49 14.42 15.77 80.23 8.77 53.42 3.68 21.34 80.35 8.58 51.17 -0.43 23.43 Llama3.1 78.97 2.64 51.56 4.47 15.97 81.99 2.52 40.88 -8.01 17.61 81.30 3.06 37.43 -12.20 21.01 BioMistral 47.47 17.10 37.71 -24.82 56.24 66.05 10.92 32.59 -28.27 39.95 66.61 10.95 30.68 -25.80 40.65 UniformAvg 76.45 8.10 - 0.00 21.05 85.15 5.10 - 0.00 13.87 87.39 7.40 - 0.00 14.23 SelfCertainty 74.42 4.58 79.78 43.61 22.08 86.58 1.36 88.75 63.21 11.86 89.22 2.70 91.59 66.96 10.71 PackLLM 79.00 9.93 50.77 8.85 18.93 84.94 5.13 37.79 -27.81 14.28 86.26 6.87 36.38 -21.80 14.93 RouterDC 78.95 ±5.46 8.77 ±0.36 55.65 ±1.86 27.65 ±1.30 18.35 ±8.02 85.28 ±0.22 4.75 ±0.24 61.71 ±22.90 30.16 ±20.00 13.61 ±0.15 87.48 ±0.19 7.22 ±0.22 63.21 ±30.19 27.50 ±25.39 13.98 ±0.18 
+
+NIRTRouter 81.15 ±0.83 6.99 ±0.22 55.64 ±1.77 27.67 ±1.17 14.56 ±0.14 86.91 ±5.79 2.15 ±0.22 82.72 ±0.93 43.72 ±4.81 11.51 ±5.78 90.17 ±2.21 5.12 ±1.75 89.18 ±0.00 46.38 ±0.00 10.65 ±3.17 
+
+RouteLLM 81.70 ±1.56 3.62 ±3.15 55.64 ±1.77 27.67 ±1.17 12.82 ±1.79 86.85 ±6.55 1.96 ±2.21 82.72 ±0.93 43.72 ±4.81 11.03 ±5.91 90.61 ±0.00 2.37 ±0.52 89.18 ±0.00 46.38 ±0.00 9.35 ±1.86 
+
+StackedGen 82.66 ±0.25 2.21 ±0.49 59.06 ±0.38 30.91 ±0.50 11.56 ±0.18 87.09 ±0.69 1.99 ±0.54 82.24 ±0.38 42.17 ±1.58 10.60 ±0.79 90.35 ±0.11 2.19 ±0.87 89.04 ±0.18 46.05 ±0.26 8.85 ±0.05 
+
+WALLA I 81.17 ±0.29 7.59 ±0.36 55.26 ±0.55 24.17 ±1.16 14.86 ±0.47 86.78 ±0.49 3.34 ±0.35 82.60 ±0.62 45.11 ±4.05 11.89 ±0.43 89.89 ±0.31 6.24 ±0.39 86.76 ±0.97 44.90 ±1.38 11.06 ±0.14 
+
+WALLA II 81.00 ±0.34 7.85 ±0.61 55.30 ±0.75 21.95 ±1.94 15.36 ±0.51 86.98 ±0.54 3.01 ±0.38 82.52 ±0.52 40.42 ±7.92 11.70 ±0.49 90.28 ±0.24 6.17 ±0.81 88.07 ±0.75 42.23 ±7.02 10.59 ±0.11 
+
+WALLA I (log-pool) 80.32 ±0.10 2.07 ±0.10 55.01 ±0.22 23.15 ±0.24 14.58 ±0.11 87.36 ±0.05 2.88 ±0.33 72.32 ±1.99 25.55 ±4.73 10.48 ±0.01 90.65 ±0.08 2.96 ±0.19 79.94 ±1.26 30.41 ±3.84 9.16 ±0.03 
+
+WALLA I (calibrated) 82.53 ±0.05 10.56 ±0.13 65.98 ±0.78 38.92 ±0.94 11.69 ±0.09 87.68 ±0.08 8.21 ±0.12 70.71 ±0.18 41.02 ±0.60 9.99 ±0.07 89.59 ±0.07 8.64 ±0.37 78.77 ±0.20 50.24 ±0.32 9.84 ±0.04 
+
+On PubMedQA (Table 2 and 9), WALLA achieves AUC and ACC comparable to StackedGen and RouteLLM (with context)—both of which require centralized access to models’ hidden states or private inputs—while outperforming all other baselines. The wager network learns from payout signals and hidden states to identify when the model has received relevant context, wagering high when it holds a comparative advantage and near zero otherwise (Fig. 1 and 5 (appendix)). As the pool grows from 4 to 12, learning-free methods degrade substantially (e.g., UniformAvg AUC drops from 70.3 to 63.1), while WALLA remains robust. On BayesX (Table 3), WALLA outperforms all baselines except RouteLLM (with context) and StackedGen, which easily recognize context in inputs. Without access to contexts, RouteLLM drops to uniform averaging. SelfCertainty performs poorly because observing the signal makes the posterior more faithful but closer to uniform, inverting its confidence estimate. 
+
+4.4 Scenario II: Heterogeneous Models without Context 
+
+In this setting, we use four heterogeneous LLMs without additional context, so that predictions differ due to distinct model weights (mirroring Example 3.2). We train a wager network for each LLM on the MedMCQA and MMLU datasets, and evaluate in-distribution on MedMCQA and MMLU, and out-of-distribution on ARC-Challenge. Results with four participants are in Table 4 and 12; two-participant results are in Tables 10–11 in the appendix. Table 4 shows that WALLA performs comparably to the centralized StackedGen across all four datasets. Aggregation can improve over individual models—especially on MedMCQA—and on MMLU and ARC-Challenge, the aggregated prediction matches the performance of the strongest individual model (Gemma2). The wager network here learns a different mapping than in Scenario I: rather than learning context assignment, it must learn each model’s domain-dependent comparative advantage from the hidden state and payout signals. Learning-free methods are notably less robust to pool composition. On MedMCQA, weaker models (Gemma2, BioMistral) cause performance drops for UniformAvg, PackLLM, and SelfCertainty, because miscalibrated confidence in weaker models can inflate their aggregation weight. This illustrates another 12 limitation of confidence-based aggregation that holds even without strategic manipulation. Table 5: Four heterogeneous models with private contexts on the PubMedQA dataset. For each question, we randomly assign one model with a relevant context (left columns) or two models, each with a relevant and an irrelevant context (right columns). 
+
+One Relevant Context One Relevant Context & One Irrelevant Context Method AUC ↑ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ AUC ↑ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+UniformAvg 73.43 76.46 11.51 - 0.00 24.28 72.76 74.60 11.32 - 0.00 27.66 SelfCertainty 69.84 77.25 3.13 86.11 46.30 21.60 66.58 71.40 10.89 83.61 39.68 31.20 PackLLM 77.85 83.60 15.38 66.42 12.32 18.05 71.95 77.02 12.86 58.23 5.39 26.41 RouterDC w/ context 73.33 ±0.63 76.55 ±1.26 11.58 ±1.91 54.66 ±37.92 10.64 ±64.71 24.23 ±0.34 72.53 ±1.44 74.90 ±2.94 11.74 ±3.55 48.77 ±6.51 -2.19 ±11.98 27.65 ±0.52 
+
+NIRTRouter w/ context 73.20 ±0.58 76.92 ±0.84 12.04 ±7.80 43.90 ±50.11 -7.29 ±152.52 24.15 ±3.73 72.53 ±0.34 75.40 ±0.00 12.27 ±4.23 43.15 ±69.64 -7.18 ±130.40 27.48 ±2.74 
+
+RouteLLM w/ context 74.46 ±0.57 79.11 ±0.59 5.66 ±1.40 60.84 ±2.83 14.24 ±2.72 19.18 ±0.32 73.19 ±0.72 77.89 ±0.64 5.97 ±1.35 62.18 ±2.94 15.00 ±2.44 22.28 ±0.32 
+
+RouteLLM w/o context 72.15 ±5.90 76.27 ±0.21 8.26 ±1.51 55.46 ±56.78 11.11 ±36.00 23.09 ±3.05 68.97 ±12.13 75.81 ±3.57 5.91 ±3.73 62.59 ±7.84 15.84 ±1.12 25.20 ±5.89 
+
+StackedGen 81.17 ±0.30 84.82 ±0.18 7.55 ±0.43 71.74 ±0.14 26.28 ±0.84 12.34 ±0.06 80.30 ±0.56 84.38 ±1.72 6.57 ±1.81 71.52 ±0.81 24.06 ±0.39 14.07 ±0.93 
+
+WALLA I 79.76 ±0.65 82.11 ±0.18 11.58 ±0.52 72.59 ±0.75 28.06 ±0.59 16.95 ±0.05 77.98 ±0.37 81.15 ±0.18 11.88 ±0.35 74.98 ±0.81 28.38 ±0.32 20.09 ±0.09 
+
+WALLA II 79.73 ±0.23 82.19 ±0.31 11.30 ±0.58 72.31 ±0.47 27.02 ±0.59 16.72 ±0.09 77.60 ±0.05 80.84 ±0.24 10.81 ±0.43 75.36 ±0.74 26.29 ±0.78 19.93 ±0.05 
+
+WALLA I (log-pooling) 78.28 ±0.65 81.60 ±0.16 7.51 ±0.64 72.51 ±0.60 28.10 ±0.33 16.07 ±0.20 75.02 ±0.35 78.83 ±0.18 4.07 ±0.21 75.18 ±0.62 28.43 ±0.72 20.26 ±0.22 
+
+WALLA I (calibrated) 87.17 ±0.25 86.18 ±0.14 11.06 ±0.18 78.31 ±0.09 35.19 ±0.41 12.11 ±0.06 85.93 ±0.23 87.19 ±0.05 11.86 ±0.13 81.41 ±0.17 37.21 ±0.44 11.82 ±0.09 
+
+4.5 Scenario III: Heterogeneous Models with Private Contexts 
+
+This setting combines Scenario I and Scenario II. We use all four LLMs for evaluation on PubMedQA. We consider two settings: (1) one randomly selected model receives the relevant context, as in Scenario I; and (2) one randomly selected model receives the relevant context while another randomly selected model receives an irrelevant context (an abstract randomly drawn from the test set). The results are provided in Table 5 and 13. StackedGen and WALLA stand out as the best-performing methods. RouteLLM (with context) and PackLLM are competitive when only one relevant context is present—context availability is easy to detect from input tokens—but their advantage diminishes when an irrelevant context is also introduced, as the method must now distinguish relevant from misleading context. The wager network in this scenario faces the most demanding learning among the three: it must jointly assess the model’s intrinsic competence, the relevance of any received context, and how much that context improves the model’s comparative advantage over the other participants in the pool. 
+
+4.6 Robustness to Variants, Advantage–Wager Alignment, and Calibration 
+
+Robustness to mechanism variants. We evaluate WALLA II and log pooling as alternative variants. Both lead to results similar to WALLA I with linear pooling. This indicates that the performance of WALLA is not driven by a particular choice of baseline or aggregation rule. The similarity between WALLA I and WALLA II is also consistent with theory: both variants preserve advantage–wager alignment, differing mainly in the normality/no-arbitrage tradeoff (Section 3.2.1). Likewise, the similarity between linear pooling and log pooling suggests that the learned wagers, rather than the aggregation rule, are the primary driver of the aggregation quality. 
+
+Advantage–wager alignment. Fig. 1 shows that learned wagers are positively correlated with realized comparative advantages, providing evidence that models learn to wager in proportion to their expected score advantage. We conduct further experiments to verify that the hidden states contain sufficient information to separately predict both the model’s own score and the baseline score; we find that the difference between these predictions aligns closely with the learned wager (see Figures 2–4 in the appendix). 
+
+Calibration. The mechanism also incentivizes participants to calibrate their predictions: even when a model’s belief Qi̸ = P, calibration aligns expected scores better with realized scores, so that the learned wager better reflects actual comparative advantage. We conduct calibration via temperature scaling [ 60 ], which predicts an appropriate temperature conditional on the last-layer hidden state. In Table 6, we show that when one model is calibrated (Gemma2) while the others remain unchanged, the calibrated model receives improved 13 Figure 1: Advantage–wager alignment for WALLA I. Learned wager ( x-axis) vs. realized score differentials 
+
+s(pi, y ) − b−i (y-axis), which equal the hindsight optimal wagers under our parameter choice ( c1 = 1 , c 2 = 1 /2,
+
+c3 = 1 /2). For Figures 1–4, each panel corresponds to one scenario: homogeneous models on PubMedQA (top-left), heterogeneous models on MedMCQA (top-right), MMLU (bottom-left), and PubMedQA (bottom-right). Colored dots highlight models with context (PubMedQA) or the best-performing model (other datasets). Pearson correlations are reported at the top of each panel. The positive correlations confirm that LLMs learn to wager in proportion to their realized advantage. On PubMedQA(top-left and bottom-right), models successfully differentiate whether they received relevant context, wagering near zero when they did not. net payoffs because its expected score advantage more accurately reflects its realized comparative advantage. This suggests that rational participants have an incentive to calibrate—discouraging both overconfidence and underconfidence. We also report WALLA I results when all participants are calibrated for Scenarios II and III. The results show that calibrated aggregation can substantially improve accuracy on in-distribution tasks while maintaining similar performance on out-of-distribution tasks. 
+
+## 5 Conclusion 
+
+We proposed a family of advantage-aligned wagering mechanisms for LLM aggregation (WALLA) that yields three properties: (1) dominant-strategy incentive compatibility under general belief structures, (2) advantage– wager alignment, and (3) the decoupling of prediction and wager learning. To our knowledge, this is the first mechanism designed for aggregating LLM predictions that simultaneously achieves advantage-weighted aggregation, uncertainty awareness, fully decentralized learning, and incentive-compatibility guarantees. Empirical results suggest that WALLA matches centralized baselines in aggregated prediction performance. 14 Table 6: Average wagers and net payouts in Scenario II when no model is calibrated v.s. when Gemma2 is calibrated. When Gemma2 is calibrated, it increases net payout on both MedMCQA and MMLU. On MedMCQA, as it does not perform as well as Llama3.1 and Aloe, the learned wagers are reduced; on MMLU, it increases the wagers, as it performs best. Both wagers and net payouts ×100 .
+
+MedMCQA MMLU All Uncalibrated Gemma2 Calibrated All Uncalibrated Gemma2 Calibrated Method Wagers Net Payouts Wagers Net Payouts Wagers Net Payouts Wagers Net Payouts 
+
+Gemma2 5.87 ±0.29 -0.93 ±0.05 5.13 ±0.42 -0.45 ±0.05 16.30 ±8.74 -0.52 ±1.19 16.62 ±5.81 -0.28 ±0.67 
+
+Llama3.1 5.87 ±0.29 0.23 ±0.02 8.45 ±0.26 0.09 ±0.01 8.59 ±3.21 -0.30 ±0.31 8.29 ±4.03 -0.39 ±0.38 
+
+Aloe 10.95 ±0.07 0.26 ±0.02 9.38 ±0.35 0.10 ±0.02 7.96 ±2.96 -0.45 ±0.29 7.80 ±2.98 -0.52 ±0.33 
+
+BioMistral 2.96 ±0.17 -0.54 ±0.03 2.36 ±0.11 -0.46 ±0.02 4.76 ±1.41 -0.69 ±0.25 4.14 ±1.40 -0.62 ±0.24 
+
+So far, we explored learning a neural network for wagers. As state-of-the-art LLMs already exhibit the capability of gameplay [ 61 ], the natural next step would be to explore whether learning-in-context can be viable for proprietary LLMs to estimate and report the model’s comparative advantage. Future work can also explore mechanisms for more complex collaboration settings that involve multi-step reasoning beyond the aggregation of probabilistic predictions. 15 References 
+
+[1] Keming Lu, Hongyi Yuan, Rui Zheng, Jianye Yin, Xiaotian Zhao, Xuanjing Huang, and Xipeng Qiu. Routing to the expert: Efficient reward-guided ensemble of large language models. arXiv preprint arXiv:2311.08692 , 2023. [2] Shuhao Chen, Weisen Jiang, Baijiong Lin, James Kwok, and Yu Zhang. RouterDC: Query-based router by dual contrastive learning for assembling large language models. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. [3] Isaac Ong, Amjad Almahairi, Vincent Wu, Wei-Lin Chiang, Tianhao Wu, Joseph E. Gonzalez, M Waleed Kadous, and Ion Stoica. RouteLLM: Learning to route LLMs from preference data. In The Thirteenth International Conference on Learning Representations , 2025. [4] Wei Song, Zhenya Huang, Cheng Cheng, Weibo Gao, Bihan Xu, GuanHao Zhao, Fei Wang, and Runze Wu. IRT-router: Effective and interpretable multi-LLM routing via item response theory. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,2025. [5] David H. Wolpert. Stacked generalization. Neural Networks , 5(2):241–259, 1992. [6] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 , 2022. [7] Yilun Du, Shuang Li, Antonio Torralba, Joshua B Tenenbaum, and Igor Mordatch. Improving factuality and reasoning in language models through multiagent debate. arXiv preprint arXiv:2305.14325 , 2023. [8] Hyeong Kyu Choi, Jerry Zhu, and Sharon Li. Debate or vote: Which yields better decisions in multi-agent large language models? In The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. [9] Zhewei Kang, Xuandong Zhao, and Dawn Song. Scalable best-of-n selection for large language models via self-certainty. In The Thirty-ninth Annual Conference on Neural Information Processing Systems ,2025. [10] Costas Mavromatis, Petros Karypis, and George Karypis. Pack of LLMs: Model fusion at test-time via perplexity optimization. In First Conference on Language Modeling , 2024. [11] Nicolas S. Lambert, John Langford, Jennifer Wortman, Yiling Chen, Daniel Reeves, Yoav Shoham, and David M. Pennock. Self-financed wagering mechanisms for forecasting. In Proceedings of the 9th ACM Conference on Electronic Commerce , page 170–179, 2008. [12] Nicolas S. Lambert, John Langford, Jennifer Wortman Vaughan, Yiling Chen, Daniel M. Reeves, Yoav Shoham, and David M. Pennock. An axiomatic characterization of wagering mechanisms. Journal of Economic Theory , 156:389–416, 2015. [13] Yiling Chen, Nikhil R. Devanur, David M. Pennock, and Jennifer Wortman Vaughan. Removing arbitrage from wagering mechanisms. In Proceedings of the Fifteenth ACM Conference on Economics and Computation , page 377–394, 2014. [14] Rupert Freeman, David M. Pennock, and Jennifer Wortman Vaughan. The double clinching auction for wagering. In Proceedings of the 2017 ACM Conference on Economics and Computation , page 43–60, 2017. [15] Zhijun Chen, Jingzheng Li, Pengpeng Chen, Zhuoran Li, Kai Sun, Yuankai Luo, Qianren Mao, Ming Li, Likang Xiao, Dingqi Yang, Yikun Ban, Hailong Sun, and Philip S. Yu. Harnessing multiple large language models: A survey on LLM ensemble. arXiv preprint arXiv:2502.18036 , 2025. 16 [16] Junyou Li, Qin Zhang, Yangbin Yu, Qiang Fu, and Deheng Ye. More agents is all you need. Transactions on Machine Learning Research , 2024. ISSN 2835-8856. [17] Yao-Ching Yu, Chun Chih Kuo, Ye Ziqi, Chang Yucheng, and Yueh-Se Li. Breaking the ceiling of the LLM community by treating token generation as a classification for ensembling. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 1826–1839, 2024. [18] Saurav Kadavath, Tom Conerly, Amanda Askell, Tom Henighan, Dawn Drain, Ethan Perez, Nicholas Schiefer, Zac Nova Dodds, Nova DasSarma, Eli Tran-Johnson, et al. Language models (mostly) know what they know. arXiv preprint arXiv:2207.05221 , 2022. [19] Amos Azaria and Tom Mitchell. The internal state of an LLM knows when it’s lying. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pages 967–976, 2023. [20] Zeguan Xiao, Diyang Dou, Boya Xiong, Yun Chen, and Guanhua Chen. Enhancing uncertainty estimation in LLMs with expectation of aggregated internal belief. Proceedings of the AAAI Conference on Artificial Intelligence , 40(40):34043–34051, Mar. 2026. [21] Tal Shnitzer, Anthony Ou, Mírian Silva, Kate Soule, Yuekai Sun, Justin Solomon, Neil Thompson, and Mikhail Yurochkin. Large language model routing with benchmark datasets. In First Conference on Language Modeling , 2024. [22] Jonathan Uesato, Nate Kushman, Ramana Kumar, Francis Song, Noah Siegel, Lisa Wang, Antonia Creswell, Geoffrey Irving, and Irina Higgins. Solving math word problems with process- and outcome-based feedback. arXiv preprint arXiv:2211.14275 , 2022. [23] Dongfu Jiang, Xiang Ren, and Bill Yuchen Lin. LLM-blender: Ensembling large language models with pairwise ranking and generative fusion. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 14165–14178, 2023. [24] Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. arXiv preprint arXiv:2305.20050 , 2023. [25] Paul Dütting, Vahab Mirrokni, Renato Paes Leme, Haifeng Xu, and Song Zuo. Mechanism design for large language models. In Proceedings of the ACM Web Conference 2024 , page 144–155, 2024. [26] Avinava Dubey, Zhe Feng, Rahul Kidambi, Aranyak Mehta, and Di Wang. Auctions with llm summaries. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , page 713–722, 2024. [27] Dirk Bergemann, Marek Bojko, Paul Duetting, Renato Paes Leme, Haifeng Xu, and Song Zuo. Data-driven mechanism design: Jointly eliciting preferences and information. In Proceedings of the 26th ACM Conference on Economics and Computation , page 507, 2025. [28] Ermis Soumalias, Michael Curry, and Sven Seuken. Truthful aggregation of LLMs with an application to online advertising. In The Thirty-ninth Annual Conference on Neural Information Processing Systems ,2026. [29] Chenghao Zhu, Nuo Chen, Yufei Gao, Yunyi Zhang, Prayag Tiwari, and Benyou Wang. Is your LLM outdated? a deep look at temporal generalization. In Luis Chiruzzo, Alan Ritter, and Lu Wang, editors, 
+
+Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 7433–7457, 2025. [30] Hui Dai, Ryan Teehan, and Mengye Ren. Are LLMs prescient? a continuous evaluation using daily news as the oracle. In Forty-second International Conference on Machine Learning , 2025. 17 [31] Andy Zou, Tristan Xiao, Ryan Jia, Joe Kwon, Mantas Mazeika, Richard Li, Dawn Song, Jacob Steinhardt, Owain Evans, and Dan Hendrycks. Forecasting future world events with neural networks. In Proceedings of the 36th International Conference on Neural Information Processing Systems , 2022. [32] Danny Halawi, Fred Zhang, Chen Yueh-Han, and Jacob Steinhardt. Approaching human-level forecasting with language models. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. [33] Woojeong Jin, Rahul Khanna, Suji Kim, Dong-Ho Lee, Fred Morstatter, Aram Galstyan, and Xiang Ren. ForecastQA: A question answering challenge for event forecasting with temporal text data. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 4636–4650, 2021. [34] Zhihan Zhang, Yixin Cao, Chenchen Ye, Yunshan Ma, Lizi Liao, and Tat-Seng Chua. Analyzing temporal complex events with large language models? a benchmark towards temporal, long context understanding. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 1588–1606, 2024. [35] Ezra Karger, Houtan Bastani, Chen Yueh-Han, Zachary Jacobs, Danny Halawi, Fred Zhang, and Philip Tetlock. Forecastbench: A dynamic benchmark of AI forecasting capabilities. In The Thirteenth International Conference on Learning Representations , 2025. [36] Zhen Wang, Xi Zhou, Yating Yang, Bo Ma, Lei Wang, Rui Dong, and Azmat Anwar. OpenForecast: A large-scale open-ended event forecasting dataset. In Proceedings of the 31st International Conference on Computational Linguistics , pages 5273–5294, 2025. [37] Zhiyuan Zeng et al. Futurex: An advanced live benchmark for LLM agents in future prediction. arXiv preprint arXiv:2508.11987 , 2025. [38] Yong Guan, Hao Peng, Xiaozhi Wang, Lei Hou, and Juanzi Li. OpenEP: Open-ended future event prediction. ACM Trans. Inf. Syst. , 2026. [39] Qingchuan Yang, Simon Mahns, Sida Li, Anri Gu, Jibang Wu, and Haifeng Xu. LLM-as-a-prophet: Understanding predictive intelligence with prophet arena. In The Fourteenth International Conference on Learning Representations , 2026. [40] Philipp Schoenegger, Indre Tuminauskaite, Peter S. Park, Rafael Valdece Sousa Bastos, and Philip E. Tetlock. Wisdom of the silicon crowd: Llm ensemble prediction capabilities rival human crowd accuracy. 
+
+Science Advances , 10(45):eadp1528, 2024. [41] Rupert Freeman, David M. Pennock, Chara Podimata, and Jennifer Wortman Vaughan. No-regret and incentive-compatible online learning. In Proceedings of the 37th International Conference on Machine Learning , 2020. [42] Aitazaz Ali Raja, Pierre Pinson, Jalal Kazempour, and Sergio Grammatico. A market for trading forecasts: A wagering mechanism. International Journal of Forecasting , 40(1):142–159, 2024. [43] Jacob Abernethy and Rafael M. Frongillo. A collaborative mechanism for crowdsourcing prediction problems. In Advances in Neural Information Processing Systems , 2011. [44] Alina Beygelzimer, John Langford, and David M. Pennock. Learning performance of prediction markets with kelly bettors. In Proceedings of the 11th International Conference on Autonomous Agents and Multiagent Systems - Volume 3 , page 1317–1318, 2012. [45] Rafael Frongillo, Nicholás Della Penna, and Mark D Reid. Interpreting prediction markets: a stochastic approach. In Advances in Neural Information Processing Systems , volume 25, 2012. [46] Jacob Abernethy, Yiling Chen, and Jennifer Wortman Vaughan. Efficient market making via convex optimization, and a connection to online learning. ACM Transactions on Economics and Computation , 1 (2), 2013. 18 [47] Jinli Hu and Amos Storkey. Multi-period trading prediction markets with connections to machine learning. In Proceedings of the 31st International Conference on Machine Learning , pages 1773–1781, 2014. [48] Glenn W. Brier. Verification of forecasts expressed in terms of probability. Monthly Weather Review , 78: 1–3, 1950. [49] Tilmann Gneiting and Adrian E Raftery. Strictly proper scoring rules, prediction, and estimation. 
+
+Journal of the American Statistical Association , 102(477):359–378, 2007. [50] Jennifer A Hoeting, David Madigan, Adrian E Raftery, and Chris T Volinsky. Bayesian model averaging: a tutorial. Statistical science , 14(4):382–417, 1999. [51] Christian Genest. A Characterization Theorem for Externally Bayesian Groups. The Annals of Statistics ,12(3):1100 – 1105, 1984. [52] Gemma Team. Gemma 2: Improving open language models at a practical size. arXiv preprint arXiv:2408.00118 , 2024. [53] Aaron Grattafiori et al. The Llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. [54] Ashwin Kumar Gururajan, Enrique Lopez-Cuena, Jordi Bayarri-Planas, Adrian Tormos, Daniel Hinjos, Pablo Bernabeu-Perez, Anna Arias-Duart, Pablo Agustin Martin-Torres, Lucia Urcelay-Ganzabal, Marta Gonzalez-Mallo, Sergio Alvarez-Napagao, Eduard Ayguadé-Parra, and Ulises Cortés Dario Garcia-Gasulla. Aloe: A family of fine-tuned open healthcare LLMs. arXiv preprint arXiv:2405.01886 , 2024. [55] Yanis Labrak, Adrien Bazoge, Emmanuel Morin, Pierre-Antoine Gourraud, Mickael Rouvier, and Richard Dufour. BioMistral: A collection of open-source pretrained large language models for medical domains. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 5848–5864, 2024. [56] Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William Cohen, and Xinghua Lu. PubMedQA: A dataset for biomedical research question answering. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP) , pages 2567–2577, 2019. [57] Ankit Pal, Logesh Kumar Umapathi, and Malaikannan Sankarasubbu. MedMCQA: A large-scale multi-subject multi-choice dataset for medical domain question answering. In Proceedings of the Conference on Health, Inference, and Learning , volume 174, pages 248–260, 2022. [58] Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. In International Conference on Learning Representations , 2021. [59] Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try ARC, the AI2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 , 2018. [60] Johnathan Xie, Annie S Chen, Yoonho Lee, Eric Mitchell, and Chelsea Finn. Calibrating language models with adaptive temperature scaling. In EMNLP , 2024. [61] Joseph Bills, Christopher Archibald, and Diego Blaylock. Improving cooperation in language games with bayesian inference and the cognitive hierarchy. In Proceedings of the Thirty-Ninth AAAI Conference on Artificial Intelligence and Thirty-Seventh Conference on Innovative Applications of Artificial Intelligence and Fifteenth Symposium on Educational Advances in Artificial Intelligence , 2025. [62] Sanjeev Arora, Elad Hazan, and Satyen Kale. The multiplicative weights update method: a meta-algorithm and applications. Theory of Computing , 8(6):121–164, 2012. doi: 10.4086/toc.2012.v008a006. [63] Pengcheng He, Jianfeng Gao, and Weizhu Chen. DeBERTav3: Improving deBERTa using ELECTRA-style pre-training with gradient-disentangled embedding sharing. In The Eleventh International Conference on Learning Representations , 2023. 19 A Theoretical Properties of WSWM Using a Scaled Linear Score 
+
+Consider the repeated setting where question x(t) arrives at time t with outcome y(t). Suppose all participants are non-strategic: reporting the predictions p(t) 
+
+> i
+
+truthfully and wagering the total cumulative payout, namely, their budget, denoted as B(t−1)  
+
+> i
+
+. Consider a WSWM that adopts a scaled linear score slin ∈ S : (∆( Y)×R≥0)M
+
+such that 
+
+s(t) 
+
+> i
+
+= p(t) 
+
+> i
+
+[y]
+
+PMj=1 w(t) 
+
+> j
+
+p(t) 
+
+> j
+
+[y]
+
+and the linear pooling (i.e., p(t) 
+
+> agg
+
+=   
+
+> PMi=1 w(t)
+> ip(t)
+> i
+> PMi=1 w(t)
+> i
+
+). We first demonstrate that such a mechanism inherently performs an exponentiated gradient-descent step on the cross-entropy loss. We then show the mechanism exactly recovers Bayesian Model Averaging (BMA) [ 50 ]. Finally, we derive a tighter regret bound than the one shown in Freeman et al. [41] , highlighting a tradeoff between this tight bound and incentive compatibility. For notation simplicity, we remove the timestamp and simplify pagg [y] as pagg and pi[y] as pi when the context is clear. 
+
+A.1 WSWM Recovers the Scaled Negative Gradient of Cross-Entropy Loss 
+
+We connect this mechanism to centralized supervised learning by analyzing the cross-entropy loss of the aggregated prediction. 
+
+Theorem A.1. Suppose WSWM utilizes the scoring function slin . The net payout function, defined as 
+
+πi = wi
+
+
+
+si −   
+
+> PMk=1 skwk
+> PMk=1 wk
+
+
+
+, satisfies πi = −wi ∂L ∂w i where L = − log pagg , the cross-entropy loss. Proof. Expanding the logarithm of the quotient yields the loss function: 
+
+L = − log 
+
+> M
+
+X
+
+> i=1
+
+wipi
+
+!
+
++ log 
+
+> M
+
+X
+
+> i=1
+
+wi
+
+!
+
+.
+
+Taking the partial derivative of L with respect to a specific weight wi gives: 
+
+∂L ∂w i
+
+= − pi
+
+PMk=1 wkpk
+
++ 1
+
+PMk=1 wk
+
+.
+
+Substituting the given scoring rule sk into PMk=1 skwk gives: 
+
+> M
+
+X
+
+> k=1
+
+skwk =
+
+> M
+
+X
+
+> k=1
+
+pk
+
+PMj=1 wj pj
+
+!
+
+wk
+
+=
+
+PMk=1 wkpk
+
+PMj=1 wj pj
+
+= 1 .
+
+We substitute this result back into the net payout function πi:
+
+πi = wi si − 1
+
+PMk=1 wk
+
+!
+
+= wi
+
+pi
+
+PMj=1 wj pj
+
+− 1
+
+PMk=1 wk
+
+!
+
+= −wi − pi
+
+PMj=1 wj pj
+
++ 1
+
+PMk=1 wk
+
+!
+
+.
+
+20 We observe that the expression inside the parentheses is exactly the partial derivative ∂L ∂w i derived previously. Therefore, by direct substitution: 
+
+πi = −wi
+
+∂L ∂w i
+
+.
+
+Remark A.1. This relationship demonstrates that the budget update B(t) 
+
+> i
+
+= w(t) 
+
+> i
+
++ π(t) 
+
+> i
+
+= w(t)
+
+> i
+
+
+
+1 − ∂L (t)
+
+> ∂w (t)
+> i
+
+
+
+=
+
+w(t) 
+
+> i
+
+− w(t) 
+
+> i∂L (t)
+> ∂w (t)
+> i
+
+has the form of a Multiplicative Weights Update (MWU) algorithm [ 62 ]. It can be interpreted as executing decentralized gradient descent where the learning rate is scaled dynamically by the current weight. It also mirrors the exponentiated gradient step B(t) 
+
+> i
+
+≈ w(t) 
+
+> i
+
+e− ∂L (t) 
+
+> ∂w (t)
+> i
+
+under a first-order Taylor approximation. 
+
+A.2 Equivalence to Bayesian Model Averaging 
+
+We now show that the WSWM under this setting is equivalent to Bayesian model averaging (BMA) [ 50 ]. We start with the review of BMA. 
+
+Definition A.2 (Bayesian Model Averaging (BMA)) . Let θ1, . . . , θ M be discrete parameters for the M
+
+models. Given a history of observations D(1: t−1) = {(x(1) , y (1) ), . . . , (x(t−1) , y (t−1) )}, the posterior probability of parameter θi is p(θi|D(1: t−1) ). Assuming (x(t), y (t)) are drawn i.i.d., the BMA predictive probability for the true label y(t) is: 
+
+pBMA (y(t)|x(t), D (1: t−1) ) = 
+
+> M
+
+X
+
+> i=1
+
+p(y(t)|x(t), θ i)p(θi|D(1: t−1) ).
+
+To prove that the mechanism recovers the exact posterior, we assume that the BMA predictive distribution perfectly recovers the true marginal probability of the label. 
+
+Theorem A.3. Assume the BMA predictive distribution equals the true marginal data distribution: 
+
+pBMA (y(t)|x(t), D (1: t−1) ) = p(y(t)|x(t), D (1: t−1) ). If the initial budgets are set to the prior probabilities B(0)  
+
+> i
+
+=
+
+p(θi), the aggregated prediction satisfies p(t) 
+
+> agg
+
+= pBMA (y(t)|x(t), D (1: t−1) ) for all t ≥ 1, and the budgets track the exact posterior B(t) 
+
+> i
+
+= p(θi|D(1: t)).Proof. We proceed by induction. The base case holds by initialization B(0)  
+
+> i
+
+= p(θi). Assume the inductive hypothesis B(t−1)  
+
+> i
+
+= p(θi|D(1: t−1) ). Because w(t) 
+
+> i
+
+= B(t−1)  
+
+> i
+
+, substituting the hypothesis into the aggregated prediction yields p(t) 
+
+> agg
+
+= PMj=1 p(θj |D(1: t−1) )p(y(t)|x(t), θ j ), which exactly matches Definition A.2. Evaluating the budget update step established previously: 
+
+B(t) 
+
+> i
+
+= w(t) 
+
+> i
+
+s(t) 
+
+> i
+
+= w(t)
+
+> i
+
+p(t)
+
+> i
+
+PMj=1 w(t) 
+
+> j
+
+p(t)
+
+> j
+
+= B(t−1) 
+
+> i
+
+p(t)
+
+> i
+
+p(t)
+
+> agg
+
+= p(θi|D(1: t−1) )p(y(t)|x(t), θ i)
+
+pBMA (y(t)|x(t), D (1: t−1) )= p(θi|x(t), D (1: t−1) )p(y(t)|x(t), D (1: t−1) , θ i)
+
+pBMA (y(t)|x(t), D (1: t−1) ) (conditional independence) 
+
+= p(θi|x(t), D (1: t−1) )p(y(t)|x(t), D (1: t−1) , θ i)
+
+p(y(t)|x(t), D (1: t−1) ) (by assumption) 
+
+= p(θi|y(t), x (t), D (1: t−1) ) (Bayes’ theorem) 
+
+= p(θi|D(1: t)).
+
+This completes the proof. As pBMA cannot recover the true marginal exactly, its effectiveness is typically quantified with the notion of regret. We provide the regret bound in the next section. 21 A.3 Regret Bound 
+
+We continue to assume the initial budgets sum to one and derive a regret bound for the WSWM with non-strategic agents under slin (i.e., s(t) 
+
+> i
+
+= p(t)  
+
+> i
+> PMj=1 w(t)
+> jp(t)
+> j
+
+). 
+
+Theorem A.4 (Regret Bound) . Assume p(t) 
+
+> i
+
+> 0 for all i, t . The regret of the WSWM mechanism over T
+
+rounds with respect to any optimal fixed distribution of models u ∈ ∆( M) is bounded by: 
+
+> T
+
+X
+
+> t=1
+
+L(t)(w(t)) −
+
+> T
+
+X
+
+> t=1
+
+L(t)(u) ≤ DKL (u ∥ w(0) ) + H(u),
+
+where DKL is the Kullback-Leibler divergence and H(u) is the Shannon entropy. Proof. Because PMk=1 w(t) 
+
+> k
+
+= 1 and PMk=1 s(t) 
+
+> k
+
+w(t) 
+
+> k
+
+=    
+
+> PMk=1 w(t)
+> kp(t)
+> k
+> PMj=1 w(t)
+> jp(t)
+> j
+
+= 1 , the net payout simplifies to: 
+
+π(t) 
+
+> i
+
+= w(t) 
+
+> i
+
+(s(t) 
+
+> i
+
+− 1) .
+
+Let Zt = PMj=1 w(t) 
+
+> j
+
+p(t) 
+
+> j
+
+. A agent’s updated budget for the next round is her wager plus her net payout: 
+
+w(t+1)  
+
+> i
+
+= B(t) 
+
+> i
+
+= w(t) 
+
+> i
+
++ π(t) 
+
+> i
+
+= w(t) 
+
+> i
+
+s(t) 
+
+> i
+
+= w(t)  
+
+> ip(t)
+> i
+> Zt
+
+. We expand the terminal weight w(T +1)  
+
+> i
+
+recursively: 
+
+w(T +1)  
+
+> i
+
+= w(0) 
+
+> iT
+
+Y
+
+> t=1
+
+p(t)
+
+> i
+
+Zt
+
+.
+
+Taking the natural logarithm of both sides: 
+
+log w(T +1)  
+
+> i
+
+= log w(0)  
+
+> i
+
++
+
+> T
+
+X
+
+> t=1
+
+log p(t) 
+
+> i
+
+−
+
+> T
+
+X
+
+> t=1
+
+log Zt.
+
+Define the instantaneous loss as L(t)(w(t)) = − log Zt and the loss for a fixed model i as L(t)(ei) = − log p(t) 
+
+> i
+
+.
+
+log w(T +1)  
+
+> i
+
+= log w(0)  
+
+> i
+
+−
+
+> T
+
+X
+
+> t=1
+
+L(t)(ei) + 
+
+> T
+
+X
+
+> t=1
+
+L(t)(w(t)).
+
+Because w(T +1) ∈ ∆( M), we know log w(T +1)  
+
+> i
+
+≤ 0. Rearranging gives: 
+
+> T
+
+X
+
+> t=1
+
+L(t)(w(t)) −
+
+> T
+
+X
+
+> t=1
+
+L(t)(ei) ≤ − log w(0)  
+
+> i
+
+.
+
+Taking the expectation over i ∼ u:
+
+> T
+
+X
+
+> t=1
+
+L(t)(w(t)) −
+
+> M
+
+X
+
+> i=1
+
+uiTX
+
+> t=1
+
+L(t)(ei) ≤ − 
+
+> M
+
+X
+
+> i=1
+
+ui log w(0)  
+
+> i
+
+.
+
+By Jensen’s inequality, − PMi=1 ui log p(t) 
+
+> i
+
+≥ − log 
+
+PMi=1 uip(t)
+
+> i
+
+
+
+= L(t)(u). Substituting this lower bound and isolating the information-theoretic quantities produces: 
+
+> T
+
+X
+
+> t=1
+
+L(t)(w(t)) −
+
+> T
+
+X
+
+> t=1
+
+L(t)(u) ≤
+
+> M
+
+X
+
+> i=1
+
+ui log ui
+
+w(0) 
+
+> i
+
+−
+
+> M
+
+X
+
+> i=1
+
+ui log ui,
+
+which simplifies to DKL (u ∥ w(0) ) + H(u).
+
+Remark A.2. The constant regret bound DKL (u ∥ w(0) ) + H(u) achieved by WSWM is tighter than the 
+
+O(√T ln M ) sublinear bound established by Freeman et al. [41] . This difference highlights a tradeoff between a tight regret bound and IC. 7
+
+> 7
+
+Although Freeman et al. [41] is incentive-compatible to agents who strategically report predictions, they assume a fixed wagering strategy that always wagers a fraction η of the cumulative payout. 
+
+22 B Deferred Content from Sec. 3 
+
+B.1 Proof of BNE under Common Prior 
+
+Corollary 3.5 (BNE under common prior) . Suppose agents share a common prior Q (Example 3.1). Let 
+
+p∗ 
+
+> i
+
+= Q(Y = · | F i) (Theorem 3.2) and w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+ with Ai = E[s(p∗ 
+
+> i
+
+, Y ) − b−i | F i] (Theorem 3.3). The strategy profile {(p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) }Mi=1 is a Bayes–Nash equilibrium: for every agent i and every alternative strategy (˜ pi, ˜wi),
+
+EQ
+
+πi
+
+ (p∗ 
+
+> i
+
+, p∗−i), (w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+), w∗−i), Y  | F i
+
+ ≥ EQ
+
+πi
+
+ (˜ pi, p∗−i), ( ˜ wi, w∗−i), Y  | F i
+
+ .
+
+Proof. Fix opponents’ equilibrium strategies (p∗−i, w∗−i). By Theorem 3.2, p∗ 
+
+> i
+
+= Q(Y = · | F i) uniquely maximizes EQ[s(pi, Y ) | F i] over all pi, and hence maximizes Ai = EQ[s(pi, Y ) − b−i | F i]. Given p∗ 
+
+> i
+
+,Theorem 3.3 gives the best-response wager w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+. When Ai > 0, the pair (p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) is the unique maximizer of the expected net payout. When Ai ≤ 0, w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = 0 and the net payout is zero regardless of pi; the agent is excluded from aggregation. A fixed point of the wager best-response mapping exists by Brouwer’s theorem for bounded s, as the mapping is continuous on [0 , (s − s)/(2 c3)] M .
+
+B.2 Proof of NE under Heterogenenous Beliefs 
+
+Corollary 3.6 (NE under heterogeneous beliefs) . Suppose each agent i holds her own belief Qi (Example 3.2). Let p∗ 
+
+> i
+
+= Qi(Y = · | F i) (Theorem 3.2) and w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+ with Ai = EQi [s(p∗ 
+
+> i
+
+, Y ) − b−i | F i]
+
+(Theorem 3.3). The strategy profile {(p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) }Mi=1 is a Nash equilibrium: for every agent i and every alternative strategy (˜ pi, ˜wi),
+
+EQi
+
+πi
+
+ (p∗ 
+
+> i
+
+, p∗−i), (w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+), w∗−i), Y  | F i
+
+ ≥ EQi
+
+πi
+
+ (˜ pi, p∗−i), ( ˜ wi, w∗−i), Y  | F i
+
+ .
+
+Proof. Fix opponents’ equilibrium strategies (p∗−i, w∗−i). By Theorem 3.2, p∗ 
+
+> i
+
+maximizes EQi [s(pi, Y ) | F i]
+
+and hence maximizes Ai(pi) = EQi [s(pi, Y ) − b−i | F i] (since b−i depends on opponents’ strategies, not on pi). By Theorem 3.3, for any fixed pi, the net payoff is maximized at w∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+) = ( Ai/2c3)+. Since p∗ 
+
+> i
+
+maximizes 
+
+Ai, the pair (p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) maximizes the expected net payoff over all ( ˜pi, ˜wi) jointly. When Ai > 0, the pair 
+
+(p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) is the unique maximizer of the expected net payout. A fixed point exists by Brouwer’s theorem for bounded s. The NE does not require information about others’ beliefs because (p∗ 
+
+> i
+
+, w ∗ 
+
+> i
+
+(p∗ 
+
+> i
+
+)) maximizes the expected net payoff with respect to any opponents’ beliefs and profile (p−i, w−i).
+
+B.3 Proofs of Properties of the Two Variants 
+
+Proposition 3.10 (Normality of WALLA I) . WALLA I satisfies normality. Proof. By strict properness, p∗ 
+
+> i
+
+:= Qi(Y = · | F i) uniquely maximizes E[s(p, Y ) | F i] when wi ≥ 0. With 
+
+wj > 0, replacing pj with p′ 
+
+> j
+
+a prediction closer to p∗ 
+
+> i
+
+increases E[s(pj , Y ) | F i], which raises the baseline 
+
+E[bI 
+
+> −i
+
+| F i] and hence reduces Ai and the net payout. When wi = 0 or wj = 0 , the expected net payoff remains the same regardless of player j’s prediction. 
+
+Proposition 3.11 (Arbitrage in WALLA I) . WALLA I does not satisfy no-arbitrage. When predictions from other agents are not all identical, there exists a report ˆpi and a sufficiently small wager wi such that πi > 0
+
+for all outcomes y ∈ Y .Proof. By Theorem 3.3 of Chen et al. [13] , when at least two predictions differ ( pj̸ = pk for some j, k ̸ = i), there exists ˆpi with s( ˆpi, y ) > b I 
+
+> −i
+
+for all y. Let δ(y) := s( ˆpi, y ) − bI 
+
+> −i
+
+> 0 and δmin := min y δ(y) > 0. Then 
+
+πi = wi(δ(y) − c3wi). Choosing any wi ∈ (0 , δ min /c 3) ensures c3wi < δ (y) for all y, hence πi > 0 for all y.
+
+Proposition 3.12 (No-Arbitrage of WALLA II) . WALLA II satisfies no-arbitrage. Proof. By Theorem 4.1 of Chen et al. [13] , the base net payout ˜πi := wi(s(pi, y ) − s(q−i, y )) has the form of a no-arbitrage wagering mechanism: there exists y∗ with ˜πi(y∗) ≤ 0 for any p and w. Since πi = ˜πi − c3w2 
+
+> i
+
+≤ ˜πi,it follows that πi(y∗) ≤ 0.23 Proposition 3.13 (Normality Failure of WALLA II) . WALLA II does not satisfy normality: by adopting p∗ 
+
+> i
+
+,agent j can change the pooled baseline q−i in a direction that increases player i’s expected net payoff. Proof. We construct a counterexample with the Brier score s(p, y ) = c1 − c2∥p − δy ∥22 (Def. 2.1). Recall that normality (Def. 3.9) is asserted for every fixed prediction profile p ∈ ∆( Y)M and wager profile w ∈ RM
+
+> ≥0
+
+; these are treated as deterministic parameters, and the conditional expectation EQi [· | F i]
+
+is taken solely over the randomness in Y . Consequently, for any fixed p and w, the pooled baseline 
+
+q−i = P  
+
+> j̸=i
+
+wj pj /W −i is a fixed vector in ∆( Y) and p1 = EQi [δY | F 1] is F1-measurable, 
+
+EQi
+
+∥q−1 − δY ∥22 | F 1
+
+ = ∥q−1 − p1∥22 + EQi
+
+∥p1 − δY ∥22 | F 1
+
+ ,
+
+where the cross-term 2⟨q−1 − p1, EQi [p1 − δY | F 1]⟩ = 2 ⟨q−1 − p1, p 1 − p1⟩ = 0 vanishes. Hence 
+
+EQi [s(q−1, Y ) | F 1] = c1 − c2∥q−1 − p1∥22 − c2EQi
+
+∥p1 − δY ∥22 | F 1
+
+ . (10) Let Y = {1, 2, 3}, M = 3 , and consider normality for player i = 1 . Fix the following deterministic profiles: 
+
+p1 = (0 .5, 0.5, 0) , p2 = (1 , 0, 0) , p3 = (0 , 1, 0) , w2 = 1 , w3 = 2 ,
+
+so W−1 = 3 .The WALLA II baseline for player 1 is 
+
+q−1 = w2p2 + w3p3
+
+W−1
+
+= 13 (1 , 0, 0) + 23 (0 , 1, 0) =   13 , 23 , 0 .
+
+The squared distance is 
+
+∥q−1 − p1∥22 =  − 16 , 16 , 0 22 = 136 + 136 = 118 .
+
+Now let p′ be the profile obtained by setting p′ 
+
+> 2
+
+= p1 = (0 .5, 0.5, 0) (player 2’s prediction improves to match player 1’s true belief) while keeping p′ 
+
+> 3
+
+= p3 and all wagers unchanged. The new pooled baseline is 
+
+q′−1 = 13 (0 .5, 0.5, 0) + 23 (0 , 1, 0) =   16 , 56 , 0 ,
+
+and the new squared distance to p1 is 
+
+∥q′−1 − p1∥22 =  − 13 , 13 , 0 22 = 19 + 19 = 29 > 118 = ∥q−1 − p1∥22.
+
+By (10), 
+
+EQi [s(q′−1, Y ) | F 1] < EQi [s(q−1, Y ) | F 1].
+
+Because the net payout subtracts the baseline score, and w1 > 0, the expected payoff of player 1 strictly increases: 
+
+EQi [πII 1 (w, p′, Y ) | F 1] > EQi [πII 1 (w, p, Y ) | F 1].
+
+This is a contradiction to Def. 3.9 and hence WALLA II fails normality. 
+
+Proposition 3.14 (Bounded Worst-Case Deficit) . Under the net payout function (2) with a bounded scoring rule ( s ∈ [s, s ]) for WALLA I, or a bounded and concave scoring rule for WALLA II (e.g., the Brier score), the total net payout satisfies 
+
+> M
+
+X
+
+> i=1
+
+πi ≤
+
+ s − sW − c3
+
+ MX
+
+> i=1
+
+w2 
+
+> i
+
+≤ (s − s)2
+
+4c3
+
+(7) 
+
+where W = P 
+
+> i
+
+wi, for any prediction profile p ∈ ∆( Y)M , any wager profile w ∈ RM
+
+> ≥0
+
+, and realized outcome 
+
+y ∈ Y .
+
+24 Proof. We first consider WALLA I . Write si := s(pi, y ), ¯sw :=    
+
+> P
+> jwjsj
+> W
+
+and W−i = P  
+
+> j̸=i
+
+wj . From 
+
+W ¯sw = wisi + W−ibI
+
+> −i
+
+, we have: 
+
+si − bI 
+
+> −i
+
+= W (si − ¯sw)
+
+W−i
+
+, si − ¯sw = W−i
+
+W (si − bI
+
+> −i
+
+). (11) Writing WW−i = 1 + wi 
+
+> W−i
+
+and using P 
+
+> i
+
+wi(si − ¯sw) = 0 , we write our net payout function (2) as the difference of the leave-one-out (LOO) inflation term and the regularization term: 
+
+> M
+
+X
+
+> i=1
+
+πi =
+
+> M
+
+X
+
+> i=1
+
+w2 
+
+> i
+
+(si − ¯sw)
+
+W−i
+
+| {z }
+
+> LOO inflation
+
+− c3
+
+> M
+
+X
+
+> i=1
+
+w2
+
+> i
+
+| {z }
+
+> regularization
+
+. (12) Using (11) and si − bI 
+
+> −i
+
+≤ s − s, we have 
+
+w2 
+
+> i
+
+(si − ¯sw)
+
+W−i
+
+= w2 
+
+> i
+
+(si − bI
+
+> −i
+
+)
+
+W ≤ w2 
+
+> i
+
+(s − s)
+
+W .
+
+Therefore, the LOO inflation is at most s−sW
+
+P 
+
+> i
+
+w2 
+
+> i
+
+, giving the first inequality in (7). For the second: since P 
+
+> i
+
+w2 
+
+> i
+
+/W ≤ wmax and P 
+
+> i
+
+w2 
+
+> i
+
+≥ w2max ,
+
+(s − s) P 
+
+> i
+
+w2
+
+> i
+
+W − c3
+
+X
+
+> i
+
+w2 
+
+> i
+
+≤ (s − s) wmax − c3 w2max ≤ (s − s)2
+
+4c3
+
+,
+
+where the last step maximized at (s − s)/(2 c3) with value (s − s)2/(4 c3).
+
+WALLA II. When s(·, y ) is concave in p, Jensen’s inequality gives bII  
+
+> −i
+
+≥ bI 
+
+> −i
+
+and thus πII  
+
+> −i
+
+≤ πI 
+
+> −i
+
+for all prediction and wager profiles, so WALLA I’s bound applies. 
+
+## C Deferred Content from Sec. 4 
+
+C.1 Datasets 
+
+Table 7 shows basic information about each dataset. Table 7: Dataset attributes. PubMedQA [56] BayesX MedMCQA [57] MMLU [58] ARC-Challenge [59] Size 37.82K 10K 183K 116K 1.17K Task Binary Classification Distribution Matching Multiple Choice Multiple Choice Multiple Choice Private Context ✓ ✓ ✗ ✗ ✗
+
+PubMedQA [ 56 ]8 is a specialized biomedical research dataset designed for answering questions based on medical abstracts. The primary task is to provide a “yes,” “no,” or “maybe” response to a clinical question by synthesizing information from an associated PubMed abstract. For our experiment, we convert this into a binary classification by focusing on “yes” and “no” questions. We also balance the dataset such that there is a similar number of “yes” and “no” questions. We extract the abstract per question and randomly assign relevant or irrelevant abstracts to a subset of participating models. MedMCQA [ 57 ]9 is a large-scale, multiple-choice question-answering dataset specifically curated from Indian medical entrance exams (AIIMS and NEET-PG). It covers 21 diverse medical subjects, such as anatomy, pathology, and pharmacology. Because these questions are designed to test human medical students, they   
+
+> 8We use the publicly available PubMedQA dataset on Hugging Face: https://huggingface.co/datasets/qiaojin/PubMedQA .
+> 9We use the publicly available MedMCQA dataset on Hugging Face: https://huggingface.co/datasets/openlifescienceai/ medmcqa .
+
+25 require deep domain knowledge, making MedMCQA a standard tool for measuring the clinical competency of general and medical-purpose LLMs. MMLU [ 58 ]10 is one of the most comprehensive benchmarks for evaluating the general knowledge and problem-solving capabilities of language models. It spans 57 subjects across STEM, the humanities, social sciences, and more, testing both world knowledge and analytical skill. The questions are multiple-choice and range in difficulty from elementary levels to advanced professional standards (such as law or medicine). MMLU has become the industry standard for reporting a model’s foundational “intelligence” and its ability to handle a vast breadth of human knowledge. ARC-Challenge [ 59 ]11 is a high-difficulty subset of the AI2 Reasoning Challenge, consisting of grade-school science questions that are particularly difficult for automated systems to solve. The Challenge set contains questions that cannot be answered by simple keyword matching or statistical co-occurrence alone; they often require a degree of logical reasoning, common sense, or a basic understanding of scientific processes. It remains a key metric for determining how well a model can move beyond rote memorization toward actual conceptual understanding. BayesX is a new dataset we constructed to capture a setting in which additional information reduces epistemic uncertainty about the world while revealing greater aleatoric uncertainty in the outcome-generating process. Each example describes a binary cluster-saturation forecasting problem. The prior probability is either 0.1 or 0.9, and the context contains a binary warning signal with sampled true-positive and false-positive rates. The evidence is selected so that receiving additional information can move the posterior closer to a uniform distribution. The ground truth is therefore the posterior probability rather than only a hard binary label. 12 
+
+C.2 Formal Definitions of Metrics 
+
+We formally define Kendall’s Tau, MRR, and dynamic regret in terms of the Brier score as follows. 
+
+Definition C.1 (Kendall’s Tau (K-Tau)) . We use K-Tau to measure the ordinal association between two orderings: (1) the ordering of models by their per-question Brier-score performance and (2) the ordering of models by their wagers. Formally, 
+
+τ = (number of concordant pairs) - (number of discordant pairs) (number of pairs) .
+
+Definition C.2 (Mean Reciprocal Rank (MRR) of the Best Experts) . The per-sample reciprocal rank is the inverse rank of the best expert in terms of the Brier score. Formally, MRR = 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+1
+
+rank (arg min j ∥δ(n) 
+
+> y
+
+− p(n) 
+
+> j
+
+∥22) ,
+
+where N is the number of samples and the rank is induced by the aggregation weights. 
+
+Definition C.3 (Dynamic Regret (D-Regret) in the Brier Score) . The D-Regret is defined as 
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+∥δ(n) 
+
+> y
+
+− p(n)
+
+> agg
+
+∥22 − min  
+
+> j
+
+∥δ(n) 
+
+> y
+
+− p(n) 
+
+> j
+
+∥22.
+
+It measures the Brier-score gap between the aggregated prediction and the best individual model on each question.    
+
+> 10 We use the publicly available MMLU dataset on Hugging Face: https://huggingface.co/datasets/cais/mmlu .
+> 11 We use the publicly available ARC-Challenge dataset on Hugging Face: https://huggingface.co/datasets/allenai/ai2_ arc .
+> 12 We include the BayesX dataset in the repo https://github.com/chailab-rutgers/WALLA .
+
+26 C.3 Baselines 
+
+Uniform averaging (UniformAvg) is a simple method that averages the predicted probability distributions with equal weights (i.e., pagg =  
+
+> PMi=1 pi
+> M
+
+). SelfCertainty [ 9] is a learning-free ensembling that uses model confidence as weight for averaging. We use the variant that quantifies confidence through the Kullback-Leibler (KL) divergence between the model’s predicted token probability distribution and a uniform distribution, as it performs best. 13 
+
+PackLLM [ 10 ] is a learning-free ensembling method that aims to minimize the perplexity of the input prompt for the ensemble of all models. As PackLLM relies on the perplexity of the input tokens for each model, it requires open-weight models. In a decentralized setting where different providers control different models, providers can misreport perplexities to gain disproportional weights. 14 
+
+RouterDC [ 2] is a pre-inference router that finetunes a DeBERTaV3-base [ 63 ] language model via dual-contrastive learning. It aligns a query’s embedding with the top-K most capable LLMs for that specific task while distancing it from the last-K models. 15 
+
+Song et al. [4] proposes a pre-inference router inspired by Item Response Theory (IRT) called IRTRouter. It treats user queries as “test items” and LLMs as “respondents,” and explicitly models the relationship between a specific query’s difficulty and an individual model’s latent capabilities. It uses a frozen BERT model to retrieve the query embedding. We adopt NIRTRouter, a variant that trains neural networks for the IRT implementation. 16 
+
+RouteLLM [ 3] was designed to choose between a more capable but expensive model and a weaker and cheaper model using human pairwise preference as feedback. Its base router is a BERT model that is finetuned using preference data. We extend this framework for routing on more LLMs using cross-entropy loss and pairwise ranking loss. 17 
+
+Stacked generalization (StackedGen) [ 5] is a classical ensembling technique that learns a neural network to combine diverse predictive models to achieve greater overall accuracy than any single model could produce alone. We train a two-layer perceptron with cross-entropy loss. We use the last-layer hidden states of LLMs as input to the perceptron as WALLA to be consistent. Table 8: The mechanism parameters and learning parameters applied to all learning-based methods. Mechanism Parameters Learning Parameters                   
+
+> c1c2c3Aggregation Scoring rule Variant Batch size Dataset split MLP hidden sizes Optimizer 11/2 1/2 Linear pooling Brier score WALLA I 100 8:1:1 512, 256 Adam
+
+C.4 Additional Experiment Setup Details 
+
+The learning parameters provided in Table 8 are common to all methods. For every dataset, we use an 
+
+8: 1: 1 train-validation-test split and fix the batch size to 100. For learning-based methods, we use the Adam optimizer, tune the learning rate with grid search and adopt early stopping to prevent overfitting. For baselines, we stop at the epoch that achieves the best validation performance. For WALLA, because the training procedure is decentralized, we use the Brier score on the most recent training batches as the early stopping criterion, ensuring that the number of training-batch samples used for early stopping matches the validation-set size. Unless specified otherwise, all methods use linear pooling for aggregation. In all experiments, the aggregated predictions are evaluated on a held-out test set, where no further updates to the wagering strategy are allowed.           
+
+> 13 We use the public implementation of SelfCertainty from https://github.com/backprop07/Self-Certainty .
+> 14 We use the public implementation of PackLLM from https://github.com/cmavro/PackLLM .
+> 15 We use the public implementation of RouterDC from https://github.com/shuhao02/RouterDC .We use the pretrained DeBERTaV3 from https://huggingface.co/microsoft/deberta-v3-base .
+> 16 We use the public implementation of NIRTRouter from https://github.com/Mercidaiha/IRT-Router .We adopt the pretrained BERT from https://huggingface.co/google-bert/bert-base-uncased .
+> 17 We adapt the public implementation of RouteLLM from https://github.com/lm-sys/RouteLLM.git . We adopt the pre-trained BERT from https://huggingface.co/google-bert/bert-base-uncased .
+
+27 Experiments are run on 4 NVIDIA RTX PRO 6000 Blackwell Server Edition GPUs (96 GiB VRAM each) and a dual-socket AMD EPYC 9354 setup (64 CPU cores total). It provides about 1.1 TiB system RAM (plus 33GiB swap). Table 9: Homogeneous models (Aloe) on PubMedQA with private contexts. Questions that all models can answer correctly are filtered out. For each question, one of M ∈ { 4, 8, 12 } models is randomly selected to receive a relevant abstract; the rest receive none. 
+
+4 8 12 Method AUC ↑ ACC ↑ ECE ↓ MRR ↑ DRegret ↓ AUC ↑ ACC ↑ ECE ↓ MRR ↑ DRegret ↓ AUC ↑ ACC ↑ ECE ↓ MRR ↑ DRegret ↓
+
+UniformAvg 26.05 30.44 30.89 54.57 39.27 19.29 20.36 43.32 39.10 48.38 19.92 17.03 47.68 31.92 51.66 SelfCertainty 54.42 48.94 23.12 67.94 31.05 51.38 43.15 27.94 62.45 36.41 49.71 39.82 30.81 60.65 39.30 PackLLM 78.23 63.72 4.72 89.58 15.18 48.75 55.15 9.35 88.83 22.87 41.43 48.42 41.43 88.45 28.00 RouterDC w/ context 24.58 ±27.74 31.57 ±61.88 30.69 ±59.00 61.57 ±366.04 39.32 ±39.64 19.86 ±2.61 20.32 ±3.61 43.30 ±4.81 48.12 ±146.06 48.17 ±4.22 20.22 ±6.03 17.03 ±1.03 47.61 ±0.21 41.98 ±186.21 51.47 ±2.50 
+
+NIRTRouter w/ context 25.81 ±3.03 30.56 ±1.55 30.77 ±1.54 52.02 ±8.94 39.27 ±0.04 19.29 ±0.00 20.36 ±0.00 43.32 ±0.00 33.89 ±17.09 48.38 ±0.00 19.92 ±0.03 17.03 ±0.00 47.67 ±0.00 24.50 ±1.64 51.66 ±0.01 
+
+RouteLLM w/ context 72.54 ±0.15 69.27 ±0.15 4.89 ±0.09 89.30 ±0.76 6.47 ±0.14 72.55 ±0.07 72.55 ±0.07 4.99 ±0.26 87.92 ±0.79 6.53 ±0.05 73.11 ±0.11 69.08 ±0.08 5.15 ±0.08 86.59 ±0.89 6.55 ±0.04 
+
+RouteLLM w/o context 23.03 ±0.59 29.69 ±0.49 31.82 ±0.50 52.08 ±0.42 39.24 ±0.01 19.52 ±0.83 20.00 ±0.46 43.68 ±0.46 33.43 ±0.90 48.52 ±0.02 22.00 ±0.81 16.26 ±0.41 48.47 ±0.40 27.78 ±2.65 51.64 ±0.06 
+
+StackedGen 71.57 ±0.36 69.25 ±0.27 4.27 ±0.20 89.18 ±0.44 6.26 ±0.34 73.38 ±1.09 69.15 ±0.45 5.02 ±0.58 87.10 ±1.11 6.48 ±0.61 72.68 ±0.42 69.05 ±0.70 4.70 ±0.50 85.99 ±1.10 6.90 ±0.65 
+
+WALLA I 67.60 ±1.05 67.34 ±1.19 3.08 ±0.37 89.14 ±0.55 8.81 ±0.89 70.91 ±0.82 68.28 ±0.34 7.55 ±0.65 79.48 ±1.08 16.81 ±0.36 64.71 ±0.82 67.33 ±0.78 7.22 ±1.77 77.34 ±1.87 20.45 ±0.79 
+
+WALLA II 66.07 ±0.41 66.55 ±0.27 2.45 ±0.39 89.62 ±0.21 9.95 ±0.10 63.16 ±0.62 65.50 ±0.96 2.88 ±0.48 87.30 ±1.40 12.60 ±0.62 59.42 ±1.30 63.68 ±1.10 2.84 ±0.91 86.18 ±0.46 14.96 ±0.40 
+
+Table 10: 2 Heterogeneous models (Llama3.1 and Aloe) without context on three datasets. 
+
+MedMCQA (i.d.) MMLU (i.d.) ARC-Challenge (o.o.d.) Method ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+Llama3.1 78.97 2.64 69.51 -21.95 10.62 81.99 2.52 68.51 -25.96 7.37 81.30 3.06 68.39 -26.43 8.89 Aloe 79.77 3.18 80.49 21.95 10.42 80.23 8.77 81.49 25.96 11.10 80.35 8.58 81.61 26.43 11.31 UniformAvg 81.76 4.60 69.51 0.00 7.58 82.22 2.47 68.51 0.00 6.66 82.87 3.05 68.39 0.00 7.05 SelfCertainty 81.73 2.24 88.64 54.56 7.32 82.15 5.07 88.57 54.29 7.56 82.87 3.94 87.74 50.96 7.34 PackLLM 81.54 4.18 79.04 16.17 7.62 82.27 2.49 72.53 -9.90 6.65 82.70 2.80 75.70 2.78 7.15 RouterDC 82.01 ±3.58 4.36 ±0.62 80.18 ±3.91 20.71 ±15.64 7.49 ±1.11 82.21 ±0.04 2.54 ±0.13 76.30 ±8.83 5.19 ±35.31 6.68 ±0.03 82.89 ±0.05 2.86 ±0.45 76.32 ±8.99 5.29 ±35.96 7.07 ±0.03 
+
+NIRTRouter 81.98 ±3.61 4.27 ±0.98 80.56 ±0.94 22.24 ±3.75 7.49 ±1.13 82.36 ±0.57 2.23 ±0.23 68.51 ±0.03 -25.97 ±0.13 6.54 ±0.55 82.78 ±0.00 3.42 ±0.00 68.39 ±0.00 -26.43 ±0.00 7.00 ±0.00 
+
+RouteLLM 81.82 ±2.71 3.89 ±1.74 80.56 ±0.94 22.24 ±3.75 7.51 ±1.14 82.56 ±0.19 1.86 ±1.28 68.51 ±0.03 -25.97 ±0.13 6.37 ±0.07 83.13 ±0.00 2.13 ±0.00 68.39 ±0.00 -26.43 ±0.00 6.94 ±0.00 
+
+StackedGen 82.61 ±0.28 2.16 ±0.32 85.51 ±0.39 42.04 ±1.57 6.35 ±0.11 82.52 ±0.21 2.29 ±0.21 77.47 ±1.03 9.88 ±4.12 6.21 ±0.19 83.33 ±0.21 3.07 ±0.35 75.22 ±0.37 0.87 ±1.46 6.61 ±0.03 
+
+WALLA I 82.02 ±0.32 4.53 ±0.28 73.69 ±3.26 -5.25 ±13.06 7.57 ±0.12 82.41 ±0.17 1.84 ±0.09 69.07 ±1.01 -23.72 ±4.03 6.49 ±0.11 83.00 ±0.14 2.44 ±0.17 68.30 ±0.20 -26.78 ±0.81 7.01 ±0.04 
+
+WALLA II 82.02 ±0.23 4.48 ±0.32 74.07 ±6.44 -3.73 ±25.78 7.56 ±0.10 82.35 ±0.33 1.90 ±0.23 68.69 ±0.67 -25.23 ±2.67 6.51 ±0.12 82.91 ±0.18 2.34 ±0.37 68.30 ±0.28 -26.78 ±1.13 7.01 ±0.05 
+
+WALLA I (log-pool) 81.73 ±0.17 2.70 ±0.66 73.96 ±5.91 -4.17 ±23.66 7.19 ±0.08 82.33 ±0.08 3.09 ±0.43 70.08 ±0.37 -19.67 ±1.50 6.55 ±0.09 82.65 ±0.29 3.02 ±0.80 68.02 ±0.49 -27.91 ±1.95 6.98 ±0.37 
+
+WALLA I (calibrated) 82.55 ±0.16 5.20 ±0.17 75.03 ±4.71 0.10 ±18.83 6.78 ±0.02 82.76 ±0.05 2.45 ±0.08 79.11 ±1.47 16.44 ±5.88 5.79 ±0.03 82.87 ±0.11 2.88 ±0.44 81.67 ±0.17 26.70 ±0.70 6.64 ±0.05 
+
+Table 11: 2 Heterogeneous models (Llama3.1 and Aloe) without context on three datasets, with questions that both models can answer correctly filtered out. 
+
+MedMCQA (i.d.) MMLU (i.d.) ARC-Challenge (o.o.d.) Method ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+Llama3.1 26.38 30.11 77.69 10.78 24.86 26.94 38.89 81.74 26.94 21.41 27.85 38.59 80.37 21.48 24.50 Aloe 29.20 36.31 72.31 -10.78 32.14 19.79 54.53 68.26 -26.94 41.29 24.16 50.18 69.63 -21.48 39.75 UniformAvg 36.17 17.01 77.69 0.00 20.68 27.87 34.11 81.74 0.00 22.88 33.89 31.10 80.37 0.00 22.62 SelfCertainty 36.03 23.67 72.61 -9.55 22.65 27.59 40.88 67.33 -30.68 28.38 33.89 34.01 69.46 -22.15 25.80 PackLLM 35.40 18.32 73.39 -6.45 21.08 28.08 33.83 78.34 13.37 22.79 33.22 31.28 73.32 -6.71 23.04 RouterDC 36.44 ±5.23 16.94 ±6.40 72.11 ±2.45 -11.55 ±9.82 20.66 ±1.91 27.81 ±0.17 34.39 ±0.46 73.65 ±9.16 -5.39 ±36.64 22.97 ±0.17 33.96 ±0.19 29.69 ±0.15 73.93 ±7.30 -4.30 ±29.21 22.71 ±0.17 
+
+NIRTRouter 36.34 ±5.34 17.10 ±6.61 72.04 ±3.38 -11.84 ±13.53 20.73 ±1.92 28.68 ±5.62 33.36 ±1.67 81.28 ±5.82 25.11 ±23.28 22.06 ±4.98 33.56 ±0.00 28.53 ±0.01 80.37 ±0.00 21.48 ±0.00 22.30 ±0.02 
+
+RouteLLM 35.78 ±2.09 18.07 ±2.44 72.04 ±3.38 -11.84 ±13.53 21.03 ±1.65 29.49 ±2.49 32.43 ±1.57 81.28 ±5.82 25.11 ±23.28 20.73 ±2.98 34.90 ±0.00 26.61 ±0.02 80.37 ±0.00 21.48 ±0.00 21.33 ±0.04 
+
+StackedGen 38.65 ±1.16 20.23 ±1.00 78.26 ±0.29 13.02 ±1.15 13.02 ±1.15 29.80 ±0.60 32.88 ±0.88 79.54 ±0.40 18.17 ±1.61 20.44 ±0.67 35.65 ±0.80 29.35 ±1.20 80.29 ±0.15 21.14 ±0.62 20.42 ±0.10 
+
+WALLA I 36.56 ±1.20 16.28 ±1.50 75.88 ±0.87 3.50 ±3.47 20.64 ±0.19 29.37 ±0.81 31.47 ±1.36 81.04 ±0.99 24.17 ±3.96 20.85 ±0.66 34.40 ±0.53 26.95 ±0.46 80.16 ±0.26 20.64 ±1.02 21.00 ±0.03 
+
+WALLA II 36.55 ±0.88 16.34 ±0.47 75.67 ±2.61 2.68 ±10.45 20.64 ±0.28 29.12 ±0.75 31.71 ±0.88 81.01 ±0.84 24.03 ±3.37 21.00 ±0.85 34.06 ±0.69 26.87 ±0.74 80.20 ±0.38 20.81 ±1.51 21.03 ±0.09 
+
+WALLA I (log-pooling) 36.06 ±0.58 19.84 ±1.13 75.57 ±3.00 2.27 ±11.99 21.32 ±0.62 28.31 ±0.31 34.79 ±0.69 80.67 ±0.64 22.67 ±2.56 22.92 ±0.97 33.05 ±1.11 31.67 ±2.59 79.70 ±0.58 18.79 ±2.31 22.31 ±0.29 
+
+WALLA I (calibrated) 38.92 ±0.55 11.68 ±1.05 74.77 ±1.09 -0.91 ±4.38 18.42 ±0.07 30.05 ±0.20 24.90 ±0.29 76.88 ±0.21 7.54 ±0.85 18.15 ±0.09 33.89 ±0.44 26.35 ±0.62 76.26 ±0.27 5.03 ±1.07 19.98 ±0.08 
+
+28 Figure 2: The alignment between the actual Brier scores ( x-axis) and the predicted Brier scores trained on last-layer hidden states. 29 Figure 3: The alignment between the actual baseline average scores ( b−i (x-axis) and the predicted baseline average scores trained on last-layer hidden states. 30 Figure 4: The alignment between the wagers ( x-axis) and the differences between the predicted own scores and the predicted baseline average scores ( y-axis), which can be interpreted as the best-response wager under one’s belief. The alignment is strong even though the wagers, the predicted own scores, and the predicted baseline average scores are trained with separate heads. 
+
+Figure 5: Dynamic regret, mean reciprocal rank of the best expert (MRR), and accuracy (ACC) over time of WALLA under Scenario I on PubMedQA. They demonstrate that WALLA’s performance gradually improves over time, though in a decentralized learning environment. A similar trend can be observed in other scenarios or datasets. 31 Table 12: Heterogeneous models (Gemma2, Aloe, Llama3.1, and BioMistral) without context on three datasets, with questions that all models can answer correctly filtered out. 
+
+MedMCQA (i.d.) MMLU (i.d.) ARC-Challenge (o.o.d.) Method ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+Gemma2 43.25 40.85 56.83 -8.50 71.61 70.20 21.74 76.62 21.61 29.71 78.04 17.82 83.15 28.84 24.36 Aloe 69.05 7.86 60.32 16.12 23.26 54.05 26.10 50.61 -3.01 47.75 54.89 24.89 48.85 -5.09 52.09 Llama3.1 67.82 2.57 56.19 11.84 22.25 58.15 15.59 43.17 0.69 37.34 57.09 15.80 39.87 -2.76 43.73 BioMistral 19.64 38.15 41.48 -19.47 78.88 21.09 45.46 38.26 -19.29 82.59 23.35 42.36 35.84 -20.99 84.41 UniformAvg 63.97 8.20 58.06 0.00 30.79 65.48 9.12 76.33 0.00 30.32 71.06 12.69 82.58 0.00 30.86 SelfCertainty 60.87 9.05 71.25 19.89 33.34 68.81 7.37 78.04 27.88 27.03 75.25 7.46 83.53 36.66 24.16 PackLLM 67.87 10.75 55.85 21.00 27.51 64.99 8.92 41.64 -15.83 31.16 68.46 11.31 38.52 -16.10 32.40 RouterDC 67.42 ±3.61 9.29 ±0.91 59.79 ±0.83 30.02 ±1.96 27.16 ±8.06 65.78 ±0.51 8.28 ±0.51 59.41 ±18.55 21.66 ±13.68 29.83 ±0.32 71.26 ±0.43 12.43 ±0.47 60.92 ±25.76 22.91 ±19.13 30.36 ±0.38 
+
+NIRTRouter 70.82 ±3.04 6.77 ±0.10 59.79 ±0.81 30.03 ±1.91 21.47 ±2.98 70.08 ±7.19 4.81 ±0.11 76.51 ±1.37 32.92 ±8.11 25.38 ±7.51 77.45 ±5.07 8.87 ±0.99 83.15 ±0.00 39.79 ±0.00 23.58 ±6.45 
+
+RouteLLM 71.67 ±1.79 2.09 ±4.02 59.79 ±0.81 30.03 ±1.91 18.77 ±0.39 69.95 ±8.91 8.92 ±4.87 76.51 ±1.37 32.92 ±8.11 24.56 ±7.84 78.44 ±0.00 6.28 ±3.05 83.15 ±0.00 39.79 ±0.00 20.90 ±3.11 
+
+StackedGen 73.13 ±0.30 1.47 ±0.59 64.16 ±0.20 33.91 ±0.07 17.09 ±0.16 70.59 ±1.23 8.42 ±1.15 76.20 ±0.58 32.87 ±1.56 23.62 ±1.43 77.84 ±0.26 7.41 ±1.70 82.96 ±0.31 39.40 ±0.18 19.97 ±0.10 
+
+WALLA I 70.82 ±0.24 7.38 ±0.43 59.90 ±0.60 28.92 ±0.64 21.93 ±0.41 69.88 ±1.10 6.51 ±1.01 76.32 ±0.35 32.16 ±0.77 26.00 ±0.55 76.80 ±0.70 10.87 ±1.65 80.47 ±0.97 38.59 ±0.85 24.24 ±0.28 
+
+WALLA II 70.56 ±0.35 7.62 ±0.78 59.10 ±0.61 26.11 ±0.83 22.65 ±0.42 70.32 ±1.11 6.20 ±0.94 76.41 ±0.56 29.48 ±4.68 25.63 ±0.70 77.69 ±0.54 11.16 ±2.10 81.94 ±0.85 36.48 ±5.60 23.26 ±0.32 
+
+WALLA I (log-pooling) 69.89 ±0.16 1.26 ±0.14 59.32 ±0.08 28.42 ±0.36 21.81 ±0.17 70.63 ±0.11 10.02 ±0.62 70.92 ±1.48 23.15 ±2.32 24.03 ±0.02 78.54 ±0.18 8.91 ±0.49 75.94 ±1.27 28.08 ±2.08 20.90 ±0.07 
+
+WALLA I (calibration) 73.27 ±0.07 10.17 ±0.14 67.35 ±0.52 34.12 ±0.52 16.57 ±0.10 71.36 ±0.19 9.27 ±0.17 70.23 ±0.10 21.01 ±0.13 31.58 ±0.36 76.10 ±0.16 13.39 ±0.76 76.92 ±0.20 38.81 ±0.48 21.06 ±0.10 
+
+Table 13: Heterogeneous models (Gemma2, Aloe, Llama3.1, and BioMistral) with private contexts on the PubMedQA dataset, with questions that all models can answer correctly filtered out. For each question, we randomly assign one model with a relevant context (left columns) or two models, each with a relevant and an irrelevant context (right columns). 
+
+1 Relevant Context 1 Relevant Context & 1 Irrelavent Context Method AUC ↑ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓ AUC ↑ ACC ↑ ECE ↓ MRR ↑ K-Tau ↑ DRegret ↓
+
+UniformAvg 62.26 67.04 5.93 61.04 0.00 29.64 65.29 68.43 7.61 65.47 0.00 31.42 SelfCertainty 64.02 68.15 9.67 80.56 25.57 29.57 63.05 64.45 16.27 79.63 25.50 38.47 PackLLM 73.28 77.04 11.34 69.89 22.08 20.68 66.20 71.43 9.66 59.43 7.04 29.60 RouterDC w/ context 62.16 ±1.03 67.18 ±1.76 6.04 ±2.34 54.05 ±21.81 7.18 ±13.04 29.58 ±0.83 65.03 ±1.62 68.80 ±3.66 8.11 ±4.30 50.04 ±1.33 -0.76 ±14.62 31.39 ±0.78 
+
+NIRTRouter w/ context 62.06 ±2.79 67.69 ±1.18 6.56 ±8.74 46.88 ±40.59 0.07 ±83.43 29.39 ±2.96 65.08 ±1.26 69.42 ±0.00 8.77 ±3.77 45.02 ±68.41 -2.09 ±81.12 31.17 ±1.96 
+
+RouteLLM w/ context 70.38 ±0.62 70.75 ±0.82 2.97 ±0.68 62.28 ±1.39 19.27 ±0.41 23.45 ±0.67 70.39 ±0.59 72.52 ±0.80 3.13 ±0.81 63.46 ±2.28 17.10 ±1.38 25.22 ±0.57 
+
+RouteLLM w/o context 62.54 ±11.96 66.78 ±0.29 2.74 ±1.75 54.72 ±32.92 7.50 ±6.67 28.87 ±3.44 64.62 ±21.30 69.93 ±4.44 2.90 ±1.45 61.40 ±4.40 12.26 ±14.45 28.98 ±10.12 
+
+StackedGen 78.87 ±0.39 78.94 ±0.25 4.54 ±0.31 73.21 ±0.22 29.97 ±0.57 14.51 ±0.06 77.62 ±0.76 79.44 ±2.26 4.14 ±1.87 72.15 ±1.23 25.05 ±2.25 16.65 ±1.21 
+
+WALLA I 73.49 ±0.87 74.95 ±0.26 7.64 ±0.59 73.65 ±0.30 24.48 ±0.63 20.75 ±0.20 73.50 ±0.43 76.51 ±0.29 9.52 ±0.38 75.21 ±0.55 25.33 ±0.41 23.09 ±0.06 
+
+WALLA II 73.68 ±0.31 75.07 ±0.43 7.31 ±0.68 73.43 ±0.07 23.53 ±0.64 20.45 ±0.14 72.93 ±0.05 76.18 ±0.29 8.45 ±0.47 75.29 ±0.59 22.84 ±0.58 23.05 ±0.08 
+
+WALLA I (log-pooling) 72.53 ±0.76 74.24 ±0.23 3.36 ±0.86 73.59 ±0.27 24.61 ±0.72 20.32 ±0.36 73.30 ±0.48 76.57 ±0.23 9.60 ±0.39 75.22 ±0.59 25.37 ±0.24 23.12 ±0.13 
+
+WALLA I (calibrated) 83.43 ±0.32 80.65 ±0.20 10.01 ±0.24 78.36 ±0.10 30.74 ±0.30 15.18 ±0.08 83.86 ±0.28 84.08 ±0.06 10.56 ±0.13 80.52 ±0.19 32.92 ±0.31 13.40 ±0.10 
+
+32
