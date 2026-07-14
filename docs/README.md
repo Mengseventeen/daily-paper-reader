@@ -6,52 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-13
-- 运行时间：2026-07-13 21:34:40 UTC
+- 最新运行日期：2026-07-14
+- 运行时间：2026-07-14 20:17:50 UTC
 - 运行状态：成功
-- 本次总论文数：10
-- 精读区：5
-- 速读区：5
+- 本次总论文数：13
+- 精读区：6
+- 速读区：7
 
 ### 今日简报（AI）
-今日精读两篇高分论文：S&P 500企业AI采纳与基于RAG的大语言模型生成投资简报系统。  
-最值得关注的是LLM+RAG如何自动化基本面分析，以及AI在头部企业中的采用趋势。  
-建议优先阅读这两篇精读，了解AI在金融分析中的落地路径。
-- 详情：[/202607/13/README](/202607/13/README)
+今日聚焦13篇AI金融研究，精读两篇9.0高分：基于记忆驱动的量化因子挖掘系统与基于语言模型的全球并购套利预测。建议优先关注多模态事件序列基础模型及防洗钱图神经网络中的稠密邻居处理技巧，对普通读者来说，理解“朴素分散化”为何有效可快速提升投资组合认知。
+- 详情：[/202607/14/README](/202607/14/README)
 
 ### 精读区论文标签
-1. [AI Adoption in S&P 500 Firms](/202607/13/2607.08920v1-ai-adoption-in-sp-500-firms)  
+1. [XALPHA: A Memory-Driven AI Quant Researcher for Hypothesis-to-Code Alpha Discovery](/202607/14/2607.08332v2-xalpha-a-memory-driven-ai-quant-researcher-for-hypothesis-to-code-alpha-discovery)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用SEC文件研究标普500公司AI采用
-2. [Augmenting Fundamental Analysis with Large Language Models: A RAG-Based System for Generating Investor Briefs](/202607/13/2607.09121v1-augmenting-fundamental-analysis-with-large-language-models-a-rag-based-system-for-generating-investor-briefs)  
+   evidence：AI驱动的金融市场阿尔法发现
+2. [Global Merger-Arbitrage Forecasting with Language Models](/202607/14/2607.09921v1-global-merger-arbitrage-forecasting-with-language-models)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于LLM和RAG的投资者简报生成系统，处理金融报告和SEC文件
-3. [Semantic Pareto-DQN: A Multi-Objective Reinforcement Learning Framework for Financial Anomaly Detection](/202607/13/2607.09641v1-semantic-pareto-dqn-a-multi-objective-reinforcement-learning-framework-for-financial-anomaly-detection)  
+   evidence：使用语言模型进行并购套利预测，金融NLP应用
+3. [Can Agentic Trading Systems Pay for Their Own Intelligence?](/202607/14/2607.10286v1-can-agentic-trading-systems-pay-for-their-own-intelligence)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用大型语言模型将交易特征编码为自然语言叙述，用于金融异常检测
-4. [The Quarter-Hour Effect: Periodic Algorithmic Trading and Return Predictability in Cryptocurrency Futures](/202607/13/2607.09426v1-the-quarter-hour-effect-periodic-algorithmic-trading-and-return-predictability-in-cryptocurrency-futures)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：加密货币期货算法交易回报预测
-5. [Large-Scale Portfolio Optimization Problem Under Cardinality Constraint With Enhanced Multi-Objective Evolutionary Algorithms](/202607/13/2607.09566v1-large-scale-portfolio-optimization-problem-under-cardinality-constraint-with-enhanced-multi-objective-evolutionary-algorithms)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：多目标进化算法用于投资组合优化
+   evidence：基于LLM代理的自主交易系统诊断工具集
+4. [LLM-Enhanced Dynamic Financial Knowledge Graphs for Cross-Entity Signal Propagation and alpha discovery](/202607/14/2607.10932v1-llm-enhanced-dynamic-financial-knowledge-graphs-for-cross-entity-signal-propagation-and-alpha-discovery)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：LLM增强的动态金融知识图谱用于跨实体信号传播
+5. [NextFund: A Unified Performance Tracking Platform for Agentic Portfolio Management](/202607/14/2607.11141v1-nextfund-a-unified-performance-tracking-platform-for-agentic-portfolio-management)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：面向智能体组合管理的平台，直接关联robo-advisor
+6. [Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States](/202607/14/2607.11414v1-confidently-wrong-detecting-hallucinations-in-financial-question-answering-from-llm-internal-states)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：从LLM内部状态检测金融问答中的自信幻觉
 
 ### 速读区论文标签
-1. [When Does Order Flow Matter? State-Dependent L2 Liquidity-State Transitions in Crypto Futures](/202607/13/2607.09230v1-when-does-order-flow-matter-state-dependent-l2-liquidity-state-transitions-in-crypto-futures)  
+1. [A Foundation Model for Multimodal Event Sequences in Financial Applications](/202607/14/2607.09955v1-a-foundation-model-for-multimodal-event-sequences-in-financial-applications)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：金融多模态事件序列基础模型
+2. [SALT-GNN: Handling Dense Neighborhoods in Anti-Money Laundering Graphs via Statistics-Aware Attention](/202607/14/2607.10131v1-salt-gnn-handling-dense-neighborhoods-in-anti-money-laundering-graphs-via-statistics-aware-attention)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：基于统计感知注意力的图神经网络用于反洗钱
+3. [When and Why Naïve Diversification Works: A Simple Diagnostic Strategy](/202607/14/2607.11054v1-when-and-why-nave-diversification-works-a-simple-diagnostic-strategy)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：混合朴素和优化权重的自适应投资组合策略，用于股票溢价预测
+4. [Deep Learning for Dynamic Programming with Recursive Utility Using First-order Conditions](/202607/14/2607.09461v1-deep-learning-for-dynamic-programming-with-recursive-utility-using-first-order-conditions)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：加密货币期货市场中的状态依赖L2流动性状态
-2. [TSAI-MetaFraud: A Benchmark Dataset for Financial Fraud Transaction and Behavioral Risk Detection in Metaverse Ecosystems](/202607/13/2607.09528v1-tsai-metafraud-a-benchmark-dataset-for-financial-fraud-transaction-and-behavioral-risk-detection-in-metaverse-ecosystems)  
+   evidence：深度学习用于递归效用动态规划，金融经济学应用
+5. [Neutralizing Structural Inequality in the Nigerian FinTech Sector](/202607/14/2607.10317v1-neutralizing-structural-inequality-in-the-nigerian-fintech-sector)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：多模态AI金融欺诈检测
-3. [GatedLinear: Adaptive Routing of Complementary Linear Bases for Time Series Forecasting](/202607/13/2607.09537v1-gatedlinear-adaptive-routing-of-complementary-linear-bases-for-time-series-forecasting)  
+   evidence：考虑公平性的金融科技AI欺诈检测
+6. [Diachronic Sample Integration: Robust Tail-Risk Estimation with Generative Models](/202607/14/2607.10810v1-diachronic-sample-integration-robust-tail-risk-estimation-with-generative-models)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：适用于金融市场的时间序列预测方法
-4. [A novel robust mixed integer linear programming model for index tracking problem under no rebalancing: heuristic optimization approach](/202607/13/2607.09556v1-a-novel-robust-mixed-integer-linear-programming-model-for-index-tracking-problem-under-no-rebalancing-heuristic-optimization-approach)  
+   evidence：生成模型用于决策中的尾部风险估计
+7. [Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator](/202607/14/2607.10960v1-reinforcement-learning-for-execution-under-dynamic-fees-in-a-closed-loop-dex-simulator)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：启发式优化用于指数跟踪
-5. [Strategic Buying Agents](/202607/13/2607.04708v1-strategic-buying-agents)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：自主购买代理的战略购买时机,与机器人顾问类似
+   evidence：去中心化交易所中的强化学习执行策略，属于AI4Finance核心
 
 
 <div class="dpr-home-promo-card">

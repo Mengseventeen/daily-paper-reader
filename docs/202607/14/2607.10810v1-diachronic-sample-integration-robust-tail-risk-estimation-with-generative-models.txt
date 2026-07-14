@@ -1,0 +1,1949 @@
+Title: Diachronic Sample Integration: Robust Tail-Risk Estimation with Generative Models
+
+URL Source: https://arxiv.org/pdf/2607.10810v1
+
+Published Time: Tue, 14 Jul 2026 01:19:59 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# Diachronic Sample Integration: Robust Tail-Risk Estimation with Generative Models 
+
+Shuning Zhao 1 Patrick Wong 2 Leran Zhang 3 Xiaolin Hu 11Department of Computer Science and Technology, BNRist, Tsinghua University, China 
+
+> 2
+
+Department of Econometrics and Business Statistics, Monash Business School, Monash University, Australia 
+
+> 3
+
+School of Mathematics and Statistics, University of Melbourne, Australia 
+
+## Abstract 
+
+Deep generative models are increasingly used as simulators for downstream decision making un-der data scarcity, but in risk-sensitive applications their usefulness depends on rare adverse scenar-ios rather than typical samples. Standard genera-tive objectives prioritize bulk distributional fidelity, leaving low-probability tails vulnerable to local-ized optimization noise and making tail-dependent functionals unstable under finite simulation bud-gets. We introduce Diachronic Sample Integra-tion (DSI), a test-time inference framework that ensembles generated samples across checkpoints from a stochastic training trajectory. DSI targets a checkpoint-mixture distribution that averages checkpoint-specific tail fluctuations rather than re-lying on a single brittle endpoint. We formalize this mechanism through a finite-budget bias-variance theory. Empirically, across multivariate synthetic processes and high-frequency trading data, DSI substantially reduces tail-estimation error com-pared to single-checkpoint baselines under fixed simulation budgets, outperforming standard diffu-sion and state-of-the-art tail-aware baselines with-out modifying the generative objective. 
+
+## 1 INTRODUCTION 
+
+Deep generative models are increasingly used as simula-tors for downstream decision making under data scarcity. In risk-sensitive applications, however, simulator reliability depends not only on typical samples but also on rare adverse scenarios. Reliable estimation of statistical functionals de-fined on low-probability regions is central to risk-sensitive inference. Because empirical tail observations are exception-ally scarce, practitioners increasingly rely on deep genera-tive models to act as approximate simulators for downstream risk estimation [Gonen et al., 2025, Tanaka et al., 2025, Li et al., 2025]. 1
+
+However, standard generative objectives, such as score matching or maximum likelihood, prioritize the “bulk” of the probability mass where data is dense. The extreme tails are consequently starved of reliable gradient signals and become dominated by localized optimization noise. Draw-ing synthetic samples from a single “converged” checkpoint often yields severe tail miscalibration, either arbitrarily trun-cating the tail (mode collapse) or hallucinating unrealistic extremes. Existing approaches attempt to resolve this dur-ing training via adversarial tail constraints or extreme-value reweighting [Huang et al., 2024, Galib et al., 2024]. While improving targeted metrics, these modeling interventions can alter the simulator’s effective target distribution or im-pose additional structural assumptions. DSI addresses a different practical problem: finite-budget risk estimates without imposing any parametric tail form, distributional constraint, or additional training objective. In many risk-management settings, the immediate task is not to recover an asymptotic tail law, but to estimate risk measures such as Value-at-Risk (VaR) and Expected Shortfall (ES) under a limited simulation budget constrained by compute, latency, or validation resources. We therefore propose Di-achronic Sample Integration (DSI), a test-time framework that ensembles samples across stochastic training check-points (Figure 1). Rather than treating a single converged model state as the sole simulator, DSI uses the training trajectory as a source of checkpoint-level variability and aggregates generated samples to reduce tail-estimation in-stability while leaving the underlying generator unchanged. DSI is not guaranteed to remove systematic model bias. Its statistical benefit arises when post-burn-in checkpoint errors contain averageable fluctuations around a persistent trajec-tory bias. We therefore analyze DSI through a finite-budget bias-variance decomposition for VaR and ES, showing that           
+
+> 1The source code for this project is available at https://github.com/ShuningZhao/DSI arXiv:2607.10810v1 [cs.LG] 12 Jul 2026 (a) Standard single checkpoint (b) DSI (Trajectory mixture)
+> True
+> Generated
+> Incorrect tails True Model Checkpoints
+> Reduces tail fluctuations
+
+Figure 1: Conceptual illustration of DSI. (a) Single checkpoints prioritize bulk distributional fidelity, often truncating extreme tails due to optimization noise. (b) DSI aggregates heterogeneous checkpoints across a single trajectory, the resulting mixture averages checkpoint-specific tail fluctuations while any persistent trajectory bias remains as an irreducible floor. checkpoint stride and mixture size enter through an effective checkpoint count determined by tail-error autocorrelation. Empirically, on controlled synthetic processes and high-frequency NASDAQ data, DSI substantially reduces relative tail-estimation error compared to standard single-checkpoint diffusion models under matched sampling budgets, outper-forming prior state-of-the-art tail-aware benchmarks. This paper makes the following contributions: • We introduce DSI, a lightweight test-time estimator that improves tail-risk inference via checkpoint sample ensem-bling. • We formalize a bias-variance Trajectory Averaging Prin-ciple for VaR and ES under non-i.i.d. stratified samples, showing when checkpoint fluctuations can be averaged and when persistent bias remains. • We show that DSI substantially reduces tail-estimation er-ror and estimator variance under fixed simulation budgets, without retraining or changing the generative objective. 
+
+## 2 RELATED WORK 
+
+2.1 GENERATIVE SIMULATORS AND TAIL-SENSITIVE OBJECTIVES 
+
+Deep generative models are increasingly employed as prob-abilistic simulators to mitigate data scarcity in risk-sensitive inference. Standard architectures [Takahashi and Minzuno, 2025, Yuan and Qiao, 2024, Xia et al., 2024, Yoon et al., 2019] optimize global distributional fidelity, which can leave low-probability regions vulnerable to localized optimization noise [Liu et al., 2024, Kollovieh et al., 2023]. Recent efforts to improve synthetic tail calibration have in-troduced adversarial risk penalties, extreme-aware diffusion mechanisms, or parametric extreme-value constraints [Cont et al., 2025, Galib et al., 2024, Huang et al., 2024]. Recent theory further shows that heavy-tailed target distributions pose distinct statistical challenges for score-based diffusion models: under polynomial tail decay, score-estimation and sampling rates explicitly depend on the tail index, unlike the exponentially decaying regime [Yu and Yu, 2026]. A re-lated but different line studies class-imbalanced long-tailed generation, where tail labels are underrepresented. For ex-ample, Das et al. [2025] propose a training-time mutual-learning regularizer for conditional diffusion models to im-prove worst-case class-label performance. These approaches address tail behavior by modifying the training objective, the modeling assumptions, or the con-ditional learning problem. In contrast, DSI preserves the original generative objective and addresses checkpoint-level tail instability at inference time via sample-space aggrega-tion and trajectory-level uncertainty averaging. 
+
+2.2 MODEL ENSEMBLING AND AVERAGING 
+
+Ensembling methods such as Deep Ensembles, Stochastic Weight Averaging (SWA), and snapshot ensembles aggre-gate parameters or predictions to improve predictive perfor-mance and generalization [Garipov et al., 2018, Izmailov et al., 2018, Maddox et al., 2019, Huang et al., 2017, Worts-man et al., 2022]. These approaches operate in parameter or predictor space by averaging network weights (which can destroy complex learned manifolds) or point-predictions. While these methods leverage multiple independent runs or training trajectories to find flatter optima, DSI shifts the focus to the sample space. By pooling stochastic samples across checkpoints, DSI constructs a macroscopic mixture distribution to stabilize non-linear statistical functionals. To address the high correlation often found between con-secutive iterates in a single trajectory, we treat checkpoint spacing as a design variable via a temporal stride. This mech-anism is designed to increase the effective checkpoint count by reducing autocorrelation among tail errors, a structural hypothesis we validate empirically in Section 6. 3 PROBLEM FORMULATION 
+
+3.1 PROBABILITY SPACE AND TAIL-DEPENDENT FUNCTIONALS 
+
+We now formalize the downstream inference problem in-duced by a learned generative simulator: the simulator pro-duces synthetic paths, which are mapped to a scalar decision quantity whose lower tail determines risk. To formally ground the problem of tail estimation, let 
+
+(Ω , F, P) be a probability space, and let X : Ω → R be a random variable representing a scalar quantity of interest. In risk-sensitive applications, X typically models the future return of a financial portfolio or the profit-and-loss (PnL) of a trading strategy, where large negative realizations cor-respond to severe and consequential losses. We denote the true, unknown data-generating distribution of X by P ⋆.We are interested in estimating a statistical functional 
+
+ψ : P → R. Conceptually, ψ is a mapping that takes an entire probability distribution as its input and outputs a single real-valued scalar (such as a risk metric). Here, P
+
+explicitly denotes the domain of this functional, the class of admissible probability distributions over R for which 
+
+ψ is mathematically well-defined. For instance, evaluating Expected Shortfall strictly requires P to be restricted to the family of distributions possessing a finite first moment. We assume throughout that both the true target distribution P ⋆
+
+and our learned generative approximations belong to P.Throughout this work, we use Value-at-Risk (VaR) and Expected Shortfall (ES) as canonical examples of such functionals [Artzner et al., 1999, Rockafellar and Uryasev, 2000]. For a given tail probability level α ∈ (0 , 1) (typically small, e.g., α = 0 .01 or 0.05 ), the α-quantile, or Value-at-Risk, of a distribution P with cumulative distribution function (CDF) FP is defined as: 
+
+qα(P ) := inf {x ∈ R : FP (x) ≥ α}. (1) We use VaR α(P ) and qα(P ) interchangeably for this lower-tail quantile. 
+
+Intuition for VaR: In risk management, Value-at-Risk (VaR) provides a severity threshold at a specified confi-dence level. For example, a 5% lower-tail VaR identifies a loss threshold exceeded in approximately the worst 5% of scenarios. VaR has historically been central to the Basel in-ternational banking regulatory framework, which sets global standards for bank capital and market-risk measurement Basel Committee on Banking Supervision [2006]. However, VaR is merely a boundary: it is blind to the shape of the distribution beyond that threshold. It does not quantify how much the distribution can deteriorate in the extreme tail, nor the magnitude of losses once the VaR threshold is breached. To capture the actual severity of extreme events, we use Expected Shortfall (ES) at level α in its lower-tail CDF form: 
+
+ES α(P ) := qα(P ) − 1
+
+α
+
+Z qα(P )
+
+> −∞
+
+FP (x) dx, (2) whenever the integral is finite. If Y ∼ P and P is continuous with FP (qα(P )) = α, this equals EP [Y | Y ≤ qα(P )] ; for empirical distributions we use the corresponding fractional-order-statistic version. 
+
+Intuition for ES: Expected Shortfall (ES) measures the average severity of outcomes in the extreme α-tail. While VaR tells us the threshold of a “bad day,” ES tells us the average severity of losses on those bad days. This distinc-tion is operationally important: the Basel III/FRTB market-risk framework Basel Committee on Banking Supervision [2019] moved from VaR toward ES as the headline internal-model risk measure because ES captures tail severity beyond the VaR cutoff. Because ES depends on the entire tail rather than a single point, it provides a more comprehensive mea-sure of risk, but is significantly more difficult to estimate reliably from limited empirical data. In many modern settings, direct empirical estimation of 
+
+ψ(P ⋆) is infeasible due to the sheer scarcity of tail observa-tions. Instead, practitioners increasingly rely on synthetic samples generated by a learned model Pθ to support down-stream risk inference. 
+
+3.2 GENERATIVE APPROXIMATION AND THE SINGLE-CHECKPOINT BOTTLENECK 
+
+Let Θ denote the parameter space of the generative simu-lator, and let M = {Pθ : θ ∈ Θ} ⊆ P denote the corre-sponding parametric class of generative distributions. We assume a mapping θ 7 → Pθ and fit the simulator by mini-mizing a global objective L(θ; D) over a training dataset 
+
+D. Stochastic optimization traverses a complex loss land-scape, inducing a training trajectory of model parameters 
+
+θ1, θ 2, . . . , θ T , where each iterate θt defines a specific gen-erative distribution Pt := Pθt .Standard practice selects a single “converged” checkpoint (typically θT ) and draws a synthetic dataset X1, . . . , X N ∼
+
+PT . This yields the plug-in estimator ˆψT := ψ( ˆPT ), where 
+
+ˆPT is the empirical distribution of the generated samples. However, relying on a single checkpoint is structurally brit-tle for tail estimation. Because global generative objectives (such as maximum likelihood or score matching) prioritize the “bulk” of the probability mass where data is dense, the tail regions of Pt receive very little reliable gradient sig-nal. Consequently, the tail behavior is highly sensitive to the optimization noise of the final training steps. A single check-point might arbitrarily truncate the tail (mode collapse) or hallucinate unrealistic extremes, leading to highly unreliable VaR and ES estimates. 
+
+3.3 CHECKPOINT ENSEMBLING ON GENERATED SAMPLES 
+
+To overcome the instability of single-checkpoint estimation, we treat the stochastic training trajectory not as a path to a single point estimate, but as a rich ensemble of tail approx-imations. Our core premise is that checkpoint ensembling on the generated samples leads to substantially better and more stable tail estimation. Rather than discarding intermediate checkpoints, we aggre-gate samples drawn across them. Let S ⊂ { 1, . . . , T } be a selected set of checkpoints, and let nt denote the number of samples drawn from each checkpoint Pt, subject to a fixed total sampling budget P 
+
+> t∈S
+
+nt = N . Defining weights 
+
+wt := nt/N , pooling these generated samples naturally targets the trajectory-induced mixture distribution. For the theoretical analysis and experiments we focus on the equal-allocation case wt = 1 /K S , corresponding to Algorithm 1 in the Appendix, but the framework is general and can ac-commodate any allocation scheme. The resulting mixture distribution is ¯PS = X
+
+> t∈S
+
+wtPt. (3) The Diachronic Sample Integration (DSI) estimator is com-puted directly on the ensembled samples: 
+
+ˆψDSI := ψ( ˆPS ), (4) where ˆPS is the empirical distribution of the pooled samples. 
+
+Why Ensembling Improves Tail Estimation: By ensem-bling generated samples across the temporal trajectory, DSI averages checkpoint-specific tail errors that fluctuate across training. An isolated tail failure at one checkpoint can be diluted by other checkpoints, provided those failures are not perfectly correlated and do not share the same systematic direction. The mixture distribution ¯PS therefore reduces fluctuation-driven estimator variance while leaving persis-tent trajectory bias as an irreducible floor, all without mod-ifying the underlying generative architecture or requiring additional training runs. 
+
+3.4 CHECKPOINT SUBSAMPLING AND STRIDE 
+
+Consecutive checkpoints along a stochastic training trajec-tory often induce highly correlated distributions. Pooling many nearby checkpoints may therefore introduce redun-dancy without significantly diversifying the simulated tail events. To control correlation and maximize the informational value of the mixture, we parameterize S using a stride M ≥ 1 and a checkpoint count K:
+
+S(M, K ) = {t0, t 0 +M, t 0 +2 M, . . . , t 0 +( K −1) M },
+
+where t0 is chosen after the model has completed its initial burn-in phase as detailed in Algorithm 1. If the trajectory evolves smoothly under a distributional metric, consecutive checkpoints induce highly correlated components. Increasing the stride M increases the separa-tion in parameter space between retained checkpoints and can increase the effective checkpoint count by lowering tail-error autocorrelation. As K grows and the mixture spans a larger portion of the trajectory, the marginal impact of the stride naturally diminishes. We study this effect empirically in Section 6. 
+
+3.5 THE BIAS-VARIANCE TRAJECTORY AVERAGING HYPOTHESIS 
+
+The fundamental advantage of checkpoint ensembling is not that the mixture ¯PS is automatically unbiased. Instead, the mixture aggregates a sequence of checkpoint-specific tail errors. If these errors fluctuate around a persistent tra-jectory bias and decorrelate under checkpoint spacing, then averaging reduces the fluctuation component of tail-risk er-ror. If the errors remain highly correlated or share the same directional misspecification, DSI cannot correct the failure. This motivates the Bias-Variance Trajectory Averaging Prin-ciple : under local tail regularity, finite-budget DSI error de-composes into (i) a persistent bias floor of the checkpoint trajectory, (ii) a checkpoint-fluctuation term controlled by an effective checkpoint count, and (iii) a synthetic-sampling term induced by the fixed generation budget. Section 4 for-malizes this principle for Value-at-Risk and Expected Short-fall. 
+
+## 4 THEORETICAL ANALYSIS 
+
+We now give a finite-budget bias-variance account of DSI. DSI targets the checkpoint-mixture distribution ¯PS , not P ⋆
+
+directly. Its usefulness therefore rests on two conditions: the mixture ¯PS must remain close to the true target distribu-tion P ⋆, and checkpoint-specific tail errors must fluctuate sufficiently along the training trajectory. Under these condi-tions, pooling samples across spaced checkpoints reduces the fluctuation-driven component of tail-functional estima-tion error, while any persistent mixture bias relative to P ⋆
+
+remains as an irreducible floor. 
+
+Setup. Let F ⋆ denote the CDF of the true scalar target distribution P ⋆, and let Ft denote the CDF induced by checkpoint t. For a selected checkpoint set S, DSI targets the checkpoint-mixture CDF ¯FS (x) := |S|−1 P 
+
+> t∈S
+
+Ft(x),equivalently the mixture distribution ¯PS := |S|−1 P 
+
+> t∈S
+
+Pt.The empirical DSI estimator draws a fixed total budget of synthetic samples across checkpoints in S and applies the plug-in tail functional to the pooled empirical distribution bPS,N .With q⋆ := qα(P ⋆) denoting the true lower-tail quantile, the VaR and ES checkpoint-level tail-error variables are 
+
+U qt = Ft(q⋆) − F ⋆(q⋆), (5) 
+
+U ES t =
+
+Z q⋆
+
+> −∞
+
+ Ft(x) − F ⋆(x) dx. (6) Under the post-burn-in checkpoint-error assumption in Ap-pendix A.1, each target functional ψ ∈ { qα, ES α} has an as-sociated checkpoint-error process U ψt = bψ + ξψt , where bψ
+
+is the persistent bias and ξψt is a mean-zero weakly station-ary fluctuation with variance σ2 
+
+> ψ
+
+and autocorrelation ρψ (h).The effective checkpoint count for ψ, with KS = |S|, is 
+
+Keff ,ψ (KS , M ) = KS
+
+1 + 2  
+
+> KS−1
+
+X
+
+> ℓ=1
+
+
+
+1 − ℓKS
+
+
+
+ρψ (ℓM )
+
+. (7) Thus Keff ,ψ is the number of effectively independent check-point errors for the functional being estimated: it is close to KS when spaced checkpoint errors are weakly corre-lated and close to one when they are highly correlated. In the theorem below we apply this construction to ψ = qα
+
+and ψ = ES α, writing Keff ,q and Keff ,ES and suppress-ing their (KS , M ) arguments. The empirical diagnostics in Appendix B estimate these quantities for the trained trajec-tories. The assumptions have three roles. Assumption 1 gives local tail regularity, ensuring that small CDF perturbations near q⋆
+
+translate smoothly into VaR and ES perturbations. Assump-tions 2 and 4 describe the post-burn-in checkpoint-error process and the local regularity of the selected checkpoint mixture, separating persistent trajectory bias from average-able checkpoint fluctuations. Assumptions 3 and 5 handle the finite-budget stratified sampling layer: DSI samples are independent conditional on checkpoints but not identically distributed marginally, and they estimate the mixture ¯PS ,not a single checkpoint. Full technical statements are given in Appendix A.1. 
+
+Theorem 1 (Finite-budget DSI MSE expansion) . Let 
+
+bqDSI α,S,N = qα( bPS,N ) and cES DSI α,S,N = ES α( bPS,N ). Under the assumptions stated in Appendix A.1, 
+
+E
+
+h bqDSI α,S,N − q⋆2i
+
+= 1
+
+f ⋆(q⋆)2 b2 
+
+> q
+
++ σ2
+
+> q
+
+Keff ,q 
+
+!
+
++ Lsam q,N + o(·),
+
+(8) 
+
+E
+
+h  cES DSI α,S,N − ES α(P ⋆)2i
+
+= 1
+
+α2
+
+
+
+b2 
+
+> ES
+
++ σ2
+
+> ES
+
+Keff ,ES 
+
+
+
++ Lsam ES,N + o(·).
+
+(9) 
+
+Here Lsam q,N and Lsam ES,N are the stratified finite-sample plug-in variances for the fixed checkpoint mixture. Their exact forms, the full two-stage theorem statement, and proof are given in Appendix A. 
+
+Interpretation. The expansion separates DSI error into a trajectory term and a sampling term. For a tail functional 
+
+ψ, the trajectory term b2 
+
+> ψ
+
++ σ2 
+
+> ψ
+
+/K eff ,ψ decomposes into a persistent bias floor b2 
+
+> ψ
+
+and a checkpoint-fluctuation com-ponent σ2 
+
+> ψ
+
+/K eff ,ψ that decreases as Keff ,ψ grows. DSI tar-gets the checkpoint mixture, not P ⋆ directly, so bias is not removed by averaging. Stride M helps only by reducing au-tocorrelation, increasing K helps only while it increases the functional-specific Keff ,ψ , and very large K is eventually limited by floor allocation and the constraint KS ≤ N .Two immediate consequences make the theorem operational: it predicts when DSI should help and when trajectory aver-aging must fail. 
+
+Corollary 1 (Mechanistic regimes). Theorem 1 identi-fies three regimes for each tail functional ψ: (i) a variance-reducible regime where b2 
+
+> ψ
+
+is small and Keff ,ψ grows, (ii) a correlation-limited regime where checkpoint fluctuations are present but highly autocorrelated, so Keff ,ψ ≪ KS , and (iii) a bias-limited regime where b2 
+
+> ψ
+
+dominates and DSI can-not remove the leading error term. The proof is given in Appendix A.7. 
+
+Proposition 1 (Failure modes). DSI cannot correct per-fectly correlated checkpoint errors, shared directional lower-tail misspecification across all selected checkpoints, or persistent bias floors. In particular, if ρψ (ℓM ) = 1 for all ℓ = 1 , . . . , K S − 1, then Keff ,ψ = 1 . If, for some sign s ∈ {− 1, 1} and nonnegative function d, s{Ft(x) −
+
+F ⋆(x)} ≥ d(x) for all t ∈ S on a tail interval, then 
+
+s{ ¯FS (x) − F ⋆(x)} ≥ d(x) on that interval. Even when 
+
+Keff ,ψ → ∞ and N → ∞ , the first-order VaR and ES MSE floors remain b2 
+
+> q
+
+/f ⋆(q⋆)2 and b2 
+
+> ES
+
+/α 2, respectively. The proof is given in Appendix A.8. These regimes motivate the diagnostics in Appendix B and the sensitivity study in Figure 3: DSI should help most when checkpoint errors for the target functional decorrelate across the trajectory, and should plateau when Keff ,ψ saturates or the bias floor dominates, see also Appendix Figure 4. 
+
+## 5 EXPERIMENTAL SETUP 
+
+Our theoretical analysis decomposes finite-budget tail-risk error under the trajectory-induced mixture ¯PS into trajec-tory bias, checkpoint-fluctuation variance, and synthetic-sampling variance. We evaluated DSI empirically in this regime to assess: (i) stabilization of tail-functional estima-tion relative to single-checkpoint inference, (ii) preservation of structural properties (cross-asset and temporal depen-dence), and (iii) robustness to checkpoint selection parame-ters (mixture size K and stride M ). Following the experimental protocol of Cont et al. [2025], tail-dependent functionals are evaluated on profit-and-loss (PnL) distributions induced by J benchmark trading strate-gies applied to multivariate return processes. The univariate functionals qα and ES α analyzed in Section 4 are thus com-puted on strategy-level empirical distributions. 
+
+5.1 DATA AND FIXED-BUDGET REGIME Synthetic data (oracle setting). Following Cont et al. [2025], we construct a five-dimensional return process X(t)
+
+combining heterogeneous components (Gaussian, AR(1), and heavy-tailed Student-t GARCH(1,1)) with fixed mul-tivariate correlation. Because the true data-generating dis-tribution P ⋆ is analytically known, exact oracle values of 
+
+qα(P ⋆) and ES α(P ⋆) are available for direct error evalua-tion. Full parameter specifications for the synthetic process are detailed in Appendix C.3. 
+
+Market data (empirical setting). Following the experi-mental setup and asset selection criteria established in Cont et al. [2025], we utilized the Nasdaq ITCH limit order book dataset for five liquid assets (AAPL, AMZN, GOOG, JPM, QQQ), sampled every ∆ = 9 seconds. Each trajectory spans 100 time steps (15 minutes). Training used November 2019 data (6,300 samples), and testing uses the first week of De-cember 2019 for out-of-sample evaluation. The empirical ground-truth risk measures (VaR and ES) for these assets across benchmark strategies are provided in Appendix Ta-ble 5. 
+
+Fixed-budget regime. To isolate estimator variance and bias, all generative methods are evaluated under a fixed sam-pling budget of N = 1000 generated trajectories, reflecting practical risk-management constraints. For DSI, drawing from the selected checkpoint set S implies m = ⌊N/K S ⌋
+
+samples per checkpoint, directly matching the stratified finite-budget analysis in Theorem 1. 
+
+5.2 BASELINES AND REFERENCES 
+
+We compared DSI against general adversarial generation (WGAN [Arjovsky et al., 2017] with gradient penalty [Gulrajani et al., 2017]), explicitly tail-optimized gener-ation ( TailGAN [Cont et al., 2025]), and standard single-checkpoint diffusion inference ( DDPM (EMA) [Ho et al., 2020]). The DDPM (EMA) baseline generates samples using an exponential moving average of the network weights, a com-mon practice in diffusion-model training that smooths high-frequency optimization noise. We use the best EMA check-point as the single-checkpoint diffusion baseline, and apply DSI to the same training trajectory without changing the architecture or objective. Full implementation details are provided in Appendix C.4. Historical Simulation ( HSM ) is a nonparametric risk-estimation reference that computes VaR and ES directly from the empirical distribution of historical PnL values, without fitting a generative model. It serves as a conven-tional finance baseline rather than a learned simulator. On synthetic data, SE(1000) denotes the irreducible sampling error obtained by drawing exactly 1000 samples from the true synthetic process. On market data, Oracle denotes risk estimates computed from the full empirical reference set. 
+
+5.3 EVALUATION METRICS Benchmark Trading Strategies. Following the experi-mental protocol of Cont et al. [2025], we evaluated down-stream tail risk on profit-and-loss (PnL) distributions in-duced by a set of J = 65 canonical trading strategies. These strategies instantiate the random variable X analyzed in Section 4 by mapping multivariate return paths into realistic financial outcomes. We categorize these mappings into three functional groups: (i) Buy-and-Hold (testing heavy-tailed multivariate dependence), (ii) Mean Reversion (testing short-term negative autocorrelation), and (iii) Trend Follow-ing (testing long-term momentum). These strategies serve as deterministic operators applied identically to empirical reference data and synthetic trajectories, providing the em-pirical basis for computing Value-at-Risk ( qα) and Expected Shortfall ( ES α). The precise mathematical formulations and dynamic trading rules are detailed in Appendix C.2. 
+
+Tail Accuracy. For confidence level α, the average rela-tive error (RE) of VaR and ES across all J strategies is: 
+
+RE( α) = 12J
+
+> J
+
+X
+
+> j=1
+
+dVaR α( ˜Xj ) − VaR α(Xj )
+
+VaR α(Xj )
+
++ cES α( ˜Xj ) − ES α(Xj )
+
+ES α(Xj )
+
+! (10) where Xj and ˜Xj denote the PnL distributions for strategy j
+
+computed from reference and generated data, respectively. 
+
+Backtesting of Tail-Risk Estimates. We evaluate distri-butional consistency via statistical backtests standard in risk management, conducted on synthetic data over 100 trials using N = 1000 generated samples. The Kupiec cov-erage test [Kupiec, 1995] evaluates whether the realized frequency of VaR violations matches the nominal tail level 
+
+α. For example, a calibrated 5% VaR should be breached approximately 5% of the time. Since VaR alone does not Table 1: Average Relative Error (RE) of VaR and ES (α = 0 .05 ) under a fixed budget of N = 1000 generated trajectories. SE(1000) denotes the irreducible sampling er-ror on synthetic data. Lower is better.                                                   
+
+> Model Synthetic RE Market RE HSM 3.4 ±2.6 11.4 ±2.3 SE(1000) / Oracle 3.1 ±2.3 2.6 ±1.1 WGAN 17.3 ±2.2 29.9 ±1.9 TailGAN 5.1 ±1.4 12.1 ±1.3 DDPM (EMA) 7.7 ±2.5 22.3 ±4.3 WGAN (DSI) 16.6 ±1.8 28.5 ±1.4 TailGAN (DSI) 5.0 ±1.3 11.9 ±1.2
+> DDPM (DSI) 3.7 ±0.12 10.6 ±1.2
+
+measure the severity of losses beyond the threshold, we also use the Fissler-Ziegel score-based test [Fissler et al., 2016], which jointly evaluates VaR and ES calibration through a strictly consistent scoring function. We report rejection rates, where lower values indicate better agreement with the target tail-risk behavior. 
+
+5.4 IMPLEMENTATION DETAILS 
+
+All reported results are averaged over 10 independent train-ing runs with different random seeds. Unless stated other-wise, DSI uses the fixed budget ( N = 1000 ) with mixture size K = 20 . Additional details are provided in Appendix C. 
+
+## 6 EXPERIMENTAL RESULTS 
+
+Accuracy and Stability of Tail-Risk Estimation. Ta-ble 1 reports tail-estimation error under the fixed sam-pling budget. On synthetic data, standard single-checkpoint DDPM (EMA) exhibits substantial error and high variance (7.7 ± 2.5). Checkpoint ensembling via DSI reduces the mean error to 3.7 and sharply reduces variance ( ±0.12 ), performing near the sampling-error reference SE(1000). On market data, DSI reduces single-checkpoint DDPM error (10 .8±1.2 vs. 22 .3±4.3) and outperforms the explicitly tail-optimized TailGAN without modifying the underlying ob-jective. Rank-frequency PnL plots in Appendix Figures 10 and 11 visually support the improved lower-tail fit. Addi-tional sensitivity results across α ∈ { 0.01 , 0.05 , 0.10 } are reported in Appendix Table 6, showing the same qualitative improvement pattern under the fixed-budget protocol. 
+
+Checkpoint-error regimes. The heterogeneous gains in Table 1 are consistent with the mechanistic regimes in Corol-lary 1, rather than indicating that DSI is tied to a particular architecture. DSI helps when the selected trajectory has a small persistent tail-bias floor and sufficiently decorrelated checkpoint fluctuations. The diagnostics in Appendix B  
+
+> (a) Multivariate dependence
+> Distance
+> 0
+> 2
+> 4
+> 6
+> WGAN
+> TailGAN
+> EMA
+> DSI
+> (b) Temporal dependence
+> Distance
+> 0
+> 1
+> 2
+> WGAN
+> TailGAN
+> EMA
+> DSI
+> Synthetic Market
+
+Figure 2: Dependence preservation under realistic sampling budgets. (a) Sum of absolute differences between refer-ence and generated correlation matrices (multivariate depen-dence). (b) Sum of absolute differences between reference and generated autocorrelation coefficients (temporal depen-dence). Lower values indicate better agreement. Error bars denote standard deviation across runs. Table 2: Average rejection rate (%) for statistical backtests over 100 trials ( N = 1000 ). Lower rejection rates indicate superior calibration.               
+
+> Model Coverage Test Score-Based Test HSM 17.19 0.00 Oracle 16.32 0.00 WGAN 70.35 14.92 TailGAN 33.55 0.29 DDPM (EMA) 53.62 0.06
+> DDPM (DSI) 20.26 0.00
+
+make this distinction explicit, see Appendix Figure 4. In Table 3, DDPM has a small bias floor, moderate check-point fluctuation variance, and a high effective checkpoint ratio Keff /K = 0 .953 , placing it in the variance-reducible regime. TailGAN has substantial fluctuation variance, but 
+
+Keff /K = 0 .149 , indicating a correlation-limited trajec-tory where nearby checkpoint errors are too redundant for pooling to provide large gains. WGAN has high sign con-sensus, indicating shared error direction across checkpoints, and its finite-budget error in Table 4 is dominated by the mixture-error MSE rather than the sampling term, indicating a bias-limited or shared-direction-error regime. These obser-vations support Proposition 1: the relevant condition for DSI is not the model family itself, but whether the checkpoint trajectory contains averageable tail variation. 
+
+Backtesting and Structural Fidelity. Table 2 reports for-mal risk backtests. Standard diffusion fails the coverage test in 53.62% of trials, reflecting lower-tail miscalibration. DSI reduces this rejection rate to 20.26% (approaching the Oracle’s 16.32%) and achieves 0.00% rejection on the joint 5 10 20 50 100 200             
+
+> 4
+> 4.5
+> 5
+> Ensemble size K(number of checkpoints)
+> Avg RE ( α = 5% ) [%]
+> Sensitivity to ensemble configuration
+> stride M= 1
+> stride M= 2
+> stride M= 5
+> stride M= 10
+> stride M= 20
+
+Figure 3: Sensitivity of DSI to mixture size K and check-point stride M under a fixed budget ( N = 1000 ). Average relative error (VaR and ES, α = 5% ) is plotted against K
+
+for different strides. Checkpoint values on the x-axis are dis-played with uniform spacing. Error decreases rapidly with increasing K and plateaus for large mixtures. Larger strides provide gains when K is small by reducing checkpoint cor-relation, with diminishing impact as K grows. VaR/ES Fissler-Ziegel test, indicating improved probabilis-tic calibration under the fixed budget. 
+
+Multivariate and Temporal Dependency. DSI also pre-serves multivariate and temporal dependence metrics. Ana-lyzing absolute differences between generated and reference correlation matrices and temporal autocorrelations (Fig-ure 2), DSI retains the structural fidelity of the underlying diffusion model and outperforms GAN-based methods on these diagnostics. This suggests that sample-space ensem-bling can improve marginal tail estimates without visibly degrading learned multivariate geometries. Full results for correlation and autocorrelation matrices are provided in Appendix Figures 6-9. 
+
+Sensitivity to Mixture Size and Stride. Finally, we em-pirically evaluate DSI’s sensitivity to the checkpoint selec-tion parameters introduced in Section 3.4, the mixture size 
+
+K and sampling stride M . As shown in Figure 3 and Ap-pendix Table 7, risk-estimation error improves rapidly as 
+
+K increases from 5 to roughly 50, after which performance plateaus under the fixed sampling budget. This behavior is consistent with Theorem 1: increasing K helps while it increases the effective checkpoint count, but gains plateau once Keff saturates and finite-budget remainders become non-negligible. Larger strides improve performance when 
+
+K is small by reducing checkpoint-error autocorrelation, see Appendix Figure 4. As K grows and the mixture spans a larger portion of the trajectory, the marginal effect of stride diminishes. 
+
+## 7 DISCUSSION AND CONCLUSION 
+
+We introduced Diachronic Sample Integration (DSI), a lightweight test-time estimator for finite-budget tail-risk estimation with generative simulators. By reusing stored checkpoints from a single stochastic training trajectory, DSI pools generated samples to target a trajectory-induced mix-ture distribution. Our theory and diagnostics show that DSI reduces checkpoint-fluctuation error when the trajectory contains averageable tail variation, while persistent bias or strong autocorrelation remains irreducible. Empirically, DSI improves risk estimation error under fixed simulation budgets and achieves state-of-the-art calibration without changing the generative objective. 
+
+Scope of DSI. DSI is not tied to a particular generative architecture, its effectiveness is governed by whether the post-burn-in checkpoint trajectory contains averageable tail variation. As formalized in Corollary 1 and Proposition 1, DSI helps in variance-reducible regimes but remains limited by persistent bias or strong checkpoint-error autocorrelation. 
+
+Broader impact. While our empirical evaluation rigorously focused on high-frequency financial time series, a canonical stress test due to their extreme signal-to-noise ratios, heavy tails, and complex multivariate dependencies, the mathemat-ical formulation of DSI is entirely domain-agnostic. Theory derived in Section 4 apply to any setting where exact sam-pling is infeasible and downstream functionals depend on the extremes of a generative simulator. We anticipate DSI will be highly effective in other critical domains requiring robust extreme-value estimation under finite budgets, such as energy, climate modeling, structural engineering, and epidemiology. 
+
+Limitations and future work. Several limitations point to natural future work. First, DSI is primarily a variance-reduction mechanism over checkpoint fluctuations, it does not directly correct systematic tail bias. When all selected checkpoints share the same missing tail support or direc-tional misspecification, the bias floor remains. Combining trajectory pooling with tail-guided or tail-constrained train-ing methods is a promising direction for reducing this sys-tematic component. Second, although our diagnostics char-acterize when DSI should work, they are currently evaluated after generating checkpoint samples. A useful next step is to develop lightweight compatibility diagnostics that can predict, early in training or with a small validation bud-get, whether a given model trajectory is variance-reducible, correlation-limited, or bias-limited. Third, our current es-timator uses simple equal-weighted checkpoint mixtures, validation-weighted mixtures, adaptive stride selection, and bias-aware checkpoint selection may further improve finite-budget performance. References 
+
+Martin Arjovsky, Soumith Chintala, and Léon Bottou. Wasserstein generative adversarial networks. In Interna-tional Conference on Machine Learning (ICML) , pages 214–223. PMLR, 2017. Philippe Artzner, Freddy Delbaen, Jean-Marc Eber, and David Heath. Coherent measures of risk. Mathematical Finance , 9(3):203–228, 1999. Basel Committee on Banking Supervision. International Convergence of Capital Measurement and Capital Stan-dards: A Revised Framework, June 2006. URL https: //www.bis.org/publ/bcbs128.htm .Basel Committee on Banking Supervision. Mini-mum Capital Requirements for Market Risk, January 2019. URL https://www.bis.org/bcbs/publ/ d457.htm .Rama Cont, Mihai Cucuringu, Renyuan Xu, and Chao Zhang. Tail-GAN: Learning to simulate tail risk sce-narios. Management Science , 2025. doi: 10.1287/mnsc. 2023.00936. Pranoy Das, Kexin Fu, Abolfazl Hashemi, and Vijay Gupta. Principled long-tailed generative modeling via diffusion models. In Advances in Neural Information Processing Systems , 2025. Tobias Fissler, Johanna F. Ziegel, and Tilmann Gneiting. Expected shortfall is jointly elicitable with value at risk – implications for backtesting. Risk , pages 58–61, January 2016. Asadullah Hill Galib, Pang-Ning Tan, and Lifeng Luo. Fide: Frequency-inflated conditional diffusion model for extreme-aware time series generation. In Advances in Neural Information Processing Systems (NeurIPS) , 2024. Timur Garipov, Pavel Izmailov, Dmitrii Podoprikhin, Dmitry P Vetrov, and Andrew G Wilson. Loss sur-faces, mode connectivity, and fast ensembling of dnns. In Advances in Neural Information Processing Systems (NeurIPS) , volume 31, pages 8803–8812, 2018. Tal Gonen, Itai Pemper, Ilan Naiman, Nimrod Berman, and Omri Azencot. Time series generation under data scarcity: A unified generative modeling approach. In Advances in Neural Information Processing Systems (NeurIPS) , 2025. Ishaan Gulrajani, Faruk Ahmed, Martin Arjovsky, Vincent Dumoulin, and Aaron C Courville. Improved training of wasserstein gans. Advances in Neural Information Processing Systems (NeurIPS) , 30, 2017. Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. Gao Huang, Yixuan Li, Geoff Pleiss, Zhuang Liu, John E Hopcroft, and Kilian Q Weinberger. Snapshot ensembles: Train 1, get m for free. International Conference on Learning Representations (ICLR) , 2017. Hongbin Huang, Minghua Chen, and Xiao Qiao. Fts-diffusion: Generative learning for financial time series with irregular and scale-invariant patterns. In Interna-tional Conference on Learning Representations (ICLR) ,2024. Pavel Izmailov, Dmitrii Podoprikhin, Timur Garipov, Dmitry Vetrov, and Andrew Gordon Wilson. Averaging weights leads to wider optima and better generalization. In Con-ference on Uncertainty in Artificial Intelligence (UAI) ,2018. Marcel Kollovieh, Abdul Fatir Ansari, Michael Bohlke-Schneider, Jasper Zschiegner, Hao Wang, and Yuyang Bernie Wang. Predict, refine, synthesize: Self-guiding diffusion models for probabilistic time series forecasting. Advances in Neural Information Processing Systems (NeurIPS) , 36:28341–28364, 2023. Paul H. Kupiec. Techniques for verifying the accu-racy of risk measurement models. The Journal of Derivatives , 3(2):73–84, 1995. doi: 10.3905/jod.1995. 407942. URL https://doi.org/10.3905/jod. 1995.407942 .Junjie Li, Yang Liu, Weiqing Liu, Shikai Fang, Lewen Wang, Chang Xu, and Jiang Bian. Mars: a financial market sim-ulation engine powered by generative foundation model. In International Conference on Learning Representations (ICLR) , 2025. Jingwei Liu, Ling Yang, Hongyan Li, and Shenda Hong. Retrieval-augmented diffusion models for time series forecasting. Advances in Neural Information Process-ing Systems (NeurIPS) , 37:2766–2786, 2024. Wesley J Maddox, Pavel Izmailov, Timur Garipov, Dmitry P Vetrov, and Andrew Gordon Wilson. A simple baseline for bayesian uncertainty in deep learning. In Advances in Neural Information Processing Systems (NeurIPS) , 2019. R. Tyrrell Rockafellar and Stanislav Uryasev. Optimization of conditional value-at-risk. Journal of risk , 2:21–42, 2000. Tomonori Takahashi and Takayuki Minzuno. Generation of synthetic financial time series by diffusion models. 
+
+Quantitative Finance , 2025. Yuki Tanaka, Ryuji Hashimoto, Takehiro Takayanagi, Zhe Piao, and Kiyoshi Murayama, Yuri amd Izumi. Cofindiff: Controllable financial diffusion model for time series generation. In International Joint Conference on Artificial Intelligence (IJCAI) , 2025. Mitchell Wortsman, Gabriel Ilharco, Samir Yitzhak Gadre, Rebecca Roelofs, Raphael Gontijo-Lopes, Ari S Morcos, Hongseok Namkoong, Ali Farhadi, Yair Carmon, Simon Kornblith, and Ludwig Schmidt. Model soups: averaging weights of multiple fine-tuned models improves accu-racy without increasing inference time. In International Conference on Machine Learning (ICML) , pages 23965– 23998. PMLR, 2022. Haochong Xia, Shuo Sun, Xinrun Wang, and Bo An. Market-gan: Adding control to financial market data gen-eration with semantic context. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38 of 14 ,pages 15996–16004, 2024. Jinsung Yoon, Daniel Jarrett, and Mihaela van der Schaar. Time-series generative adversarial networks. In Advances in Neural Information Processing Systems (NeurIPS) ,2019. Yifeng Yu and Lu Yu. Diffusion models with heavy-tailed targets: Score estimation and sampling guarantees. arXiv preprint arXiv:2601.06715 , 2026. Xinyu Yuan and Yan Qiao. Diffusion-ts: Interpretable diffu-sion for general time series generation. In International Conference on Learning Representations (ICLR) , 2024. Diachronic Sample Integration: Robust Tail-Risk Estimation with Generative Models (Supplementary Material) 
+
+Shuning Zhao 1 Patrick Wong 2 Leran Zhang 3 Xiaolin Hu 11Department of Computer Science and Technology, BNRist, Tsinghua University, China 
+
+> 2
+
+Department of Econometrics and Business Statistics, Monash Business School, Monash University, Australia 
+
+> 3
+
+School of Mathematics and Statistics, University of Melbourne, Australia 
+
+## A PROOFS 
+
+This appendix provides the full assumptions, formal theorem, and proofs for the finite-budget theory in Section 4. The proof uses a two-stage decomposition: first compare the checkpoint mixture ¯PS with the truth P ⋆, and then compare the empirical DSI estimator with the fixed mixture ¯PS . This avoids assuming a direct empirical plug-in linearization around P ⋆.
+
+A.1 ASSUMPTIONS AND FULL THEOREM STATEMENT Assumption 1 (Local tail regularity) . F ⋆ has a unique α-quantile q⋆ and is continuously differentiable on Iδ = [ q⋆−δ, q ⋆+δ],with density f ⋆(q⋆) > 0 and inf x∈Iδ f ⋆(x) ≥ c > 0. When second-order remainders are invoked, f ⋆ is locally Lipschitz on 
+
+Iδ .
+
+Assumption 2 (Post-burn-in checkpoint-error process) . Let Xt ∼ Pt and X⋆ ∼ P ⋆. Define et(x) = Ft(x) − F ⋆(x),
+
+U qt = et(q⋆), (11) 
+
+U ES t =
+
+Z q⋆
+
+> −∞
+
+et(x) dx = E[( q⋆ − Xt)+] − E[( q⋆ − X⋆)+]. (12) 
+
+After burn-in, assume U qt = bq + ξqt and U ES t = bES + ξES t , where bq , b ES are persistent bias terms and ξqt , ξ ES t are mean-zero weakly stationary fluctuations with variances σ2 
+
+> q
+
+, σ 2 
+
+> ES
+
+and autocorrelations ρq (h), ρ ES (h).
+
+Assumption 3 (Sampling and lower-tail moments) . Assume KS ≤ N and set m = ⌊N/K S ⌋ and NS = KS m. Conditional on the selected checkpoint distributions {Pt : t ∈ S}, the generated samples {Xt,i : t ∈ S, 1 ≤ i ≤ m} are independent with Xt,i ∼ Pt. For all quantiles appearing below, the lower-tail variables (q − Xt)+ have uniformly bounded second moments, and the analogous condition holds under P ⋆.
+
+Assumption 4 (Local mixture regularity) . Let 
+
+qS := qα( ¯PS ), (13) 
+
+¯eS (x) := ¯FS (x) − F ⋆(x), (14) 
+
+ηS := sup 
+
+> x∈Iδ
+
+|¯eS (x)|. (15) 
+
+Define the two leading checkpoint-mixture errors 
+
+¯Uq,S := ¯FS (q⋆) − F ⋆(q⋆), (16) 
+
+¯UES,S := 
+
+Z q⋆
+
+> −∞
+
+( ¯FS (x) − F ⋆(x)) dx, (17) and the local oscillation of the mixture error around q⋆,
+
+ωS (r) := sup 
+
+> x∈Iδ
+> |x−q⋆|≤ r
+
+|¯eS (x) − ¯eS (q⋆)|. (18) 
+
+Along the selected post-burn-in windows, the mixture remains in a local perturbation neighbourhood of P ⋆: qS ∈ Iδ ,
+
+¯FS (qS ) = α, and ¯FS has a density ¯fS in a neighbourhood of qS with ¯fS (qS ) ≥ c0 > 0. The local oscillation and second-order terms are negligible relative to the leading checkpoint-mixture errors: 
+
+E(ωS (ηS /c ) + η2 
+
+> S
+
+)2 + E| ¯Uq,S |(ωS (ηS /c ) + η2 
+
+> S
+
+) = o E[ ¯U 2 
+
+> q,S
+
+] , (19) 
+
+and 
+
+E[η4 
+
+> S
+
+] + E[| ¯UES,S |η2 
+
+> S
+
+] = o E[ ¯U 2 
+
+> ES,S
+
+] . (20) 
+
+Assumption 4 is a local perturbation condition: it requires the selected post-burn-in mixture to remain in a neighbourhood where VaR and ES admit stable first-order expansions. 
+
+Assumption 5 (Standard stratified plug-in linearization) . Conditional on the selected checkpoint distributions, the empirical DSI estimators satisfy the usual Bahadur/plug-in linearizations around the fixed mixture ¯PS :
+
+bqDSI α,S,N − qS = − bFS,N (qS ) − α
+
+¯fS (qS ) + rsam q,S,N , (21) 
+
+cES DSI α,S,N − ES α( ¯PS ) = − 1
+
+α
+
+Z qS
+
+> −∞
+
+( bFS,N (x) − ¯FS (x)) dx + rsam ES,S,N , (22) 
+
+with E[( rsam q,S,N )2 | { Pt}] = o(N −1 
+
+> S
+
+) and E[( rsam ES,S,N )2 | { Pt}] = o(N −1 
+
+> S
+
+) along the finite-budget sequences considered. These conditions hold under standard local density and moment assumptions for independent, stratified triangular arrays with positive density at the target mixture quantile. They are stated explicitly to separate sampling regularity from trajectory regularity in Assumption 4. 
+
+Full theorem statement. For an autocorrelation function ρ, define 
+
+κρ(KS , M ) = 1 + 2  
+
+> KS−1
+
+X
+
+> ℓ=1
+
+
+
+1 − ℓKS
+
+
+
+ρ(ℓM ), (23) 
+
+Keff ,ρ (KS , M ) = KS
+
+κρ(KS , M ) , (24) assuming κρ(KS , M ) > 0. Define the conditional sampling variances at the mixture quantile 
+
+Amix  
+
+> q,N
+
+(S) = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Ft(qS )(1 − Ft(qS )) , (25) 
+
+Amix  
+
+> ES,N
+
+(S) = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Var Pt [( qS − Xt)+]. (26) For comparison, write Aq,N (S) and AES,N (S) for the same two quantities with qS replaced by q⋆. Unless explicitly conditioned, expectations below are taken over both the post-burn-in checkpoint-error process and the synthetic samples drawn conditionally from the selected checkpoints. 
+
+Theorem 1 (Two-stage finite-budget DSI MSE expansion, full statement) . Suppose Assumptions 1-5 hold. Define 
+
+Ltraj q = b2 
+
+> q
+
++ σ2
+
+> q
+
+Keff ,q (KS , M ) , Lsam q,N = E
+
+" Amix  
+
+> q,N
+
+(S)¯fS (qS )2
+
+#
+
+, (27) 
+
+Ltraj ES = b2 
+
+> ES
+
++ σ2
+
+> ES
+
+Keff ,ES (KS , M ) , Lsam ES,N = EAmix  
+
+> ES,N
+
+(S). (28) Then 
+
+E
+
+h bqDSI α,S,N − q⋆2i
+
+= Ltraj q
+
+f ⋆(q⋆)2 + Lsam q,N + Rq,N , (29) 
+
+E
+
+ cES DSI α,S,N − ES α(P ⋆)
+
+2
+
+= (Ltraj ES + Lsam ES,N )
+
+α2 + RES,N , (30) 
+
+where 
+
+Rq,N = o Ltraj q
+
+f ⋆(q⋆)2
+
+!
+
++ o(N −1 
+
+> S
+
+), (31) 
+
+RES,N = o Ltraj ES 
+
+α2
+
+!
+
++ o(N −1 
+
+> S
+
+). (32) 
+
+If, additionally, ¯fS (qS ) = f ⋆(q⋆) + oP(1) and the stratified variances at qS are first-order equivalent to those at q⋆,this reduces to the simpler common-denominator form with Aq,N (S) and AES,N (S) evaluated at q⋆. In the notation of Theorem 1, Lsam q,N = Lsam q,N and Lsam ES,N = Lsam ES,N /α 2.
+
+Corollary 1 (Mechanistic regimes) . Theorem 1 identifies three regimes: (i) a variance-reducible regime where the corre-sponding bias term is small and Keff grows, (ii) a correlation-limited regime where checkpoint fluctuations are present but highly autocorrelated, so Keff ≪ KS , and (iii) a bias-limited regime where b2 dominates and DSI cannot remove the leading error term. 
+
+Proposition 1 (Failure modes) . DSI cannot correct perfectly correlated checkpoint errors, shared directional lower-tail misspecification across all selected checkpoints, or persistent bias floors. In particular, if ρ(ℓM ) = 1 for all ℓ =1, . . . , K S − 1, then Keff = 1 . If, for some sign s ∈ {− 1, 1} and nonnegative function a, s{Ft(x) − F ⋆(x)} ≥ a(x) for all t ∈ S on a tail interval, then s{ ¯FS (x) − F ⋆(x)} ≥ a(x) on that interval. Even when Keff → ∞ and N → ∞ , the first-order VaR and ES MSE floors remain b2 
+
+> q
+
+/f ⋆(q⋆)2 and b2 
+
+> ES
+
+/α 2, respectively. 
+
+A.2 AUXILIARY STATEMENTS Lemma 1 (Smooth first-order tail-functional expansions) . Let G be a continuous CDF with finite lower-tail first moment, 
+
+qG = qα(G) ∈ Iδ , and G(qG) = α. Write g = G − F ⋆, ∆ = qG − q⋆, η = sup x∈Iδ |g(x)|, and 
+
+ωG(r) := sup 
+
+> x∈Iδ
+> |x−q⋆|≤ r
+
+|g(x) − g(q⋆)|. (33) 
+
+Under Assumption 1, |∆| ≤ η/c and 
+
+qα(G) − q⋆ = − g(q⋆)
+
+f ⋆(q⋆) + O ωG(η/c ) + η2 , (34) 
+
+while 
+
+ES α(G) − ES α(P ⋆) = − 1
+
+α
+
+Z q⋆
+
+> −∞
+
+g(x) dx + O(η2). (35) 
+
+Proposition 2 (Checkpoint-error averaging) . Under Assumption 2, 
+
+E
+
+ 1
+
+KS
+
+X
+
+> t∈S
+
+U qt
+
+!2 = b2 
+
+> q
+
++ σ2
+
+> q
+
+Keff ,q (KS , M ) , (36) 
+
+and 
+
+E
+
+ 1
+
+KS
+
+X
+
+> t∈S
+
+U ES t
+
+!2 = b2 
+
+> ES
+
++ σ2
+
+> ES
+
+Keff ,ES (KS , M ) . (37) Proposition 3 (Stratified DSI sampling identities) . Under Assumption 3, condition on the selected checkpoint distributions. For any fixed x ∈ R,
+
+E[ bFS,N (x) | { Pt : t ∈ S}] = ¯FS (x), (38) 
+
+and 
+
+Var[ bFS,N (x) | { Pt : t ∈ S}] = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Ft(x)(1 − Ft(x)) . (39) 
+
+If m = N/K S exactly, then this variance is at most ¯FS (x)(1 − ¯FS (x)) /N . Moreover, for any fixed threshold q with finite lower-tail second moments, 
+
+ZES,N (q) := 
+
+Z q
+
+> −∞
+
+( bFS,N (x) − ¯FS (x)) dx (40) 
+
+satisfies 
+
+E[ZES,N (q) | { Pt : t ∈ S}] = 0 , (41) 
+
+and 
+
+Var[ ZES,N (q) | { Pt : t ∈ S}] = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Var Pt [( q − Xt)+]. (42) 
+
+A.3 PROOF OF LEMMA 1 
+
+Because G(qG) = α and F ⋆(q⋆) = α,
+
+0 = G(qG) − F ⋆(q⋆) = F ⋆(q⋆ + ∆) − F ⋆(q⋆) + g(qG). (43) The lower density bound in Assumption 1 implies 
+
+c|∆| ≤ | F ⋆(q⋆ + ∆) − F ⋆(q⋆)| = |g(qG)| ≤ η, (44) so |∆| ≤ η/c . A Taylor expansion of F ⋆ around q⋆ gives 
+
+0 = f ⋆(q⋆)∆ + g(q⋆) + {g(qG) − g(q⋆)} + O(∆ 2). (45) Since |∆| ≤ η/c , the oscillation term is bounded by ωG(η/c ) and ∆2 = O(η2). Hence 
+
+∆ = − g(q⋆)
+
+f ⋆(q⋆) + O ωG(η/c ) + η2 , (46) which proves the VaR expansion. For ES, use the quantile-integral/lower-tail CDF identity, valid for continuous distributions with finite lower-tail first moment, 
+
+ES α(G) = qG − 1
+
+α
+
+Z qG
+
+> −∞
+
+G(x) dx, (47) 
+
+ES α(P ⋆) = q⋆ − 1
+
+α
+
+Z q⋆
+
+> −∞
+
+F ⋆(x) dx. (48) Subtracting gives 
+
+ES α(G) − ES α(P ⋆) = ∆ − 1
+
+α
+
+"Z q⋆
+
+> −∞
+
+g(x) dx +
+
+Z q⋆+∆ 
+
+> q⋆
+
+G(x) dx 
+
+#
+
+. (49) The second integral satisfies Z q⋆+∆ 
+
+> q⋆
+
+G(x) dx = α∆ + O(∆ 2) + O(η|∆|), (50) where the last term bounds the perturbation contribution on Iδ . Since |∆| ≤ η/c , the ∆ terms cancel and the remainder is 
+
+O(η2):
+
+ES α(G) − ES α(P ⋆) = − 1
+
+α
+
+Z q⋆
+
+> −∞
+
+g(x) dx + O(η2). (51) A.4 PROOF OF PROPOSITION 2 
+
+We prove the VaR statement and the ES statement is identical. By Assumption 2, 
+
+U qt = bq + ξqt , E[ξqt ] = 0 . (52) Thus 1
+
+KS
+
+X
+
+> t∈S
+
+U qt = bq + 1
+
+KS
+
+X
+
+> t∈S
+
+ξqt . (53) Squaring and taking expectations gives 
+
+E
+
+ 1
+
+KS
+
+X
+
+> t∈S
+
+U qt
+
+!2 = b2 
+
+> q
+
++ E
+
+ 1
+
+KS
+
+X
+
+> t∈S
+
+ξqt
+
+!2 , (54) because the cross term vanishes. Writing S = {t0 + rM : r = 0 , . . . , K S − 1}, weak stationarity gives 
+
+Cov( ξqt0+rM , ξ qt0+sM ) = σ2 
+
+> q
+
+ρq (|r − s|M ). (55) Therefore, 
+
+E
+
+ 1
+
+KSKS −1X
+
+> r=0
+
+ξqt0+rM 
+
+!2 = σ2
+
+> q
+
+K2 
+
+> SKS−1
+
+X 
+
+> r=0
+> KS−1
+
+X
+
+> s=0
+
+ρq (|r − s|M )= σ2
+
+> q
+
+KS
+
+"
+
+1 + 2  
+
+> KS−1
+
+X
+
+> ℓ=1
+
+
+
+1 − ℓKS
+
+
+
+ρq (ℓM )
+
+#
+
+= σ2
+
+> q
+
+Keff ,q (KS , M ) . (56) This proves the VaR identity. Replacing U qt by U ES t proves the ES identity. 
+
+A.5 PROOF OF PROPOSITION 3 
+
+Condition on the selected checkpoint distributions. For any fixed x,
+
+bFS,N (x) = 1
+
+KS
+
+X
+
+> t∈S
+
+bFt,m (x), (57) 
+
+bFt,m (x) = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+1{Xt,i ≤ x}. (58) Because E[ bFt,m (x) | Pt] = Ft(x),
+
+E[ bFS,N (x) | { Pt : t ∈ S}] = 1
+
+KS
+
+X
+
+> t∈S
+
+Ft(x) = ¯FS (x). (59) Conditional independence across samples and checkpoints gives 
+
+Var[ bFS,N (x) | { Pt : t ∈ S}] = 1
+
+K2
+
+> S
+
+X
+
+> t∈S
+
+Var[ bFt,m (x) | Pt] = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Ft(x)(1 − Ft(x)) . (60) If m = N/K S , this becomes 
+
+1
+
+KS N
+
+X
+
+> t∈S
+
+Ft(x)(1 − Ft(x)) . (61) Since p 7 → p(1 − p) is concave on [0 , 1] , Jensen’s inequality yields 
+
+1
+
+KS
+
+X
+
+> t∈S
+
+Ft(x)(1 − Ft(x)) ≤ ¯FS (x)(1 − ¯FS (x)) . (62) For the integrated identity, fix q. For any sample value X,
+
+Z q
+
+> −∞
+
+1{X ≤ x} dx = ( q − X)+. (63) Therefore 
+
+ZES,N (q) = 1
+
+KS
+
+X
+
+> t∈S
+
+"
+
+1
+
+m
+
+> m
+
+X
+
+> i=1
+
+(q − Xt,i )+ − EPt (q − Xt)+
+
+#
+
+. (64) The conditional mean is zero, and conditional independence gives 
+
+Var[ ZES,N (q) | { Pt : t ∈ S}] = 1
+
+K2 
+
+> S
+
+m
+
+X
+
+> t∈S
+
+Var Pt [( q − Xt)+]. (65) 
+
+A.6 PROOF OF THEOREM 1 
+
+We prove VaR first. Decompose 
+
+bqDSI α,S,N − q⋆ = (qS − q⋆)
+
+| {z }  
+
+> D2,q :trajectory
+
++ ( bqDSI α,S,N − qS )
+
+| {z }  
+
+> D1,q :sampling
+
+. (66) For the trajectory term, Lemma 1 applied to G = ¯FS gives 
+
+D2,q = − ¯FS (q⋆) − F ⋆(q⋆)
+
+f ⋆(q⋆) + rtraj q,S = − 1
+
+f ⋆(q⋆)1
+
+KS
+
+X
+
+> t∈S
+
+U qt + rtraj q,S , (67) where the deterministic remainder is negligible in the sense of Assumption 4. Proposition 2 then yields 
+
+E[D22,q ] = 1
+
+f ⋆(q⋆)2 b2 
+
+> q
+
++ σ2
+
+> q
+
+Keff ,q (KS , M )
+
+!
+
++ o(Ltraj q ). (68) For the sampling term, Assumption 5 gives 
+
+D1,q = − Zq,N 
+
+¯fS (qS ) + rsam q,S,N , (69) 
+
+Zq,N := bFS,N (qS ) − α. (70) Conditional on the trajectory, E[Zq,N | { Pt}] = 0 because ¯FS (qS ) = α, and Proposition 3 gives 
+
+Var[ Zq,N | { Pt}] = Amix  
+
+> q,N
+
+(S). (71) Therefore 
+
+E[D21,q ] = E
+
+" Amix  
+
+> q,N
+
+(S)¯fS (qS )2
+
+#
+
++ o(N −1 
+
+> S
+
+) = Lsam q,N + o(N −1 
+
+> S
+
+). (72) The leading sampling term has conditional mean zero, so 
+
+E[D1,q D2,q ] = ED2,q E(rsam q,S,N | { Pt}). (73) By Cauchy-Schwarz, Assumption 4, and Appendix Assumption 5, this cross term is negligible relative to Ltraj q + Lsam q,N .Combining the three pieces proves the VaR expansion. For ES, use the analogous decomposition 
+
+cES DSI α,S,N − ES α(P ⋆) = (ES α( ¯PS ) − ES α(P ⋆)) 
+
+| {z }
+
+> D2,ES
+
++ ( cES DSI α,S,N − ES α( ¯PS )) 
+
+| {z }
+
+> D1,ES
+
+. (74) Lemma 1 gives 
+
+D2,ES = − 1
+
+α
+
+Z q⋆
+
+> −∞
+
+( ¯FS (x) − F ⋆(x)) dx + rtraj ES,S = − 1
+
+α
+
+1
+
+KS
+
+X
+
+> t∈S
+
+U ES t + rtraj ES,S , (75) where the deterministic remainder is negligible in the sense of Assumption 4. Proposition 2 yields 
+
+E[D22,ES ] = 1
+
+α2
+
+
+
+b2 
+
+> ES
+
++ σ2
+
+> ES
+
+Keff ,ES (KS , M )
+
+
+
++ o(Ltraj ES ). (76) For the sampling term, Assumption 5 gives 
+
+D1,ES = − 1
+
+α ZES,N (qS ) + rsam ES,S,N , (77) 
+
+ZES,N (qS ) := 
+
+Z qS
+
+> −∞
+
+( bFS,N (x) − ¯FS (x)) dx. (78) By Proposition 3, conditional on the trajectory, 
+
+E[ZES,N (qS ) | { Pt}] = 0 , (79) 
+
+Var[ ZES,N (qS ) | { Pt}] = Amix  
+
+> ES,N
+
+(S). (80) Thus 
+
+E[D21,ES ] = 1
+
+α2 EAmix  
+
+> ES,N
+
+(S) + o(N −1 
+
+> S
+
+). (81) The cross term is again negligible because the leading sampling term has conditional mean zero, the population remainder is controlled by Assumption 4, and the sampling remainder is mean-square negligible by Appendix Assumption 5. Combining trajectory, sampling, and cross terms proves the ES expansion. 
+
+A.7 PROOF OF COROLLARY 1 
+
+The regimes follow directly from Theorem 1. If b2 is small and Keff grows, the checkpoint-fluctuation term σ2/K eff 
+
+decreases, producing a variance-reducible regime. If Keff ≪ KS because autocorrelation is persistent, the variance term does not decrease much, producing a correlation-limited regime. If b2 dominates the other terms, increasing Keff or N
+
+cannot remove the dominant error, producing a bias-limited regime. 
+
+A.8 PROOF OF PROPOSITION 1 
+
+If ρ(ℓM ) = 1 for every ℓ = 1 , . . . , K S − 1, then 
+
+κρ(KS , M ) = 1 + 2  
+
+> KS−1
+
+X
+
+> ℓ=1
+
+
+
+1 − ℓKS
+
+
+
+= 1 + 2 
+
+
+
+(KS − 1) − 1
+
+KS
+
+(KS − 1) KS
+
+2
+
+
+
+= KS . (82) Thus Keff = KS /K S = 1 .For shared directional tail misspecification, suppose that for some s ∈ {− 1, 1},
+
+s{Ft(x) − F ⋆(x)} ≥ a(x) for every t ∈ S. (83) Then by linearity of the mixture CDF, 
+
+s{ ¯FS (x) − F ⋆(x)} = 1
+
+KS
+
+X
+
+> t∈S
+
+s{Ft(x) − F ⋆(x)}≥ 1
+
+KS
+
+X
+
+> t∈S
+
+a(x) = a(x). (84) Thus the mixture inherits any common directional lower-tail error, including both undercoverage and overcoverage. Finally, the bias floors follow by taking Keff → ∞ and N → ∞ in Theorem 1. The checkpoint-fluctuation and finite-sampling terms vanish, leaving b2 
+
+> q
+
+/f ⋆(q⋆)2 for VaR and b2 
+
+> ES
+
+/α 2 for ES, up to negligible first-order remainders. 
+
+## B CHECKPOINT TAIL-ERROR DIAGNOSTICS 
+
+The following diagnostics support the regime interpretation in Section 4 and Section 6. For each strategy j, let Ft,j and 
+
+F ⋆j be the checkpoint and reference CDFs of the strategy-level PnL, and let q⋆j = qα(P ⋆j ). We compute the integrated ES checkpoint-error process U ES t,j := R q⋆j
+
+> −∞
+
+(Ft,j (x) − F ⋆j (x)) dx at α = 5% , before multiplication by 1/α 2. Diagnostics are computed at the strategy level over the selected post-burn-in checkpoint sequence and then averaged over the J = 65 
+
+strategies. The purpose is not to introduce an additional benchmark, but to explain when checkpoint pooling should reduce error. Table 3 summarizes four quantities at K = 200 and M = 10 . The bias floor B2 measures the squared persistent component of the trajectory error. The fluctuation variance σ2 measures the amount of checkpoint-level variation that can potentially be averaged. The sign-consensus statistic measures the average fraction of checkpoints sharing the dominant error sign. The effective checkpoint ratio Keff /K measures how much of the nominal checkpoint count remains after accounting for the strategy-specific autocorrelation of U ES t,j . A favorable DSI regime has a small bias floor, non-negligible fluctuation variance, low sign consensus, and high Keff /K .Table 3: Strategy-averaged integrated ES checkpoint-error diagnostics at α = 5% , K = 200 , and M = 10 . Values for B2
+
+and σ2 are in raw U ES units before multiplication by 1/α 2.Model Bias floor B2 Fluctuation variance σ2 Sign consensus Keff /K 
+
+DDPM 1.15 × 10 −9 2.00 × 10 −8 0.588 0.953 
+
+TailGAN 8.14 × 10 −6 3.82 × 10 −5 0.776 0.149 
+
+WGAN 1.82 × 10 −7 4.62 × 10 −8 0.847 0.647 
+
+The diagnostics separate the three model trajectories. DDPM has a small bias floor and high Keff /K , so its checkpoint fluc-tuations are averageable. TailGAN has substantial fluctuation variance, but its low Keff /K indicates strong autocorrelation, placing it in a correlation-limited regime. WGAN has relatively high sign consensus and a mixture-error term that remains large relative to its sampling term, indicating a shared-direction or bias-limited regime. Table 4: Strategy-averaged finite-budget ES integrated-tail decomposition at α = 5% , K = 200 , M = 10 , and N = 1000 .Values are reported in raw integrated-tail units before multiplication by 1/α 2.Model Mixture-error MSE Sampling term AN Predicted finite MSE Observed fixed-budget MSE DDPM 1.229 × 10 −9 9.370 × 10 −9 1.060 × 10 −8 1.074 × 10 −8
+
+TailGAN 8.142 × 10 −6 3.127 × 10 −8 8.173 × 10 −6 8.141 × 10 −6
+
+WGAN 1.824 × 10 −7 6.495 × 10 −9 1.889 × 10 −7 1.888 × 10 −7
+
+Table 4 compares the predicted finite-budget decomposition with the observed fixed-budget MSE, averaged over strategies and repeated fixed-budget draws. The mixture-error MSE is the population error of the checkpoint mixture ¯PS relative to P ⋆, while AN is the stratified sampling contribution under the fixed budget. For DDPM, the sampling term and the reduced mixture error are of comparable scale, so checkpoint pooling leads to a meaningful finite-budget improvement. For TailGAN, the predicted and observed errors are dominated by the mixture-error MSE, consistent with a correlation-limited 0 10 20 30 40 50 
+
+> Lag (h)
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Autocorrelation  (h)
+> Checkpoint-Error Autocorrelation Decay
+> WGAN
+> TailGAN
+> DDPM
+
+Figure 4: Autocorrelation decay of the post-burn-in checkpoint tail-error process. For each model, the curve reports the average lag-h autocorrelation across training checkpoints of a composite tail-error vector that concatenates strategy-level VaR error, ES error, and lower-tail CDF discrepancies relative to the reference distribution at α = 5% . Faster decay indicates that checkpoint-specific tail errors become less redundant as the stride increases, which increases the effective checkpoint count available to DSI. The DDPM curve decays most rapidly, consistent with the high Keff /K values in Table 3, TailGAN remains strongly correlated, while WGAN shows more persistent dependence than DDPM. trajectory. For WGAN, the mixture-error term also dominates the sampling term, consistent with a persistent bias floor. These diagnostics explain why DSI yields large gains for DDPM in Table 1, while providing limited gains for the tested adversarial trajectories. Figure 4 provides a complementary visual summary of checkpoint dependence across the post-burn-in trajectory. Unlike Table 3, which reports strategy-averaged diagnostics for the integrated ES process U ES t,j , this plot shows the lag-h autocor-relation of an aggregate checkpoint tail-error vector built from the strategy-level tail diagnostics used in the checkpoint analysis. The qualitative pattern is consistent with the regime interpretation above: DDPM exhibits faster decay toward zero, indicating more averageable checkpoint fluctuations, whereas TailGAN and WGAN retain stronger dependence across nearby checkpoints. 
+
+## C ADDITIONAL IMPLEMENTATION DETAILS 
+
+In this section, we provide the formal procedural steps for the DSI framework and detail the experimental configurations. 
+
+C.1 DSI SAMPLING PROCEDURE 
+
+Algorithm 1 formalizes the test-time sample aggregation process introduced in Section 3.3 and 3.4. Algorithm 1: Diachronic Sample Integration (DSI) Estimation 
+
+Input: Set of model checkpoints along a training trajectory {θt}Tt=1 , checkpoint count K, temporal stride M , total simulation budget N .
+
+Output: Pooled synthetic dataset X representing samples from ¯PS .Identify start index t0 after the burn-in phase; 
+
+S ← { t0, t 0 + M, t 0 + 2 M, . . . , t 0 + ( K − 1) M };Discard any indices in S where t > T ;
+
+KS ← | S|;Set per-checkpoint sample size m ← ⌊ N/K S ⌋;
+
+X ← ∅ ;
+
+foreach t ∈ S do 
+
+Draw m independent samples {Xt, 1, . . . , X t,m } ∼ Pθt ;
+
+X ← X ∪ { Xt, 1, . . . , X t,m };
+
+return X .
+
+Checkpoint burn-in selection. The checkpoint set S(M, K ) defined in Algorithm 1 begins after a fixed burn-in period to avoid including under-trained models whose generative distributions deviate substantially from the target distribution. To ensure reproducibility and prevent selection bias, we define the burn-in checkpoint t0 deterministically as the midpoint of the training trajectory. Specifically, models were trained for 3000 epochs, and checkpoints eligible for DSI were drawn uniformly from epochs 1000 onward. This choice coincides with the regime where the training loss and out-of-sample error have stabilized (Figure 5), and does not rely on any tail-risk metric, validation risk estimate, or oracle information. All reported DSI results use the same burn-in definition across models, datasets, and runs. 
+
+C.2 BENCHMARK TRADING STRATEGIES 
+
+We evaluate tail risk using a set of J benchmark trading strategies adapted from Cont et al. [2025]. Each strategy acts as a deterministic functional mapping a multivariate asset price trajectory S1: T = {St}Tt=1 ∈ Rd×T (derived from the generated return sequence) to a univariate portfolio profit-and-loss (PnL) sequence. Crucially, the terminal PnL over the investment horizon physically instantiates the random variable X introduced in Section 3, upon which the statistical risk functionals VaR α(X) and ES α(X) are evaluated. To ensure strict causal evaluation, strategies are applied identically to empirical reference data and synthetic trajectories, utilizing only information available up to time t.
+
+C.2.1 Buy-and-Hold (Multivariate Dependence) 
+
+The Buy-and-Hold strategy represents a static allocation baseline. Because it aggregates simultaneous price movements without dynamic trading, it explicitly tests the generative model’s ability to preserve heavy-tailed multivariate dependence. Given a fixed portfolio weight vector w ∈ Rd (derived from a predefined allocation matrix), the portfolio value Vt at time t
+
+is computed as the linear combination of the individual asset prices Si,t :
+
+Vt = w⊤St =
+
+> d
+
+X
+
+> i=1
+
+wiSi,t . (85) The strategy takes an initial position and holds it over the entire investment horizon. The terminal PnL is simply the difference between the final and initial portfolio values: X = VT − V1.
+
+C.2.2 Mean Reversion (Short-Term Temporal Dependence) 
+
+The Mean Reversion (MR) strategy stress-tests the model’s preservation of short-term negative autocorrelation, operating on the assumption that asset prices will eventually revert to a historical anchor. For a given asset, we define the anchoring mean μinit as the average price over an initial lookback window of length W :
+
+μinit = 1
+
+W
+
+> W
+
+X
+
+> k=1
+
+Sk. (86) At each subsequent active time step t > W , a normalized deviation score zt is computed to measure the divergence of the current price from this initial mean: 
+
+zt = St − μinit 
+
+c , (87) where c > 0 is a fixed empirical scaling factor (e.g., c = 0 .01 ). Trading signals are generated dynamically based on empirical quantile thresholds. The strategy initiates a Long position when zt < τ lower (under the assumption that the asset is undervalued and will revert upward) and initiates a Short position when zt > τ upper (identifying overvaluation). 
+
+C.2.3 Trend Following (Long-Term Temporal Dependence) 
+
+The Trend Following (TF) strategy implements a Moving Average Crossover system to capitalize on market momentum, thereby probing the long-term positive autocorrelation of the generated paths. For a given asset, we compute two simple moving averages (SMA): a short-term average over a window of length W , and a long-term average over a window of length 
+
+2W :SMA short ,t = 1
+
+W 
+
+> W−1
+
+X
+
+> k=0
+
+St−k, SMA long ,t = 12W 
+
+> 2W−1
+
+X
+
+> k=0
+
+St−k. (88) The trading signal is derived from the normalized divergence between these two temporal smoothing filters: 
+
+zt = SMA short ,t − SMA long ,t 
+
+c . (89) Similar to the MR strategy, active market positions are determined by comparing zt against upper ( τupper ) and lower ( τlower )thresholds. However, the trading logic is inverted to follow momentum: a Long position is initiated when the short-term average crosses significantly above the long-term average ( zt > τ upper ), while a Short position is initiated when it crosses significantly below ( zt < τ lower ). 
+
+C.3 SETUP OF PARAMETERS IN THE SYNTHETIC DATASET 
+
+We follow the synthetic data–generation procedure of Cont et al. [2025] exactly to ensure a fair and controlled comparison across methods. For each time step t ∈ { 1, . . . , T }, we first sample a latent innovation vector 
+
+ut = ( u1,t , . . . , u 5,t )⊤ ∼ N (0, Σ) , (90) where Σ ∈ R5×5 is a covariance matrix. In addition, we sample independent chi-square random variables v1,t ∼ χ2(ν1) and 
+
+v2,t ∼ χ2(ν2), which are independent of ut.The five asset price increments are then generated according to 
+
+∆p1,t = u1,t ,
+
+∆p2,t = ϕ1∆p2,t −1 + u2,t ,
+
+∆p3,t = ϕ2∆p3,t −1 + u3,t ,
+
+∆p4,t = ε4,t = σ4,t η1,t ,
+
+∆p5,t = ε5,t = σ5,t η2,t ,
+
+where the conditional variances evolve according to GARCH(1,1) dynamics: 
+
+σ24,t = γ4 + κ4ε24,t −1 + β4σ24,t −1,σ25,t = γ5 + κ5ε25,t −1 + β5σ25,t −1.The standardized innovations are defined as 
+
+η1,t = u4,t 
+
+pv1,t /ν 1
+
+, η2,t = u5,t 
+
+pv2,t /ν 2
+
+, (91) which induce heavy-tailed marginal behavior. We set T = 100 , corresponding to the number of intraday observations within one trading day. A correlation matrix R is first generated by sampling each element independently from Unif(0 , 1) . Annualized standard deviations si are sampled uniformly from [0 .3, 0.5] , and the covariance matrix Σ is constructed as 
+
+Σij = si
+
+√255 Tsj
+
+√255 T Rij , i, j = 1 , . . . , 5. (92) The remaining parameters are fixed as follows: ϕ1 = 0 .5, ϕ2 = −0.15 , ν1 = 5 , ν2 = 10 , κ4, κ 5 ∼ Unif(0 .08 , 0.12) ,
+
+β4, β 5 ∼ Unif(0 .825 , 0.875) , and γ4, γ 5 ∼ Unif(0 .03 , 0.07) . Main results are reported for the risk level α = 0 .05 ,additional sensitivity results for α ∈ { 0.01 , 0.05 , 0.10 } are provided in Appendix Table 6. Static Buy-and-Hold Mean-Reversion Trend-Following Asset VaR ES VaR ES VaR ES AAPL -0.366 -0.591 -0.307 -0.491 -0.382 -0.527 AMZN -0.420 -0.606 -0.347 -0.508 -0.330 -0.453 GOOG -0.377 -0.572 -0.340 -0.510 -0.347 -0.462 JPM -0.360 -0.519 -0.287 -0.405 -0.350 -0.473 QQQ -0.223 -0.447 -0.192 -0.349 -0.191 -0.289 Table 5: Empirical Value-at-Risk (VaR) and Expected Shortfall (ES) on market training data for α = 5% .
+
+C.4 DIFFUSION PARAMETERS 
+
+Following the Denoising Diffusion Probabilistic Model (DDPM) framework Ho et al. [2020]. The construction consists of a forward diffusion process that gradually adds noise to the data and a reverse process parameterized by a neural network to denoise it. 
+
+Diffusion Process. We define a forward process q(xt|xt−1) which adds Gaussian noise to the data x0 over Tdiff = 1000 
+
+timesteps according to a variance schedule βt:
+
+q(xt|xt−1) = N (xt; p1 − βtxt−1, β tI). (93) We utilize a linear noise schedule where βt increases linearly from β1 = 10 −4 to βTdiff = 0 .02 .
+
+Network Architecture. The reverse process is modeled by a 1D U-Net architecture, denoted as ϵθ , which takes the noisy input xt ∈ Rd×L (where d is the number of assets and L is the time horizon) and the timestep t to predict the added noise. The network consists of: 1. Time Embedding: A sinusoidal position embedding followed by a Multi-Layer Perceptron (MLP) with SiLU activation, projecting the discrete timestep t into a 256 -dimensional embedding vector. 2. Encoder: A series of 1D residual blocks and downsampling layers. Each residual block comprises two 1D convolutional layers with Group Normalization (groups=8), SiLU activations, and a time embedding projection that is added to the intermediate feature map. Downsampling is performed via strided 1D convolutions. 3. Bottleneck: A sequence of residual blocks processing the latent representation at the lowest resolution. 4. Decoder: A symmetric path of upsampling layers (transposed 1D convolutions) and residual blocks. Skip connections concatenate feature maps from the encoder to the decoder to preserve high-frequency details. The model was trained to minimize the mean squared error (MSE) between the true noise ϵ and the predicted noise ϵθ (xt, t ):
+
+L = Et, x0,ϵ 
+
+∥ϵ − ϵθ (√¯αtx0 + √1 − ¯αtϵ, t )∥2 , (94) where ¯αt = Qts=1 (1 − βs). The network uses a base channel dimension of 64 and is optimized using AdamW with a learning rate of 10 −5.1500 2000 2500 3000 
+
+Epochs 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+> Out-of-Sample Error
+
+TailGAN 
+
+WGAN 
+
+DDPM Figure 5: Post-burn-in out-of-sample error dynamics across training checkpoints. The solid line shows average relative error at α = 5% , and the shaded region denotes one standard deviation. DDPM maintains a low, stable error floor, TailGAN exhibits higher volatility, and WGAN shows an increasing error trend over later checkpoints. Table 6: Sensitivity of tail-risk estimation error across tail levels under the fixed budget N = 1000 . The reported metric is average relative error of VaR and ES in percent. Lower is better.                                                                    
+
+> Synthetic Market Method α= 0 .01 α= 0 .05 α= 0 .10 α= 0 .01 α= 0 .05 α= 0 .10
+> TailGAN 6.9 ±3.1 5.1 ±1.4 4.5 ±1.2 17.8 ±3.8 12.1 ±1.3 10.9 ±1.1 DDPM (EMA) 9.1 ±3.6 7.7 ±2.5 6.1 ±1.9 27.3 ±6.1 22.3 ±4.3 19.2 ±3.5 DDPM (DSI) 4.6 ±0.3 3.7 ±0.12 3.4 ±0.10 12.2 ±2.1 10.8 ±1.2 8.9 ±0.9
+
+## D ADDITIONAL EXPERIMENTAL RESULTS 
+
+This section provides supplementary empirical results that support and contextualize the main findings in Section 6. Number of Checkpoints Stride 5 10 20 50 100 150 200 1 4.80 ± 0.46 4.74 ± 0.34 4.39 ± 0.17 3.84 ± 0.11 3.90 ± 0.15 4.00 ± 0.16 3.83 ± 0.17 
+
+2 4.91 ± 0.63 4.23 ± 0.41 3.73 ± 0.21 3.85 ± 0.22 3.80 ± 0.15 3.77 ± 0.12 3.94 ± 0.13 
+
+5 4.76 ± 0.62 4.47 ± 0.38 3.92 ± 0.25 3.84 ± 0.12 3.81 ± 0.19 3.85 ± 0.10 3.71 ± 0.14 
+
+10 4.71 ± 0.79 4.19 ± 0.25 4.06 ± 0.18 4.10 ± 0.27 3.66 ± 0.12 3.69 ± 0.19 3.82 ± 0.12 
+
+20 4.68 ± 0.49 4.24 ± 0.52 4.09 ± 0.31 3.95 ± 0.25 3.94 ± 0.16 4.05 ± 0.13 3.81 ± 0.12 Table 7: Full sensitivity analysis results: the reported metric is the average RE of VaR and ES in % at alpha = 5%. 0.00 (0.00) 
+
+> Ground Truth
+> 3.31 (0.51)
+> WGAN
+> 0.88 (0.15)
+> TailGAN
+> 0.22 (0.02)
+> DDPM (EMA)
+> 0.51 (0.13)
+> DDPM (DSI)
+
+0.0 
+
+0.5 
+
+1.0 
+
+Figure 6: Multivariate correlations of the price increments in the Synthetic data and from different trained models. Numbers below each heatmap: mean and standard deviation (in parentheses) of the sum of the absolute difference between the correlation coefficients computed with all training samples and 1,000 generated samples. 0.00 (0.00) 
+
+> Ground Truth
+> 7.85 (0.22)
+> WGAN
+> 2.92 (0.16)
+> TailGAN
+> 1.35 (0.25)
+> DDPM (EMA)
+> 1.53 (0.35)
+> DDPM (DSI)
+
+0.0 
+
+0.5 
+
+1.0 
+
+Figure 7: Cross-asset correlations of the price increments in the Market data and from different trained models. Numbers below each heatmap: mean and standard deviation (in parentheses) of the sum of the absolute difference between the correlation coefficients computed with all training samples and 1,000 generated samples. 0 2 4 6 8 10  
+
+> 0.00 (0.00)
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+Ground Truth      
+
+> 0246810
+> 1.09 (0.04)
+
+WGAN      
+
+> 0246810
+> 2.10 (0.04)
+
+TailGAN      
+
+> 0246810
+> 0.06 (0.01)
+
+DDPM (EMA)      
+
+> 0246810
+> 0.13 (0.02)
+
+DDPM (DSI) 
+
+Gaussian AR(1) 1 = 0.5 AR(1) 2 = 0.12 GARCH(1,1) t(5) GARCH(1,1) t(10) Figure 8: Auto-correlations of the price increments from different trained models for Synthetic data. Numbers below each graph: mean and standard deviation (in parentheses) of the sum of the absolute element-wise difference between auto-correlation coefficients computed with all training samples and 1,000 generated samples. 0 2 4 6 8 10  
+
+> 0.00 (0.00)
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+Ground Truth      
+
+> 0246810
+> 1.69 (0.78)
+
+WGAN      
+
+> 0246810
+> 2.17 (0.33)
+
+TailGAN      
+
+> 0246810
+> 0.34 (0.04)
+
+DDPM (EMA)      
+
+> 0246810
+> 0.18 (0.03)
+
+DDPM (DSI) 
+
+AAPL AMZN GOOG JPM QQQ 
+
+Figure 9: Auto-correlations of the price increments from different trained models for Market data. Numbers below each graph: mean and standard deviation (in parentheses) of the sum of the absolute element-wise difference between auto-correlation coefficients computed with all training samples and 1,000 generated samples. -1.1 
+
+0.0 
+
+1.2 
+
+> Gaussian
+> -quantile (log scale)
+
+Static buy-and-hold 
+
+-1.1 
+
+0.0 
+
+1.3 Mean-reversion 
+
+-1.1 
+
+0.0 
+
+1.3 Trend-following 
+
+-1.0 
+
+0.0 
+
+1.0 
+
+> AR(1) with  1 = 0.5
+> -quantile (log scale)
+
+-1.0 
+
+0.0 
+
+-1.0 
+
+0.0 
+
+1.0 
+
+-1.5 
+
+0.0 
+
+1.1 
+
+> AR(1) with  2 = 0.12
+> -quantile (log scale)
+
+-1.3 
+
+0.0 
+
+1.2 
+
+-1.0 
+
+0.0 
+
+1.2 
+
+-1.2 
+
+0.0 
+
+1.2 
+
+> GARCH(1,1) with  t(5)
+> -quantile (log scale)
+
+-1.1 
+
+0.0 
+
+0.8 
+
+-1.1 
+
+0.0 
+
+1.1 
+
+10 4 10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-1.4 
+
+0.0 
+
+1.5 
+
+> GARCH(1,1) with  t(10)
+> -quantile (log scale)
+
+10 4 10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-1.2 
+
+0.0 
+
+1.1 
+
+10 4 10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-1.1 
+
+0.0 
+
+1.2 
+
+Synthetic Data WGAN Tail-GAN DDPM EMA DDPM DSI Figure 10: Tail behavior via the synthetic rank-frequency distribution of the strategy PnL. The columns represent the strategy types. -1.0 
+
+0.0 
+
+> AAPL
+> -quantile (log scale)
+
+Static buy-and-hold 
+
+-1.0 
+
+0.0 
+
+Mean-reversion 
+
+-1.0 
+
+0.0 
+
+1.0 
+
+Trend-following 
+
+-1.5 
+
+0.0 
+
+1.4 
+
+> AMZN
+> -quantile (log scale)
+
+-1.4 
+
+0.0 
+
+1.1 
+
+0.0 
+
+1.0 
+
+-1.0 
+
+0.0 
+
+> GOOG
+> -quantile (log scale)
+
+-1.6 
+
+0.0 
+
+1.4 
+
+-1.4 
+
+0.0 
+
+1.5 
+
+-1.1 
+
+0.0 
+
+1.0 
+
+> JPM
+> -quantile (log scale)
+
+-0.9 
+
+0.0 
+
+1.1 
+
+-1.1 
+
+0.0 
+
+1.9 
+
+10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-1.7 
+
+0.0 
+
+0.8 
+
+> QQQ
+> -quantile (log scale)
+
+10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-1.5 
+
+0.0 
+
+1.0 
+
+10 3 10 2 10 1 10 0
+
+(log scale) 
+
+-0.9 
+
+0.0 
+
+1.2 
+
+Market Data WGAN Tail-GAN DDPM EMA DDPM DSI Figure 11: Tail behavior via the market rank-frequency distribution of the strategy PnL. The columns represent the strategy types.

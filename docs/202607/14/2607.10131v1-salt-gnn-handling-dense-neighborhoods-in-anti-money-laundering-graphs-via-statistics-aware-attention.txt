@@ -1,0 +1,1193 @@
+Title: SALT-GNN: Handling Dense Neighborhoods in Anti-Money Laundering Graphs via Statistics-Aware Attention
+
+URL Source: https://arxiv.org/pdf/2607.10131v1
+
+Published Time: Tue, 14 Jul 2026 00:25:42 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# SALT-GNN: Handling Dense Neighborhoods in Anti-Money Laundering Graphs via Statistics-Aware Attention 
+
+## Lidia Losavio, Francesco Sovrano, Dario Fenoglio, Martin Gjoreski, Marc Langheinrich 
+
+Università della Svizzera italiana (USI) Lugano, Switzerland 
+
+Abstract 
+
+Money laundering threatens financial stability and exposes institutions to penalties, motivating automated detection. Be-cause laundering schemes often emerge through relational patterns, graph neural networks (GNNs) are increasingly used for anti-money laundering (AML). Yet AML GNNs are typ-ically evaluated with aggregate metrics such as overall F1 score, which hide an operational issue: high-activity recipi-ent accounts concentrate many incoming transactions, mak-ing suspicious signals harder to isolate and costlier to inves-tigate. We introduce a recipient-degree stratified evaluation that reports standard AML metrics across recipient-context density. Across three datasets (HI-Small, HI-Medium, and AMLSim-32k-5%), the evaluation reveals consistent degrada-tion in dense recipient contexts, which we trace to three GNN characteristics: the first two are known GNN limitations that AML amplifies, i.e., (1) multiset non-discriminability and (2) cardinality blindness; and (3) an attention-specific effect, i.e., in dense neighborhoods, normalized attention attenuates weak but pattern-relevant multi-hop signals. Guided by this diagno-sis, we propose SALT-GNN, a lightweight statistics-aware ar-chitecture that fuses degree-aware statistical aggregation with attention at each message-passing layer. This layer-wise fusion allows distributional and cardinality information to shape the node states used by subsequent attention steps. Ablation re-sults support fusion placement as a key factor in dense-context performance. On HI-Small and HI-Medium it uses up to 77% fewer parameters than task-specific graph-transformer base-lines while improving dense-context F1 score by 3–6 points; on AMLSim-32k-5%, it improves highest-degree F1 score by 16–20 points. The gains hold for both Transformer- and GAT-style attention, indicating that the benefit comes from where statistical and attentional evidence is fused rather than from a specific attention operator. 
+
+## 1 Introduction 
+
+Money laundering conceals illicit asset origins through placement, layering, and integration, involving an estimated 2–5% of global GDP ($800 billion to $2 trillion annually) (United Nations Office on Drugs and Crime 2011; Lannoo and Parlour 2021). Because compliance failures expose fi-nancial institutions to substantial penalties, effective anti-money laundering (AML) systems are operationally essen-tial (Chen et al. 2018). A central difficulty is that laundering rarely appears as a single anomalous transaction (Altman 
+
+Figure 1: Recipient-context example. A suspicious incoming transaction (red) is easier to isolate at low in-degree (left) than among many normal transfers at high in-degree (right). et al. 2023). Instead, risk signals often emerge from rela-tional structures such as cycles, fan-in/fan-out, and layered flows (Appendix A). AML data is therefore naturally graph-structured, with accounts as nodes and transactions as di-rected edges. Graph Neural Networks (GNNs), which propa-gate and aggregate information over transaction graphs, have consequently become a prominent modeling family in AML research (Altman et al. 2023; Egressy et al. 2024). Although engineered-feature pipelines remain competitive (Blanuša et al. 2024), recent AML-tailored GNNs provide strong benchmarks for both transaction-level edge classification and account-level node classification (Suzumura and Kanezashi 2021; Lin et al. 2024). However, current AML-GNN evalua-tion remains incomplete. Aggregate metrics such as F1 score and PR-AUC indicate whether a model performs well on av-erage, but they do not show whether it remains reliable in the recipient contexts where many incoming transfers compete to be summarized. We call the incoming neighborhood of a receiver a recipient context. For edge classification, a trans-action inherits the context of its receiver, since a transaction has no intrinsic degree; for node classification, the context is the evaluated account itself. This unit is operationally mean-ingful: errors in dense recipient contexts are costly, because false positives can trigger large manual reviews, while false negatives may miss collection or mixing points associated with large-scale laundering (Kou et al. 2004; Beneish and Vorst 2022). 1arXiv:2607.10131v1 [cs.LG] 11 Jul 2026 Our central observation is that dense recipient contexts are a missing unit of AML-GNN evaluation and design. We expose them with a recipient-degree diagnostic: a post-hoc stratification of test predictions by recipient in-degree (Fig. 1) without changing training or model selection. Across three widely used AML benchmarks—HI-Small, HI-Medium (Altman et al. 2023), and AMLSim-32k-5% (Suzu-mura and Kanezashi 2021; Schmidt et al. 2024)—recipient-degree stratified evaluation reveals a pattern hidden by ag-gregate metrics: GNN performance deteriorates precisely in high in-degree recipient contexts. These are exactly the regions where detection is technically difficult and opera-tionally most costly. This degradation is not incidental to a single model or dataset, and our results show that it is not resolved simply by increasing attention-model capacity or tuning. At the same time, the finding does not imply that at-tention should be abandoned. Attention remains valuable in AML because it can selectively focus on relevant neighbors among large volumes of background activity. The limitation is that, as recipient density grows, attention becomes fragile: weak but pattern-relevant multi-hop signals can be attenu-ated before the full laundering pattern is assembled. Thus, recipient-degree stratification localizes the failure, but it also points to a broader design question: what information should be available to the model before each attention step? To answer this question, we map the dense-recipient failure to three aggregation limitations that AML graphs amplify: (i) limited discrimination of neighborhood multisets under single summaries (Corso et al. 2020), (ii) loss of cardinal-ity information in normalized or order-statistic aggregators (Zhang and Xie 2021), and (iii) attenuation of weak multi-hop evidence under normalized attention. These limitations are not specific to AML (Wu, He, and Xu 2019; Wu et al. 2022; Sun et al. 2026; Xu et al. 2019), but they become espe-cially consequential in transaction graphs, where suspicious evidence is often relational, sparse within large volumes of benign activity, and meaningful only when multiple weak signals are composed into a broader pattern. This leads to a simple design principle: attention provides useful selec-tivity, but dense recipient contexts require distributional and cardinality information to be incorporated into the node state before subsequent attention layers operate. If this informa-tion is introduced only at prediction time (Chen et al. 2025), later attention steps still select over representations that may not contain the cues needed to distinguish dense suspicious contexts. Our ablations support this view (§5; Appendix M), showing that the placement of statistical-attention fusion, rather than the mere presence of both branches, is critical for dense-region performance. We instantiate this principle as SALT-GNN , a lightweight architecture that couples degree-aware statistical aggregation with learned attention at each message-passing layer, so both distributional evidence and selective attention are available before the next propagation step. To test whether the principle depends on a particular attention operator, we instantiate it with both Transformer-style and GAT-style attention ( SALT-Trans , SALT-GAT ). Empirically, SALT improves aggregate and high-degree F1 score across all three benchmarks, using up to 77% fewer parameters than the strongest baselines on HI-Small and HI-Medium and reaching its largest gains in the dense recipient contexts the stratified evaluation identi-fies. The gains hold for both backbones, supporting that the benefit comes from where evidence is fused rather than from a specific attention operator. 
+
+Contributions. 
+
+1. A recipient-degree diagnostic for AML-GNN evalua-tion. We introduce a post-hoc protocol that reports stan-dard AML metrics across destination in-degree ranges, revealing systematic degradation in dense recipient con-texts that aggregate metrics conceal across both edge- and node-level tasks. 2. A dense-context diagnosis for AML GNNs. We con-nect the observed degradation to aggregation limitations that AML graphs amplify: multiset non-discriminability, cardinality blindness, and attenuation of weak multi-hop evidence under normalized attention. 3. SALT-GNN, a lightweight statistics-aware attention architecture. We propose a layer-wise fusion architecture that combines degree-aware statistical aggregation with learned attention before each propagation step, improving performance precisely in the dense regions isolated by the diagnostic. We release code to reproduce the stratified protocol, base-lines, and ablations, with the goal of making dense-context reliability a standard part of AML-GNN evaluation. 
+
+## 2 Background and Problem Formulation 
+
+We formalize financial transaction graphs and the edge- and node-level AML tasks, review message passing and attention in standard GNNs, and introduce three general aggregation limitations, linking them to AML transaction graphs. 
+
+Financial Transaction Graphs 
+
+Financial transaction networks are directed multigraphs G =(V, E), with accounts as nodes and attributed transactions as directed edges; parallel edges encode repeated transfers. 
+
+Task Formulation. We study transaction-level edge clas-sification and account-level node classification, predicting whether a transaction or account is suspicious. This dual for-mulation lets us validate architectural insights across task types. 
+
+Graph Neural Networks 
+
+Message Passing Neural Networks (MPNNs) update node representations as h(k) 
+
+> v
+
+=U(k)
+
+
+
+h(k−1)  
+
+> v
+
+, AGG (k)
+
+{h(k−1)  
+
+> u
+
+: u ∈ N (v)}
+
+ 
+
+, where 
+
+N (v) is the neighborhood of v, AGG is a permutation-invariant function, and U is typically a Multilayer Perceptron (MLP). After k rounds, h(k) 
+
+> v
+
+incorporates information from up to k hops. Architectures mainly differ in AGG : GCN uses degree-normalized averaging (Kipf and Welling 2017), GAT learns attention weights (Velickovic et al. 2018), GIN uses sum aggregation (Xu et al. 2019; Huang and Villar 2021), and PNA combines multiple statistics with degree-based scaling (Corso et al. 2020). Attention-based 2GNNs instead compute an adaptive weighted mean of neighbor representations as their aggregation function:          
+
+> h′
+> i=X
+> j∈N (i)
+> αij hjs.t. X
+> j∈N (i)
+> αij = 1 (1)
+
+where h′ 
+
+> i
+
+is the updated embedding of node i, hj is the embedding of a neighbor j ∈ N (i), and αij ∈ [0 , 1] is a learned importance coefficient (typically obtained via a soft-max) that distributes unit mass across all neighbors of i.For hub nodes with many incoming transactions, this nor-malization can down-weight even moderately informative neighbors to near-zero—underexplored yet problematic in pattern-centric financial graphs, where weak but coordinated multi-hop signals matter. 
+
+Characterization of Aggregation Limitations 
+
+The three characteristics below are established properties of GNN aggregation: the first two are general limitations of common neighborhood summaries (Corso et al. 2020; Zhang and Xie 2021), and the third follows from how normalized at-tention propagates across hops. They have not, to our knowl-edge, been explicitly examined in the AML setting, yet this is a regime where they matter especially, because the struc-ture of laundering interacts directly with each of them: illicit flows hide behind benign-looking summaries, concentrate at high-volume accounts, and are deliberately arranged to look locally legitimate. In the rest of this section we therefore map each characteristic to a concrete AML reading. 
+
+Characteristic 1 (Multiset non-discriminability) (Corso et al. 2020). A single neighborhood statistic such as the mean, maximum, minimum, or standard deviation cannot uniquely characterize a multiset, so distinct neighborhoods may collapse to similar summaries even when their risk pro-files differ. This matters in AML because the collision can hide structured behavior behind a benign-looking summary: a smurfing pattern, in which an illicit total is split across many small incoming transfers, can present an average in-coming amount close to that of an ordinary account while differing sharply in dispersion or extremes. 
+
+Characteristic 2 (Cardinality blindness) (Zhang and Xie 2021). Common neighborhood summaries are normalized or order-based: mean, min, max, and standard deviation do not by themselves encode how many neighbors produced the summary. Normalized (softmax) attention likewise outputs a convex combination whose result does not expose neighbor-hood size, even though the attention weights are themselves shaped by it (Characteristic 3). Sum aggregation does scale with cardinality, but it entangles this size signal with feature content and, in dense neighborhoods, with large volumes of background traffic. In AML this is a direct loss of sig-nal rather than a generic limitation: the number of incoming transfers is itself informative, since high in-degree accounts are candidate collection or mixing points where laundered flows concentrate, and cardinality also affects modeling dif-ficulty and operational risk. 
+
+Characteristic 3 (Attention-induced multi-hop signal at-tenuation). The normalized attention of Eq. (1) is selec-tive, which is valuable in AML because many transactions are irrelevant background activity. The same mechanism, however, can have a downside in AML settings: launder-ing is constructed through layering so that each individ-ual transfer looks locally legitimate, which is precisely the regime in which a locally weak edge can be assigned a very small weight despite being part of a larger multi-hop pat-tern. Because the influence of an early-hop neighbor on a downstream node compounds multiplicatively through the attention weights along the connecting path, repeated down-weighting across successive dense hubs can attenuate such evidence before the full pattern is assembled. This is distinct from the usual benefit of attention against noise: the mecha-nism that filters irrelevant neighbors is the same one that can suppress weak but coordinated signals that an adversary has deliberately shaped to appear benign. 
+
+Implications for AML architectures. PNA-type models address the first two characteristics by combining multiple statistics with degree scalers, but they still aggregate all neighbors and may be sensitive to dense background traf-fic. Attention-based GNNs and graph transformers provide selectivity, but normalized attention remains exposed to car-dinality effects and can attenuate weak multi-hop evidence. 
+
+## 3 From Diagnosis to a Design Principle: SALT-GNN 
+
+Guided by the diagnosis in §2, we introduce SALT-GNN ,a statistics-aware layer-wise fusion architecture for directed transaction graphs. At each message-passing layer it com-putes a degree-aware statistical update and an attention up-date, then fuses them before the next layer, so propagation uses states carrying both forms of evidence (Fig. 2). 
+
+Layer-wise SALT update 
+
+Let G = ( V, E) be a directed transaction multigraph, with ac-counts as nodes and transactions as directed edges. For a node 
+
+v, let Nin (v) denote its incoming transaction neighborhood. We write dv ≡ din (v) = |N in (v)| for the in-degree of v.When multiple parallel transactions connect the same source account u to the same recipient account v, they are treated as distinct incoming messages; for notational simplicity, we index incoming messages by u ∈ N in (v) and associate each message with an edge-feature vector ev,u . Let h(k−1)  
+
+> v
+
+∈ Rdh
+
+be the representation of node v entering layer k. Before ag-gregation, each incoming transaction is represented as an edge-conditioned neighbor message: 
+
+m(k) 
+
+> v,u
+
+= h(k−1)  
+
+> u
+
++ W(k) 
+
+> e
+
+ev,u , u ∈ N in (v), (2) where W(k) 
+
+> e
+
+projects edge attributes to the hidden dimension. If edge attributes are unavailable for a dataset or task, the second term is omitted. The multiset aggregated by the two SALT channels is 
+
+M(k) 
+
+> v
+
+=
+
+n
+
+m(k) 
+
+> v,u
+
+: u ∈ N in (v)
+
+o
+
+.
+
+Statistical channel. The statistical channel computes summaries of M(k) 
+
+> v
+
+using element-wise aggregators 
+
+A = {μ, σ, min , max } and degree scalers S. Following 3PNA (Corso et al. 2020), we use identity, amplification, and attenuation scalers: 
+
+sid (dv ) = 1 , samp (dv ) = γv
+
+δ , sattn (dv ) = δ
+
+max( γv , ϵ ) , (3) 
+
+where γv = log( dv + 1) , δ is the mean value of log( d + 1) 
+
+over the training graph, and ϵ > 0 is a small constant used only to avoid division by zero. The statistical summary is 
+
+g(k) 
+
+> v, stat
+
+= M
+
+> s∈S
+
+M
+
+> agg ∈A
+
+s(dv ) · agg 
+
+
+
+M(k)
+
+> v
+
+
+
+, (4) and the statistical update is 
+
+h(k) 
+
+> v, stat
+
+= U (k)stat 
+
+
+
+h(k−1)  
+
+> v
+
+∥ g(k)
+
+> v, stat
+
+
+
+, (5) where U(k)stat is an MLP and ∥ denotes concatenation. 
+
+Attention channel. The attention channel computes a learned weighted aggregation over the same incoming trans-action messages. SALT is agnostic to the attention scoring function. For each incoming message from u to v, let 
+
+a(k) 
+
+> v,u
+
+= score (k) 
+
+h(k−1)  
+
+> v
+
+, m(k)
+
+> v,u
+
+
+
+(6) be an unnormalized attention score. The normalized coeffi-cient is 
+
+α(k) 
+
+> v,u
+
+= exp( a(k)
+
+> v,u
+
+)
+
+P 
+
+> u′∈N in (v)
+
+exp( a(k) 
+
+> v,u ′
+
+) , X
+
+> u∈N in (v)
+
+α(k) 
+
+> v,u
+
+= 1 . (7) 
+
+The attention update is then 
+
+h(k) 
+
+> v, att
+
+= U (k)att 
+
+ X
+
+> u∈N in (v)
+
+α(k)
+
+> v,u
+
+m(k)
+
+> v,u
+
+ , (8) where U(k)att is either an identity map or a learned projection, depending on the backbone instantiation. We instantiate this template with two standard attention operators. In SALT-Trans , score (k) is a Transformer-style dot-product score (Shi et al. 2021); in SALT-GAT , it is a GAT-style additive score (Velickovic et al. 2018). In both cases, the SALT contribution is not the particular attention scoring rule, but the fact that the attention update is fused layer-wise with a degree-aware statistical update. 
+
+Layer-wise fusion. The full SALT layer is the residual fusion of the previous state, the statistical update, and the attention update: 
+
+z(k) 
+
+> v
+
+= h(k−1)  
+
+> v
+
+∥ h(k) 
+
+> v, stat
+
+∥ h(k)
+
+> v, att
+
+, (9) 
+
+eh(k) 
+
+> v
+
+= MLP (k)fusion 
+
+
+
+z(k)
+
+> v
+
+
+
+, (10) 
+
+h(k) 
+
+> v
+
+= 12
+
+
+
+h(k−1)  
+
+> v
+
++ eh(k)
+
+> v
+
+
+
+. (11) Eq. (11) is the complete SALT update. The two channels do not define two independent models: after every layer, their outputs are integrated into a single node representation h(k) 
+
+> v
+
+,which is then consumed by the next message-passing layer.     
+
+> Input
+> Statistical Channel
+> μ, σ
+> min ,max
+> Attention Channel
+> Fusion
+> Concat  → MLP  Output
+> h(k)
+> v
+> ×s(dv)
+> Residual h(k−1)
+> v
+> Global Residual
+
+Figure 2: SALT-GNN architecture. Two parallel branches process each neighborhood: a statistical channel computes degree-aware statistics (aggregators μ, σ, min , max rescaled by degree scalers s(dv )) and an attention channel applies selective attention to highlight salient neighbors. A learnable fusion block combines both with the residual state h(k−1)  
+
+> v
+
+,producing h(k) 
+
+> v
+
+with a global residual connection. 
+
+Architectural role of the two channels 
+
+Eqs. (4)–(11) map directly to the aggregation characteris-tics of §2. The multi-aggregation block (Eq. (4)) addresses multiset non-discriminability by exposing complementary summaries (μ, σ, min , max) , and the degree scalers s(dv )
+
+address cardinality blindness by making recipient in-degree an explicit input separated from feature content. SALT does not remove softmax normalization, so the attention channel can still attenuate locally weak edges across hops; the mit-igation of this effect is the coexistence of the attentive path with a parallel non-attentive statistical path inside the same layer-wise update, rather than a separate term. 
+
+Propagation across hops. Layer-wise fusion changes what later attention layers receive as input. At layer k+1 , messages are built from h(k), which already contains statistical and attentional evidence from the previous hop. Thus subsequent attention scores are computed on statistics-enriched states, unlike late-fusion designs such as PNAGMDA (Chen et al. 2025), where branches interact only at prediction time. 
+
+Computational Efficiency. 
+
+Despite combining two aggregation operators, SALT-GNN remains lightweight: about 42k and 40k parameters for SALT-Trans and SALT-GAT, versus 182k for FraudGT, 61k for GAT, and 84k for a TransConv-only model. All models are instantiated at their best-validation-F1 configuration, so these differences are not tuned in SALT’s favor. This compact design offers a favorable performance–parameter trade-off, which matters where computational cost is a practical con-straint (Paoletti et al. 2025). 
+
+## 4 Experimental Setup 
+
+We present our stratified evaluation protocol and attention diagnostics, then datasets, baselines, and statistical testing. 4Recipient-Stratified Evaluation 
+
+We use recipient-degree-stratified reporting as a post-hoc di-agnostic: models are trained and selected under the original benchmark protocol, and only the reporting of test predic-tions is stratified. Alongside the stratified scores we report the overall F1 score used in prior work, making explicit how aggregate metrics conceal degradation in dense neigh-borhoods. Each test prediction is assigned to a degree bin according to the in-degree of its recipient context : for node classification this is the evaluated account itself, and for edge classification it is the receiver of the transaction, since the receiver is where incoming evidence is aggregated and com-peting transfers must be compressed. Bins partition recipient in-degree into logarithmically increasing ranges, and within each bin we compute the same metric as in the aggregate evaluation, over the predictions whose recipient context falls in that bin (see Algorithms in Appendix L). 
+
+Attention diagnostics. For attention-based GNNs, ENNs measures attention spread (Appendix D), while Hit@ k mea-sures fraud relevance: among nodes with at least one fraudu-lent incoming neighbor, it is the fraction whose top-k atten-tion weights include one. Low Hit@ k indicates that attention suppresses fraud-relevant evidence before multi-hop patterns can be assembled (Characteristic 3 in §2). Table 1: Datasets used in our experiments.                 
+
+> Dataset # Nodes # Edges Illicit Rate Task
+> HI-Small 515,088 5,078,345 0.102% Edge HI-Medium 2,077,023 31,898,238 0.110% Edge AMLSim-32k-5% 32,000 757,044 5.000% Node
+
+Datasets. Because real banking data are severely restricted by privacy and regulation, AML research relies on re-producible synthetic benchmarks. We use IBM’s HI-Small and HI-Medium (Altman et al. 2023), de facto standards for transaction-level AML evaluation (Gounoue, Sao, and Gottschalk 2025; Altman et al. 2023; Egressy et al. 2024; Bilgi, Chen, and Atasu 2024; Karim et al. 2024; Lin et al. 2024; Blanuša et al. 2024), and AMLSim-32k-5% (Schmidt et al. 2024), which provides account-level labels from canon-ical laundering patterns (Tab. 1). We use strictly temporal splits for HI-Small and HI-Medium (Egressy et al. 2024; Altman et al. 2023; Lin et al. 2024; Gounoue, Sao, and Gottschalk 2025; Bilgi, Chen, and Atasu 2024) and the data creators’ protocol for AMLSim-32k-5% (Schmidt et al. 2024). 
+
+Baselines. We instantiate SALT-GNN as SALT-Trans (Transformer-based) and SALT-GAT (GAT-based). On HI-Small and HI-Medium we compare against GIN (Xu et al. 2019), PNA (Corso et al. 2020), GAT (Velickovic et al. 2018), TransConv (Shi et al. 2021), FraudGT (Lin et al. 2024), and PNAGMDA (Chen et al. 2025), the closest late-fusion prece-dent. We evaluate TransConv at hidden sizes 64 (84k params) and 128 (318k params) to test whether dense-neighborhood degradation is merely a capacity issue (Di Giovanni et al. 2023). On AMLSim-32k-5% we also include GCN (Kipf and Welling 2017) and the AML-specialized for node classi-fication GAMLNet (Schmidt et al. 2024). Established base-lines use best validation F1 score configurations from prior work (Altman et al. 2023; Lin et al. 2024; Schmidt et al. 2024) and tune the new ones equivalently; SALT and PNAG-MDA inherit backbone hyperparameters, so gains stem from architectural fusion. Full configurations are in Appendix I. 
+
+Evaluation Protocol. Our primary metric is positive-class F1 score, standard in AML (Altman et al. 2023; Lin et al. 2024; Egressy et al. 2024; Blanuša et al. 2024; Karim et al. 2024; Gounoue, Sao, and Gottschalk 2025) to keep a sin-gle comparable metric across bins and datasets. Addition-ally, Appendix F reports degree-stratified PR-AUC on HI-Small, HI-Medium, and AMLSim-32k-5%. We report mean and standard deviation across seeds (5 for HI-Small and AMLSim-32k-5%, 3 for HI-Medium), selecting checkpoints by best overall validation F1 score. 
+
+Statistical Testing. We test SALT against the strongest baseline and PNAGMDA on overall and densest-bin F1/PR-AUC, using exact permutation tests where possible and Welch’s t-test for HI-Medium. Throughout the result tables,  
+
+> ∗
+
+and † mark SALT gains at p < 0.05 and p < 0.10 after Holm correction against the comparison baseline named in each caption; full values are in Appendix E. 
+
+## 5 Results 
+
+Tables 2–4 show a consistent pattern: aggregate F1 score hides dense-recipient degradation, while SALT remains com-petitive overall and is strongest in the highest-degree regimes. We discuss the results through three research questions (RQ1–RQ3). 
+
+RQ1: How do vanilla GNNs behave as structural com-plexity increases? Across benchmarks, standard GNNs de-grade as in-degree grows. On the IBM tasks (Tables 2– 3), PNA and TransConv drop in dense bins; increasing TransConv from 84k to 318k parameters lowers dense-bin F1 score, suggesting a structural rather than capacity-only limi-tation. GAT collapses on IBM (overall F1 score ≈0.008), consistent with prior AML results (Altman et al. 2023; Egressy et al. 2024; Lin et al. 2024). FraudGT is robust on HI-Small but scales less reliably to HI-Medium, and the deg[5–9] dip is linked to unstructured ”agent-based” fraud (Appendix J). AMLSim (Table 4) similarly shows high over-all F1 score but tail degradation, supporting that high-degree hubs remain challenging across tasks. 
+
+RQ2: How do attention-based GNNs behave in dense transaction graphs? Attention spread alone does not ex-plain dense-bin behavior (Appendix D): a model can attend broadly but rank fraud-relevant edges poorly, or narrowly and miss them. We therefore use Hit@20 as the primary diagnostic. As shown in Table 5, in deg[50–99] TransConv reaches Hit@20 of only 0.352 at L0, so in roughly 65% of cases no fraudulent neighbor appears among the top-20 at-tention weights; once such an edge is down-weighted early, multi-hop propagation can attenuate it further (§2). Both SALT variants repair this: Hit@20 rises to 0.449 /0.468 at L0 5Model [1–4] [5–9] [10–19] [20–49] [50–99] overall                                                          
+
+> GIN 0.528 ±0.076 0.362 ±0.059 0.479 ±0.124 0.362 ±0.127 0.509 ±0.106 0.418 ±0.107
+> PNA 0.679 ±0.069 0.516 ±0.021 0.662 ±0.015 0.643 ±0.030 0.515 ±0.099 0.629 ±0.032
+> GAT 0.000 ±0.000 0.003 ±0.005 0.002 ±0.003 0.000 ±0.000 0.035 ±0.070 0.008 ±0.015
+> Trans-84k 0.737 ±0.034 0.542 ±0.034 0.651 ±0.029 0.636 ±0.038 0.615 ±0.018 0.645 ±0.031
+> Trans-318k 0.756 ±0.013 0.574 ±0.007 0.675 ±0.009 0.639 ±0.035 0.581 ±0.053 0.656 ±0.017
+> FraudGT 0.733 ±0.012 0.539 ±0.022 0.674 ±0.031 0.696 ±0.013 0.706 ±0.044 0.679 ±0.018
+> PNAGMDA 0.757 ±0.039 0.529 ±0.033 0.680 ±0.014 0.682 ±0.020 0.678 ±0.019 0.676 ±0.019
+> SALT-GAT 0.765 ±0.027 0.557 ±0.021 0.683 ±0.016 0.695 ±0.023 0.751 ±0.027 ∗0.694 ±0.007
+> SALT-Trans 0.795 ±0.028 0.573 ±0.042 0.688 ±0.016 0.723 ±0.013 0.741 ±0.019 ∗0.716 ±0.018 ∗
+
+Table 2: HI-Small F1 by recipient degree (mean ± std, 5 seeds). Bold/underline: best/second best. ∗: gain over PNAGMDA at 
+
+p < 0.05 (Holm-corrected permutation test). Contrasts vs. FraudGT are not significant on F1, though SALT-Trans significantly leads on overall PR-AUC (Appendix E).                                                                                                                                                                         
+
+> Model [1–4] [5–9] [10–19] [20–49] [50–99] [100+] overall
+> GIN (73k) 0.747 ±0.028 0 .615 ±0.012 0 .672 ±0.020 0 .565 ±0.003 0 .568 ±0.019 0.556 ±0.045 0.608 ±0.011
+> PNA (35k) 0.811 ±0.011 0 .686 ±0.013 0 .722 ±0.013 0 .625 ±0.004 0 .644 ±0.018 0.631 ±0.046 0.671 ±0.006
+> GAT (61k) 0.002 ±0.000 0 .000 ±0.000 0 .000 ±0.000 0 .023 ±0.000 0 .000 ±0.000 0.004 ±0.000 0.003 ±0.001
+> TransConv (84k) 0.812 ±0.007 0 .688 ±0.003 0 .732 ±0.004 0 .641 ±0.005 0 .645 ±0.007 0.598 ±0.020 0.682 ±0.004
+> TransConv (318k) 0.766 ±0.011 0 .575 ±0.004 0 .658 ±0.002 0 .636 ±0.006 0 .647 ±0.027 0.560 ±0.057 0.655 ±0.006
+> FraudGT (182k) 0.691 ±0.064 0 .506 ±0.030 0 .591 ±0.041 0 .572 ±0.023 0 .631 ±0.018 0.608 ±0.049 0.615 ±0.017
+> PNAGMDA (40k) 0.813 ±0.014 0 .698 ±0.007 0 .718 ±0.006 0 .625 ±0.024 0 .648 ±0.029 0.652 ±0.028 0.675 ±0.020
+> SALT-GAT (40k) 0.835 ±0.012 0.722 ±0.015 0.741 ±0.015 0.663 ±0.022 0.683 ±0.021 0.687 ±0.029 †0.708 ±0.019
+> SALT-Trans (42k) 0.832 ±0.005 0 .712 ±0.008 0 .736 ±0.006 0.665 ±0.008 0.677 ±0.008 0 .673 ±0.018 ∗0.705 ±0.004 ∗
+
+Table 3: HI-Medium F1 score by recipient degree (mean ± std, 3 seeds). Bold/underline mark best/second best. ∗/† mark SALT gains over TransConv-84k, the strongest baseline, at p < 0.05 /p < 0.10 after Holm correction (Welch’s t-test, n = 3 ;Appendix E). Contrasts against PNAGMDA do not reach significance after correction on this dataset (Appendix E). (SALT-Trans/SALT-GAT) and from 0.579 to 0.774 /0.746 at L1. The statistics-aware pathway thus does not merely re-shape attention entropy; it keeps weak fraud-relevant ev-idence available across hops even when learned attention would suppress it. RQ3: Does SALT-GNN help in extreme-degree areas and across tasks? On the IBM edge bench-marks, SALT leads in the densest bins: on HI-Small deg[50– 99], SALT-Trans/SALT-GAT reach 0.741/0.751 vs. FraudGT 0.706 and TransConv 0.615; on HI-Medium deg[100+], 0.673/0.687 vs. the best baseline PNAGMDA at 0.652—with competitive or best overall F1 score. On the AMLSim node task the effect persists in the extreme tail: in deg[2000–4732], SALT-Trans/SALT-GAT reach 0.733/0.782 vs. TransConv 0.442 and GAT 0.573, with the SALT-GAT gain significant at p < 0.05 and SALT-Trans at p < 0.10 after correction. This separates SALT from PNAGMDA (Chen et al. 2025), which fuses the same branches only at prediction time: it trails SALT on HI-Small overall (0.676 vs. 0.716) and in the densest bin (0.678 vs. 0.751), and collapses to 0.044 in AML-Sim deg[2000–4732]. Since this contrast is between-model, we also isolate fusion placement with a within-model knock-out: moving SALT’s fusion from per-layer to prediction-time, operators fixed, still solves the task (probe PR-AUC 0.995 )yet collapses second-hop attention routing onto the planted fraud from AUC 1.00 to 0.50 (chance), while per-layer SALT keeps it at 1.00 (Appendix M). This shows that where the two views interact—not which branches are combined—drives the dense-region gain. 
+
+Characteristic-level ablation. We ablate SALT-Trans on HI-Small (Table 6; full F1 score/PR-AUC in Appendix F), removing C1 (multi-aggregation) and C2 (degree-aware en-coding) one at a time, then the statistical channel as a whole. C3 is isolated by toggling the statistical channel on and off at fixed attention: removing it ( no statistics ) leaves atten-tion unmitigated, while the full model mitigates it; PNA (no attention) and TransConv (unmitigated attention) bound the comparison. Dropping multi-aggregators (mean only) lowers deg[50–99] F1 score from 0.741 to 0.636 , with std restor-ing most of it ( 0.720 ), supporting C1; removing degree-awareness gives a comparable drop ( → 0.616 ) at the highest variance, supporting C2. Attention alone without the statis-tical channel is less reliable in the dense bin (TransConv 
+
+0.615 , PNA 0.515 ), but complementing it with statistics in SALT-Trans reaches 0.741 . Tellingly, removing the statistical channel entirely ( no statistics ) reduces dense-bin F1 score to 
+
+0.637 and doubles its variance while overall F1 score barely moves ( 0.698 vs. 0.716 ), supporting that the dense-region gain comes from the statistical channel and that aggregate F1 score hides it. 
+
+## 6 Discussion, Limitations, and Future Work 
+
+On HI-Small, SALT-GAT and SALT-Trans train in 140s and 142s per epoch, close to PNA (135s) and TransConv-6Table 4: Compact AMLSim-32k-5% node-classification F1 score (mean ± std, 5 seeds, 3 splits). We report one sparse bin, two high-degree tail bins, and the aggregate score; the full degree-stratified table with mean ± std is in Appendix C. 
+
+> ∗
+
+/† mark SALT gains over GAT, the strongest attention base-line in the extreme bin, at p < 0.05 /p < 0.10 after Holm correction (exact paired permutation test, n = 15 ); both variants also exceed PNAGMDA there at pHolm < 0.001 
+
+(Appendix E).                                      
+
+> Model deg[2–4] deg[1000–1999] deg[2000–4732] overall
+> GCN 0.709 0.000 0.000 0.785 GIN 0.656 0.000 0.000 0.751 PNA 0.783 0.578 0.178 0.852 GAMLNet 0.745 0.567 0.000 0.822 TransConv 0.743 0.760 0.442 0.827 GAT 0.740 0.632 0.573 0.821 PNAGMDA 0.706 0.633 0.044 0.826 SALT-GAT 0.794 0.827 0.782 ∗0.855
+> SALT-Trans 0.794 0.811 0.733 †0.855
+
+Table 5: Hit@20 on HI-Small deg[50–99] (mean ± std, 5 seeds): fraction of nodes with at least one fraudulent neighbor among the top-20 attention weights, at the first (L0) and second (L1) hop. We set k = 20 to match TransConv’s effective neighborhood in deg[50–99], which is close to 20 at both hops ( ENNs ≈ 20 .7 at L0 and 17 .0 at L1; Appendix D). Higher is better: it shows that the fraud signal remains among the most-attended neighbors. 
+
+Model Hit@20 (L0) Hit@20 (L1) 
+
+TransConv (84k) 0.352 ± 0.038 0.579 ± 0.037 
+
+SALT-GAT 0.468 ± 0.054 0.746 ± 0.138 
+
+SALT-Trans 0.449 ± 0.052 0.774 ± 0.136 
+
+318k (123s) and far faster than FraudGT (242s) under the same configuration (Appendix K). SALT thus improves dense-region behavior without a heavy task-specific graph transformer—operationally relevant, since high-activity ac-counts concentrate investigation cost and missed-risk expo-sure. Our evaluation is restricted to public synthetic AML benchmarks, which, though standard, may not reflect the full heterogeneity of products, institutions, labeling prac-tices, and cross-border flows in deployed systems; validating recipient-degree behavior and SALT-style hybrids on propri-etary, multi-institution, and temporal graphs is an important next step. 
+
+## 7 Related Work 
+
+AML and financial-fraud detection have been studied with graph feature pre-processing, GNNs, temporal models, and graph transformers. GFP (Blanuša et al. 2024) extracts struc-tural features for tree ensembles on the IBM AML bench-marks (Altman et al. 2023); GAMLNet (Schmidt et al. 2024), MultiGNN-style architectures (Egressy et al. 2024; Bilgi, Chen, and Atasu 2024), TeMP-TraG (Gounoue, Sao, Table 6: Characteristic-level ablation on HI-Small (F1 score, mean ± std, 5 seeds). ✓/◦/× denote full/partial/absent. C1 
+
+(multi-aggregation): ◦ = two aggregators, × = mean only. 
+
+C2 (degree-aware encoding): × = absent. C3 (attention han-dling): ✓ = attention with multi-hop mitigation (statistics preserve down-weighted signal), ◦ = attention without mit-igation, × = no attention. C1, C2 are toggled internally on SALT-Trans; no statistics removes the whole channel; PNA and TransConv are references. Full F1 score/PR-AUC ver-sion in Appendix F.                                                                           
+
+> Model C1 C2 C3 deg[50–99] overall
+> SALT-Trans (full) ✓✓✓0.741 ±0.019 0.716 ±0.018
+> ,→mean+std only ◦✓✓0.720 ±0.042 0.712 ±0.004
+> ,→mean only ×✓✓0.636 ±0.065 0.690 ±0.020
+> ,→no degree ✓×✓0.616 ±0.103 0.713 ±0.013
+> ,→no statistics ××◦0.637 ±0.032 0.698 ±0.016
+> PNA (ref.) ✓✓×0.515 ±0.099 0.629 ±0.032
+> TransConv (ref.) ××◦0.615 ±0.018 0.645 ±0.031
+
+and Gottschalk 2025), temporal GNNs for online pay-ments (Saldaña-Ulloa, De Ita Luna, and Marcial-Romero 2024), and FraudGT (Lin et al. 2024) demonstrate the value of graph and temporal structure. Other work addresses scal-able semi-supervised learning and ensembles (Karim et al. 2024), class imbalance (Liu et al. 2021; Boyapati and Aygun 2025), LLM–GNN integration (Yang et al. 2025), reverse message passing (Schlichtkrull et al. 2018), port number-ing (Sato, Yamada, and Kashima 2019), ego identifiers (You et al. 2021), and specialized pre-processing (Liang et al. 2025). We focus on vanilla message passing and lightweight hybrids to isolate how standard aggregation and attention behave across recipient-degree regimes. PNAGMDA (Chen et al. 2025) is the closest architectural precedent because it combines PNA and GAT branches; we evaluate it directly and distinguish SALT-GNN by layer-wise rather than prediction-time fusion. Dense-subgraph methods (Hooi et al. 2017; Liu, Hooi, and Faloutsos 2018) are complementary: they search for suspicious dense communities in an unsupervised or subgraph-centric way, whereas we use recipient-degree strat-ified evaluation to analyze supervised GNN behavior across graph regimes. Work on scalable fraud pipelines (Rees et al. 2022; Paoletti et al. 2025) emphasizes production constraints; we instead show that lightweight supervised GNNs improve dense-region robustness without heavy graph transformers. 
+
+## 8 Conclusion 
+
+We introduced recipient-degree stratified evaluation for AML GNNs, showing that aggregate metrics hide system-atic degradation in dense, high-activity recipient contexts, and SALT-GNN, which fuses degree-aware statistical aggre-gation and attention at every message-passing layer. Across three benchmarks, SALT improves dense-bin performance with a compact footprint, and our ablations and Hit@ k di-agnostics support the central claim: layer-wise interaction between statistics and attention is more robust in dense neigh-borhoods than either view alone or late fusion. 7References 
+
+Altman, E.; Blanuša, J.; Niederhäusern, L. V.; Egressy, B.; Anghel, A.; and Atasu, K. 2023. Realistic Synthetic Finan-cial Transactions for Anti-Money Laundering Models. In 
+
+Thirty-seventh Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track .Beneish, M. D.; and Vorst, P. 2022. The cost of fraud pre-diction errors. The Accounting Review , 97(6): 91–121. Bilgi, H. Ç.; Chen, L. Y.; and Atasu, K. 2024. Multigraph Message Passing with Bi-Directional Multi-Edge Aggrega-tions. arXiv preprint arXiv:2412.00241 .Blanuša, J.; Cravero Baraja, M.; Anghel, A.; von Nieder-häusern, L.; Altman, E.; Pozidis, H.; and Atasu, K. 2024. Graph Feature Preprocessor: Real-time Subgraph-based Fea-ture Extraction for Financial Crime Detection. In Proceed-ings of the 5th ACM International Conference on AI in Fi-nance , ICAIF ’24, 222–230. New York, NY, USA: Associa-tion for Computing Machinery. ISBN 9798400710810. Boyapati, M.; and Aygun, R. 2025. BalancerGNN: Bal-ancer Graph Neural Networks for imbalanced datasets: A case study on fraud detection. Neural Networks , 182: 106926. Chen, C.; Ma, M.; Nie, J.; Wang, L.; and Xu, J. 2025. PNAGMDA: A Principal Neighborhood Aggregation Based Graph Neural Network for miRNA-Disease Association Pre-diction. IEEE/ACM Transactions on Computational Biology and Bioinformatics .Chen, Z.; Van Khoa, L. D.; Teoh, E. N.; Nazir, A.; Karuppiah, E. K.; and Lam, K. S. 2018. Machine learning techniques for anti-money laundering (AML) solutions in suspicious transaction detection: a review. Knowledge and Information Systems , 57(2): 245–285. Corso, G.; Cavalleri, L.; Beaini, D.; Liò, P.; and Velickovic, P. 2020. Principal Neighbourhood Aggregation for Graph Nets. In Larochelle, H.; Ranzato, M.; Hadsell, R.; Balcan, M.; and Lin, H., eds., Advances in Neural Information Processing Systems 33: Annual Conference on Neural Information Pro-cessing Systems 2020, NeurIPS 2020, December 6-12, 2020, virtual .Di Giovanni, F.; Giusti, L.; Barbero, F.; Luise, G.; Lio, P.; and Bronstein, M. M. 2023. On over-squashing in message passing neural networks: The impact of width, depth, and topology. In International conference on machine learning ,7865–7885. PMLR. Egressy, B.; Von Niederhäusern, L.; Blanuša, J.; Altman, E.; Wattenhofer, R.; and Atasu, K. 2024. Provably powerful graph neural networks for directed multigraphs. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 38, 11838–11846. Gounoue, S.; Sao, A.; and Gottschalk, S. 2025. TeMP-TraG: Edge-based Temporal Message Passing in Transaction Graphs. arXiv preprint arXiv:2503.16901 .Hooi, B.; Shin, K.; Song, H. A.; Beutel, A.; Shah, N.; and Faloutsos, C. 2017. Graph-based fraud detection in the face of camouflage. ACM Transactions on Knowledge Discovery from Data (TKDD) , 11(4): 1–26. Huang, N. T.; and Villar, S. 2021. A short tutorial on the weisfeiler-lehman test and its variants. In ICASSP 2021-2021 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , 8533–8537. IEEE. Karim, M. R.; Hermsen, F.; Chala, S. A.; De Perthuis, P.; and Mandal, A. 2024. Scalable semi-supervised graph learning techniques for anti money laundering. IEEE Access , 12: 50012–50029. Kipf, T. N.; and Welling, M. 2017. Semi-Supervised Clas-sification with Graph Convolutional Networks. In 5th In-ternational Conference on Learning Representations, ICLR 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings . OpenReview.net. Kou, Y.; Lu, C.-T.; Sirwongwattana, S.; and Huang, Y.-P. 2004. Survey of fraud detection techniques. In IEEE Inter-national Conference on Networking, Sensing and Control, 2004 , volume 2, 749–754 Vol.2. Lannoo, K.; and Parlour, R. 2021. Anti-Money Laundering in the EU: Time to get serious. Technical report, Centre for European Policy Studies. Liang, S.; Xie, Q.; Feng, J.; Yue, Y.; Li, H.; Ye, J.; and Jie, W. 2025. Feature Reconstruction for Anomaly Detection on Directed Multigraphs: A Preprocessing Framework for GNNs. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 1707–1717. Lin, J.; Guo, X.; Zhu, Y.; Mitchell, S.; Altman, E.; and Shun, J. 2024. FraudGT: a simple, effective, and efficient graph transformer for financial fraud detection. In Proceedings of the 5th ACM International Conference on AI in Finance ,292–300. Liu, S.; Hooi, B.; and Faloutsos, C. 2018. A contrast metric for fraud detection in rich graphs. IEEE Transactions on Knowledge and Data Engineering , 31(12): 2235–2248. Liu, Y.; Ao, X.; Qin, Z.; Chi, J.; Feng, J.; Yang, H.; and He, Q. 2021. Pick and choose: a GNN-based imbalanced learning approach for fraud detection. In Proceedings of the web conference 2021 , 3168–3177. Paoletti, G.; Giobergia, F.; Giordano, D.; Cagliero, L.; Ronchiadin, S.; Moncalvo, D.; Mellia, M.; and Baralis, E. 2025. MAD: Multicriteria Anomaly Detection of Suspi-cious Financial Accounts from Billions of Cash Transac-tions. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 4751–4760. Rees, B.; Wang, X.; Eaton, J.; Yilmaz, O.; Ratzel, R.; and LaSalle, D. 2022. Accelerated GNN training with DGL and RAPIDS cuGraph in a Fraud Detection Workflow. In Pro-ceedings of the 28th ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining , 4820–4821. Saldaña-Ulloa, D.; De Ita Luna, G.; and Marcial-Romero, J. R. 2024. A Temporal Graph Network Algorithm for Detect-ing Fraudulent Transactions on Online Payment Platforms. 
+
+Algorithms , 17(12): 552. Sato, R.; Yamada, M.; and Kashima, H. 2019. Approximation ratios of graph neural networks for combinatorial problems. 
+
+Advances in Neural Information Processing Systems , 32. 8Schlichtkrull, M.; Kipf, T. N.; Bloem, P.; Van Den Berg, R.; Titov, I.; and Welling, M. 2018. Modeling relational data with graph convolutional networks. In European semantic web conference , 593–607. Springer. Schmidt, J.; Pasadakis, D.; Sathe, M.; and Schenk, O. 2024. GAMLNet: a graph based framework for the detection of money laundering. In 2024 11th IEEE Swiss Conference on Data Science (SDS) , 241–245. IEEE. Shi, Y.; Huang, Z.; Feng, S.; Zhong, H.; Wang, W.; and Sun, Y. 2021. Masked Label Prediction: Unified Message Passing Model for Semi-Supervised Classification. In Zhou, Z., ed., 
+
+Proceedings of the Thirtieth International Joint Conference on Artificial Intelligence, IJCAI 2021, Virtual Event / Mon-treal, Canada, 19-27 August 2021 , 1548–1554. ijcai.org. Sun, J.; Chang, W.; Yang, C.; Huang, Q.; and Wang, S. 2026. Relieving the Over-Aggregating Effect in Graph Transform-ers. Advances in Neural Information Processing Systems , 38: 6673–6699. Suzumura, T.; and Kanezashi, H. 2021. Anti-Money Laun-dering Datasets: InPlusLab Anti-Money Laundering Data-Datasets. http://github.com/IBM/AMLSim/. United Nations Office on Drugs and Crime. 2011. Estimat-ing Illicit Financial Flows Resulting from Drug Trafficking and Other Transnational Organized Crimes. Technical re-port, UNODC. Global money laundering estimates: 2-5% of global GDP. Velickovic, P.; Cucurull, G.; Casanova, A.; Romero, A.; Liò, P.; and Bengio, Y. 2018. Graph Attention Networks. In 
+
+6th International Conference on Learning Representations, ICLR 2018, Vancouver, BC, Canada, April 30 - May 3, 2018, Conference Track Proceedings . OpenReview.net. Wu, J.; He, J.; and Xu, J. 2019. Net: Degree-specific graph neural networks for node and graph classification. In Pro-ceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining , 406–415. Wu, Q.; Zhao, W.; Li, Z.; Wipf, D. P.; and Yan, J. 2022. Node-former: A scalable graph structure learning transformer for node classification. Advances in neural information process-ing systems , 35: 27387–27401. Xu, K.; Hu, W.; Leskovec, J.; and Jegelka, S. 2019. How Powerful are Graph Neural Networks? In 7th International Conference on Learning Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019 . OpenReview.net. Yang, C.; Liu, H.; Wang, D.; Zhang, Z.; Yang, C.; and Shi, C. 2025. Flag: Fraud detection with llm-enhanced graph neural network. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 ,5150–5160. You, J.; Gomes-Selman, J. M.; Ying, R.; and Leskovec, J. 2021. Identity-aware graph neural networks. In Proceedings of the AAAI conference on artificial intelligence , volume 35, 10737–10745. Zhang, S.; and Xie, L. 2021. Improving attention mechanism in graph neural networks via cardinality preservation. In Pro-ceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence , IJCAI’20. ISBN 9780999241165. 
+
+## A Money Laundering Known Patterns 
+
+Figure 3: Canonical money laundering patterns observed in AML datasets. The blue node denotes the main laundering account; depending on the task, all nodes and transactions involved in the pattern are typically labeled as fraudulent. 
+
+## B Degree-Stratified Evaluation 
+
+Figure 4 illustrates the recipient-degree stratified evaluation protocol, which reorganizes a single aggregate metric into a breakdown by the volume of incoming transactions per node (account). 
+
+Figure 4: Degree-stratified evaluation: from an overall metric to a breakdown by the volume of incoming transactions per node (account). 
+
+## C Full AMLSim Degree-Stratified Results 
+
+The complete degree-stratified F1 results on AMLSim-32k-5% are reported in Table 12, presented together with the corresponding PR-AUC breakdown in the Threshold-Free Metric section below, so that the two large AMLSim tables can be read side by side. 
+
+## D Effective Number of Neighbors Diagnostics 
+
+For completeness, we report entropy-based attention-spread diagnostics. For a node i at layer ℓ, let α(ℓ) 
+
+> i
+
+be the normalized attention vector over its incoming neighbors. We compute 
+
+H(α(ℓ) 
+
+> i
+
+) = − X
+
+> j
+
+α(ℓ) 
+
+> ij
+
+log α(ℓ) 
+
+> ij
+
+,
+
+ENNs( α(ℓ) 
+
+> i
+
+) = exp  H(α(ℓ) 
+
+> i
+
+).
+
+Uniform attention gives ENNs = di, while single-neighbor concentration gives ENNs = 1 . ENNs measures attention spread, not ranking correctness; the main paper therefore uses Hit@20 as the primary attention-preservation diagnostic. 9E Statistical Significance Tests 
+
+We test whether each SALT variant outperforms the relevant baselines beyond seed variability, on two contrasts per bench-mark (overall performance and the densest populated degree bin) and, for the IBM datasets, on both F1 score and PR-AUC. Besides the strongest baseline, we also test against PNAG-MDA, the closest dual-branch precedent, to isolate per-layer from prediction-time fusion. The test matches each bench-mark’s design. On AMLSim, runs are paired by split ×seed (identical graph), so we use an exact paired permutation test ( n = 15 ; Table 9). On HI-Small we use an exact two-sample permutation test ( n = 5 ). On HI-Medium ( n = 3 )the permutation null admits only  63
+
+ = 20 assignments, lower-bounding the two-sided p at 0.10 ; we therefore use a two-sided Welch’s t-test, which retains power at small n
+
+(Table 8). Within each family of related tests we apply Holm correction and report pHolm ; the markers ∗ (p < 0.05 ) and  
+
+> †
+
+(p < 0.10 ) in the main tables refer to these corrected values. Given the small seed counts on the IBM datasets, we report effect sizes ( ∆) alongside p-values and treat those tests as indicative. Across the three benchmarks, the evidence is strongest on AMLSim, where the paired design yields full statis-tical power: both SALT variants significantly outperform GAT and PNAGMDA overall and in the high-degree regime (pHolm < 0.001 for all but the SALT-Trans extreme-bin contrast, which reaches pHolm = 0 .062 ). The contrast with PNAGMDA in the extreme bin is the sharpest: PNAGMDA collapses to 0.044 while both SALT variants exceed 0.73 
+
+(∆ > 0.68 , pHolm < 0.001 ), directly supporting per-layer over prediction-time fusion. On HI-Small, SALT-Trans sig-nificantly outperforms PNAGMDA on every contrast after correction (overall F1 score, overall PR-AUC, and dense-bin F1 score/PR-AUC; pHolm = 0 .032 for all four) and FraudGT on overall PR-AUC ( pHolm = 0 .032 ); On HI-Medium, SALT-Trans significantly outperforms TransConv-84k overall (F1 score and PR-AUC, pHolm = 0 .024 ) and in deg[100+] F1 score ( pHolm = 0 .043 ). Several dense-bin contrasts on the IBM datasets do not reach significance after correction: this is expected, as their high-degree bins contain very few posi-tive examples (see the Fraud Distribution Across Degree Bins section), inflating variance and reducing power. We therefore emphasize effect sizes alongside p-values, and note that the consistent direction and magnitude of the gains across all three benchmarks is the central evidence, with formal signif-icance strongest where the data permit it. 
+
+## F Threshold-Free Metric: PR-AUC 
+
+Because F1 score depends on the decision threshold (fixed to 
+
+0.5 in the main paper for consistency with prior AML work and across degree bins), we additionally report threshold-free PR-AUC on HI-Small. Table 10 shows the same ordering as the F1 score results: SALT-Trans attains the best overall PR-AUC ( 0.702 ), while SALT-GAT attains the best dense-bin PR-AUC ( 0.730 in deg[50–99]), both improving over FraudGT and the TransConv configurations. We additionally report degree-stratified PR-AUC on HI-Medium (Table 11) and AMLSim-32k-5% (Table 13), computed from the same checkpoints used for the F1 score results. The threshold-free ordering matches the F1 score analysis on both: on HI-Medium, SALT-GAT and SALT-Trans attain the best over-all PR-AUC ( 0.699 ) and lead in the densest populated bin (deg[100+], 0.684 /0.683 ); on AMLSim, both variants are best overall ( 0.824 /0.826 ) and dominate the extreme-degree tail (deg[2000–4732], 0.832 /0.707 ). On HI-Medium, where the densest populated bin (deg[100+]) is only at moderate density, PNAGMDA remains competitive in PR-AUC ( 0.672 
+
+in deg[100+]); this is consistent with our claim that late fusion degrades specifically in the extreme-density regime, which among our benchmarks is reached only on AMLSim, where PNAGMDA collapses to 0.074 PR-AUC while SALT exceeds 0.70 .
+
+## G Baseline Tuning Robustness 
+
+A natural concern is whether the dense-region gap between SALT and the attention baselines is an artifact of insufficient baseline tuning. We address this with three additional studies on HI-Small. 
+
+Dense-bin tuning of TransConv and FraudGT. We re-tuned TransConv by selecting on densest-bin validation F1 score rather than overall validation F1 score. The best config-uration reached 0.708 on deg[50–99] validation (lr = 0 .005 ,hidden = 64 , class weight = 6.156 , dropout = 0.131 ), but only 0.570 ± 0.024 on the deg[50–99] test set and 
+
+0.604 ±0.017 overall, still well below SALT-Trans. FraudGT showed the same trend. On AMLSim, tuning over the dense tail (the last bin had too few positives to tune on directly) yielded F1 score of 0.638 /0.503 /0.514 /0.771 /0.533 from deg[100–199] to deg[2000–4732]: mixed and, on aggregate, below the SALT variants evaluated against the globally tuned TransConv. Tuning the baselines specifically for dense bins therefore does not close the gap. 
+
+Attention-temperature scaling. We also tested whether manually forcing TransConv to spread its attention wider (via softmax temperature scaling) resolves its dense-bin failure. It does not, and broader attention does not monotonically improve dense-bin F1 score: at temperature 4, TransConv reached 0.443 ± 0.098 on deg[50–99] and 0.599 ± 0.008 
+
+overall; at temperature 2, 0.455 ± 0.214 and 0.673 ± 0.012 .This supports our reading of the ENNs diagnostics: the prob-lem is not the raw spread of attention but whether weak fraud-relevant evidence is preserved. 
+
+Parameter-matched ablation. Finally, to rule out model size as the explanation, we evaluated a TransConv reduced to ≈40k parameters (matching SALT). It reached overall F1 score 0.624 ± 0.017 and 0.544 ± 0.048 on deg[50–99], confirming that SALT’s gains are not explained by parameter count alone. 
+
+## H Final Residual-Step Ablation 
+
+The final update averages the previous state and the fusion output, h(k) 
+
+> v
+
+= ( h(k−1)  
+
+> v
+
++ h(k)
+
+> v, fusion
+
+)/2. We keep this residual integration consistent with other AML GNNs so that gains cannot be attributed to removing the usual residual step. 10 Table 7: Attention diagnostics on HI-Small: mean (5 seeds) Effective Number of Neighbors ( ENNs ) at the first (L0) and second (L1) hop, computed as ENNs = exp( H) with H the Shannon entropy. Uniform attention gives ENNs = d (degree); single-neighbor focus gives ENNs = 1 .
+
+Degree Bin GAT TransConv (84k) SALT-GAT SALT-Trans F1 ENNs (L0/L1) F1 ENNs (L0/L1) F1 ENNs (L0/L1) F1 ENNs (L0/L1) 
+
+deg[1–1] 0.000 1.00 / 1.00 0.779 1.00 / 1.00 0.790 1.00 / 1.00 0.772 1.00 /1.00 
+
+deg[2–4] 0.000 2.89 / 1.78 0.758 2.64 / 2.53 0.765 3.03 / 2.30 0.795 2.45 /2.10 
+
+deg[5–9] 0.003 6.43 / 3.06 0.542 4.89 / 4.22 0.557 6.15 / 3.85 0.573 4.62 /2.75 
+
+deg[10–19] 0.002 15 .44 / 5.57 0.651 8.55 / 7.33 0.683 14 .82 / 9.13 0.688 10 .74 /4.98 
+
+deg[20–49] 0.000 28 .76 / 7.92 0.658 13 .25 /10 .06 0.695 28 .35 /15 .31 0.723 19 .59 /6.95 
+
+deg[50–99] 0.035 56 .60 /12 .91 0.603 20 .69 /17 .04 0.751 53 .43 /25 .02 0.741 35 .88 /9.59 
+
+Table 8: Statistical significance of SALT variants against the strongest baselines on HI-Small and HI-Medium. We test two contrasts (overall and the densest populated degree bin: deg[50–99] for HI-Small, deg[100+] for HI-Medium) on F1 score and PR-AUC. HI-Small ( n = 5 ): exact two-sample permutation test. HI-Medium ( n = 3 ): two-sided Welch’s t-test, since the permutation null admits only  63
+
+ = 20 assignments (minimum two-sided p = 0 .10 ). ∆ is the mean difference (SALT −
+
+baseline). pHolm applies Holm correction within each family of four tests (the two contrasts × two metrics for a given SALT variant, baseline, and dataset). ∗ p < 0.05 , † p < 0.10 (on pHolm ). Effect sizes are reported alongside p-values; given the small seed counts, tests are indicative. 
+
+Comparison Metric SALT Base ∆ p pHolm 
+
+HI-Small (n = 5 , exact permutation test) SALT-GAT vs. FraudGT Overall F1 0.694 0.679 +0.015 0.397 0.397 SALT-GAT vs. FraudGT Overall PR-AUC 0.685 0.664 +0.021 0.143 0.333 SALT-GAT vs. FraudGT deg[50–99] F1 0.751 0.706 +0.045 0.111 0.333 SALT-GAT vs. FraudGT deg[50–99] PR-AUC 0.730 0.659 +0.072 0.071 0.286 SALT-GAT vs. PNAGMDA Overall F1 0.694 0.676 +0.018 0.183 0.365 SALT-GAT vs. PNAGMDA Overall PR-AUC 0.685 0.668 +0.018 0.302 0.365 SALT-GAT vs. PNAGMDA deg[50–99] F1 0.751 0.678 +0.073 0.008 0.032 ∗
+
+SALT-GAT vs. PNAGMDA deg[50–99] PR-AUC 0.730 0.660 +0.071 0.040 0.119 SALT-Trans vs. FraudGT Overall F1 0.716 0.679 +0.037 0.040 0.119 SALT-Trans vs. FraudGT Overall PR-AUC 0.702 0.664 +0.038 0.008 0.032 ∗
+
+SALT-Trans vs. FraudGT deg[50–99] F1 0.741 0.706 +0.035 0.119 0.119 SALT-Trans vs. FraudGT deg[50–99] PR-AUC 0.726 0.659 +0.067 0.040 0.119 SALT-Trans vs. PNAGMDA Overall F1 0.716 0.676 +0.040 0.032 0.032 ∗
+
+SALT-Trans vs. PNAGMDA Overall PR-AUC 0.702 0.668 +0.034 0.008 0.032 ∗
+
+SALT-Trans vs. PNAGMDA deg[50–99] F1 0.741 0.678 +0.063 0.008 0.032 ∗
+
+SALT-Trans vs. PNAGMDA deg[50–99] PR-AUC 0.726 0.660 +0.066 0.016 0.032 ∗
+
+HI-Medium (n = 3 , Welch’s t-test) SALT-GAT vs. TransConv-84k Overall F1 0.708 0.682 +0.026 0.132 0.264 SALT-GAT vs. TransConv-84k Overall PR-AUC 0.699 0.661 +0.038 0.045 0.136 SALT-GAT vs. TransConv-84k deg[100+] F1 0.687 0.598 +0.089 0.020 0.081 †
+
+SALT-GAT vs. TransConv-84k deg[100+] PR-AUC 0.684 0.637 +0.047 0.204 0.264 SALT-GAT vs. PNAGMDA Overall F1 0.708 0.675 +0.033 0.098 0.295 SALT-GAT vs. PNAGMDA Overall PR-AUC 0.699 0.664 +0.035 0.066 0.265 SALT-GAT vs. PNAGMDA deg[100+] F1 0.687 0.652 +0.035 0.216 0.432 SALT-GAT vs. PNAGMDA deg[100+] PR-AUC 0.684 0.672 +0.012 0.669 0.669 SALT-Trans vs. TransConv-84k Overall F1 0.705 0.682 +0.023 0.006 0.024 ∗
+
+SALT-Trans vs. TransConv-84k Overall PR-AUC 0.699 0.661 +0.038 0.008 0.024 ∗
+
+SALT-Trans vs. TransConv-84k deg[100+] F1 0.673 0.598 +0.075 0.021 0.043 ∗
+
+SALT-Trans vs. TransConv-84k deg[100+] PR-AUC 0.683 0.637 +0.046 0.146 0.146 SALT-Trans vs. PNAGMDA Overall F1 0.705 0.675 +0.030 0.088 0.265 SALT-Trans vs. PNAGMDA Overall PR-AUC 0.699 0.664 +0.035 0.049 0.195 SALT-Trans vs. PNAGMDA deg[100+] F1 0.673 0.652 +0.021 0.292 0.584 SALT-Trans vs. PNAGMDA deg[100+] PR-AUC 0.683 0.672 +0.011 0.471 0.584 
+
+11 Table 9: Statistical significance on AMLSim-32k-5% (node classification). Runs are paired by split ×seed (same train/val/test graph), so we use an exact paired permutation test (sign-flip, n = 15 paired runs). We report overall F1 score, the aggregated high-degree regime (deg[100+]), and the extreme bin (deg[2000–4732]), against the strongest attention baseline (GAT) and against PNAGMDA (per-layer vs. prediction-time fusion). The deg[100+] contrast pools all test predictions with recipient degree at least 100 and is not the arithmetic mean of the degree-bin F1 scores. ∆ is the mean paired difference (SALT − baseline). 
+
+pHolm is Holm-corrected within each variant–baseline family. ∗ p < 0.05 , † p < 0.10 (on pHolm ). 
+
+Comparison Metric SALT Base ∆ pHolm 
+
+SALT-GAT vs. GAT Overall F1 0.855 0.821 +0.034 <0.001 ∗
+
+SALT-GAT vs. GAT Aggregated deg[100+] F1 0.617 0.479 +0.138 <0.001 ∗
+
+SALT-GAT vs. GAT deg[2000–4732] F1 0.782 0.573 +0.209 0.004 ∗
+
+SALT-GAT vs. PNAGMDA Overall F1 0.855 0.826 +0.029 <0.001 ∗
+
+SALT-GAT vs. PNAGMDA Aggregated deg[100+] F1 0.617 0.512 +0.105 <0.001 ∗
+
+SALT-GAT vs. PNAGMDA deg[2000–4732] F1 0.782 0.044 +0.738 <0.001 ∗
+
+SALT-Trans vs. GAT Overall F1 0.855 0.821 +0.034 <0.001 ∗
+
+SALT-Trans vs. GAT Aggregated deg[100+] F1 0.624 0.479 +0.146 <0.001 ∗
+
+SALT-Trans vs. GAT deg[2000–4732] F1 0.733 0.573 +0.160 0.062 †
+
+SALT-Trans vs. PNAGMDA Overall F1 0.855 0.826 +0.029 <0.001 ∗
+
+SALT-Trans vs. PNAGMDA Aggregated deg[100+] F1 0.624 0.512 +0.112 <0.001 ∗
+
+SALT-Trans vs. PNAGMDA deg[2000–4732] F1 0.733 0.044 +0.689 <0.001 ∗
+
+Table 10: PR-AUC on HI-Small test, stratified by degree (mean ± std, 5 seeds); bold marks best and underlined second best. 
+
+Model (Param #) deg[1-4] deg[5-9] deg[10-19] deg[20-49] deg[50-99] overall 
+
+GIN (73k) 0.6000 ± 0.1098 0.3582 ± 0.0634 0.4892 ± 0.0753 0.3336 ± 0.1359 0.5724 ± 0.1086 0.4104 ± 0.1051 
+
+PNA (35k) 0.6772 ± 0.0719 0.4396 ± 0.0292 0.6152 ± 0.0181 0.5594 ± 0.0595 0.4946 ± 0.1021 0.5591 ± 0.0488 
+
+TransConv (84k) 0.7698 ± 0.0319 0.5062 ± 0.0169 0.6348 ± 0.0410 0.6150 ± 0.0468 0.5848 ± 0.0760 0.6298 ± 0.0300 
+
+TransConv (318k) 0.7480 ± 0.0220 0.5110 ± 0.0140 0.6450 ± 0.0312 0.6210 ± 0.0278 0.4903 ± 0.1004 0.6232 ± 0.0327 
+
+FraudGT (182k) 0.7822 ± 0.0174 0.5195 ± 0.0200 0.6718 ± 0.0159 0.6495 ± 0.0198 0.6588 ± 0.0590 0.6639 ± 0.0176 
+
+PNAGMDA (40k) 0.8061 ± 0.0154 0.5189 ± 0.0249 0.6517 ± 0.0125 0.6619 ± 0.0146 0.6596 ± 0.0284 0.6678 ± 0.0132 
+
+SALT-GAT (40k) 0.8130 ± 0.0145 0.5407 ± 0.0235 0.6625 ± 0.0158 0.6715 ± 0.0106 0.7303 ± 0.0699 0.6853 ± 0.0086 
+
+SALT-Trans (42k) 0.8217 ± 0.0205 0.5502 ± 0.0152 0.6800 ± 0.0144 0.7002 ± 0.0141 0.7258 ± 0.0352 0.7019 ± 0.0100 
+
+Table 11: PR-AUC on Medium-HI dataset, stratified by degree (mean ± std, 3 seeds); bold marks best and underlined second best. 
+
+Model deg[1–4] deg[5–9] deg[10–19] deg[20–49] deg[50–99] deg[100+] Overall 
+
+FraudGT 0.669 ± 0.149 0.492 ± 0.028 0.571 ± 0.103 0.563 ± 0.061 0.582 ± 0.070 0.607 ± 0.183 0.610 ± 0.088 
+
+GIN 0.799 ± 0.029 0.623 ± 0.026 0.679 ± 0.019 0.547 ± 0.024 0.554 ± 0.033 0.578 ± 0.042 0.605 ± 0.026 
+
+PNA 0.858 ± 0.006 0.678 ± 0.035 0.715 ± 0.030 0.609 ± 0.026 0.615 ± 0.054 0.635 ± 0.056 0.665 ± 0.029 
+
+TransConv (84k) 0.840 ± 0.013 0.674 ± 0.011 0.714 ± 0.002 0.604 ± 0.009 0.625 ± 0.012 0.637 ± 0.036 0.661 ± 0.009 
+
+TransConv (318k) 0.817 ± 0.015 0.586 ± 0.006 0.639 ± 0.001 0.597 ± 0.005 0.641 ± 0.040 0.553 ± 0.074 0.646 ± 0.003 
+
+PNAGMDA 0.841 ± 0.016 0.692 ± 0.009 0.712 ± 0.009 0.604 ± 0.018 0.631 ± 0.018 0.672 ± 0.018 0.664 ± 0.017 
+
+SALT-GAT 0.879 ± 0.013 0.724 ± 0.010 0.746 ± 0.008 0.638 ± 0.021 0.661 ± 0.023 0.684 ± 0.039 0.699 ± 0.018 
+
+SALT-Trans 0.870 ± 0.012 0.727 ± 0.009 0.746 ± 0.009 0.640 ± 0.008 0.660 ± 0.014 0.683 ± 0.017 0.699 ± 0.009 
+
+12 Table 12: F1 score on AMLSim dataset (Schmidt et al. 2024), stratified by degree (mean ± std, 5 seeds, 3 splits); bold marks best and underlined second best. ∗/† in the extreme-degree bin denote a SALT variant significantly better than the strongest attention baseline (GAT) at p < 0.05 /p < 0.10 after Holm correction; the full set of significant contrasts (overall and high-degree, vs. GAT and PNAGMDA) is reported in the Statistical Significance Tests section of this supplement. 
+
+Degree Bin GCN GIN PNA GAMLNet TransConv GAT PNAGMDA SALT-GAT SALT-Trans 
+
+deg[1–1] 0.986 ±0.010 0 .977 ±0.008 0 .989 ±0.009 0 .977 ±0.003 0 .952 ±0.007 0 .976 ±0.010 0 .988 ±0.009 0.991 ±0.009 0.990 ±0.007 
+
+deg[2–4] 0.709 ±0.033 0 .656 ±0.023 0 .783 ±0.039 0 .745 ±0.043 0 .743 ±0.030 0 .740 ±0.038 0 .706 ±0.025 0.794 ±0.022 0.794 ±0.014 
+
+deg[5–9] 0.648 ±0.002 0 .609 ±0.008 0.841 ±0.041 0.807 ±0.023 0 .820 ±0.047 0 .803 ±0.042 0 .796 ±0.038 0.842 ±0.034 0.839 ±0.038 
+
+deg[10–19] 0.840 ±0.022 0 .794 ±0.022 0 .888 ±0.020 0 .894 ±0.020 0 .900 ±0.022 0 .886 ±0.034 0 .851 ±0.038 0.904 ±0.024 0.893 ±0.016 
+
+deg[20–49] 0.731 ±0.058 0 .499 ±0.069 0 .783 ±0.020 0 .732 ±0.050 0 .750 ±0.049 0 .726 ±0.013 0 .736 ±0.030 0.785 ±0.037 0.793 ±0.018 
+
+deg[50–99] 0.378 ±0.075 0 .137 ±0.118 0 .827 ±0.034 0 .809 ±0.018 0 .829 ±0.028 0 .712 ±0.079 0 .805 ±0.053 0.836 ±0.018 0.850 ±0.029 
+
+deg[100–199] 0.122 ±0.062 0 .024 ±0.007 0 .624 ±0.031 0 .538 ±0.053 0.645 ±0.034 0.478 ±0.017 0 .592 ±0.037 0.617 ±0.025 0.639 ±0.026 
+
+deg[200–499] 0.142 ±0.058 0 .000 ±0.000 0 .514 ±0.097 0 .409 ±0.046 0 .482 ±0.100 0 .441 ±0.118 0 .468 ±0.073 0.532 ±0.112 0.529 ±0.100 
+
+deg[500–999] 0.000 ±0.000 0 .000 ±0.000 0 .533 ±0.189 0 .427 ±0.050 0 .502 ±0.166 0 .413 ±0.207 0 .409 ±0.354 0.556 ±0.157 0.556 ±0.157 
+
+deg[1000–1999] 0.000 ±0.000 0 .000 ±0.000 0 .578 ±0.166 0 .567 ±0.233 0 .760 ±0.200 0 .632 ±0.260 0 .633 ±0.289 0.827 ±0.245 0.811 ±0.222 
+
+deg[2000–4732] 0.000 ±0.000 0 .000 ±0.000 0 .178 ±0.166 0 .000 ±0.000 0 .442 ±0.138 0 .573 ±0.264 0 .044 ±0.077 0.782 ±0.162 ∗ 0.733 ±0.196 †
+
+overall 0.785 ±0.011 0 .751 ±0.012 0 .852 ±0.008 0 .822 ±0.010 0 .827 ±0.008 0 .821 ±0.008 0 .826 ±0.005 0.855 ±0.006 0.855 ±0.005 
+
+Table 13: PR-AUC on AMLSim dataset (Schmidt et al. 2024), stratified by degree (mean ± std across split means, 5 seeds, 3 splits); bold marks best and underlined second best. 
+
+Degree Bin GCN GIN PNA GAMLNet TransConv GAT PNAGMDA SALT-GAT SALT-Trans 
+
+deg[1–1] 0.996 ±0.000 0 .997 ±0.000 0.998 ±0.000 0 .999 ±0.000 0.999 ±0.000 0.997 ±0.000 0 .972 ±0.000 0.998 ±0.000 0.995 ±0.000 
+
+deg[2–4] 0.649 ±0.052 0 .629 ±0.034 0.721 ±0.067 0 .675 ±0.069 0.689 ±0.053 0 .672 ±0.066 0 .546 ±0.004 0.716 ±0.043 0.726 ±0.046 
+
+deg[5–9] 0.625 ±0.035 0 .629 ±0.022 0.839 ±0.058 0.771 ±0.068 0.784 ±0.064 0 .766 ±0.055 0 .687 ±0.063 0.799 ±0.062 0.828 ±0.056 
+
+deg[10–19] 0.839 ±0.036 0 .836 ±0.045 0.885 ±0.033 0 .919 ±0.050 0.920 ±0.042 0.912 ±0.055 0 .749 ±0.047 0.913 ±0.050 0.906 ±0.047 
+
+deg[20–49] 0.699 ±0.044 0 .567 ±0.004 0.776 ±0.043 0 .756 ±0.069 0.797 ±0.050 0.760 ±0.067 0 .622 ±0.039 0.791 ±0.033 0.793 ±0.041 
+
+deg[50–99] 0.305 ±0.123 0 .197 ±0.119 0.852 ±0.010 0 .839 ±0.044 0.846 ±0.056 0 .784 ±0.069 0 .672 ±0.090 0.864 ±0.014 0.844 ±0.049 
+
+deg[100–199] 0.201 ±0.088 0 .127 ±0.025 0.631 ±0.062 0 .567 ±0.060 0.646 ±0.047 0 .501 ±0.033 0 .457 ±0.024 0.641 ±0.043 0.648 ±0.042 
+
+deg[200–499] 0.297 ±0.063 0 .108 ±0.029 0.494 ±0.097 0 .496 ±0.038 0.477 ±0.086 0 .469 ±0.092 0 .391 ±0.068 0.547 ±0.116 0.526 ±0.134 
+
+deg[500–999] 0.204 ±0.041 0 .143 ±0.023 0.576 ±0.124 0 .459 ±0.157 0.535 ±0.172 0 .521 ±0.108 0 .414 ±0.221 0.610 ±0.101 0.608 ±0.169 
+
+deg[1000–1999] 0.136 ±0.038 0 .066 ±0.026 0.812 ±0.245 0 .534 ±0.321 0.803 ±0.342 0 .770 ±0.316 0 .633 ±0.306 0.819 ±0.313 0.827 ±0.300 
+
+deg[2000–4732] 0.246 ±0.213 0 .060 ±0.017 0.415 ±0.223 0 .082 ±0.033 0.599 ±0.223 0 .673 ±0.300 0 .074 ±0.036 0.832 ±0.235 0.707 ±0.254 
+
+overall 0.756 ±0.001 0 .743 ±0.008 0.823 ±0.001 0 .797 ±0.012 0.803 ±0.011 0 .805 ±0.008 0 .720 ±0.013 0.824 ±0.007 0.826 ±0.008 
+
+Table 14: Characteristic-level ablation on HI-Small, full F1 score / PR-AUC (mean ± std, 5 seeds). Symbols as in the characteristic-level ablation table of the main paper. 
+
+Model C1 C2 C3 deg[50–99] overall 
+
+SALT-Trans (full) ✓ ✓ ✓ 0.741 ± 0.019 /0.723 ± 0.039 0.716 ± 0.018 /0.700 ± 0.014 
+
+,→ mean+std only ◦ ✓ ✓ 0.720 ± 0.042 /0.703 ± 0.065 0.712 ± 0.004 /0.674 ± 0.013 
+
+,→ mean only × ✓ ✓ 0.636 ± 0.065 /0.613 ± 0.079 0.690 ± 0.020 /0.665 ± 0.021 
+
+,→ no degree ✓ × ✓ 0.616 ± 0.103 /0.585 ± 0.105 0.713 ± 0.013 /0.667 ± 0.015 
+
+,→ no statistics × × ◦ 0.637 ± 0.032 /0.589 ± 0.031 0.698 ± 0.016 /0.669 ± 0.017 
+
+PNA (ref.) ✓ ✓ × 0.515 ± 0.099 /0.495 ± 0.102 0.629 ± 0.032 /0.559 ± 0.049 
+
+TransConv (ref.) × × ◦ 0.615 ± 0.018 /0.585 ± 0.076 0.645 ± 0.031 /0.629 ± 0.030 
+
+13 Removing the final residual (using h(k) 
+
+> v
+
+= h(k) 
+
+> v, fusion
+
+directly) on HI-Small slightly destabilizes training and reduces dense-bin F1 score, while the per-layer fusion remains the dominant source of the dense-region improvement; the previous-state term in the concatenation z(k) 
+
+> v
+
+is what supplies the fusion MLP with context, not the residual averaging alone. 
+
+## I Hyperparameter Configuration 
+
+All models are trained with the Adam optimizer. Unless oth-erwise stated, the optimization objective is the F1 score of the minority (fraudulent) class on the validation set. Table 15 summarizes, for each model and dataset, whether the config-uration was reused from prior work, tuned by us , or selected via full grid search .
+
+HI-Small and HI-Medium 
+
+Both HI-Small and HI-Medium adopt a strictly temporal split : transactions are ordered by timestamp and partitioned into non-overlapping training, validation, and test intervals. Consequently, the data distribution (including fraud distri-bution across degree bins) is fixed and identical across runs and seeds. For these benchmarks, we followed standard practice in prior AML work and reused the published baseline config-urations consistently adopted across these datasets (Altman et al. 2023; Lin et al. 2024; Egressy et al. 2024; Bilgi, Chen, and Atasu 2024), rather than introducing a new full re-tuning pipeline for already-established baselines. A full grid search at this scale is impractical: a conservative grid (4 learning rates, 2 depths, 3 hidden sizes, 3 dropouts, 3 class weights) would require >2000 GPU-hours on HI-Small and >13000 on HI-Medium on a single RTX A6000, which is precisely why prior AML-GNN work reuses published tuned configs. The reference search ranges are: 
+
+Hyperparameter Search range 
+
+hidden dim. 16–72 learning rate 0.0001–0.05 # GNN layers 2–4 dropout 0.0–0.5 class weight 6–8 
+
+Models evaluated. 
+
+• PNA, GIN, GAT 
+
+• TransConv (84k parameters, hidden size 64 )
+
+• TransConv (318k parameters, hidden size 128 )
+
+• FraudGT, PNAGMDA 
+
+• SALT-GAT, SALT-Trans 
+
+TransConv configurations. Since no canonical tuned con-figuration exists for these IBM benchmarks, we tuned TransConv ourselves. We fixed the depth to 2 layers, in line with all baselines on these datasets, to test whether the degradation is mainly a width/capacity issue rather than a full model-selection effect. TransConv inherits the same architectural hyperparameters as the GAT tuned by Alt-man et al. (2023) (number of heads and dropout), which are consistent with those found by Lin et al. (2024) for FraudGT, differing only in the attention operator and learn-ing rate. After a coarse search, we fine-tuned the learning rate ∈ { 0.006 , 0.005 , 0.003 , 0.002 , 0.001 , 0.0005 } for hid-den sizes 64 and 128: 
+
+• 84k parameters : hidden dimension 64 ;
+
+• 318k parameters : hidden dimension 128 .
+
+SALT variants and PNAGMDA. SALT-GAT inherits all PNA hyperparameters (depth, hidden size, aggregation, nor-malization, loss weighting). SALT-Trans is identical to PNA in all hyperparameters, with the learning rate fixed to 0.001 .PNAGMDA reuses the SALT-GAT backbone hyperparam-eters. SALT performs no model-specific tuning, so perfor-mance differences are attributable to architectural design rather than additional tuning advantages. 
+
+Final HI-Small / HI-Medium configurations. All models use the Adam optimizer, cross-entropy loss with positive-class weight w, z-normalization, 2 GNN layers, and a single MLP layer; both datasets share the same configuration per model. The two TransConv variants differ only in hidden size (64 vs. 128 ), as noted above. 
+
+• GIN: lr = 0 .0062 , F = 64 , w = 6 , dropout = 0 .010 , final dropout = 0 .105 .
+
+• PNA: lr = 0 .0006 , F = 20 , w = 7 , dropout = 0 .083 , final dropout = 0 .288 .
+
+• GAT: lr = 0 .006 , F = 64 , H = 4 , w = 6 , dropout =0.009 , final dropout = 0 .1.
+
+• TransConv (84k): lr = 0 .001 , F = 64 , H = 4 , w = 6 ,dropout = 0 .009 , final dropout = 0 .1.
+
+• TransConv (318k): as above, with F = 128 .
+
+• FraudGT: lr = 0 .001 (AdamW, cosine schedule with 5
+
+warmup epochs, weight decay 10 −5), F = 64 , H = 8 ,
+
+w = 6 , 2 transformer layers ( +2 post-GT layers), trans-former dropout = 0.2, attention dropout = 0.3; edge-masked sparse-node attention with layer norm and GELU. 
+
+• SALT-GAT: lr = 0 .0006 , F = 20 , w = 7 , dropout =0.083 , final dropout = 0 .288 .
+
+• SALT-Trans: lr = 0 .0012 , F = 20 , w = 7 , dropout =0.083 , final dropout = 0 .288 .
+
+• PNAGMDA: lr = 0 .0006 , F = 20 , w = 7 , dropout =0.083 , final dropout = 0 .288 .
+
+AMLSim dataset 
+
+Hyperparameter search. For models not already optimized in prior work, we perform a grid search over: 
+
+• learning rate ∈ { 0.01 , 0.005 , 0.001 };
+
+• number of layers K ∈ { 2, 3, 4, 5, 6};
+
+• hidden dimension F ∈ { 8, 16 , 32 , 64 };
+
+• class-weight parameter w ∈ { 0.26 , 0.44 , 0.79 , 0.96 };
+
+• heads ∈ { 2, 4, 8} when applicable (GAT/TransConv); 
+
+• attention dropout ∈ { 0.0, 0.1, 0.2, 0.3} when applicable. Each configuration is evaluated over multiple seeds; the best model is selected by validation F1 score. 
+
+Final AMLSim configurations. 
+
+14 Table 15: Provenance of hyperparameter configurations. Reused: published tuned configs adopted as-is; Tuned: tuned by us over the ranges below; Grid: full grid search with the ranges below.                       
+
+> Model HI-Small / HI-Medium AMLSim-32k-5%
+> GIN Grid (Altman et al. 2023) Grid (Schmidt et al. 2024) GCN — (no edge features) Grid (Schmidt et al. 2024) PNA Grid (Altman et al. 2023) Grid (Schmidt et al. 2024) GAT Grid (Altman et al. 2023) Grid (Schmidt et al. 2024) TransConv Tuned with similar grid of (Altman et al. 2023) (lr; hidden 64/128) Grid FraudGT Grid by authors (Lin et al. 2024) with similar grid of (Altman et al. 2023) —GAMLNet —Grid (Schmidt et al. 2024) PNAGMDA Inherits PNA/GAT backbone Inherits PNA/GAT backbone (only hidden size adapted for matching heads and towers) SALT-GAT Inherits PNA/GAT backbone Inherits PNA/GAT backbone (only hidden size adapted for matching heads and towers) SALT-Trans Inherits PNA/TransConv backbone Inherits PNA/TransConv backbone (only hidden size adapted for matching heads and towers)
+
+• GAMLNet: lr = 0 .01 , w = 0 .44 , K1 = 2 , K 2 = 6 ,
+
+F1 = 8 , F 2 = 64 (GIN and GraphSAGE components). 
+
+• GIN: lr = 0 .01 , w = 0 .44 , K = 1 , F = 8 .
+
+• GCN: lr = 0 .01 , w = 0 .44 , K = 3 , F = 32 .
+
+• GAT: lr = 0 .01 , w = 0 .79 , K = 2 , F = 64 , H = 2 ,dropout = 0 .0.
+
+• TransConv: lr = 0 .005 , w = 0 .44 , K = 3 , F = 64 ,
+
+H = 2 , dropout = 0 .3.
+
+• PNA: lr = 0 .005 , w = 0 .96 , K = 2 , F = 20 .
+
+• SALT-GAT: lr = 0 .005 , w = 0 .79 , K = 2 , F = 40 ,dropout = 0 .0.
+
+• SALT-Trans: lr = 0 .005 , w = 0 .44 , K = 2 , F = 40 ,dropout = 0 .3.Prior works on AMLSim adopt a random split . Random partitioning can yield degenerate splits in which some de-gree bins (especially dense ones) contain no fraudulent ex-amples in train/val/test, biasing the evaluation. We apply a pre-defined validity filter to avoid degenerate random splits where the target degree-stratified metric is undefined: 
+
+• all degree bins, including the densest, contain fraudulent examples in train, validation, and test; 
+
+• each split contains, in each bin, at least one recognizable fraud pattern, i.e., patterns provably detectable by vanilla GNNs without reverse message passing, ports, or ego identifiers (Egressy et al. 2024), such as cycles, fan-in, scatter-gather, and gather-scatter. All AMLSim results are averaged over these three splits. 
+
+## J Fraud Distribution Across Degree Bins 
+
+For HI-Small and HI-Medium, the split is strictly temporal ;the fraud distribution is therefore fixed and identical across runs and seeds. Tables 16, 17, and 18 report the fraud dis-tribution across in-degree bins. Both datasets concentrate fraudulent activity in medium-to-high degree bins, under-scoring the importance of handling dense neighborhoods where legitimate and illicit transactions are tightly interwo-ven. 
+
+## K Time Performance 
+
+Figure 5: Average training time per epoch for HI-Small on a single NVIDIA RTX A6000 with batch size 8,192 and 100 neighbors per hop. Despite its hybrid design, SALT exhibits a training cost comparable to PNA and substantially lower than high-capacity TransformerConv models, confirming that im-proved detection performance does not come at the expense of prohibitive computational overhead. 
+
+## L Algorithms 
+
+For completeness, we provide pseudocode for the two pro-cedures referenced in the main paper. Algorithm 1 details the recipient-degree stratified evaluation protocol, and Algo-rithm 2 details the layer-wise SALT-GNN forward pass. 
+
+## M Controlled Synthetic Validation 
+
+The degree-stratified results in the main paper are observa-tional: they localize where GNNs degrade but cannot, on real data alone, attribute the degradation to a specific aggregation property. To complement them, we build a small controlled testbed of synthetic transaction graphs with planted ground truth , in which each of the three characteristics analyzed in the main paper can be isolated and turned on or off. All mod-els are instantiated from a single backbone that differs only in the component under test (statistical channel, attention 15 Table 16: Agent-based fraud distribution across degree bins for HI-Small. 
+
+Split Degree Bin Fraud Count Fraud Share % Total Count Fraud Rate % 
+
+Train 
+
+[1, 4] 186 15.30 390,746 0.05 [5, 9] 315 25.90 254,855 0.12 [10,19] 480 39.47 1,616,927 0.03 [20,49] 223 18.34 971,372 0.02 [50,99] 12 0.99 12,834 0.09 
+
+Test 
+
+[1, 4] 53 14.29 40,576 0.13 [5, 9] 80 21.56 41,211 0.19 [10,19] 86 23.18 136,546 0.06 [20,49] 139 37.47 589,963 0.02 [50,99] 13 3.50 53,035 0.02 
+
+Table 17: Complete in-degree binning analysis across all splits on HI-Small. 
+
+Split (scope) Bin’s in-degree Fraud # Fraud share % Total # Fraud rate % 
+
+train (train) [1, 4] 503 19.88 391,063 0.13 [5, 9] 459 18.14 254,999 0.18 [10,19] 892 35.26 1,617,339 0.06 [20,49] 664 26.25 971,813 0.07 [50,99] 12 0.47 12,834 0.09 [100+] 0 0.00 873 0.00 val (train+val) [1, 4] 232 22.39 5,676 4.09 [5, 9] 132 12.74 23,460 0.56 [10,19] 275 26.54 319,887 0.09 [20,49] 386 37.26 596,971 0.06 [50,99] 10 0.97 19,356 0.05 [100+] 1 0.10 174 0.57 test (full) [1, 4] 314 19.49 40,837 0.77 [5, 9] 204 12.66 41,335 0.49 [10,19] 333 20.67 136,793 0.24 [20,49] 636 39.48 590,460 0.11 [50,99] 124 7.70 53,146 0.23 [100+] 0 0.00 1,329 0.00 
+
+Table 18: Complete in-degree binning analysis across all splits on HI-Medium. 
+
+Split (scope) Bin’s in-degree Fraud # Fraud share % Total # Fraud rate % 
+
+train (train) [1, 4] 2,944 18.74 1,535,071 0.19 [5, 9] 2,426 15.44 727,528 0.33 [10,19] 3,186 20.28 3,789,170 0.08 [20,49] 6,671 42.46 12,584,957 0.05 [50,99] 478 3.04 836,730 0.06 [100+] 8 0.05 13,670 0.06 val (train+val) [1, 4] 1,566 18.42 36,478 4.29 [5, 9] 1,304 15.34 53,375 2.44 [10,19] 1,156 13.60 388,330 0.30 [20,49] 3,673 43.21 3,978,480 0.09 [50,99] 780 9.18 1,054,339 0.07 [100+] 22 0.26 9,881 0.22 test (full) [1, 4] 1,780 16.16 109,099 1.63 [5, 9] 1,418 12.87 226,761 0.63 [10,19] 1,398 12.69 298,687 0.47 [20,49] 4,085 37.08 3,707,509 0.11 [50,99] 2,263 20.54 2,455,117 0.09 [100+] 72 0.65 93,056 0.08 
+
+16 Algorithm 1: Degree-Stratified Evaluation 
+
+Require: Graph G = ( V, E); trained model f ; bin edges B =
+
+{b0, b 1, . . . } (log-spaced); task τ ∈ { node , edge }
+
+Ensure: Per-bin scores {F 1b}; (attention models) 
+
+{ENNs (ℓ) 
+
+> b
+
+, Hit@ kb}
+
+1: Initialize empty prediction set Pb ← ∅ for each bin b
+
+2: for all target t (node v or transaction (u, v )) in the test set do 
+
+3: v ← t if τ = node else receiver of t {receiver aggregates incoming evidence} 4: dv ← |N in (v)|
+
+5: b ← Bin (dv , B)
+
+6: Pb ← Pb ∪ { (f (t), y t)} {store (prediction, label)} 7: end for 
+
+8: for all bin b do 
+
+9: F 1b ← F1 (Pb) at threshold 0.5
+
+10: end for 
+
+11: if f uses attention then 
+
+12: for all node i, layer ℓ do 
+
+13: α(ℓ) 
+
+> i
+
+← attention weights over N (i)
+
+14: H ← − P 
+
+> j
+
+α(ℓ) 
+
+> ij
+
+log α(ℓ)
+
+> ij
+
+15: ENNs (ℓ) 
+
+> i
+
+← exp( H) {= di if uniform, 1 if peaked} 16: end for 
+
+17: for all node i with ≥ 1 fraudulent in-neighbor do 
+
+18: hit i ← 1[∃ fraud edge in top-k of αi]
+
+19: end for 
+
+20: Aggregate ENNs (ℓ) 
+
+> b
+
+, Hit@ kb per bin b
+
+21: end if 
+
+22: return {F 1b} and attention diagnostics 
+
+Algorithm 2: SALT-GNN Layer-wise Forward Pass 
+
+Require: Graph G; edge features e; input features h(0)  
+
+> v
+
+; layers K;aggregators A = {μ, σ, min , max }; degree scalers S
+
+Ensure: Final node embeddings h(K)
+
+> v
+
+1: for k = 1 to K do 
+
+2: for all node v ∈ V do 
+
+3: // Statistical channel (Characteristics 1–2) 
+
+4: av ← L
+
+> s∈S
+
+L 
+
+> agg ∈A
+
+s(dv ) · agg  {h(k−1)  
+
+> u
+
+: u ∈ N v }
+
+5: h(k) 
+
+> v, stat
+
+← U(k)stat 
+
+ h(k−1)  
+
+> v
+
+∥ av
+
+
+
+6: // Attention channel (selectivity) 
+
+7: α(k) 
+
+> v,u
+
+← softmax u∈N v
+
+ score (h(k−1)  
+
+> v
+
+, h(k−1)  
+
+> u
+
+, ev,u )
+
+8: h(k) 
+
+> v, att
+
+← P 
+
+> u∈N v
+
+α(k)
+
+> v,u
+
+ h(k−1)  
+
+> u
+
++ ev,u 
+
+
+
+9: // Layer-wise fusion (interaction during propagation) 
+
+10: z(k) 
+
+> v
+
+← h(k) 
+
+> v, stat
+
+∥ h(k) 
+
+> v, att
+
+∥ h(k−1) 
+
+> v
+
+
+
+11: h(k) 
+
+> v, fusion
+
+← MLP (k)fusion 
+
+ z(k)
+
+> v
+
+
+
+12: h(k) 
+
+> v
+
+←  h(k−1)  
+
+> v
+
++ h(k)
+
+> v, fusion
+
+/2
+
+13: end for 
+
+14: end for 
+
+15: return {h(K) 
+
+> v
+
+}
+
+operator, degree scalers, and per-layer vs. prediction-time fusion); every task includes a feature-only floor (a classifier with no graph access, expected at chance) and an oracle that scores the planted rule (the attainable ceiling). The genera-tors, models, and protocol are released with our code. 
+
+Characteristics 1–2 (multiset and cardinality). We con-struct two families of graphs. In the multiset family, positive and negative accounts are built to share the same neighbor-hood mean while differing in the rest of the multiset, so that a single mean summary collapses them; in the cardinality 
+
+family, all incoming transactions are made feature-identical and only their count differs, so that a normalized aggrega-tor cannot recover the signal. Table 19 reports the results. A single mean aggregator and the feature-only floor collapse to chance on both, whereas multi-aggregation recovers the multiset signal and degree-aware scaling recovers the car-dinality signal. The comparison is causal at the component level: removing only the degree scalers from SALT (“SALT-Trans − degree”) reproduces the cardinality failure, while the full model matches the oracle. Attention alone passes the multiset case (it can emphasize extreme neighbors) but, like the mean aggregator, remains blind to cardinality, mir-roring the behavior of the attention baselines on dense real neighborhoods. 
+
+Characteristic 3 (layer-wise fusion and attention routing). 
+
+The third characteristic concerns whether weak but pattern-relevant evidence remains available to attention across hops. A pure task-accuracy separation is not the right test here: a PNA-containing late-fusion model can often solve an existence-style synthetic label through its statistical branch, even if its attention branch never routes mass to the planted fraud. We therefore measure the mechanism directly. We plant a two-hop motif (Fig. 6) in which a dense receiver collects from D = 40 mules. Positive receivers hide one to three coordinated mules; negative receivers hide none. A mule is coordinated only if its own upstream neighborhood has a high-cardinality signature, so the cue is unavailable to the receiver’s attention at the first hop. The graded probe edge asks whether the receiver contains any coordinated mule. We report probe PR-AUC only as a sanity check. The C3 metric is the attention AUC over incoming mule edges on positive test receivers: 0.5 is random ranking and 1.0 means the coordinated mule is ranked above all legitimate mules. We also report Hit@10, matching the main-paper diagnostic. Table 20 shows the result. At L0 all attention models are random, because coordinated and legitimate mules have not yet incorporated their upstream statistics. At L1, only per-layer SALT routes attention to the planted fraud. The strict causal control is SALT-Trans − per-layer , which keeps the same statistical and Transformer-attention operators but moves fusion to prediction time; it still solves the probe la-bel (PR-AUC 0.995 ) yet its L1 attention remains random. PNAGMDA, the external late-fusion precedent, also solves the probe label but does not reliably route attention to the coordinated mules. Thus the experiment does not claim a representational impossibility for late fusion; it isolates the mechanism SALT needs in dense AML graphs: statistical evidence must enter the state before the next attention step, 17 Table 19: Controlled synthetic validation of Characteristics 1–2. Candidate-edge PR-AUC ( ↑; 0.5 = chance, oracle = 1 .0), mean over seeds. Bold marks a model collapsing to chance on that axis. “ − degree” removes only the degree scalers from SALT (a component-level knockout). 
+
+Model Multiset (C1) Cardinality (C2) 
+
+Feature-only floor (no graph) 0.50 0.50 
+
+Single mean aggregator 0.54 0.51 
+
+Attention-only (TransConv) 1.00 0.53 
+
+SALT-Trans − degree (knockout) 1.00 0.57 
+
+PNA 1.00 0.99 SALT-Trans 1.00 0.99 Oracle (planted rule) 1.00 1.00 not only at the final classifier. 
+
+Figure 6: A constructed two-hop fraud motif. A receiver (hub) collects from many mules; a few coordinated mules (red) are the planted fraud, distinguishable only by a first-hop statistic of their own upstream (here, high cardinality), while legitimate mules (gray) have a sparse upstream. The fraud is rare among the neighbors, as on real high-degree accounts. 
+
+Figure 7: Hop-resolved attention quality (AUC of fraud vs. legitimate mules ranked by attention; 0.5 = random). All models are at chance at the first hop (L0); only per-layer fusion (SALT) lifts the second-hop (L1) attention onto the planted fraud. Flipping SALT-Trans to prediction-time fusion (knockout) removes the lift. 18 Table 20: Controlled C3 routing test on the planted two-hop motif ( D = 40 , 5 seeds). Probe PR-AUC confirms that late-fusion statistical branches can solve the label; attention AUC and Hit@10 measure whether the receiver’s attention ranks the planted coordinated mule highly. Only layer-wise SALT moves the L1 attention from random ranking to perfect routing.                                                               
+
+> Model Fusion Probe PR-AUC Attn AUC L0/L1 Hit@10 L1
+> TransConv attention only 0.556 ±0.078 0.500 ±0.000 /0.500 ±0.000 0.400 ±0.071
+> PNAGMDA prediction-time 1.000 ±0.000 0.500 ±0.000 /0.205 ±0.398 0.200 ±0.400
+> SALT-Trans −per-layer prediction-time 0.995 ±0.010 0.500 ±0.000 /0.500 ±0.000 0.400 ±0.071
+> SALT-Trans layer-wise 1.000 ±0.000 0.500 ±0.000 /1.000 ±0.000 1.000 ±0.000
+
+19
