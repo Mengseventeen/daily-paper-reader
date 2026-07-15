@@ -6,59 +6,53 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-14
-- 运行时间：2026-07-14 20:17:50 UTC
+- 最新运行日期：2026-07-15
+- 运行时间：2026-07-15 21:07:35 UTC
 - 运行状态：成功
-- 本次总论文数：13
+- 本次总论文数：11
 - 精读区：6
-- 速读区：7
+- 速读区：5
 
 ### 今日简报（AI）
-今日聚焦13篇AI金融研究，精读两篇9.0高分：基于记忆驱动的量化因子挖掘系统与基于语言模型的全球并购套利预测。建议优先关注多模态事件序列基础模型及防洗钱图神经网络中的稠密邻居处理技巧，对普通读者来说，理解“朴素分散化”为何有效可快速提升投资组合认知。
-- 详情：[/202607/14/README](/202607/14/README)
+今日共推荐11篇金融科技相关论文，精读6篇、速读5篇。最值得关注的两篇9分论文分别聚焦动态图节点亲和度的机构持仓预测和融合LLM专家与规则信号的实时混合交易智能体。建议优先阅读这两篇高分论文，探索图神经网络与多智能体系统在金融量化中的应用。
+- 详情：[/202607/15/README](/202607/15/README)
 
 ### 精读区论文标签
-1. [XALPHA: A Memory-Driven AI Quant Researcher for Hypothesis-to-Code Alpha Discovery](/202607/14/2607.08332v2-xalpha-a-memory-driven-ai-quant-researcher-for-hypothesis-to-code-alpha-discovery)  
+1. [Institutional Equity Holdings Prediction Using Node Affinities of Dynamic Graphs](/202607/15/2607.12067v1-institutional-equity-holdings-prediction-using-node-affinities-of-dynamic-graphs)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：AI驱动的金融市场阿尔法发现
-2. [Global Merger-Arbitrage Forecasting with Language Models](/202607/14/2607.09921v1-global-merger-arbitrage-forecasting-with-language-models)  
+   evidence：时序图机器学习用于机构股权持有预测
+2. [Fin-Analyst at FinMMEval 2026 Task 3: A Live Hybrid Trading Agent with LLM Specialists and Rule-Based Signals](/202607/15/2607.12233v1-fin-analyst-at-finmmeval-2026-task-3-a-live-hybrid-trading-agent-with-llm-specialists-and-rule-based-signals)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：使用语言模型进行并购套利预测，金融NLP应用
-3. [Can Agentic Trading Systems Pay for Their Own Intelligence?](/202607/14/2607.10286v1-can-agentic-trading-systems-pay-for-their-own-intelligence)  
+   evidence：使用LLM专家进行交易，深度学习在金融中的应用，自然语言处理金融数据
+3. [EVOQUANT: Self-Evolving Verifier-Guided Strategy Optimization for Robust Quantitative Trading](/202607/15/2607.12455v1-evoquant-self-evolving-verifier-guided-strategy-optimization-for-robust-quantitative-trading)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于LLM代理的自主交易系统诊断工具集
-4. [LLM-Enhanced Dynamic Financial Knowledge Graphs for Cross-Entity Signal Propagation and alpha discovery](/202607/14/2607.10932v1-llm-enhanced-dynamic-financial-knowledge-graphs-for-cross-entity-signal-propagation-and-alpha-discovery)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：LLM增强的动态金融知识图谱用于跨实体信号传播
-5. [NextFund: A Unified Performance Tracking Platform for Agentic Portfolio Management](/202607/14/2607.11141v1-nextfund-a-unified-performance-tracking-platform-for-agentic-portfolio-management)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：面向智能体组合管理的平台，直接关联robo-advisor
-6. [Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States](/202607/14/2607.11414v1-confidently-wrong-detecting-hallucinations-in-financial-question-answering-from-llm-internal-states)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：从LLM内部状态检测金融问答中的自信幻觉
+   evidence：利用LLM优化量化交易策略，深度学习在金融中的应用
+4. [Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator](/202607/15/2607.10960v1-reinforcement-learning-for-execution-under-dynamic-fees-in-a-closed-loop-dex-simulator)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：强化学习用于去中心化交易所动态费用下的交易执行
+5. [When Directional Accuracy Lies: A Base-Rate-Honest Benchmark for LoRA-Adapted TimesFM on Equity Forecasting](/202607/15/2607.12248v1-when-directional-accuracy-lies-a-base-rate-honest-benchmark-for-lora-adapted-timesfm-on-equity-forecasting)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：股票预测中深度时间序列模型的基准测试
+6. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/15/2607.12252v1-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：利用LLM评估财务报告质量，自然语言处理用于金融分析
 
 ### 速读区论文标签
-1. [A Foundation Model for Multimodal Event Sequences in Financial Applications](/202607/14/2607.09955v1-a-foundation-model-for-multimodal-event-sequences-in-financial-applications)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融多模态事件序列基础模型
-2. [SALT-GNN: Handling Dense Neighborhoods in Anti-Money Laundering Graphs via Statistics-Aware Attention](/202607/14/2607.10131v1-salt-gnn-handling-dense-neighborhoods-in-anti-money-laundering-graphs-via-statistics-aware-attention)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于统计感知注意力的图神经网络用于反洗钱
-3. [When and Why Naïve Diversification Works: A Simple Diagnostic Strategy](/202607/14/2607.11054v1-when-and-why-nave-diversification-works-a-simple-diagnostic-strategy)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：混合朴素和优化权重的自适应投资组合策略，用于股票溢价预测
-4. [Deep Learning for Dynamic Programming with Recursive Utility Using First-order Conditions](/202607/14/2607.09461v1-deep-learning-for-dynamic-programming-with-recursive-utility-using-first-order-conditions)  
+1. [Recovering Structural Organization in Noisy Correlation Networks Using Financial Systems as a Testbed](/202607/15/2607.10297v1-recovering-structural-organization-in-noisy-correlation-networks-using-financial-systems-as-a-testbed)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：深度学习用于递归效用动态规划，金融经济学应用
-5. [Neutralizing Structural Inequality in the Nigerian FinTech Sector](/202607/14/2607.10317v1-neutralizing-structural-inequality-in-the-nigerian-fintech-sector)  
+   evidence：金融相关网络的去噪与结构恢复
+2. [From Neural Network Decisions to Training Cases: An Exact Account via Case-Based Decision Theory](/202607/15/2607.11347v1-from-neural-network-decisions-to-training-cases-an-exact-account-via-case-based-decision-theory)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：考虑公平性的金融科技AI欺诈检测
-6. [Diachronic Sample Integration: Robust Tail-Risk Estimation with Generative Models](/202607/14/2607.10810v1-diachronic-sample-integration-robust-tail-risk-estimation-with-generative-models)  
+   evidence：使用基于案例分解的信用审批决策可解释AI
+3. [Modeling the Dynamic Relationship Between Brent Crude Oil Prices and the Nepal Stock Exchange: An Integrated Econometric and Explainable Machine Learning Approach](/202607/15/2607.11922v1-modeling-the-dynamic-relationship-between-brent-crude-oil-prices-and-the-nepal-stock-exchange-an-integrated-econometric-and-explainable-machine-learning-approach)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：生成模型用于决策中的尾部风险估计
-7. [Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator](/202607/14/2607.10960v1-reinforcement-learning-for-execution-under-dynamic-fees-in-a-closed-loop-dex-simulator)  
+   evidence：使用机器学习建模股市关系，人工智能在金融中的应用
+4. [Forecasting Inflation with Microdata: An Adaptive Machine Learning Approach](/202607/15/2607.12345v1-forecasting-inflation-with-microdata-an-adaptive-machine-learning-approach)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：去中心化交易所中的强化学习执行策略，属于AI4Finance核心
+   evidence：使用微观数据的自适应机器学习管道进行通货膨胀预测
+5. [Learning Predictive Ambiguity Sets for Decision-Focused Distributionally Robust Optimization](/202607/15/2607.09820v1-learning-predictive-ambiguity-sets-for-decision-focused-distributionally-robust-optimization)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：基于学习的分布鲁棒优化方法，可应用于金融预测-优化场景
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,465 @@
+Title: Institutional Equity Holdings Prediction Using Node Affinities of Dynamic Graphs
+
+URL Source: https://arxiv.org/pdf/2607.12067v1
+
+Published Time: Wed, 15 Jul 2026 12:00:04 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+# Institutional Equity Holdings Prediction Using Node Affinities of Dynamic Graphs 
+
+Emad Izadifar a, Zahed Rahmati a, ∗
+
+> aDepartment of Mathematics and Computer Science, Amirkabir University of Technology, Tehran, Iran
+
+Abstract 
+
+Institutional equity holdings disclosed in SEC Form 13F filings provide a rich temporal record of port-folio decisions by large investment managers. However, forecasting future allocations and modeling fu-ture demand remains challenging due to disclosure lags, reporting noise, and strong persistence in in-stitutional behavior. We introduce the first benchmark for these tasks using temporal graph machine learning, framing holdings prediction as node affinity prediction—i.e., forecasting portfolio weights—on a discrete-time temporal bipartite graph of managers and securities extracted from preprocessed filings. On a sampled dataset comprising 99 managers and the S&P 500 index (503 securities, 209,351 temporal edges across 48 quarters from 2013–2025), Node Affinity prediction model using Virtual State (NAVIS) achieves a state-of-the-art test Normalized Discounted Cumulative Gain (NDCG) of 0.9127 with features (0.9121 without), outperforming all dynamic graph representation learning competitors by a substantial margin, and outperforming all heuristic methods. Remarkably, a simple Exponential Moving Average base-line achieves 0.8882, surpassing all dynamic graph models except NAVIS and all heuristics except Persistent Forecast (0.8891), highlighting the strong smoothness and persistence of institutional portfolios. Domain-specific node features provide only marginal gains (<1.2%), indicating that temporal and structural signals in the 13F ownership graph already capture most of the predictable information. By benchmarking a suite of Temporal Graph Benchmark (TGB) models under the node affinity prediction setting, both with and without features, on real-world 13F data, this work provides a reproducible foundation for temporal graph machine learning in holdings prediction and portfolio allocation. The source code is available at: 
+
+https://github.com/e-izdfr/portfolio-holdings-prediction .
+
+Keywords: Dynamic Graphs, Graph Neural Networks, Node Affinity Prediction, Dynamic Portfolio Allocation, Institutional Ownership Dynamics, Institutional Demand Modeling, SEC Form 13F 
+
+1. Introduction 
+
+Institutional investors exercising investment discretion over more than $100 million in Section 13(f) securities are required by the U.S. Securities and Exchange Commission to file Form 13F within 45 days of each calendar quarter-end. These filings collectively constitute one of the most comprehensive, publicly available snapshots of the U.S. equity ownership landscape [11, 53, 133, 134, 135, 136]. Since their inception under the Securities Exchange Act of 1934, 13F disclosures have served as a critical resource for researchers, market participants, and regulators [19] seeking to understand concentration [11, 49], common ownership [10, 11], and the investment behavior of large asset managers [53, 124]. The rapid growth of passive indexing [14, 49, 144], the concentration of assets among a handful of giant managers [11, 49], and the increasing availability of large-scale longitudinal holdings data [53, 124] have increased the importance of Form 13F disclosures beyond their original role as a relatively static     
+
+> ∗Corresponding author
+> Email addresses: emad.izadifar@aut.ac.ir (Emad Izadifar), zrahmati@aut.ac.ir (Zahed Rahmati) arXiv:2607.12067v1 [cs.LG] 13 Jul 2026
+
+regulatory artifact [134, 136], enabling their use as a rich temporal panel for analyzing institutional portfolio evolution [53, 124]. Each filing reveals not only what a manager owns at a point in time, but—when viewed sequentially—how portfolios evolve [53, 124], which stocks enter or exit favor [124, 146], and how investment styles shift in response to market conditions [142]. This dynamic dimension has sparked a growing literature on institutional herding [85], style drift [142], and the predictive power of institutional ownership changes for future returns [124, 146]. A particularly intriguing question is whether the historical ownership patterns embedded in successive 13F filings may contain predictive information about future institutional portfolio evolution and holdings dynamics [53, 124, 146]. In other words, can we infer a latent "affinity" that each manager exhibits toward individual securities, an affinity that persists through time and manifests in the probability of initiating, increasing, or maintaining a position in the next quarter? Accurately forecasting these affinities is especially powerful because institutional investors now dominate U.S. equity markets, with almost 80% of publicly traded equity held by institutions [12], institutional ownership accounting for the majority of the market capitalization of S&P 500 firms [88], and ownership increasingly concentrated among a small number of giant asset managers [15, 49]. Even modest improvements in predicting where this concentrated capital may flow next can translate into substantial economic signals, as changes in institutional ownership and trading behavior have been shown to generate predictable return responses [146]. The presence of persistent be-havioral biases among institutional investors further suggests that portfolio allocation decisions may exhibit systematic patterns that persist over time [9]. Institutional demand imbalances can create price-pressure and liquidity effects across securities [80]. Institutional attention and information-processing frictions further contribute to predictable trading and underreaction patterns [16]. Moreover, stocks attracting large passive or index-tracking investors may experience substantial demand shocks and ownership changes [8, 49]. Early detection of such shifts may therefore enable earlier identification of crowding and fire-sale risks [36, 56], more precise imputation of latent institutional demand in asset-pricing models [81], and more timely regulatory monitoring of systemic ownership concentration [11, 49]. If such affinities can be learned accurately, they may offer a principled way to model institutional demand, forecast ownership concentration, and disentangle genuine conviction from mechanical or index-driven trading [8, 144]. Recent advances in temporal graph machine learning provide a natural framework for modeling such dynamic interaction structures [42, 48, 67, 92, 93, 95, 108, 114, 117, 129, 149, 152]. Managers and securities can naturally be represented as the two partitions of a bipartite graph, with possibly time-stamped ownership edges weighted by market value [27, 39, 86, 95]. Such representations enable models to capture (i) the evolving preferences of each manager, (ii) the changing attractiveness of each security, and (iii) the complex, time-varying interactions between the two sides. In temporal graph machine learning, dynamic link property prediction [67] has received the most attention as a task formulation, whereas dynamic node property prediction [67] has been comparatively less explored. Motivated by this imbalance, in this article, we are—to the best of our knowledge— the first to formulate the prediction of institutional equity holdings from SEC Form 13F filings as a dynamic node property prediction task—specifically, the (dynamic) node affinity prediction subtask introduced in the Temporal Graph Benchmark [67]—and to benchmark it on the TGB leaderboard models [127]. We cast the task as predicting, for each institutional manager (CIK) at quarter t, an affinity vector over the entire universe of securities (CUSIPs) that reflects the expected market value of holdings in quarter t + 1 .We construct a discrete-time temporal (or dynamic) heterogeneous directed, weighted bipartite graph (DTDG) [32, 43, 52, 68, 76, 121] from a cleaned panel of quarterly Form 13F filings spanning 2013–2025 and covering the full S&P Global 500 securities. Manager and security nodes are augmented with rich time-varying features including turnover, sector exposures, historical similarity, institutional ownership breadth, volatility, and top holdings entropy. Following the official TGB node property prediction protocol, we train all competing models using the benchmark’s standardized data loading, temporal splits, and evaluation pipeline. To clearly isolate the impact of node features, every model is trained in two configurations: once with the full set of financial features and once in a completely featureless setting that relies solely on graph structure and temporal information. Our experiments reveal that NAVIS [48] and heuristic methods [67, 71] consistently outperform all learned temporal graph models in forecasting next-quarter holdings, as measured by Normalized Discounted 2Cumulative Gain at 10 (NDCG@10) [67]. This underscores the high persistence and smoothness inherent in institutional portfolio changes, where recent allocations are highly predictive of future ones. Adding node features improves performance only slightly across all models (typically by less than 1.2%), indicating that the temporal and structural signals in the 13F ownership graph already contain most of the predictive information for forecasting future holdings. The top-performing affinity predictions—particularly those from NAVIS and the heuristic methods—nevertheless capture persistent and economically intuitive allocation patterns, with many managers exhibiting stable preferences toward particular subsets of securities that evolve gradually over time and remain informative about future portfolio adjustments. By framing institutional holdings prediction as a node affinity prediction problem and evaluating a suite of temporal graph models on the TGB node property prediction track—both with and without node features— this work establishes a rigorous, reproducible benchmark for applying temporal graph machine learning to institutional holdings dynamics, while providing a foundation for future research on ownership concentration, portfolio evolution, institutional herding, crowding risks, price pressure, and latent institutional demand in financial markets. 
+
+2. Problem Definition 
+
+We study the problem of predicting future quarterly equity holdings of institutional investment managers as disclosed in SEC Form 13F filings. The proposed formulation is not restricted to Form 13F data and can be naturally applied to other institutional portfolio disclosure and regulatory filings, such as Form 13G, Form 13D, and Form N-PORT, as well as to portfolios containing both equity and non-equity asset classes. We model institutional holdings as a discrete-time temporal heterogeneous directed, weighted bipartite graph. Let Mt and St denote the sets of institutional managers and securities, respectively, at quarter t.We define the global sets of managers and securities as 
+
+M =
+
+> ∞
+
+[
+
+> t=1
+
+Mt, S =
+
+> ∞
+
+[
+
+> t=1
+
+St.
+
+The node set at quarter t and the global node set are defined as 
+
+Vt = Mt ∪ S t, V =
+
+> ∞
+
+[
+
+> t=1
+
+Vt.
+
+We associate each node u ∈ V t with a time-varying feature vector 
+
+xtu ∈ Rdu ,
+
+where du depends only on node type (i.e., du = dM if u ∈ M and du = dS if u ∈ S ). The feature matrix at time t is denoted by 
+
+Xt = {xtu}u∈V t .
+
+The discrete-time dynamic graph evolves over calendar quarters t = 1 , 2, . . . . At each quarter t, the graph snapshot is 
+
+Gt = ( Vt, Et, Xt),
+
+where Et denotes the set of directed weighted manager–security edges observed at quarter t. An edge 
+
+etm,s ∈ E t
+
+connects manager m ∈ M to security s ∈ S if manager m reports a position in security s at quarter t. Each edge is associated with a non-negative weight 
+
+vtm,s ∈ R≥0,
+
+3representing the reported market value of the position in thousands of U.S. dollars. If manager m reports no position in security s at quarter t, we define 
+
+vtm,s = 0 .
+
+In TGB, node affinity prediction is a dynamic node property prediction subtask in which the objective is to predict, for each node, a future affinity vector describing its strength of association with other nodes. For a dynamic directed weighted graph, the affinity of a node u toward a node v at time t can be defined as the normalized outgoing edge weight 
+
+atu,v = wtu,v 
+
+X
+
+> z∈V t
+
+wtu,z 
+
+,
+
+where wtu,v denotes the weight of the edge from u to v at time t. If there is no directed edge going out of node u into any other node at time t, we define 
+
+atu,v = 0 .
+
+The affinity vector of node u is then 
+
+atu =  atu,v 
+
+ 
+
+> v∈V t
+
+,
+
+which describes how the total outgoing edge weight of u is distributed among its neighbors. In our manager– security dynamic graph, the edge weight 
+
+vtm,s 
+
+represents the reported market value of security s held by manager m at quarter t. The total outgoing edge weight of manager m is therefore 
+
+V tm = X
+
+> s∈S t
+
+vtm,s ,
+
+which corresponds to the manager’s total reported Form 13F equity assets under management (AUM). Consequently, the affinity of manager m toward security s is 
+
+atm,s = vtm,s 
+
+V tm
+
+,
+
+whenever V (t) 
+
+> m
+
+> 0, and 0 otherwise. The resulting affinity vector 
+
+atm =  atm,s 
+
+
+
+> s∈S t+
+
+is exactly the portfolio-weight vector of manager m, since each component represents the fraction of the manager’s portfolio invested in security s. Therefore, under our graph construction, predicting future node affinities is mathematically equivalent to predicting future institutional equity holdings (or portfolio alloca-tions). Given the historical graph sequence 
+
+G1, G2, . . . , Gt,
+
+the node affinity prediction task becomes the prediction of 
+
+at+1  
+
+> m
+
+=  at+1 
+
+> m,s
+
+ 
+
+> s∈S t
+
+,
+
+for every manager m ∈ M t, which is precisely the problem of forecasting future institutional holdings expressed as portfolio weights. We predict percentage weights rather than absolute dollar values because the total equity AUM V t+1 
+
+> m
+
+is not observable at prediction time, as it is only disclosed after quarter t + 1 concludes. Consequently, forecasting absolute holdings requires forecasting both future portfolio allocations and the manager’s future 4total equity AUM. In contrast, percentage weights are scale-invariant and capture managerial allocation decisions independent of fund flows and market valuation effects [36, 51, 53, 81, 146]. While absolute holdings can be computed ex post as 
+
+vt+1  
+
+> m,s
+
+= at+1  
+
+> m,s
+
+· V t+1  
+
+> m
+
+,
+
+after the corresponding filings are released, directly modeling them conflates active portfolio rebalancing with passive changes in fund size [31, 36, 125]. Therefore, we focus on predicting relative affinity vectors, which provide a more stable and economically meaningful forecasting target. This formulation captures the normalized nature of portfolio allocation decisions and reflects the relative conviction a manager assigns to each security, independent of overall portfolio size. 
+
+3. Related Works and Challenges 
+
+3.1. Related Works 
+
+Our problem of institutional equity holdings prediction is most closely related to institutional ownership dynamics [53, 123], institutional demand modeling [51, 81], and dynamic portfolio allocation [94, 96]. While related literature has studied institutional ownership, mutual fund trading behavior [57, 141], portfolio similarity [27, 86, 118], ownership networks [82, 107], herding [123], and crowding [39], relatively little work has focused on directly forecasting future institutional holdings. These topics span several interconnected strands of literature, including empirical finance and quantitative modeling [31, 53, 81, 98, 100, 125], network science [82, 107], and machine learning [21, 28, 29, 66, 83, 104, 138]. 
+
+3.1.1. Empirical Finance and Quantitative Modeling 
+
+Foundational finance theory originates from Markowitz’s mean–variance framework [94], followed by the Capital Asset Pricing Model (CAPM) [122] and multifactor models [24, 47]. These theories formalize portfolio choice as a risk–return optimization problem and view portfolio weights as outcomes of expected returns, risk preferences, constraints, and market frictions [94, 96, 122]. Traditional portfolio models [94, 96, 122] provide a theoretical basis for understanding institutional portfolio construction, while factor-based models [24, 47] explain cross-sectional returns and institutional tilts toward particular risk factors. Later approaches incorporate Bayesian priors and equilibrium views [18] as well as dynamic portfolio choice under uncertainty [96]. These frameworks provide theoretical foundations for understanding institutional portfolio allocations and motivate subsequent empirical studies of institutional ownership dynamics and demand formation [53, 81, 123]. A broad overview of institutional investors’ behavior and economic roles is synthesized in survey articles such as [44], which review global patterns in institutional ownership, activism, ESG involvement, and market stability; [110], which summarizes theoretical mechanisms underlying institutional investor behavior and the associated empirical literature; and [140], which surveys the relationship between institutional ownership and corporate governance. Related empirical studies, including [34], examine how heterogeneous institutional shareholders influence governance quality and firm value. These surveys provide economic and behavioral motivations underlying changes in institutional portfolios [44, 110, 140]. Empirical studies further document how institutional trading affects prices through herding, information transmission, and trading pressure [85, 103, 123]. Institutional holdings also help identify phenomena such as slow-moving capital [45], institutional im-itation and herding [123], window-dressing behavior [84], and closet indexing [37]. These works analyze holdings data to infer latent investor behavior [37, 45, 84, 123]. Early empirical research examines how institutional investors allocate capital [53], rebalance portfolios [85, 123], and respond to market informa-tion [103, 123]. Classic studies investigate institutional herding [85, 123], information-based trading [103], and the impact of institutional ownership on asset prices [53]. Regression-based and panel-data econometric models are widely used to identify determinants of institutional flows [12, 22], portfolio reallocation [22], and risk exposure [12]. Such analyses are grounded in standard econometric methodologies [55]. Although most of these works do not directly forecast future institutional holdings, they provide important insights into the 5mechanisms driving institutional portfolio evolution [12, 22, 53, 123] and therefore constitute a foundation for subsequent predictive models [12, 22]. Building on this empirical literature, statistical methods have long been used to model portfolio dynam-ics [63], while econometric methods have been widely employed to analyze institutional behavior [12, 22, 55]. Regression-based models, factor analysis, and shrinkage estimators [55], together with Kalman filters and state-space models [63], enable inference on latent exposures and style drift [22] as well as risk dynamics [63]. These approaches emphasize interpretability and economic insight [5] while providing transparent statistical baselines [55] for modeling portfolio dynamics [63] and institutional demand [12, 22]. Regulatory disclosures such as Form 13F enabled large-scale co-holding analyses, portfolio-overlap studies, and similarity-network construction, revealing latent structure in institutional portfolios [27, 40, 60]. These methods reveal latent structure in institutional portfolios without relying on complex machine-learning models [12, 22, 60]. How-ever, classical statistical models often assume linearity, stationarity, and weak dependence across entities. Such assumptions limit their ability to capture nonlinear interactions and cross-institution dependencies that arise naturally in interconnected financial systems. 
+
+3.1.2. Network Science 
+
+Network science introduced a relational perspective by modeling financial systems as graphs [77, 82], where nodes represent institutions or assets and edges encode relationships such as ownership [46], co-holding and cross-holding [7, 60], buying and selling interactions [54], or similarity [27]. Studies construct ownership networks [46], co-holding and portfolio-overlap networks [7, 60], liquidity-dependency networks [77], and counterparty-exposure networks [101] to examine contagion pathways [2, 13], fire-sale amplification [60], market concentration [70], stock-level idiosyncratic volatility [150], and structural vulnerabilities in financial systems [82, 101]. These works have employed both static and dynamic network analysis [41, 97], including centrality measures [77], community detection [60], percolation analysis [82], and contagion modeling [2, 13], to study shock propagation [13], market interconnectedness [46, 77], financial stability [2, 132], and corporate financial frictions such as debt maturity mismatch driven by investor network centrality [91]. Pioneering systemic-risk frameworks [2, 13] formalize how network topology can amplify shocks throughout the financial system. Empirical analyses of co-holding networks [7], portfolio-overlap networks [60], and fund similarity structures [27] demonstrate how shared exposures contribute to correlated losses and systemic fragility [7, 60]. These approaches primarily provide structural insights and focus on system-level effects rather than directly forecasting specific holdings [2, 13, 60]. Nevertheless, they establish that institutional portfolios are embedded in complex relational structures [7, 46, 60], thereby motivating graph-based representations and network-aware predictive models for institutional holdings forecasting. 
+
+3.1.3. Machine Learning 
+
+Machine learning expanded predictive capabilities in finance by introducing nonlinear and data-driven models across a wide range of financial tasks [21, 138], including asset pricing [26, 59], risk prediction [78], institutional investment behavior and holdings analysis [20, 119], return forecasting [28, 83], and portfolio evolution [128]. Machine-learning methods such as random forests and gradient boosting [59, 78], collabora-tive filtering [35, 115, 116], autoencoders [23, 28], and deep neural networks [26, 59] have been successfully applied to financial forecasting and investment decision-making [20, 29, 66, 119, 128]. Sequence models, in-cluding recurrent neural networks, temporal convolutional networks, and Transformers [26, 28], further cap-ture complex temporal dependencies in market data and disclosure sequences [128]. Reinforcement-learning approaches have also been explored for dynamic portfolio allocation and sequential investment decisions [6, 75]. Several recent studies have moved closer to the institutional holdings prediction setting by leverag-ing SEC Form 13F disclosures for portfolio construction [29], investment recommendation [20], institutional trading prediction [119], and next-portfolio prediction [128]. Despite these advances, most machine-learning applications in finance remain focused on forecasting returns [28, 83], prices and risk measures [59, 78], or portfolio performance [128] rather than directly predicting future institutional holdings. Nevertheless, their ability to learn nonlinear relationships [26, 59], capture high-dimensional dependencies [26, 28], and exploit large-scale financial datasets [23, 83] makes them a natural foundation for institutional holdings forecasting. 6ML methods capture complex nonlinear dependencies that are often difficult to represent using classi-cal econometric and statistical models [26, 59] and generally prioritize predictive accuracy. However, most conventional machine-learning approaches do not explicitly represent the relational structure among institu-tions and assets, instead capturing interactions indirectly through features, correlations, or shared covariates [67, 139]. Static and dynamic graph machine learning extend this relational perspective on investors, assets, and exposures by modeling financial systems as static or temporal graphs [82, 139]. Financial systems are of-ten represented as bipartite or heterogeneous graphs, where institutions and assets are modeled as nodes [82, 99, 148]. Relationships such as ownership [82], co-holding [120, 148], buying and selling interactions [95], and similarity [25, 61, 118] are represented as edges. Within this framework, institutional holdings forecast-ing can naturally be formulated as a link prediction problem [65, 67] or a relational recommendation task [139]. However, most existing graph learning studies in finance formulate prediction as a link prediction problem in static or temporal graphs [67, 139, 151]. Representative applications include stock recommenda-tion [95], institutional holder prediction [120], investor funding decision prediction [90], financial represen-tation learning [72, 99, 145], portfolio and investment network forecasting [38, 73], and financial knowledge graph reasoning [33, 62, 147]. Node prediction tasks have received comparatively less attention in financial graph learning [139], particularly for forecasting future institutional portfolio allocations in institution–asset networks. Examples of node prediction applications include stock movement prediction [105, 109], risk and market-state prediction [74, 79], financial representation learning [50], asset price prediction [58, 126, 131], and knowledge-graph-based financial forecasting [1, 137]. These studies demonstrate that financial enti-ties are embedded in rich relational structures [82, 102, 139] and that graph-based learning can exploit such dependencies for prediction. Consequently, graph machine learning provides a natural framework for institu-tional holdings forecasting, where future portfolio decisions depend not only on entity-specific attributes but also on evolving relationships among institutions and assets. Static and dynamic hypergraph machine learn-ing, which extends graph representations by modeling higher-order relationships among multiple entities, has also recently been applied to financial prediction tasks [30]. Overall, existing literature provides important insights into institutional portfolio behavior, financial network structure, and predictive modeling. Nevertheless, several limitations remain. First, most empirical finance studies focus on explaining institutional behavior rather than forecasting future holdings. Second, network science approaches primarily analyze structural properties and systemic effects rather than making asset-level predictions. Third, machine learning and graph learning studies in finance predominantly target stock prediction, recommendation, market forecasting, or financial link prediction tasks. Direct prediction of future institutional equity holdings in dynamic institution–asset networks remains relatively underexplored, particularly from a node prediction perspective that seeks to forecast future port-folio allocations. This gap motivates the development of predictive models that jointly leverage temporal portfolio evolution and relational dependencies among institutions and assets. In this work, we directly forecast future institutional equity holdings in large-scale dynamic institution–asset networks. 
+
+3.2. Challenges 
+
+Forecasting institutional equity holdings faces structural, statistical, and computational challenges. 
+
+3.2.1. Low-Frequency, Incomplete, and Delayed Reporting 
+
+Institutional holdings data (e.g., Form 13F filings) are reported quarterly, filed with delays of up to 45 days after quarter-end, and may be incomplete. This limits temporal resolution, obscures intraperiod trading activity and short positions, and makes predictions partially backward-looking, complicating any dynamic analysis, whether statistical, econometric, network-science-based, or machine-learning-based [3, 4, 133, 134, 135]. In addition, many positions are exempt from reporting or subject to regulatory lags, and reporting practices may vary across jurisdictions, creating further blind spots in observed institutional exposures [3, 4]. 
+
+3.2.2. Sparsity and Staleness 
+
+Institutional holdings data are highly sparse, as only a small fraction of all possible manager–equity pairs correspond to observed positions at any reporting period. Moreover, institutional portfolios often 7exhibit substantial persistence across consecutive quarters, resulting in relatively infrequent changes in many holdings [53, 123]. These characteristics create challenges for predictive modeling by introducing severe class imbalance and making meaningful portfolio changes difficult to distinguish from routine position maintenance. 
+
+3.2.3. Data Quality and Identifier Drift 
+
+Corporate actions, reporting inconsistencies, and identifier changes introduce significant data quality challenges in constructing consistent historical datasets [3, 4]. In particular, identifier drift arising from changes in CUSIP and ticker codes, mergers, delistings, and identifier reuse complicates the alignment of holdings over time. Reported positions may also not always align perfectly with SEC-provided datasets due to processing differences and reporting inconsistencies [133, 134, 135]. Amended 13F filings may further introduce revisions that complicate the reconstruction of historical holdings [3, 4]. As a result, constructing reliable time-consistent snapshots requires substantial preprocessing independent of downstream modeling. 
+
+3.2.4. Changing Universe of Securities and Institutions 
+
+The set of reporting institutional investors and securities in 13F filings is inherently time-varying, as new entities enter the reporting system while others exit over time [135]. This changing universe complicates longitudinal analysis, including panel construction, cross-time comparability, and standard econometric assumptions such as balanced panels and stationarity. It may also affect descriptive statistics due to entry and exit dynamics [55]. 
+
+3.2.5. Survivorship Bias 
+
+Survivorship bias arises in longitudinal analyses if delisted securities and inactive funds are excluded from the analysis [5]. This can lead to systematically biased inference in institutional holdings studies due to non-random sample truncation over time [55]. 
+
+3.2.6. Endogeneity and Causal Interpretation 
+
+Institutional trading behavior affects asset prices, while prices in turn influence future portfolio allocation decisions, creating a two-way feedback loop that induces endogeneity and complicates causal inference. Addressing this issue typically requires instrumental variables, structural models, or quasi-experimental designs [5]. In the absence of strong identification strategies, many computational approaches instead focus on predictive performance rather than causal identification, relying on assumptions about temporal dependence, latent structure, or relational dynamics that may be affected by non-stationarity and regime shifts over time. 
+
+3.2.7. Lack of Standardized Benchmarks 
+
+To the best of our knowledge, there is no universally accepted benchmark dataset for institutional portfolio evolution and prediction. Differences in preprocessing pipelines, reporting formats, aggregation procedures, survivorship-bias handling, and filtering criteria limit reproducibility and hinder systematic comparison across statistical, econometric, network science, and machine learning approaches. 
+
+3.2.8. Model Interpretability, Transparency, and Policy Relevance 
+
+Interpretability remains an open challenge in modeling institutional trading behavior. Across econo-metric, network-based, and machine learning approaches, understanding the drivers of predicted portfolio decisions is often non-trivial despite differences in model structure and complexity. However, regulators, risk managers, and practitioners require explanations in addition to predictions, making interpretability an important requirement for real-world deployment [113]. 
+
+3.2.9. Scalability and Computational Complexity 
+
+Large ownership matrices or tensors (thousands of institutions × tens of thousands of securities ×
+
+multiple time periods) introduce significant computational and memory challenges. Network-based and machine learning approaches face scalability constraints in large-scale graph settings, while econometric models struggle with high-dimensional panel structures [64, 82]. 83.2.10. Conceptual Gaps Between Disciplines 
+
+Empirical finance, econometrics, network science, and machine learning often rely on different assump-tions, evaluation protocols, and notions of dependence and causality. As a result, integrating insights across these domains remains challenging, particularly when models adopt incompatible views of dependence struc-ture, causal inference, or equilibrium versus predictive objectives. 
+
+3.2.11. Economic Validation 
+
+While accurately predicting changes in institutional holdings is of methodological interest, a key empirical validation criterion is whether the resulting implied trades generate positive risk-adjusted returns after accounting for transaction costs, including turnover and market impact. Overall, the forecasting of institutional equity holdings is challenged by limitations in data availability and quality, sparsity in observed institution–asset interactions, and the dynamic nature of both market participants and asset universes. These challenges are further compounded by scalability constraints in high-dimensional relational settings and the need to reconcile heterogeneous methodological perspectives across empirical finance, econometrics, network science, and machine learning. Collectively, they highlight the need for models capable of capturing temporal dynamics and rich relational structures in institutional portfolios, while supporting reliable prediction in large-scale dynamic networks. In this work, we seek to account for several of the key challenges identified in the literature, including low-frequency and delayed reporting, sparsity and staleness in holdings data, data quality issues and identifier drift, the evolving universe of securities and institutions, survivorship bias, lack of standardized benchmarks, and scalability constraints in high-dimensional settings. Rather than treating these issues in isolation, our modeling and data construction pipeline is designed to mitigate their combined impact, enabling more reliable forecasting of institutional equity holdings in large-scale, time-evolving institution–asset networks. 
+
+4. Methodology 
+
+As discussed in Section 2, we formulate the prediction of future institutional equity holdings as a node affinity prediction task on a discrete-time temporal heterogeneous directed, weighted bipartite graph con-structed from quarterly Form 13F filings. Both manager and security nodes are equipped with rich, time-varying features engineered from historical 13F data. We train predictive models to estimate future node affinities of investment managers towards assets. Depending on the model class, the loss function is either cross-entropy loss or a customized loss function introduced in [48]. All experiments are conducted using the official TGB codebase with our extensions including adding node features, facilitating reproducibility. Model performance is evaluated using NDCG@10, which measures the quality of the predicted asset rankings with respect to actual future holdings. Higher NDCG@10 values indicate better alignment between predicted and observed institutional portfolio allocations. 
+
+4.1. Temporal Bipartite Graph Construction 
+
+The raw Form 13F filings from 2013–2025 are first processed by joining the relevant filing tables and retaining the attributes required for graph construction and feature engineering. Standard preprocessing steps are then applied to clean and harmonize the data across reporting periods. To identify the target asset universe, we first retain common-stock holdings from the merged dataset. Fuzzy string matching is then used to match reported securities to the constituents of the S&P 500 index. Matches with a similarity score below 80 are discarded, resulting in a set of 503 securities represented by their CUSIP identifiers. A random sample of 99 institutional investment managers (CIKs) is subsequently selected from the reporting population. For each quarter, we construct a graph snapshot from the holdings reported during that period, and the resulting discrete-time dynamic graph is obtained as the sequence of subgraphs induced by the selected managers and securities. From the cleaned panel of Form 13F disclosures spanning 2013–2025, we construct a temporal bipartite graph G = ( V, E) with time t snapshot given by Gt = ( Vt, Et, Xt) where 9• Mt is the set of 99 institutional investment managers (CIKs), 
+
+• St is the set of 503 S&P 500 securities (CUSIPs), and Xt is the 602 × 23 node-feature matrix at time t discussed in Section 4.2. 
+
+4.2. Node Features 
+
+Both manager and security nodes are equipped with rich, time-varying feature vectors engineered from historical 13F data. The complete node-feature representation at time t is denoted by Xt ∈ R602 ×23 , where 602 corresponds to the total number of nodes (99 managers and 503 securities) and 23 denotes the full feature dimension after encoding. Since the feature space is shared across both node types, features not applicable to a given node type are explicitly set to zero, yielding a shared feature space with structured zero-padding across heterogeneous node types. 
+
+Manager (CIK) features (17 dimensions): 
+
+• num_stocks : number of distinct positions held (log-transformed) 
+
+• AUM : total reported equity assets under management (log-transformed) 
+
+• HHI : Herfindahl–Hirschman Index measuring portfolio concentration (z-scored) 
+
+• One-hot encoded sector exposures (11 GICS sectors): 
+
+– sector_Basic_Materials ,
+
+– sector_Communication_Services ,
+
+– sector_Consumer_Cyclical ,
+
+– sector_Consumer_Defensive ,
+
+– sector_Energy ,
+
+– sector_Financial_Services ,
+
+– sector_Healthcare ,
+
+– sector_Industrials ,
+
+– sector_Real_Estate ,
+
+– sector_Technology ,
+
+– sector_Utilities 
+
+• turnover_ratio : quarter-over-quarter portfolio turnover (z-scored) 
+
+• historical_similarity : cosine similarity of current portfolio weights to past portfolios (z-scored) 
+
+• top_holdings_entropy : Shannon entropy of the top 10 holdings’ weights (z-scored) 
+
+Security (CUSIP) features (6 dimensions): 
+
+• num_holders : number of distinct reporting managers (z-scored) 
+
+• total_institutional_ownership : total reported market value across all managers (z-scored) 
+
+• total_shares_held : total number of shares held by institutions (z-scored) 
+
+• avg_holding_per_manager : average position size per manager (z-scored) 
+
+• volatility_of_holdings : standard deviation of position sizes across managers (z-scored) 
+
+• sector : GICS sector (treated as a categorical feature and encoded via a learnable embedding) Features are either log-transformed or standardized (zero mean, unit variance) using statistics computed from the training period, one-hot encoded, or encoded via learned embeddings. 10 4.3. Task Formulation and Evaluation Protocol 
+
+As discussed in Section 2, we formulate institutional equity holdings prediction as a node affinity predic-tion task on the constructed temporal bipartite graph. For each manager m at quarter t, the objective is to predict the affinity vector ˆat+1  
+
+> m
+
+∈ [0 , 1] 503 , where P503  
+
+> i=1
+
+ˆat+1  
+
+> m,i
+
+= 1 , representing the predicted percentage allocation of manager m’s equity portfolio across all 503 S&P 500 securities in the subsequent quarter t + 1 .We adopt the official TGB temporal data split protocol (70% training, 15% validation, and 15% test) [67, 127]: 
+
+• Training : April 2013 – March 2023 (40 quarters, 70% of the temporal edges) 
+
+• Validation : April 2023 – March 2024 (4 quarters, 15% of the temporal edges) 
+
+• Test : April 2024 – March 2025 (4 quarters, 15% of the temporal edges) Performance is evaluated using NDCG@10, the standard metric employed in the TGB node property prediction benchmark. NDCG@10 is computed for each manager and then averaged across all prediction instances. The metric evaluates the quality of the predicted ranking of securities relative to the manager’s actual future portfolio allocation. Higher NDCG@10 values indicate better agreement between predicted and observed institutional holdings. 
+
+4.4. Models 
+
+We evaluate models from the TGB node property prediction leaderboard [67, 127] and additionally include Exponential Moving Average (EMA) [71], a statistical baseline based on exponentially weighted moving averages of past weights: 
+
+• Persistent Forecast (PF) [67] 
+
+• Moving Average (MA) [67] 
+
+• Exponential Moving Average [71] 
+
+• DyRep [130] 
+
+• TGN [114] 
+
+• DyGFormer [149] 
+
+• TGNv2 [129] 
+
+• NAVIS [48] Unlike most existing temporal graph representation learning models, which were primarily designed for link prediction, NAVIS is specifically developed for the node affinity prediction task. Its architecture combines per-node memory with a learnable virtual global state that evolves jointly with the dynamic graph, enabling it to capture both local node histories and global temporal dynamics. Inspired by state-space models, NAVIS incorporates long-range temporal memory while retaining the flexibility of graph representation learning. In addition, it employs a ranking-based loss function that is better aligned with node affinity prediction than the cross-entropy loss commonly used for link prediction. These design choices have enabled NAVIS to achieve state-of-the-art performance on the TGB node affinity prediction benchmark [48, 67]. While additional node affinity prediction models [17, 69, 87, 106, 111, 112, 143] and alternative evaluation metrics [89] have been proposed in the literature, we focus on the official TGB models and the above additional baseline to facilitate reproducibility and direct comparability with the established benchmark. To isolate the impact of node features—which are specifically engineered for our 13F institutional own-ership data, unlike the original featureless TGB datasets—each model is trained under two configurations: 
+
+• With features : using the full manager and security feature vectors described above 
+
+• Without features : using only structural and temporal information 11 4.5. Training and Reproducibility 
+
+All experiments are conducted using the official TGB codebase and evaluation pipeline to facilitate reproducibility and direct comparability with published leaderboard results. Hyperparameters follow the recommended settings from the respective model repositories unless otherwise stated. The temporal data split follows the protocol described in Section 4.3. 
+
+5. Experimentation 
+
+We conduct a comprehensive empirical evaluation on a cleaned panel of quarterly SEC Form 13F filings spanning 2013–2025. The dataset covers the S&P 500 constituent universe (503 distinct CUSIPs) and a ran-dom sample of 99 institutional investment managers (CIKs), yielding 209,351 time-stamped directed edges across 48 quarters. We follow the official TGB protocol for evaluation, reproducibility, and data splitting. The main results are reported in Section 5.3, and per-model visualizations are provided in Section 5.4. 
+
+5.1. Dataset 
+
+The dataset construction process is discussed in Section 4.1, and its statistics are summarized in Table 1. 
+
+Statistic Value 
+
+Number of manager nodes (CIKs) 99 Number of security nodes (CUSIPs) 503 Number of temporal edges 209,351 Number of quarters 48 Average edges per quarter 4,361 Time span Q2 2013 – Q1 2025 
+
+> Table 1: Dataset summary
+
+5.2. Experimental Setup 
+
+We follow the official TGB protocol [67, 127]: 
+
+• Training : Q2 2013 – Q1 2023 (40 quarters, 70% of the temporal edges) 
+
+• Validation : Q2 2023 – Q1 2024 (4 quarters, 15% of the temporal edges) 
+
+• Test : Q2 2024 – Q1 2025 (4 quarters, 15% of the temporal edges) This chronological split preserves temporal ordering and simulates a streaming evaluation setting [67]. All models are trained using the official TGB codebase [127]. To support the proposed dataset and experi-mental setting, we extend both the TGB package and the corresponding model repositories with additional functionality, including support for node features, improved and consistent logging and visualization across models, both locally and on Weights & Biases, as well as robust logging that is synchronized to the cloud in case of interrupted connections. Hyperparameters follow the recommended settings from the respective model repositories unless otherwise stated. We report NDCG@10 (higher is better) and cross-entropy loss. The cross-entropy loss is recorded per epoch and computed as the average across all batches. 12 Model Test NDCG@10 Validation NDCG@10 Epochs NAVIS_with_features 0.9127 0.8818 500 NAVIS 0.9121 0.8886 50 EMA 0.8882 0.8762 48 PF 0.8891 0.8691 48 MA 0.8464 0.8433 48 TGNv2_with_features 0.6975 0.7348 500 TGNv2 0.6962 0.7224 50 TGN_with_features 0.6146 0.5714 50 TGN 0.6178 0.5673 50 DyGFormer_with_features 0.5965 0.5728 50 DyGFormer 0.5857 0.5587 50 DyRep_with_features 0.5804 0.5481 30 DyRep 0.5800 0.5477 30 
+
+> Table 2: Performance comparison of TGB leaderboard models and an additional EMA baseline on validation and test sets
+
+5.3. Main Results 
+
+Key observations from Table 2: 
+
+• NAVIS_with_features achieves the highest Test NDCG@10 of 0.9127. 
+
+• NAVIS is, by a large margin of at least 21.46%, the best dynamic graph representation learning model without node features, achieving a Test NDCG@10 of 0.9121. 
+
+• EMA achieves a Test NDCG@10 of 0.8882, outperforming by at least 19.07% all dynamic graph representation learning models except NAVIS, as well as all heuristic methods except PF, which exceeds it by only 0.09%. This is notable given the simplicity of the method. 
+
+• PF achieves a Test NDCG@10 of 0.8891, outperforming by at least 19.16% all dynamic graph represen-tation learning models except NAVIS, and outperforming all other heuristic methods. This highlights the strong persistence of institutional portfolio allocations, where recent holdings remain highly pre-dictive of future ones. 
+
+• Node features provide only modest improvements—less than 1.2% across all models—suggesting that temporal portfolio dynamics and graph structure already capture most of the predictive information available in the dataset. 
+
+5.4. Per-Model Detailed Visualizations 
+
+For transparency, we provide NDCG@10 performance visualizations for each model over time. 
+
+6. Conclusion 
+
+This work introduces a novel application of temporal graph machine learning to the prediction of insti-tutional equity holdings from SEC Form 13F filings. By framing the problem as forecasting node affinities (percentage portfolio allocations) on a discrete-time temporal bipartite graph of managers and securities, we establish a rigorous, reproducible benchmark for this important financial prediction task. While our experiments focus on institutional equity holdings from SEC Form 13F filings, the underlying proposed node affinity prediction formulation is more general and can be applied to other regulatory filings involving a broader range of financial instruments and asset classes involving both equity and non-equity. 13 Figure 1: NDCG@10 over time for NAVIS with node features 
+
+Figure 2: NDCG@10 over time for EMA 
+
+14 Figure 3: NDCG@10 over time for PF 
+
+Figure 4: NDCG@10 over time for MA 
+
+15 Figure 5: NDCG@10 over time for TGNv2 with node features 
+
+Figure 6: NDCG@10 over time for TGN with node features 
+
+16 Figure 7: NDCG@10 over time for DyGFormer with node features 
+
+Figure 8: NDCG@10 over time for DyRep with node features 
+
+17 Our comprehensive evaluation on a random sample of 99 institutional investment managers and the full S&P 500 index (503 securities, 209,351 temporal edges) reveals several key insights. First, NAVIS emerges as the clear state-of-the-art, achieving a test NDCG@10 of 0.9127 with features and 0.9121 without, dominating all dynamic graph representation learning models by a substantial margin, and all heuristic methods. Second, a simple Exponential Moving Average delivers remarkably strong performance (test NDCG@10 = 0.8882), outperforming all sophisticated dynamic graph representation learning models except NAVIS, and all other heuristic methods except Persistent Forecast, which achieves test NDCG@10 = 0.8891. This underscores the high persistence and smoothness inherent in institutional portfolio changes, where recent allocations are highly predictive of future ones. The top-performing affinity predictions—particularly those from NAVIS and the heuristic methods—nevertheless capture persistent and economically intuitive allocation patterns, with many managers exhibiting stable preferences toward particular subsets of securities that evolve gradually over time and remain informative about future portfolio adjustments. Third, while domain-specific node features provide consistent gains across learned models, the improve-ment is slight (typically <1.2%). This suggests that the temporal and structural signals in the 13F ownership graph already capture most of the predictive information for institutional holdings forecasting, allowing ad-vanced models such as NAVIS to perform exceptionally well even without node features. The fact that NAVIS performs exceptionally well even in the featureless setting highlights the power of temporal graph representation learning for financial time-series prediction. Nevertheless, these findings are informative, as they suggest that further performance improvements are more likely to come from developing more infor-mative financial features or more expressive temporal graph representation learning architectures than from simply increasing the number of handcrafted node attributes. These findings have important implications. For practitioners, the strong performance of simple statisti-cal methods like EMA indicates that sophisticated dynamic graph representation learning models may offer only marginal benefits in highly persistent domains like institutional holdings—a reminder that baselines should never be underestimated. However, this observation should not be interpreted as diminishing the value of temporal graph representation learning. Financial markets often exhibit structural changes, regime shifts, abrupt market events, and varying degrees of persistence across markets, datasets, asset classes, and regulatory disclosure frameworks. In such settings, learned temporal graph representations are well suited to capturing complex structural and temporal dependencies that may not be adequately modeled by simple persistence-based heuristics, making them a promising direction for more challenging and less persistent prediction problems. For researchers, our benchmark demonstrates the value of bringing state-of-the-art temporal graph representation learning models to finance, while revealing opportunities to develop more informative financial features and more expressive model architectures. By framing institutional holdings prediction as a node affinity prediction problem and evaluating a suite of temporal graph models on the TGB node property prediction track—both with and without node features— this work establishes a rigorous, reproducible benchmark for applying temporal graph machine learning to institutional holdings dynamics, while providing a foundation for future research on ownership concentration, portfolio evolution, institutional herding, crowding risks, price pressure, and latent institutional demand in financial markets. 
+
+7. Limitations 
+
+The proposed benchmark is constructed from a randomly sampled subset of institutional investment managers rather than the complete universe of SEC Form 13F filers. Specifically, 99 managers were selected due to computational resource constraints, particularly the lack of access to GPU hardware required for training and evaluating multiple temporal graph representation learning models under a unified benchmark-ing framework. While this sampling reduces the size of the benchmark, it preserves the realistic temporal characteristics of institutional portfolio evolution and enables reproducible comparison across a diverse set of methods. In contrast, the benchmark includes all 503 constituents of the S&P 500 index, providing complete coverage of one of the most widely followed segments of the U.S. equity market. The benchmark is further limited to publicly available quarterly Form 13F disclosures, which primarily report long equity positions and therefore do not capture short positions, derivatives, or many non-equity 18 asset classes. Moreover, the quarterly reporting frequency inherently limits the temporal resolution of the benchmark. Despite these limitations, the proposed methodology is not restricted to the specific benchmark presented in this work. Both the heuristic baselines and, in particular, the dynamic graph representation learning models are inherently scalable and can be applied to substantially larger datasets as computational resources permit. Furthermore, the proposed node affinity prediction formulation is independent of SEC Form 13F and can naturally be extended to other regulatory disclosure datasets, such as Form 13D, Form 13G, and Form N-PORT, as well as to portfolios containing multiple asset classes. Unlike heuristic methods that primarily exploit persistence in historical allocations, dynamic graph representation learning models learn evolving structural and temporal dependencies directly from the underlying graph. Consequently, they are expected to remain applicable in settings exhibiting greater market volatility, structural changes, or weaker portfolio persistence, where richer temporal dynamics become increasingly important. 
+
+8. Future Work 
+
+Future work could evaluate the proposed framework on larger datasets and additional regulatory filings, including Form 13D, Form 13G, and Form N-PORT, as well as portfolios containing multiple asset classes. Such settings are likely to exhibit more complex temporal dynamics and varying degrees of persistence, providing a broader evaluation of temporal graph representation learning models beyond highly persistent institutional holdings. Another direction is to develop more powerful architectures and richer financial features, incorporate short positions where available, or explore multi-step forecasting. Furthermore, gen-eralizing the node affinity prediction task from dynamic graphs to dynamic hypergraphs represents another promising research direction for temporal graph machine learning and financial applications, as many finan-cial interactions involve higher-order relationships that cannot be adequately captured by pairwise graphs. The reproducible setup and public TGB integration we provide lay a solid foundation for such advances and for future research on ownership concentration, portfolio evolution, institutional herding, crowding risks, price pressure, and latent institutional demand in financial markets. 
+
+References 
+
+[1] Abbas, Z., 2024. Knowledge Graphs, Automatic Feature Engineering and Machine Learning in Al-gorithmic Trading for Financial Markets. Ph.D. thesis. Università degli Studi di Camerino. URL: 
+
+https://hdl.handle.net/11581/492545 .[2] Acemoglu, D., Ozdaglar, A., Tahbaz-Salehi, A., 2015. Systemic risk and stability in financial networks. American Economic Review 105, 564–608. doi: 10.1257/aer.20130456 .[3] Anderson, A., Brockman, P., 2018. An examination of 13f filings. Journal of Financial Research 41, 295–324. doi: 10.1111/jfir.12150 .[4] Anderson, A.M., Brockman, P., 2016. Form 13f (mis) filings. doi: 10.2139/ssrn.2809128 . available at SSRN 2809128. [5] Angrist, J.D., Pischke, J.S., 2009. Mostly harmless econometrics: An empiricist’s companion. Prince-ton university press. [6] Anisha, J., Saravanan, K., 2025. Aiml strategies reshaping the future of financial portfolio decisions: A bibliometric insights. doi: 10.2139/ssrn.5643092 . available at SSRN 5643092. [7] Anton, M., Polk, C., 2014. Connected stocks. The Journal of Finance 69, 1099–1127. doi: 10.1111/jo fi.12149 .[8] Appel, I.R., Gormley, T.A., Keim, D.B., 2016. Passive investors, not passive owners. Journal of Financial Economics 121, 111–141. doi: 10.1016/j.jfineco.2016.03.003 .19 [9] Aren, S., Aydemir, S.D., Şehitoğlu, Y., 2016. Behavioral biases on institutional investors: a literature review. Kybernetes 45, 1668–1684. doi: 10.1108/K-08-2015-0203 .[10] Azar, J., Schmalz, M.C., Tecu, I., 2018. Anticompetitive effects of common ownership. The Journal of Finance 73, 1513–1565. doi: 10.1111/jofi.12698 .[11] Backus, M., Conlon, C., Sinkinson, M., 2021. Common ownership in america: 1980–2017. American Economic Journal: Microeconomics 13, 273–308. doi: 10.1257/mic.20190389 .[12] Barardehi, Y.H., Da, Z., Dixon, P., Wang, J.L., 2024. You can only lend what you own: Inferring daily institutional trading from lendable equity inventory. doi: 10.2139/ssrn.5025126 . available at SSRN 5025126. [13] Battiston, S., Puliga, M., Kaushik, R., Tasca, P., Caldarelli, G., 2012. Debtrank: Too central to fail? financial networks, the fed and systemic risk. Scientific reports 2, 541. doi: doi.org/10.1038/srep00 541 .[14] Ben-David, I., Franzoni, F., Moussawi, R., 2017. Exchange-traded funds. Annual Review of Financial Economics 9, 169–189. doi: 10.1146/annurev-financial-110716-032538 .[15] Ben-David, I., Franzoni, F., Moussawi, R., Sedunov, J., 2021. The granular nature of large institutional investors. Management Science 67, 6629–6659. doi: 10.1287/mnsc.2020.3808 .[16] Ben-Rephael, A., Da, Z., Israelsen, R.D., 2017. It depends on where you search: Institutional investor attention and underreaction to news. The Review of Financial Studies 30, 3009–3047. doi: 10.1093/ rfs/hhx031 .[17] Berndt, T., Walker, B., Qin, T., Stühmer, J., Kormilitzin, A., 2025. Permutation equivariant neural controlled differential equations for dynamic graph representation learning, in: Belgrave, D., Zhang, C., Lin, H., Pascanu, R., Koniusz, P., Ghassemi, M., Chen, N. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc.. pp. 98276–98311. URL: https://proceedings.neurip s.cc/paper_files/paper/2025/file/8d54ecfb4ffc95c8994c479671a46b66-Paper-Conference. pdf .[18] Black, F., Litterman, R., 1992. Global portfolio optimization. Financial analysts journal 48, 28–43. doi: 10.2469/faj.v48.n5.28 .[19] Boermans, M., 2026. A literature review of securities holdings statistics research and a practitioner’s guide. Journal of Economic Surveys 40, 632–658. doi: 10.1111/joes.70012 .[20] van Brakel, J.P., 2024. Machine learning from the best: Analyzing the holdings of top mutual funds. doi: 10.2139/ssrn.4924423 . available at SSRN 4924423. [21] Buczynski, W., Cuzzolin, F., Sahakian, B., 2021. A review of machine learning experiments in equity investment decision-making: why most published research findings do not live up to their promise in real life. International Journal of Data Science and Analytics 11, 221–242. doi: 10.1007/s41060-021 -00245-5 .[22] Campbell, J.Y., Vuolteenaho, T., Ramadorai, T., 2004. Caught on tape: Predicting institutional ownership with order flow. doi: 10.2139/ssrn.519882 . available at SSRN 519882. [23] Cao, B., Wang, S., Lin, X., Wu, X., Zhang, H., Ni, L.M., Guo, J., 2025. From deep learning to llms: A survey of ai in quantitative investment. doi: 10.48550/arXiv.2503.21422 , arXiv:2503.21422 . arXiv preprint arXiv:2503.21422. [24] Carhart, M.M., 1997. On persistence in mutual fund performance. The Journal of finance 52, 57–82. doi: 10.1111/j.1540-6261.1997.tb03808.x .20 [25] Cavar, D., Josefy, M., 2018. Mapping deep nlp to knowledge graphs: An enhanced approach to ana-lyzing corporate filings with regulators, in: Proceedings of the The first financial narrative processing workshop (FNP 2018), pp. 1–6. URL: https://damir.cavar.me/Pubs/Mapping_SEC_Deep_NLP_Kno wledge_Graph.pdf .[26] Chen, L., Pelger, M., Zhu, J., 2024a. Deep learning in asset pricing. Management Science 70, 714–750. doi: 10.1287/mnsc.2023.4695 .[27] Chen, R.R., Luo, L., Wang, Y., Zhang, X., 2026. Fund similarity: A use of bipartite graphs. Informa-tion 17, 83. doi: 10.3390/info17010083 .[28] Chen, W., Hussain, W., Cauteruccio, F., Zhang, X., 2024b. Deep learning for financial time series pre-diction: A state-of-the-art review of standalone and hybrid models. Computer Modeling in Engineering & Sciences 139, 187–224. doi: 10.32604/cmes.2023.031388 .[29] Chen, Y., Song, Y., Qian, S., Fleiss, A., 2023. Applying machine learning to sec 13f investment manager filings for portfolio construction and rebalancing. doi: 10.2139/ssrn.4352145 . available at SSRN 4352145. [30] Chen, Y.S., Kao, C.L.M., Liu, P.H., Tseng, V.S., 2025. Extracting stock predictive information in mutual fund managers’ portfolio decisions through machine learning with hypergraph: Y. chen et al. Computational Economics 65, 3039–3075. doi: 10.1007/s10614-024-10673-7 .[31] Chevalier, J., Ellison, G., 1997. Risk taking by mutual funds as a response to incentives. Journal of political economy 105, 1167–1200. doi: 10.1086/516389 .[32] Chmura, J., Huang, S., Ngo, T.G.B., Parviz, A., Poursafaei, F., Leskovec, J., Bronstein, M., Rabusseau, G., Fey, M., Rabbany, R., 2025. Tgm: a modular and efficient library for machine learn-ing on temporal graphs. doi: 10.48550/arXiv.2510.07586 , arXiv:2510.07586 . arXiv preprint arXiv:2510.07586. [33] Cho, N., Srishankar, N., Cecchi, L., Watson, W., 2024. Fishnet: Financial intelligence from sub-querying, harmonizing, neural-conditioning, expert swarms, and task planning, in: Proceedings of the 5th ACM International Conference on AI in Finance, pp. 591–599. doi: 10.1145/3677052.3698597 .[34] Chung, K.H., Zhang, H., 2011. Corporate governance and institutional ownership. Journal of financial and quantitative analysis 46, 247–273. doi: 10.1017/S0022109010000682 .[35] Chung, M., Lee, J., Lee, Y., Kim, W.C., 2025. Mean variance efficient collaborative filtering for stock recommendations, in: Proceedings of the 6th ACM International Conference on AI in Finance, pp. 806–813. doi: 10.1145/3768292.3770427 .[36] Coval, J., Stafford, E., 2007. Asset fire sales (and purchases) in equity markets. Journal of Financial Economics 86, 479–512. doi: 10.1016/j.jfineco.2006.09.007 .[37] Cremers, K.M., Petajisto, A., 2009. How active is your fund manager? a new measure that predicts performance. The review of financial studies 22, 3329–3365. doi: 10.1093/rfs/hhp057 .[38] Dai, C., Wang, W., Fan, Y., Wang, Y., Huang, L., Li, K., Zhou, F., 2025. Griffinnet: Agraph-relation integrated transformer for financial predictions. doi: 10.48550/arXiv.2510.10387 ,
+
+arXiv:2510.10387 . arXiv preprint arXiv:2510.10387. [39] Delpini, D., Battiston, S., Caldarelli, G., Riccaboni, M., 2019. Systemic risk from investment similar-ities. PloS one 14, e0217141. doi: 10.1371/journal.pone.0217141 .[40] Delpini, D., Battiston, S., Caldarelli, G., Riccaboni, M., 2020. Portfolio diversification, differentiation and the robustness of holdings networks. Applied Network Science 5, 37. doi: 10.1007/s41109-020-0 0278-y .21 [41] Demirel, E., 2024. Examination of Institutional Investor Network Patterns in Context of Major Crashes in US Stock Markets. Master’s thesis. Middle East Technical University (Turkey). URL: 
+
+https://www.proquest.com/openview/62301f804c70d63ca76b09d810b12f82/1?pq-origsite=gs cholar&cbl=2026366&diss=y .[42] Ding, Z., Li, Y., He, Y., Norelli, A., Wu, J., Tresp, V., Bronstein, M.M., Ma, Y., 2025. DyGMamba: Efficiently modeling long-term temporal dependency on continuous-time dynamic graphs with state space models. Transactions on Machine Learning Research URL: https://openreview.net/forum ?id=sq5AJvVuha .[43] Dizaji, A., Tjandra, B.A., Hamidi, M., Huang, S., Rabusseau, G., 2026. T-GRAB: A synthetic diagnostic benchmark for learning on temporal graphs, in: Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.1, Association for Computing Machinery, New York, NY, USA. p. 2628–2639. doi: 10.1145/3770854.3785699 .[44] Drobetz, W., El Ghoul, S., Guedhami, O., Yu, X., 2024. Beyond ownership: The role of institutional investors in international corporate governance. doi: 10.2139/ssrn.5047799 . available at SSRN 5047799. [45] Duffie, D., 2010. Asset price dynamics with slow-moving capital. Journal of Finance 65, 1238–68. doi: 10.1111/j.1540-6261.2010.01569.x .[46] Enriques, L., Romano, A., 2019. Institutional investor voting behavior: A network theory perspective. University of Illinois Law Review 2019, 223–272. URL: https://illinoislawreview.org/print/vo l-2019-no-1/institutional-investor-voting-behavior/ .[47] Fama, E.F., French, K.R., 1993. Common risk factors in the returns on stocks and bonds. Journal of financial economics 33, 3–56. doi: 10.1016/0304-405X(93)90023-5 .[48] Feldman, O., Mantri, K.S.I., Eliasof, M., Baskin, C., 2026. Revisting node affinity prediction in temporal graphs, in: The Fourteenth International Conference on Learning Representations. URL: 
+
+https://openreview.net/forum?id=6UvkemEgK3 .[49] Fichtner, J., Heemskerk, E.M., Garcia-Bernardo, J., 2017. Hidden power of the big three? passive index funds, re-concentration of corporate ownership, and new financial risk. Business and politics 19, 298–326. doi: 10.1017/bap.2017.6 .[50] Fu, K., Wang, J., 2025. Low correlation portfolio formation with preselection using rich relational data. Knowledge-Based Systems 315, 113287. doi: 10.1016/j.knosys.2025.113287 .[51] Gabaix, X., Koijen, R.S., 2024. Granular instrumental variables. Journal of Political Economy 132, 2274–2303. doi: 10.1086/728743 .[52] Gastinger, J., Huang, S., Galkin, M., Loghmani, E., Parviz, A., Poursafaei, F., Danovitch, J., Rossi, E., Koutis, I., Stuckenschmidt, H., Rabbany, R., Rabusseau, G., 2024. Tgb 2.0: A benchmark for learning on temporal knowledge graphs and heterogeneous graphs, in: Globerson, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J., Zhang, C. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc.. pp. 140199–140229. URL: https://proceedings.neur ips.cc/paper_files/paper/2024/file/fda026cf2423a01fcbcf1e1e43ee9a50-Paper-Datasets_ and_Benchmarks_Track.pdf , doi: 10.52202/079017-4450 .[53] Gompers, P.A., Metrick, A., 2001. Institutional investors and equity prices. The quarterly journal of Economics 116, 229–259. doi: 10.1162/003355301556392 .[54] Gong, X.L., Du, Z.Q., 2020. Institutional investor information sharing, stock market extreme risk, and financial systemic risk. Complexity 2020, 5745916. doi: 10.1155/2020/5745916 .22 [55] Greene, W., 2018. Econometric Analysis. 8 ed., Pearson. [56] Greenwood, R., Landier, A., Thesmar, D., 2015. Vulnerable banks. Journal of financial economics 115, 471–485. doi: 10.1016/j.jfineco.2014.11.006 .[57] Grinblatt, M., Titman, S., Wermers, R., et al., 1995. Momentum investment strategies, portfolio performance, and herding: A study of mutual fund behavior. American Economic Review 85, 1088– 1105. URL: http://www.jstor.org/stable/2950976 .[58] Gu, J., Ye, J., Uddin, A., Wang, G., 2024. Dystage: dynamic graph representation learning for asset pricing via spatio-temporal attention and graph encodings, in: Proceedings of the 5th ACM International Conference on AI in Finance, pp. 388–396. doi: 10.1145/3677052.3698680 .[59] Gu, S., Kelly, B., Xiu, D., 2020. Empirical asset pricing via machine learning. The Review of Financial Studies 33, 2223–2273. doi: 10.1093/rfs/hhaa009 .[60] Gualdi, S., Cimini, G., Primicerio, K., Di Clemente, R., Challet, D., 2016. Statistically validated network of portfolio overlaps and systemic risk. Scientific reports 6, 39467. doi: 10.1038/srep39467 .[61] Guo, L., Sanz-Cruzado, J., McCreadie, R., 2024. Comparing the impact of financial knowledge graphs from financial reports and wikidata in asset recommendation, in: Proceedings of the IJCAI 2024 Workshop on Recommender Systems in Finance (Fin-RecSys). URL: https://eprints.gla.ac.uk/ 328251/ .[62] Guo, L., Sanz-Cruzado, J., McCreadie, R., 2025. Evaluating knowledge graph sources for non-personalized financial asset recommendation: 10k reports vs. wikidata, in: International Workshop on Knowledge-Enhanced Information Retrieval, Springer. pp. 120–150. doi: 10.1007/978-3-032-028 99-0_7 .[63] Hamilton, J.D., 2020a. Time series analysis. Princeton university press. [64] Hamilton, W., Ying, Z., Leskovec, J., 2017. Inductive representation learning on large graphs, in: Guyon, I., Luxburg, U.V., Bengio, S., Wallach, H., Fergus, R., Vishwanathan, S., Garnett, R. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc. URL: https://procee dings.neurips.cc/paper_files/paper/2017/file/5dd9db5e033da9c6fb5ba83c7a7ebea9-Paper .pdf .[65] Hamilton, W.L., 2020b. Graph representation learning. Morgan & Claypool Publishers. [66] Htun, H.H., Biehl, M., Petkov, N., 2023. Survey of feature selection and extraction techniques for stock market prediction. Financial Innovation 9, 26. doi: /10.1186/s40854-022-00441-7 .[67] Huang, S., Poursafaei, F., Danovitch, J., Fey, M., Hu, W., Rossi, E., Leskovec, J., Bronstein, M., Rabusseau, G., Rabbany, R., 2023. Temporal graph benchmark for machine learning on temporal graphs, in: Advances in Neural Information Processing Systems, pp. 2056–2073. URL: https://proc eedings.neurips.cc/paper_files/paper/2023/file/066b98e63313162f6562b35962671288-Pap er-Datasets_and_Benchmarks.pdf .[68] Huang, S., Poursafaei, F., Rabbany, R., Rabusseau, G., Rossi, E., 2025. Utg: Towards a unified view of snapshot and event based models for temporal graphs, in: Wolf, G., Krishnaswamy, S. (Eds.), Proceedings of the Third Learning on Graphs Conference, PMLR. pp. 28:1–28:16. URL: https: //proceedings.mlr.press/v269/huang25a.html .[69] Huang, W., 2026. G-match: Graph-structured memory with interpretable motif matching for future node affinity prediction. Journal of Sustainability, Policy, and Practice 2, 7–17. URL: https://Econ Papers.repec.org/RePEc:dba:jsppaa:v:2:y:2026:i:2:p:7-17 .23 [70] Huseynov, J., Dalal, S., Shepelenko, V., 2025. Firmographica: Knowledge graph and ai-based frame-work for short-selling risk assessment. Journal of Computer Science and Digital Technologies 1, 39–49. doi: 10.30546/UNECCSDT.2025.01.039 .[71] Izadifar, E., Rahmati, Z., Davoodi, A., 2025. EMA-Affinity: A statistical approach for node affinity prediction in dynamic graphs, in: 2025 29th International Computer Conference, Computer Society of Iran (CSICC), IEEE. pp. 1–7. doi: 10.1109/CSICC65765.2025.10967445 .[72] Jeyaraman, B.P., Dai, B.T., Fang, Y., 2024. Temporal relational graph convolutional network approach to financial performance prediction. Machine Learning and Knowledge Extraction 6, 2303–2320. doi: 10 .3390/make6040113 .[73] Jiang, S., Uddin, A., Tao, X., Wei, Z., Yu, D., 2025. Mutual fund holding network: Dynamic network embedding in equity return predictions. doi: 10.2139/ssrn.5224806 . available at SSRN 5224806. [74] Jiang, S., Uddin, A., Wei, Z., Yu, D., 2023. The network of mutual funds: A dynamic heterogeneous graph neural network for estimating mutual funds performance, in: Proceedings of the Fourth ACM international conference on AI in Finance, pp. 235–243. doi: 10.1145/3604237.3626910 .[75] Jiang, Z., Xu, D., Liang, J., 2017. A deep reinforcement learning framework for the financial port-folio management problem. doi: 10.48550/arXiv.1706.10059 , arXiv:1706.10059 . arXiv preprint arXiv:1706.10059. [76] Kazemi, S.M., Goel, R., Jain, K., Kobyzev, I., Sethi, A., Forsyth, P., Poupart, P., 2020. Representation learning for dynamic graphs: A survey. Journal of Machine Learning Research 21, 1–73. URL: 
+
+http://jmlr.org/papers/v21/19-447.html .[77] Kenett, D.Y., Havlin, S., 2015. Network science: a useful tool in economics and finance. Mind & Society 14, 155–167. doi: 10.1007/s11299-015-0167-y .[78] Khandani, A.E., Kim, A.J., Lo, A.W., 2010. Consumer credit-risk models via machine-learning algo-rithms. Journal of Banking & Finance 34, 2767–2787. doi: 10.1016/j.jbankfin.2010.06.001 .[79] Kim, S.H., Lee, K.H., 2025. Multi-asset multi-agent reinforcement learning for portfolio management. IEEE Access 13, 194456–194474. doi: 10.1109/ACCESS.2025.3632201 .[80] Koch, A., Ruenzi, S., Starks, L., 2016. Commonality in liquidity: a demand-side explanation. The Review of Financial Studies 29, 1943–1974. doi: 10.1093/rfs/hhw026 .[81] Koijen, R.S., Yogo, M., 2019. A demand system approach to asset pricing. Journal of Political Economy 127, 1475–1515. doi: 10.1086/701683 .[82] Konstantinov, G.S., Fabozzi, F.J., 2025. Network Models in Finance: Expanding the Tools for Portfolio and Risk Management. John Wiley & Sons. [83] Kumbure, M.M., Lohrmann, C., Luukka, P., Porras, J., 2022. Machine learning techniques and data for stock market forecasting: A literature review. Expert Systems with Applications 197, 116659. doi: 10.1016/j.eswa.2022.116659 .[84] Lakonishok, Josef, e.a., 1991. Window dressing by pension fund managers. American Economic Review 81, 227–31. URL: https://EconPapers.repec.org/RePEc:aea:aecrev:v:81:y:1991:i:2: p:227-31 .[85] Lakonishok, J., Shleifer, A., Vishny, R.W., 1992. The impact of institutional trading on stock prices. Journal of financial economics 32, 23–43. doi: 10.1016/0304-405X(92)90023-Q .[86] Lavin, J.F., Valle, M.A., Magner, N.S., 2019. Modeling overlapped mutual funds’ portfolios: a bipartite network approach. Complexity 2019, 1565698. doi: 10.1155/2019/1565698 .24 [87] Lee, J., Kwon, T., Moon, H., Shin, K., 2025. Simple yet effective node property prediction on edge streams under distribution shifts, in: 2025 IEEE 41st International Conference on Data Engineering (ICDE), IEEE. pp. 2521–2534. doi: 10.1109/ICDE65448.2025.00190 .[88] Lewellen, J., Lewellen, K., 2022. Institutional investors and corporate governance: The incentive to be engaged. The Journal of Finance 77, 213–264. doi: 10.1111/jofi.13085 .[89] Li, B., Zheng, X., Jin, M., Wang, C., Pan, S., 2025. Test-time gnn model evaluation on dynamic graphs. doi: 10.48550/arXiv.2509.23816 , arXiv:2509.23816 . arXiv preprint arXiv:2509.23816. [90] Liang, Y.E., Yuan, S.T.D., 2016. Predicting investor funding behavior using crunchbase social network features. Internet Research 26, 74–100. doi: 10.1108/IntR-09-2014-0231 .[91] Liu, T., Chen, Z., Zhang, J., Lucey, B., 2025. Institutional investor networks centrality and firms’ debt maturity mismatch. Finance Research Letters 71, 106482. doi: 10.1016/j.frl.2024.106482 .[92] Lu, X., Sun, L., Zhu, T., Lv, W., 2024. Improving temporal link prediction via temporal walk matrix projection, in: Globerson, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J., Zhang, C. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc.. pp. 141153– 141182. URL: https://proceedings.neurips.cc/paper_files/paper/2024/file/ff7bf6014f782 6da531aa50f4538ee19-Paper-Conference.pdf .[93] Luo, Y., Li, P., 2022. Neighborhood-aware scalable temporal network representation learning, in: Rieck, B., Pascanu, R. (Eds.), Proceedings of the First Learning on Graphs Conference, PMLR. pp. 1:1–1:18. URL: https://proceedings.mlr.press/v198/luo22a.html .[94] Markowitz, H., 1952. PORTFOLIO SELECTION. The Journal of Fi-nance 7, 77–91. doi: 1 0 . 1 1 1 1 / j . 1 5 4 0 - 6 2 6 1 . 1 9 5 2 . t b 0 1 5 2 5 .x ,
+
+arXiv:https://onlinelibrary.wiley.com/doi/pdf/10.1111/j.1540-6261.1952.tb01525.x .[95] Melucci, R., Kajiura, Y., Guo, J., 2019. Stock recommendations using information connections from financial bipartite graph. URL: https://snap.stanford.edu/class/cs224w-2019/project/2642 4787.pdf . cS224W course project report. Accessed: 2026-05-22. [96] Merton, R.C., 1969. Lifetime portfolio selection under uncertainty: The continuous-time case. The review of Economics and Statistics 51, 247–257. doi: 10.2307/1926560 .[97] Miori, D., 2024. Network analysis and data science for finance: from traditional markets to decen-tralised exchanges. Ph.D. thesis. University of Oxford. URL: https://ora.ox.ac.uk/objects/uuid: 4c52da69-8703-4a14-b18c-527711d28e43 .[98] Miori, D., Cucuringu, M., 2022. Sec form 13f-hr: Statistical investigation of trading imbalances and profitability analysis. doi: 10.48550/arXiv.2209.08825 , arXiv:2209.08825 . arXiv preprint arXiv:2209.08825. [99] Nath, P.K., Waghmare, G., Tumbde, N., Kumar, N., Asthana, S., 2023. Learning temporal represen-tations of bipartite financial graphs, in: Proceedings of the Fourth ACM International Conference on AI in Finance, pp. 202–209. doi: 10.1145/3604237.3626911 .[100] Nayanar, N., 2023. Interpreting institutional investment activity as a markov process: A stock recom-mender. Intelligent Decision Technologies 17, 673–685. doi: 10.3233/IDT-220264 .[101] Nier, E., Yang, J., Yorulmazer, T., Alentorn, A., 2007. Network models and financial stability. Journal of Economic Dynamics and Control 31, 2033–2060. doi: 10.1016/j.jedc.2007.01.014 .[102] Niu, Y., Lu, L., Dolphin, R., Poti, V., Dong, R., 2024. Evaluating financial relational graphs: Interpre-tation before prediction, in: Proceedings of the 5th ACM International Conference on AI in Finance, pp. 564–572. doi: 10.1145/3677052.3698644 .25 [103] Nofsinger, J.R., Sias, R.W., 1999. Herding and feedback trading by institutional and individual investors. The Journal of finance 54, 2263–2295. doi: 10.1111/0022-1082.00188 .[104] Olorunnimbe, K., Viktor, H., 2022. Deep learning in the stock market—a systematic survey of practice, backtesting, and applications. Artificial Intelligence Review 56, 2057. doi: 10.1007/s10462-022-102 26-0 .[105] Pacreau, G., Lezmi, E., Xu, J., 2021. Graph neural networks for asset management. doi: 10.2139/ss rn.3976168 . available at SSRN 3976168. [106] Panyshev, A., Vinichenko, D., Travkin, O., Alferov, R., Zaytsev, A., 2025. Never skip a batch: Continuous training of temporal gnns via adaptive pseudo-supervision. doi: 10.48550/arXiv.2505. 12526 , arXiv:2505.12526 . arXiv preprint arXiv:2505.12526. [107] Pareek, A., 2012. Information networks: Implications for mutual fund trading behavior and stock returns. doi: 10.2139/ssrn.1361779 . aFA 2010 Atlanta Meetings Paper. Available at SSRN 1361779. [108] Poursafaei, F., Huang, S., Pelrine, K., Rabbany, R., 2022. Towards better evaluation for dynamic link prediction, in: Koyejo, S., Mohamed, S., Agarwal, A., Belgrave, D., Cho, K., Oh, A. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc.. pp. 32928–32941. URL: 
+
+https://proceedings.neurips.cc/paper_files/paper/2022/file/d49042a5d49818711c401d341 72f9900-Paper-Datasets_and_Benchmarks.pdf .[109] Qian, H., Zhou, H., Zhao, Q., Chen, H., Yao, H., Wang, J., Liu, Z., Yu, F., Zhang, Z., Zhou, J., 2024. Mdgnn: Multi-relational dynamic graph neural network for comprehensive and dynamic stock investment prediction, in: Proceedings of the AAAI Conference on Artificial Intelligence, pp. 14642– 14650. doi: 10.1609/aaai.v38i13.29381 .[110] Qian, R., 2023. Institutional investors: A literature review. SHS Web Conf. 169, 01066. doi: 10.105 1/shsconf/202316901066 .[111] Qian, W., 2025. An Edge-Aggregated Temporal Transformer with Dual Graph Neural Networks for Enhanced Dynamic Node Affinity Prediction. Ph.D. thesis. UNSW Sydney. doi: 10.26190/unswork s/31696 .[112] Qin, T., Walker, B., Lyons, T., Yan, H., Li, H., 2026. Learning dynamic graph embeddings with neural controlled differential equations. IEEE Transactions on Pattern Analysis and Machine Intelligence 48, 2096–2103. doi: 10.1109/TPAMI.2025.3617660 .[113] Ribeiro, M.T., Singh, S., Guestrin, C., 2016. "why should i trust you?": Explaining the predictions of any classifier, in: Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining, Association for Computing Machinery. pp. 1135–1144. doi: 10.1145/2939 672.2939778 .[114] Rossi, E., Chamberlain, B., Frasca, F., Eynard, D., Monti, F., Bronstein, M., 2020. Temporal graph networks for deep learning on dynamic graphs. doi: 10.48550/arXiv.2006.10637 , arXiv:2006.10637 .arXiv preprint arXiv:2006.10637. [115] Roy, D., Dutta, M., 2022. A systematic review and research perspective on recommender systems. Journal of Big Data 9, 59. doi: 10.1186/s40537-022-00592-5 .[116] Sankar, C.P., Vidyaraj, R., Kumar, K.S., 2015. Trust based stock recommendation system–a social network analysis approach. Procedia Computer Science 46, 299–305. doi: 10.1016/j.procs.2015.0 2.024 .[117] Sarıgün, A., 2023. Graph mixer networks. doi: 10.48550/arXiv.2301.12493 , arXiv:2301.12493 .arXiv preprint arXiv:2301.12493. 26 [118] Satone, V., Desai, D., Mehta, D., 2022. Fund2vec: mutual funds similarity using graph learning, in: Proceedings of the Second ACM International Conference on AI in Finance, pp. 1–8. doi: 10.1145/34 90354.3494381 .[119] Saxena, A., 2025. Predicting institutional investment trends from sec form 13f filings using machine learning, in: 2025 Second International Conference on Cognitive Robotics and Intelligent Systems (ICC-ROBINS), IEEE. pp. 243–248. doi: 10.1109/ICC-ROBINS64345.2025.11086238 .[120] Saxena, R., Kumar, A., Mishra, M., 2022. Holder recommendations using graph representation learn-ing and link prediction. doi: 10.48550/arXiv.2212.09624 , arXiv:2212.09624 . arXiv preprint arXiv:2212.09624. [121] Shamsi, K., Ngo, T.G.B., Shirzadkhani, R., Huang, S., Poursafaei, F., Azad, P., Rabbany, R., Coskunuzer, B., Rabusseau, G., Akcora, C., 2025. Mint: Multi-network transfer benchmark for tem-poral graph learning, in: Belgrave, D., Zhang, C., Lin, H., Pascanu, R., Koniusz, P., Ghassemi, M., Chen, N. (Eds.), Advances in Neural Information Processing Systems, Curran Associates, Inc. URL: 
+
+https://proceedings.neurips.cc/paper_files/paper/2025/file/c5548168cb7324f714365a971 dfe76d1-Paper-Datasets_and_Benchmarks_Track.pdf .[122] Sharpe, W.F., 1964. Capital asset prices: A theory of market equilibrium under conditions of risk. The journal of finance 19, 425–442. doi: 10.1111/j.1540-6261.1964.tb02865.x .[123] Sias, R.W., 2004. Institutional herding. The review of financial studies 17, 165–206. doi: 10.1093/rf s/hhg035 .[124] Sias, R.W., Starks, L.T., Titman, S., 2006. Changes in institutional ownership and stock returns: Assessment and methodology. The Journal of Business 79, 2869–2910. doi: 10.1086/508002 .[125] Sirri, E.R., Tufano, P., 1998. Costly search and mutual fund flows. The journal of finance 53, 1589– 1622. doi: 10.1111/0022-1082.00066 .[126] Squartini, T., Almog, A., Caldarelli, G., Van Lelyveld, I., Garlaschelli, D., Cimini, G., 2017. Enhanced capital-asset pricing model for the reconstruction of bipartite financial networks. Physical Review E 96, 032315. doi: 10.1103/PhysRevE.96.032315 .[127] Temporal Graph Benchmark Team, 2026. Leaderboards for dynamic node property prediction. URL: 
+
+https://tgb.complexdatalab.com/docs/leader_nodeprop/ . accessed: 2025-12-02. [128] Thomaz, G., Maua, D., 2024. A case study of next portfolio prediction for mutual funds. doi: 10.485 50/arXiv.2410.18098 , arXiv:2410.18098 . arXiv preprint arXiv:2410.18098. [129] Tjandra, B.A., Barbero, F., Bronstein, M., 2024. Enhancing the expressivity of temporal graph networks through source-target identification. doi: 10.48550/arXiv.2411.03596 , arXiv:2411.03596 .arXiv preprint arXiv:2411.03596. [130] Trivedi, R., Farajtabar, M., Biswal, P., Zha, H., 2018. Representation learning over dynamic graphs. doi: 10.48550/arXiv.1803.04051 , arXiv:1803.04051 . arXiv preprint arXiv:1803.04051. [131] Uddin, A., Tao, X., Yu, D., 2021. Attention based dynamic graph learning framework for asset pricing, in: Proceedings of the 30th ACM International Conference on Information & Knowledge Management, pp. 1844–1853. doi: 10.1145/3459637.3482413 .[132] Uddin, A., Tao, X., Yu, D., 2022. Network centrality, leadership, and institutional investors portfolio performance. doi: 10.2139/ssrn.4650574 . available at SSRN 4650574. [133] U.S. Securities and Exchange Commission, . Form 13f — reports filed by institutional investment managers. URL: https://www.investor.gov/introduction-investing/investing-basics/glos sary/form-13f-reports-filed-institutional-investment . accessed: 2025-11-27. 27 [134] U.S. Securities and Exchange Commission, 2024. Form 13f data sets. URL: https://www.sec.gov/ files/form_13f_readme.pdf . accessed: 2025-11-27. [135] U.S. Securities and Exchange Commission, 2026a. Form 13f data sets. URL: https://www.sec.gov/ data-research/sec-markets-data/form-13f-data-sets . accessed: 2026-05-19. [136] U.S. Securities and Exchange Commission, 2026b. Frequently asked questions about form 13f. URL: 
+
+https://www.sec.gov/rules-regulations/staff-guidance/division-investment-managem ent-frequently-asked-questions/frequently-asked-questions-about-form-13f . accessed: 2026-05-19. [137] Uygun, Y., Sefer, E., 2025. Financial asset price prediction with graph neural network-based temporal deep learning models. Neural Computing and Applications 37, 25445–25471. doi: 10.1007/s00521-0 25-11586-8 .[138] Vancsura, L., Tatay, T., Bareith, T., 2025. Navigating ai-driven financial forecasting: A systematic review of current status and critical research gaps. Forecasting 7, 36. doi: 10.3390/forecast7030036 .[139] Wang, J., Zhang, S., Xiao, Y., Song, R., 2022. A review on graph neural network methods in financial applications. Journal of Data Science 20, 111–134. doi: 10.6339/22-JDS1047 .[140] Wang, T., Elsayed, M., Ahmed, A., 2011. Corporate governance and institutional ownership: a critical evaluation and literature survey. Corporate ownership and control 9, 72–85. doi: 10.22495/cocv9i1 art4 .[141] Wermers, R., 1999. Mutual fund herding and the impact on stock prices. the Journal of Finance 54, 581–622. doi: 10.1111/0022-1082.00118 .[142] Wermers, R., 2012. A matter of style: the causes and consequences of style drift in institutional portfolios. CFR Working Paper 12-04. University of Cologne, Centre for Financial Research (CFR). URL: https://hdl.handle.net/10419/59971 .[143] Wu, X., Li, X., Li, R.H., Zhao, K., Wang, G., 2026. Scadyg: A new paradigm for large-scale dynamic graph learning. IEEE Transactions on Neural Networks and Learning Systems , 1–15doi: 10.1109/TN NLS.2025.3650673 .[144] Wurgler, J., 2010. On the economic consequences of index-linked investing. Working Paper 16376. National Bureau of Economic Research. doi: 10.3386/w16376 .[145] Xiang, S., Cheng, D., Shang, C., Zhang, Y., Liang, Y., 2022. Temporal and heterogeneous graph neural network for financial time series prediction, in: Proceedings of the 31st ACM international conference on information & knowledge management, pp. 3584–3593. doi: 10.1145/3511808.3557089 .[146] Yan, X., Zhang, Z., 2009. Institutional investors and equity returns: are short-term institutions better informed? The Review of Financial Studies 22, 893–924. doi: 10.1093/revfin/hhl046 .[147] Yang, B., Huang, K., Sidiropoulos, N.D., 2020. Identifying potential investors with data driven ap-proaches, in: Proceedings of the 2020 SIAM International Conference on Data Mining, SIAM. pp. 235–243. doi: 10.1137/1.9781611976236.27 .[148] Yang, S., Li, X., Jiang, Z., Xiao, M., 2023. Common institutional investors and the quality of management earnings forecasts—empirical and machine learning evidences. Plos one 18, e0290126. doi: 10.1371/journal.pone.0290126 .[149] Yu, L., Sun, L., Du, B., Lv, W., 2023. Towards better dynamic graph learning: New architecture and unified library, in: Advances in Neural Information Processing Systems, pp. 67686–67700. URL: 
+
+https://proceedings.neurips.cc/paper_files/paper/2023/file/d611019afba70d547bd595e8a 4158f55-Paper-Conference.pdf .28 [150] Zhai, X., Ma, H., Zhang, Y., Wang, P., Toh, M.Y., 2024. Institutional investor network and idiosyn-cratic volatility of stocks. Economics & Politics 36, 1261–1288. doi: 10.1111/ecpo.12289 .[151] Zhang, C., Chan, E., Abdulhamid, A., 2015. Link prediction in bipartite venture capital investment networks. URL: https://snap.stanford.edu/class/cs224w-2015/projects_2015/Link_Predict ion_in_Bipartite_Venture_Capital_Investment_Networks.pdf . cS224W course project report. Accessed: 2026-06-16. [152] Zhang, X., Wang, Y., Wang, X., Zhang, M., 2025. Efficient neural common neighbor for temporal graph link prediction, in: The Fourth Learning on Graphs Conference. URL: https://openreview.n et/forum?id=ffsDVGiKRm .29
