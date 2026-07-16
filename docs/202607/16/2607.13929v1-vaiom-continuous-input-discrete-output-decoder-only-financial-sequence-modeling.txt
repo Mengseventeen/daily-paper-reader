@@ -1,0 +1,999 @@
+Title: VAIOM: Continuous-Input, Discrete-Output Decoder-Only Financial Sequence Modeling
+
+URL Source: https://arxiv.org/pdf/2607.13929v1
+
+Published Time: Thu, 16 Jul 2026 01:14:27 GMT
+
+Number of Pages: 40
+
+Markdown Content:
+# VAIOM: Continuous-Input, Discrete-Output Decoder-Only Financial Sequence Modeling 
+
+Yiming MA ∗ Xinyu CHEN ∗
+
+# Abstract 
+
+Financial observations are continuous, heterogeneous and noisy, whereas decoder-only next-token models are usually built around discrete symbolic inputs. We introduce Vector-Input Autoregressive Inference for Ordinal-Return Modeling (VAIOM), a decoder-only Transformer for probabilistic next-return modeling on one-hour (1H) foreign-exchange (FX) bars. VAIOM separates input representation from output likelihood: continuous multivariate financial-event vectors preserve numerical structure at the input, while a categorical distribution over the next volatility-normalized return bucket supports cross-entropy training and likelihood evaluation. The selected 0.9M Hybrid Continuous Input (HybridContIn) model combines continuous event features with categorical asset metadata and a Mixture-of-Market-States (MoMS) return head. It uses Gap, volatility-regime (VolReg) and Ordinal auxiliary objectives with full-sequence supervision (FullSeq). Models and preprocessing are fitted before 2024, selected on 2024H2 Vali-dation and evaluated without refitting on two 2025 Test periods. The selected model outperforms train-fitted Frequency, Markov and identity-augmented single-bar Light Gradient Boosting Ma-chine (LightGBM) baselines in both periods. Across three independent training seeds, every model beats the fixed LightGBM baseline in both Test halves. For the canonical checkpoint, paired gains over LightGBM are approximately 0.029–0.043 bits per event. Validation experiments provide three main design findings. The evaluated continuous-input branch improves over the discrete-token branch while retaining the same categorical return objec-tive; full-sequence autoregressive supervision improves over last-position training; and auxiliary representation shaping together with a mixture-structured return head improves return likelihood in controlled component comparisons. A supporting capacity study finds that the smallest eval-uated complete architecture rung achieves the strongest Validation likelihood, while larger rungs do not convert added parameters into better compression. These results establish a compact continuous-input, categorical-output formulation for decoder-only financial sequence modeling. 
+
+# 1 Introduction 
+
+Decoder-only Transformers have become a general architecture for conditional sequence model-ing. Their original success in natural language came from a simple objective: given a historical sequence, predict the distribution of the next token. This principle is not limited to language. Time series, market data and multivariate event streams can also be viewed as sequences in which the central modeling problem is to estimate the conditional distribution of the next event. Financial markets, however, present a harder version of this problem. Text already comes with a discrete symbolic substrate. Financial observations do not. A market event is usually observed as a heterogeneous vector containing return magnitude, gap behavior, volatility state, calendar position and data-quality masks. These variables are noisy, heavy-tailed, regime-dependent and 
+
+> ∗These authors contributed equally.
+
+1arXiv:2607.13929v1 [cs.LG] 15 Jul 2026 only partially comparable across assets. A financial Transformer therefore cannot simply inherit the natural-language notion of a token. Before next-token prediction can be meaningfully applied to markets, one must decide what the financial event is, how it should enter the model and what probability distribution the model should predict. This paper studies the following scientific problem: can a decoder-only Transformer learn useful probabilistic structure in financial return sequences, and which repre-sentation, supervision and architecture choices make this possible? More concretely, we study next-period normalized return-bucket prediction for 1H FX market data. The target is not a raw price level or a scalar point forecast. The target is a full probability distribution over the next volatility-normalized return bucket. The main metric is negative log-likelihood (NLL) in bits per return event. Return predictability is weak, non-stationary and easy to overstate. A model can appear to learn from financial data while only reproducing unconditional class imbalance, first-order tran-sition persistence or shallow engineered-feature rules. The primary test is therefore whether the model improves held-out return likelihood beyond train-fitted probabilistic baselines, including Frequency, Markov and LightGBM. Without this baseline-compression test, representation and architecture ablations would compare variants of a modeling setup whose predictive value had not been established. The problem is also difficult because financial data create a representation dilemma. Dis-cretizing all market variables before they enter the Transformer makes the task compatible with categorical next-token training, but it destroys local numerical geometry. Two returns, gaps or volatility states that fall into the same bucket become identical to the input encoder, even when their relative magnitudes may carry useful information. This is costly in finance, where useful signals are often weak, conditional and concentrated in small distributional differences. The opposite approach also has limitations. Keeping the entire task continuous often forces the researcher into regression losses, quantile losses or parametric density assumptions. These objectives can be useful, but they do not naturally preserve the language-model-style likelihood discipline of predicting a full categorical distribution over future states. Financial returns are not well summarized by a single point estimate. A distributional target is more appropriate because the model must represent center mass, skew, tail probability and regime-dependent uncertainty. VAIOM resolves this tension by separating the input representation problem from the output likelihood problem. The model receives continuous multivariate financial event vectors as input, preserving the numerical geometry of market variables. At the output, it predicts a categorical distribution over the next normalized return bucket, preserving cross-entropy training, bits-per-event evaluation and direct comparison with probabilistic baselines. The formulation retains next-token-style supervision without tokenizing every input field. The resulting architecture is a decoder-only Transformer for continuous-input, discrete-output financial sequence modeling. Each historical bar is represented as a past-only continuous market-event vector containing standardized return, gap, volatility-regime, calendar and mask informa-tion. The selected model further augments this representation with categorical asset, asset-class and timeframe metadata. These event representations are projected into the Transformer hid-den space and processed causally over market histories. The primary target is the next-period normalized return bucket. Bucket boundaries, categorical maps and other fitted preprocessing parameters are estimated only on Train; fixed recursive rules such as exponentially weighted moving average (EWMA) spans retain their Train-defined specification while their states update causally from past observations. Model selection and ablation decisions use Validation, and final performance is reported on the held-out 2025 Test interval. The empirical study addresses four research questions: whether VAIOM improves held-out next-return likelihood beyond statistical and tree-based baselines; whether continuous financial-event input improves over a discrete-token input branch under the same categorical output objec-tive; whether full-sequence autoregressive supervision improves over last-position training; and 2whether auxiliary objectives and the Mixture-of-Market-States (MoMS) return head improve the main return likelihood. A separate supporting analysis evaluates how the fixed corpus supports predefined 0.9M, 5M and 15M architecture rungs. The contribution is threefold. First, to our knowledge, VAIOM is the first decoder-only model to predict a categorical distribution over the next return bucket from continuous multivariate market-event inputs. Second, the selected Hybrid Continuous Input (HybridContIn) configura-tion improves Test likelihood beyond Frequency, Markov and LightGBM across three training seeds and both 2025 Test halves. Third, the ablations identify continuous event representation, full-sequence supervision, auxiliary representation shaping and mixture-structured return heads as effective design choices under the evaluated protocols. The supporting capacity experiment further shows that the 0.9M rung achieves the strongest Validation likelihood on the present corpus, without treating this local result as a universal scaling threshold. 
+
+# 2 Related Work 
+
+2.1 Transformer-Based Time-Series Forecasting 
+
+Transformer architectures were originally introduced for sequence transduction in natural lan-guage processing, replacing recurrent and convolutional sequence models with self-attention [Vaswani et al., 2017]. Their success motivated a large body of work adapting attention-based models to time-series forecasting. Early long-sequence forecasting models focused on the computational and memory limitations of applying vanilla self-attention to long temporal con-texts. Informer introduced ProbSparse attention and a generative-style decoder for long sequence time-series forecasting [Zhou et al., 2021]. Autoformer incorporated series decomposition into the model architecture and replaced point-wise attention with an auto-correlation mechanism for long-term forecasting [Wu et al., 2021]. FEDformer further combined decomposition with frequency-domain modeling to capture global structure in long-horizon series [Zhou et al., 2022]. Subsequent work showed that the effectiveness of Transformers in time series depends heav-ily on representation design. DLinear challenged the assumption that increasingly complex Transformer models are always superior, showing that simple linear models can outperform several Transformer-based forecasters on long-term forecasting benchmarks [Zeng et al., 2023]. PatchTST reframed time-series tokens as subseries-level patches and used channel-independent Transformer processing. This design improves long-term forecasting and self-supervised represen-tation learning [Nie et al., 2023]. iTransformer inverted the usual temporal-token representation by treating variates as tokens, arguing that timestamp-level tokens can fuse heterogeneous vari-ables in a way that weakens variate-centric representation learning [Liu et al., 2024]. TimesNet transformed one-dimensional time series into two-dimensional tensors to model intra-period and inter-period variation [Wu et al., 2023]. TimeMixer later emphasized decomposable multiscale mixing across temporal resolutions [Wang et al., 2024]. This literature establishes that time-series Transformers require domain-specific representa-tion choices. VAIOM follows this lesson but studies a different task. Most of the above models are evaluated on generic forecasting benchmarks using continuous forecasting losses such as mean squared error (MSE), mean absolute error (MAE) or probabilistic forecasting metrics. VAIOM instead focuses on financial next-return distribution modeling, where the target is a discrete probability distribution over volatility-normalized return buckets and the main metric is return NLL in bits per event. 
+
+2.2 Time-Series Foundation Models and Tokenization 
+
+Recent time-series foundation models (TSFMs) extend the pretraining paradigm to diverse temporal datasets. Chronos is especially relevant because it explicitly treats time series as a 3language-like modeling problem: values are scaled, quantized into a fixed vocabulary and mod-eled by Transformer language-model architectures using cross-entropy loss [Ansari et al., 2024]. TimesFM proposes a decoder-only foundation model pretrained on a large time-series corpus for zero-shot forecasting across domains and granularities [Das et al., 2024]. Moirai presents a masked encoder-based universal forecasting Transformer trained on the Large-scale Open Time Series Archive (LOTSA), which spans multiple domains, and targets cross-frequency, arbitrary-variate forecasting [Woo et al., 2024]. MOMENT develops an open family of TSFMs and empha-sizes the difficulty of pretraining across heterogeneous public time-series datasets [Goswami et al., 2024]. Lag-Llama proposes a decoder-only probabilistic TSFM using lags as covariates [Rasul et al., 2023]. Time-MoE scales TSFMs with sparse mixture-of-experts and reports billion-scale decoder-only autoregressive models trained on Time-300B [Shi et al., 2024]. Another line adapts pretrained large language models (LLMs) or vision models to time series rather than training time-series-native models from scratch. One Fits All uses frozen pretrained language or vision Transformer backbones for general time-series analysis [Zhou et al., 2023]. Time-LLM reprograms time-series inputs into representations suitable for a frozen LLM and adds prompt-as-prefix information for forecasting [Jin et al., 2024]. These approaches show that time-series modeling can borrow from language-model architectures, but they do not directly resolve the representation problem for financial market events. VAIOM differs from both tokenized and continuous forecasting foundation-model routes. Chronos-style models tokenize the input series before modeling; many forecasting foundation models retain continuous outputs or predict future trajectories. VAIOM separates the two sides of the problem: historical market events enter the model as continuous financial event vectors, while the output remains a categorical return-bucket distribution. This allows the model to preserve input-side numerical geometry while retaining language-model-style likelihood training and direct comparison against probabilistic baselines. 
+
+2.3 Financial Market Sequence Modeling and Financial Foundation Models 
+
+Recent work has begun to model financial numerical sequences directly with decoder-only Trans-formers. StockGPT discretizes daily U.S. equity returns into a vocabulary of return tokens and trains a vanilla decoder-only Transformer through autoregressive cross-entropy to predict the distribution of the next return token [Mai, 2024]. Its formulation establishes an especially close precedent for probabilistic next-return modeling: both StockGPT and VAIOM use causal decoder-only backbones and categorical distributions over future return states. The principal representation difference is that StockGPT uses discretized scalar returns on both the input and output sides, whereas VAIOM preserves a continuous multivariate financial-event vector at the input and discretizes only the volatility-normalized return target. Other financial sequence models operate at broader market-event or forecasting scales. Kro-nos discretizes multivariate candlestick information into token sequences and pretrains an autore-gressive Transformer on a large multi-market corpus [Shi et al., 2025]. MarS models order-level financial events generatively for interactive market simulation [Li et al., 2024], while MarketGPT uses a Generative Pre-trained Transformer (GPT)-style architecture to generate limit order book (LOB) event streams inside a discrete-event simulator [Wheeler and Varner, 2024]. FinCast takes a different continuous forecasting route: it is a large decoder-only financial foundation model that projects normalized time-series patches into continuous latent representations and produces multi-horizon point and quantile forecasts through a point-quantile objective [Zhu et al., 2025]. These studies establish complementary routes for decoder-only financial modeling. Stock-GPT retains discrete representations on both sides of the model; Kronos and order-flow models construct discrete financial-event vocabularies; and FinCast retains continuous patch represen-tations together with continuous forecasting outputs. VAIOM studies the remaining hybrid formulation: continuous multivariate market-event input with a discrete volatility-normalized next-return likelihood. Its empirical scope is narrower and more controlled than foundation-4model or simulation work. Rather than evaluating zero-shot multi-domain forecasting, synthetic market generation or downstream portfolio returns, VAIOM asks whether this representation improves held-out next-return NLL beyond train-fitted statistical and tree-based baselines. Recent empirical work also suggests that financial time-series foundation modeling requires domain-specific care. Studies of TSFMs in finance find that off-the-shelf general TSFMs can underperform in zero-shot or fine-tuning settings, while finance-specific pretraining can provide stronger forecasting and economic results [Rahimikia et al., 2025]. Survey work on financial TSFMs emphasizes that financial forecasting requires attention to heavy tails, non-stationarity, evaluation protocols and risk-aware probabilistic scoring [Lu, 2025]. These observations motivate VAIOM’s design: the model is trained and evaluated directly on financial return-distribution likelihood rather than treated as a generic forecasting benchmark. 
+
+2.4 Machine Learning for Return Prediction and Baselines 
+
+A separate but important literature studies machine learning for asset pricing and return pre-diction. Gu, Kelly and Xiu compare machine learning methods for empirical asset pricing and show that trees and neural networks can capture nonlinear predictor interactions missed by more restrictive models [Gu et al., 2020]. This line of work motivates the use of nonlinear tab-ular models as serious financial baselines rather than relying only on unconditional or linear comparisons. Earlier deep learning work, such as Fischer and Krauss, applied long short-term memory (LSTM) networks to financial market prediction and compared recurrent neural models against classical machine-learning baselines [Fischer and Krauss, 2018]. More recent work has applied Transformer-style architectures to stock return prediction, including studies that adapt forecasting Transformers to equity excess-return prediction tasks [Wang, 2025]. VAIOM differs from this return-prediction literature in both target and evaluation. Many financial machine-learning studies focus on point forecasts, directional movement, excess-return prediction or downstream portfolio performance. VAIOM focuses on probabilistic next-return bucket modeling. The primary object is not a trading rule, a point forecast or a portfolio return. It is the full conditional distribution over the next normalized return bucket, evaluated by held-out likelihood. This distinction is why the baseline design is central. VAIOM is evaluated against Fre-quency, Markov and LightGBM baselines. Frequency and Markov test whether the model goes beyond unconditional class imbalance and first-order bucket persistence. LightGBM provides a tree-based nonlinear feature baseline, following the broader empirical asset-pricing lesson that nonlinear tabular models are strong competitors in financial prediction. LightGBM itself is a gradient boosting decision tree (GBDT) system designed for efficient large-scale training using techniques such as gradient-based one-side sampling and exclusive feature bundling [Ke et al., 2017]. By requiring baselines to output probability distributions over return buckets, VAIOM keeps the comparison on the same probabilistic likelihood metric. 
+
+2.5 Representation, Supervision and Output-Head Design 
+
+VAIOM’s architecture choices also connect to broader machine-learning ideas. Auxiliary objec-tives are closely related to multi-task learning and deep supervision. Multi-task learning uses shared representations across related tasks and can improve data efficiency or reduce overfitting, but task choice and loss balancing are nontrivial [Ruder, 2017, Crawshaw, 2020]. Deeply super-vised networks use auxiliary losses to make hidden-layer learning more direct [Lee et al., 2015]. VAIOM uses Gap, VolReg and Ordinal heads in this spirit: auxiliary losses are not alternative success metrics, but representation-shaping signals judged only by whether they improve return likelihood. The ordinal auxiliary head is motivated by the ordered nature of return buckets. Standard multi-class cross-entropy treats all wrong classes as unordered categories, while return buckets 5have a natural rank structure. Ordinal regression methods such as Consistent Rank Logits (CORAL) explicitly model ordered class labels and enforce rank-consistent ordinal predictions [Cao et al., 2020]. VAIOM does not replace the main categorical likelihood with an ordinal objective. Instead, it adds ordinal supervision as an auxiliary training signal while retaining return NLL as the evaluation objective. MoMS is related to mixture-output modeling. Mixture density networks combine neural networks with mixture models to represent conditional probability distributions rather than single deterministic predictions [Bishop, 1994]. VAIOM applies a categorical analogue of this idea: the return distribution is represented as a mixture of latent predictive components over return buckets. The model does not assume that these latent components are economically identified regimes. Their value is empirical and likelihood-based: MoMS is retained only if it improves return NLL relative to an independent categorical head. Finally, VAIOM’s full-sequence supervision follows the autoregressive training logic of causal sequence models. Standard causal language modeling trains a model to predict future tokens under a left-context constraint. VAIOM transfers this principle to financial event sequences by comparing last-position loss with full-sequence next-return supervision. The contribution is not the invention of full-sequence autoregressive training, but its validation as a supervision-density choice for noisy, overlapping financial return windows. 
+
+2.6 Positioning of VAIOM 
+
+Decoder-only financial models now cover several representation choices. StockGPT uses discrete return tokens at both input and output; FinCast maps continuous patches to continuous point and quantile forecasts; Kronos tokenizes multivariate candlestick sequences; and VAIOM com-bines continuous multivariate market-event input with a categorical next-return output [Mai, 2024, Zhu et al., 2025, Shi et al., 2025]. To our knowledge, VAIOM is the first decoder-only model to predict a categorical distribu-tion over the next return bucket from continuous multivariate market-event inputs. Its scope is controlled held-out likelihood rather than broad foundation-model transfer, event-stream simu-lation or trading performance. The empirical study compares input representation, supervision density, auxiliary representation shaping, mixture-structured output heads and corpus-matched capacity within one small decoder-only model family. 
+
+# 3 Methods 
+
+3.1 Task Definition: Next-Return Distribution Modeling 
+
+Given a historical sequence of market events available up to time t, the model predicts the probability distribution of the next normalized return bucket ya,t +1 , where a indexes the asset. Let Ca,t denote the close price of asset a at time t. The next-period log return, its volatility-normalized form and the bucketized target are 
+
+ra,t +1 = log Ca,t +1 
+
+Ca,t 
+
+, za,t +1 = ra,t +1 
+
+σa,t 
+
+, ya,t +1 = B(za,t +1 ),
+
+where σa,t is an exponentially weighted moving-average scale of past clean log returns through time t (short span = 20 ), and B(·) is the bucket map defined in Section 3.4. Let (Ft)t≥0 be the natural filtration generated by the observed market history. The volatility estimate σa,t is Ft-measurable: it uses only information available through time t and never uses 
+
+ra,t +1 , Ca,t +1 , or any other quantity from the prediction interval. Each input field xa,s is Ft-measurable for all s ≤ t. The target ya,t +1 is Ft+1 -measurable and is not generally Ft-measurable. The model therefore learns 6Pθ(ya,t +1 | xa, ≤t).
+
+The task is not raw price-level prediction, raw return regression, or directional classification. It is probabilistic next-return bucket prediction. The main evaluation metric is return negative log-likelihood, reported in bits per return event. 
+
+3.2 Corpus Construction and Split Protocol 
+
+The main corpus used in this paper is the 1H FX V0.2 corpus with expanded calendar fields. The corpus is constructed as a set of per-asset time series. Training samples are drawn from valid causal context windows, and no cross-asset sequence concatenation is used. The split protocol is chronological and assigns each prediction event by the timestamp of its target bar: 
+
+T rain : Datetime < 2024 -01 -01 
+
+V alidation : 2024 -07 -01 ≤ Datetime < 2025 -01 -01 
+
+T est : 2025 -01 -01 ≤ Datetime < 2026 -01 -01 .
+
+The interval 2024 -01 -01 ≤ Datetime < 2024 -07 -01 is a non-supervised temporal buffer. Its target events are not used for parameter fitting, checkpoint selection, ablation comparison or reported evaluation. Its observed bars are retained only as past-only causal history: they update recursive feature states and may enter the left context of early Validation windows. This preserves deployment-time continuity without turning 2024H1 into a fitted or scored split. No random split is used. Train determines all fitted preprocessing quantities, including bucket edges, categorical maps and serialized tokenizer state, together with fixed recursive specifications such as EWMA spans and floors. Validation and Test are transform-only in the parameter-estimation sense: no preprocessing parameter, baseline distribution or model parameter is refit. Recursive EWMA states nevertheless continue to update through the buffer, Validation and Test using only observations available by each feature’s information time and strictly before its prediction target. The paper uses the split names as follows. Train is used for fitting tokenizers, model param-eters and train-fitted baselines. Validation is used for checkpoint selection, ablation comparison and model-design diagnosis. Test is the 2025 calendar-year interval and is used only for final held-out reporting of the selected main model. Data at or after 2026 -01 -01 are excluded from every result in this paper and reserved as a future holdout. 
+
+Test purity. The Test interval is reported as two pre-defined halves: 
+
+2025H1 : 2025 -01 -01 ≤ Datetime < 2025 -07 -01 ,
+
+2025H2 : 2025 -07 -01 ≤ Datetime < 2026 -01 -01 .
+
+Evaluation was performed separately for each half after the main model was fully selected. No Test statistic, Test likelihood, Test comparison or Test visualization entered any design decision, ablation choice, checkpoint selection, hyperparameter tuning or model-selection step. The main model was selected on Validation alone; only then was it evaluated on Test. Figure 1 summarizes the split and information-flow rules. Recursive feature states continue causally across boundaries, but fitting ends with Train; the buffer is unscored, Validation selects the model and 2026 onward remains untouched. 7Train before 2024   
+
+> 2024H1 buffer
+> 2024H2 Validation
+> 2025H1 Test
+> 2025H2 Test
+> 2026+ reserved
+> past-only recursive state updates
+> fit preprocessing, baselines and model checkpoint selection report only; no refit
+
+Figure 1: Chronological split and causal information flow. Train determines fitted quantities. Recursive states update from past observations across later intervals, but no fitting occurs after Train. 
+
+3.3 Market Data, Price Convention and Bar Construction 
+
+The 1H corpus is derived from one-minute FX and spot-metal open-high-low-close-volume (OHLCV) data obtained from Dukascopy. The universe contains AUDUSD, EURUSD, GBPUSD, NZ-DUSD, USDCAD, USDCNY, USDHKD, USDJPY, USDSGD, XAGUSD and XAUUSD. The first nine series are assigned to the FX class and XAGUSD and XAUUSD to the spot-metal class. Each asset is processed as a separate time series; windows never cross asset boundaries. The archive exposes one open-high-low-close (OHLC) price stream rather than separate bid and ask series. No midpoint is reconstructed. In this paper, Oa,t and Ca,t therefore denote the stored open and close of that source stream; in particular, Ca,t is not a separately calculated 
+
+(bid + ask) /2 midpoint. Raw trading volume is disabled because the available FX activity field is a broker-tick proxy rather than comparable exchange volume. Appendix Table 14 reports archived coverage and valid Train-window counts by asset. The counts sum to 1,266,989 unique valid Train windows. Bars from 2026 remain in the archive but are excluded from every result under the future-holdout rule. One-hour bars are formed independently by symbol from fixed one-hour clock bins. Within each non-empty bin, Open is the earliest one-minute Open, High is the maximum High, Low is the minimum Low, Close is the latest one-minute Close and Volume is the sum of available one-minute volume values. The stored Datetime is the left boundary of the one-hour bin. Timestamps are timezone-naive in the archived parquet files and are consumed without localization or timezone conversion; split cutoffs and calendar covariates use this stored provider clock. Empty clock bins are not synthesized. The pipeline performs no interpolation, forward filling or weekend filling, and therefore inserts no artificial Saturday or Sunday bars. Consecutive observed rows remain consecutive in the per-asset sequence across holidays and weekends. The opening displacement after any such interval is retained through 
+
+ga,t = log Oa,t 
+
+Ca,t −1
+
+,
+
+and is normalized by a past-only gap scale. Thus a weekend or market-closure jump is represented as a gap, while the missing wall-clock bins themselves do not become model events. 
+
+Data-quality masks. A row is missing when Open or Close is null or non-positive. It is stale when a previous close exists and the close-to-close log return is exactly zero; the configured tolerance is 0. It is bad-data when | log( Ct/C t−1)| > 1 or | log( Ot/C t−1)| > 1.It is insufficient-history when fewer than 20 preceding clean returns are available, and 
+
+scale-zero when the past-only volatility scale is at or below 10 −8. The row-level mask-any flag is the logical OR of these five masks. Masked categorical input fields receive index 0; ContIn retains the numerical mask channels. A next-return target is invalid when the next close-to-close return is non-finite, exactly zero, exceeds the absolute log-return threshold, or the next row has missing/non-positive Open or Close. Invalid targets receive index 0 and never enter any loss or reported likelihood denominator. 8Continuous dynamic features. Define the close return and opening gap as 
+
+ra,t = log Ca,t 
+
+Ca,t −1
+
+, ga,t = log Oa,t 
+
+Ca,t −1
+
+.
+
+Let era,t equal ra,t unless the row is missing, stale or has |ra,t | > 1, in which case it is missing. Likewise, ega,t equals ga,t unless the row is missing or has |ga,t | > 1. For a possibly missing series 
+
+q, define 
+
+Es(q≤t) = EWMMean 
+
+
+
+q≤t; α = 2
+
+s + 1 , adjust=False , min_periods=1 
+
+
+
+,
+
+using the implementation’s default missing-value handling, and 
+
+σ(s) 
+
+> a,t
+
+= max 
+
+
+
+10 −8,
+
+q
+
+Es(er,2
+
+> a, ≤t
+
+)
+
+
+
+, σgap  
+
+> a,t
+
+= max 
+
+
+
+10 −8,
+
+q
+
+E20 (eg,2
+
+> a, ≤t
+
+)
+
+
+
+.
+
+The four dynamic ContIn fields are therefore 
+
+ret _za,t = ra,t 
+
+σ(20) 
+
+> a,t −1
+
+, gap _za,t = ga,t 
+
+σgap 
+
+> a,t −1
+
+,
+
+relative _log _vol a,t = log σ(20)  
+
+> a,t
+
+− log σ(120)  
+
+> a,t
+
+, sigma _through _ta,t = σ(20)  
+
+> a,t
+
+.
+
+Thus sigma_through_t is the untransformed short-span EWMA scale through the current row. Non-finite continuous fields are serialized as zero and all 25 numerical inputs are clipped to 
+
+[−32 , 32] only when they enter the model. The Gap bucket map uses the same fixed tail cutoffs and Train-fitted interior-quantile procedure as the return map; its exact serialized 1H edges are reported in Appendix B.4. 
+
+3.4 Return Bucket Construction 
+
+The output vocabulary is defined over normalized return buckets. The normalized return za,t +1 
+
+removes raw price level and asset-scale effects by measuring each return in units of the asset’s own past volatility. Bucket boundaries are fitted on Train and then fixed for the buffer, Validation and Test. For a series of clean returns ˜r, the implemented scale is 
+
+σ(s) 
+
+> a,t
+
+= max 10 −8,
+
+r
+
+EWMA s
+
+
+
+˜r 2
+
+> a, ≤t
+
+!
+
+,
+
+where EWMA is the pandas exponentially weighted mean with span =s, adjust=False and 
+
+min_periods =1. Equivalently, on consecutive non-missing observations its decay coefficient is 
+
+α = 2 /(s + 1) . The spans, floor and update rule are fixed before out-of-sample (OOS) evaluation; they are not re-estimated on Validation or Test. The EWMA state itself is dynamic and continues recursively through the buffer, Validation and Test using past-only observations. The target normalization uses s = 20 and the scale through time t, so za,t +1 = ra,t +1 /σ (20)  
+
+> a,t
+
+. The current-return ContIn field uses the analogous scale computed through t − 1. The long volatility input uses s = 120 .Let the bucket edges be 
+
+−∞ = b0 < b 1 < · · · < b K−1 < b K = + ∞,
+
+where K = 16 is the number of return buckets. The bucket map is 
+
+B(z) = j ⇐⇒ bj−1 < z ≤ bj , j ∈ { 1, . . . , K }.
+
+9The edges are hybrid: fixed tail cutoffs (−8, −5, −3, −2, +2 , +3 , +5 , +8) in units of σa,t and seven interior quantile edges (0 .1, 0.2, 0.35 , 0.5, 0.65 , 0.8, 0.9) fitted on the Train distribution of z
+
+values inside (−2, +2) . The special index 0 marks missing or invalid observations. For the reported 1H V0.2 corpus, the fitted return edges, shown to four decimal places, are 
+
+(−∞ , −8, −5, −3, −2, −1.0085 , −0.6241 , −0.2697 , 0.0118 , 0.2833 , 0.6362 , 1.0206 , 2, 3, 5, 8, +∞).
+
+These 17 edges define exactly 16 non-missing target buckets; the serialized tokenizer state, rather than a refit, is used by every Validation and Test run. 
+
+3.5 Input Representations: DiscIn, ContIn and HybridContIn 
+
+The primary representation study compares Discrete Input (DiscIn) and pure Continuous Input (ContIn) while keeping the output target fixed; Hybrid Continuous Input (HybridContIn) is evaluated afterward as a refinement of the continuous branch. In DiscIn , raw-volume field volume_bucket is disabled. The variant contains the 15 categor-ical fields in Table 15. Return, gap and volatility-regime bucket maps are fitted on Train, with index 0 marking missing values. Asset identifiers are assigned in sorted-symbol order: AUDUSD through XAUUSD receive integer values 1 through 11, and 0 is reserved for an unknown asset. The Train-fitted class map is FX 7 → 0 and spot metal (internal label SPOT ) 7 → 1; the sole time-frame maps 1H 7 → 0. Calendar fields are extracted from the stored provider-clock timestamp. The field years_since_2000 is clipped to [0 , 63] . Month, day and day-of-year use one-based integers; day-of-week, hour, minute and second use zero-based integers. The complete DiscIn schema is listed in Appendix Table 15. The ContIn variant contains exactly the 25 numerical fields in Table 16. Raw-volume field 
+
+volume_z is disabled. Non-finite values are replaced by 0, and every numerical field is clipped elementwise to [−32 , 32] before input projection. The complete numerical schema is listed in Appendix Table 16; metadata fields are injected separately. For the continuous calendar fields, years_since_2000_norm equals the clipped year offset divided by 63. For each periodic calendar variable v with period P , the two channels are 
+
+sin(2 π(v − o)/P ) and cos(2 π(v − o)/P ), where o = 1 for month, day-of-month and day-of-year and o = 0 for day-of-week, hour, minute and second. The corresponding periods are 12, 31, 366, 7, 24, 60 and 60. After completing the primary DiscIn-versus-ContIn representation study, we evaluated Hy-bridContIn , a metadata-augmented extension of the continuous-input branch. The original 25-dimensional continuous market-event vector remains unchanged. Asset identity, asset class and timeframe are additionally represented through learned categorical embeddings and fused with the continuous event projection before the Transformer backbone. HybridContIn is treated as a subsequent model refinement rather than as part of the primary representation ablation. The DiscIn-versus-pure-ContIn comparison tests whether continuous dynamic market variables improve return likelihood relative to tokenized market variables under the same output target and return-likelihood objective. The HybridContIn experiment then tests whether static categorical identity information provides complementary predictive information after the continuous representation has been established. The selected main model uses the HybridContIn extension. Raw trading volume is disabled in these experiments. VolReg always denotes volatility-regime information and supervision. Figure 2 summarizes the three alternative input branches and the shared causal backbone. DiscIn and pure ContIn define the primary representation comparison; HybridContIn augments the continuous branch with static categorical metadata. 10 DiscIn                
+
+> 15 categorical fields independent 8-d embeddings concatenate 120-d
+> →MLP →128-d
+> Pure ContIn
+> 25 continuous fields MLP 25 →128 →128
+> 128-d event embedding
+> HybridContIn
+> 25 fields →128-d projection asset/class/timeframe:
+> 3×8-d concatenate 152-d →
+> fusion MLP →128-d
+> Learned absolute positional embeddings (positions 0–511)
+> Four-layer pre-normalized causal Transformer decoder 4 attention heads; hidden width 128; feed-forward width 512
+> Return-distribution head
+> Independent cat-egorical or MoMS
+> Auxiliary heads
+> Gap, VolReg and Ordinal
+> Last-position or FullSeq causal supervision
+
+Figure 2: VAIOM architecture. Alternative DiscIn, pure ContIn and HybridContIn encoders feed the same causal decoder, return head, auxiliary heads and supervision interface. 
+
+3.6 VAIOM Backbone 
+
+VAIOM is a causal decoder-only Transformer over financial event embeddings, built from the self-attention architecture introduced by Vaswani et al. [2017]. DiscIn and pure ContIn use a two-layer input multilayer perceptron (MLP) with Gaussian error linear unit (GELU) activation: 
+
+et = W2 GELU( W1ut + b1) + b2,
+
+where et ∈ Rd and d = 128 for the main model. For pure ContIn, ut ∈ R25 is the clipped numerical event vector, so the projection is 25 → 128 → 128 . For the selected HybridContIn model, the implemented fusion is concatenation followed by projection. Specifically, 
+
+ca,t = GELU  Wcxcont  
+
+> a,t
+
++ bc
+
+ ,ea,t = W2 GELU( W1 [ca,t ; Easset (a); Eclass (κ(a)); Etf (τ (a))] + b1) + b2.
+
+Here κ(a) denotes the asset class and τ (a) the timeframe. The continuous projection ca,t ∈
+
+R128 ; each metadata embedding is 8-dimensional; the concatenated vector is therefore 152-dimensional; and the fusion MLP has shape 152 → 128 → 128 with GELU activation. This matches the implemented order: continuous projection, embedding lookup, concatenation and fused projection. For DiscIn, each of the 15 fields has an independent learned embedding table. The per-field embedding width is 
+
+df = max 
+
+
+
+8,
+
+ d
+
+15 
+
+ 
+
+= 8 .
+
+The 15 field embeddings are concatenated into ut ∈ R120 and passed through the same MLP form, 120 → 128 → 128 . Field embeddings are concatenated, not summed or averaged. A learned absolute positional embedding ps ∈ R128 , indexed by sequence position s ∈{0, . . . , 511 }, is added to each projected event: h(0)  
+
+> s
+
+= es + ps. No sinusoidal or rotary posi-tional encoding is used. 11 Each Transformer block is pre-normalized. Layer normalization (LayerNorm) is applied be-fore four-head causal self-attention, followed by a residual addition; a second LayerNorm precedes the feed-forward network, followed by another residual addition. The feed-forward network has inner dimension 4d = 512 , GELU activation and shape 128 → 512 → 128 . Attention dropout and feed-forward output dropout are both 0.1. A final LayerNorm is applied after the fourth block and before all return and auxiliary heads. The causal mask is strictly upper triangular, so position s cannot attend to positions later than s.
+
+3.7 Output Heads: Independent Categorical Head and MoMS 
+
+The simplest output head is an independent categorical return head. Let h ∈ Rdemb be the Transformer hidden state at the prediction position, W ∈ RK×demb and b ∈ RK . The probability of bucket j is 
+
+pj (h) = P (y = j | h) = exp( w⊤ 
+
+> j
+
+h + bj )
+
+PKℓ=1 exp( w⊤ 
+
+> ℓ
+
+h + bℓ) ,
+
+or, in vector form, p(h) = softmax( W h + b) with P (y = j | h) = pj (h).VAIOM also evaluates a MoMS head. MoMS follows the general mixture-output principle of representing a conditional predictive distribution through multiple latent components and learned mixture weights [Bishop, 1994], adapted here to categorical return-bucket distributions. MoMS parameterizes the return distribution as a mixture of Kstates latent predictive components, with 
+
+Kstates = 4 . Let Wπ ∈ RKstates ×demb , bπ ∈ RKstates , Wk ∈ RK×demb and bk ∈ RK . The mixture weights and component distributions are 
+
+πk(h) = softmax( Wπh + bπ)k, pk,j (h) = Pk(y = j | h) = softmax( Wkh + bk)j .
+
+The blended return distribution is 
+
+P (y = j | h) = 
+
+> Kstates
+
+X
+
+> k=1
+
+πk(h) pk,j (h),
+
+which is a valid categorical distribution because P 
+
+> k
+
+πk(h) = 1 and P 
+
+> j
+
+pk,j (h) = 1 for every 
+
+k.MoMS is used only as a return-distribution output-head hypothesis. The learned mixture components are not assumed to correspond to identifiable economic regimes. Their value is judged only by whether MoMS improves return NLL relative to an independent categorical head. 
+
+3.8 Training Objective 
+
+The primary training objective is return NLL. Under an independent categorical head, the per-position loss is 
+
+Lreturn = − log P (ytrue | h) = − log pytrue (h).
+
+Under MoMS, the exact per-position return NLL is written in logsumexp form for numerical stability: 
+
+Lreturn = − logsumexp Kstates  
+
+> k=1
+
+(log πk(h) + log pk, y true (h)) .
+
+VAIOM optionally adds auxiliary objectives. Through multi-task training, these objectives shape the shared backbone representation and provide deep supervision [Ruder, 2017, Crawshaw, 2020, Lee et al., 2015]. The full per-position loss is 12 L = Lreturn + λgap Lgap + λvolreg Lvolreg + λord Lord .
+
+The auxiliary targets are all next-period quantities, constructed only from information in the prediction interval, and are never fed back as inputs at prediction time. 
+
+Gap auxiliary. The next-period gap is 
+
+ga,t +1 = Bgap 
+
+log( Oa,t +1 /C a,t )
+
+σgap 
+
+> a,t
+
+!
+
+,
+
+where Oa,t +1 is the next open, Ca,t is the current close, σgap  
+
+> a,t
+
+is a past-only gap scale, and 
+
+Bgap is a signed-edge bucket map fitted on Train. The gap loss is 
+
+Lgap = − log Pθ(ga,t +1 | xa, ≤t).
+
+VolReg auxiliary. The next-period volatility-regime bucket is 
+
+va,t +1 = Bvol 
+
+
+
+log σshort  
+
+> a,t +1
+
+− log σlong 
+
+> a,t +1
+
+
+
+,
+
+where σshort and σlong are short-span (20) and long-span (120) EWMA scales of past clean log returns, and Bvol is a four-quantile edge map (0 .2, 0.4, 0.6, 0.8) fitted on Train, producing five regimes. The volreg loss is 
+
+Lvolreg = − log Pθ(va,t +1 | xa, ≤t).
+
+The label va,t +1 is used only as an auxiliary training target and is never used as an input at prediction time, so there is no leakage into the return head. 
+
+Ordinal auxiliary. The ordinal head outputs K − 1 threshold logits ℓ = ( ℓ1, . . . , ℓ K−1) via a linear projection Word h + bord . For a target bucket y ∈ { 1, . . . , K }, define the cumulative binary labels 
+
+ℓ⋆j = 1[j < y ], j ∈ { 1, . . . , K − 1}.
+
+The ordinal loss is the average binary cross-entropy (BCE) over the K − 1 thresholds: 
+
+Lord = 1
+
+K − 1
+
+> K−1
+
+X
+
+> j=1
+
+BCE( ℓj , ℓ ⋆j ),
+
+where BCE( ℓj , ℓ ⋆j ) = −ℓ⋆j log σ(ℓj ) − (1 − ℓ⋆j ) log(1 − σ(ℓj )) , and σ(·) is the sigmoid func-tion. This is an independent-binary decomposition of the ordinal structure rather than CORAL: unlike the rank-consistent cumulative formulation of Cao et al. [2020], each threshold classifier is parameterized independently and no shared-weight or cumulative-link constraint is imposed. The ordinal loss is used only as a training signal; evaluation always reports return NLL alone. Auxiliary-task accuracy or auxiliary loss is not used as a primary success metric. 
+
+3.9 Supervision Scope: Last-Position and Full-Sequence 
+
+Full-sequence supervision follows the general causal autoregressive training logic of decoder-based sequence models, in which multiple positions are trained under a left-context constraint [Vaswani et al., 2017, Das et al., 2024, Rasul et al., 2023]. The paper compares two supervision scopes. Consider a sampled causal context window of length C for asset a, starting at index u:
+
+Xa,u :u+C−1. A position is valid when 13 valid _base a,s = 1[ya,s +1 > 0] ∧ ¬ mask _any a,s ∧ ¬ target _bad a,s .
+
+Here ya,s +1 > 0 marks a serialized non-missing next-return target, mask _any a,s is the current-row data-quality mask and target _bad a,s is the serialized target_mask_bad flag. The implementation stores this conjunction as valid_base .Return and Ordinal use the base indicator directly. Gap and VolReg additionally require their own next-period target indices to be nonzero. With q ∈ { r, g, v, o } denoting return, Gap, VolReg and Ordinal, respectively, define 
+
+m(r) 
+
+> a,s
+
+= valid _base a,s , m(o) 
+
+> a,s
+
+= valid _base a,s ,m(g) 
+
+> a,s
+
+= valid _base a,s 1[y(g) 
+
+> a,s +1
+
+> 0] , m(v) 
+
+> a,s
+
+= valid _base a,s 1[y(v) 
+
+> a,s +1
+
+> 0] ,
+
+and, for one window, 
+
+Iq(a, u ) = {s : u ≤ s ≤ u + C − 1, m (q) 
+
+> a,s
+
+= 1 }.
+
+In the last-position setting, windows are sampled with a return-valid endpoint, so s⋆ =
+
+u + C − 1 = max Ir(a, u ). The return loss is 
+
+Llast = − log Pθ(ya,s ⋆+1 | Xa,u :s⋆ ) .
+
+In the full-sequence setting, reduction is global over all valid positions in the current micro-batch, not a mean of per-window means. For a micro-batch B = {(ab, u b)}Bb=1 , define 
+
+Iq(B) = {(b, s ) : 1 ≤ b ≤ B, u b ≤ s ≤ ub + C − 1, m (q) 
+
+> ab,s
+
+= 1 }.
+
+Each task is reduced separately: 
+
+Lq = 1
+
+|I q(B)|
+
+X 
+
+> (b,s )∈I q(B)
+
+ℓ(q) 
+
+> b,s
+
+, q ∈ { r, g, v, o },
+
+and the implemented objective is 
+
+Lfull = Lr + λgap Lg + λvolreg Lv + λord Lo.
+
+Equivalently, Lq = P 
+
+> b,s
+
+m(q) 
+
+> b,s
+
+ℓ(q) 
+
+> b,s
+
+/ P 
+
+> b,s
+
+m(q) 
+
+> b,s
+
+. The sampler guarantees a return-valid final position in every sampled window, so |I r(B)| > 0; Ordinal uses the same return target and mask. If a micro-batch contains no valid Gap or VolReg targets, that auxiliary term is omitted for that forward pass. Four fixed-size micro-batches are accumulated per optimizer update, with each micro-batch reduced as above. The same causal masking rule is preserved in both scopes: each position can attend only to its past. Full-sequence training therefore increases supervised signal density without changing the prediction target. Optimizer steps are not directly comparable across the two scopes, because each sampled window supplies |I r(a, u )| return targets under FullSeq but only one under last-position supervision. Operationally, FullSeq constructs task target tensors of shape (B, C ). Invalid return and auxiliary targets are replaced by index 0, and each head selects its own positive-index positions before taking its global mean. No padding, invalid target or masked current row contributes to any numerator or denominator. Causal self-attention masking remains unchanged, so logits at position s depend only on Xa,u :s.FullSeq is treated as a training protocol, not as a different model architecture. The final main model is the 0.9M HybridContIn MoMS Gap/VolReg/Ordinal FullSeq checkpoint selected on Validation . This selected checkpoint is then evaluated on the held-out Test split. 14 3.10 Optimization and Reproducibility Settings 
+
+The selected main model uses Adam with decoupled weight decay (AdamW) at learning rate 
+
+3 × 10 −4, PyTorch default coefficients (β1, β 2) = (0 .9, 0.999) , ϵ = 10 −8 and weight decay 0.01 .The learning rate is constant: no warm-up and no learning-rate scheduler are used. Gradient norm is clipped to 1.0. Transformer dropout is 0.1.The micro-batch contains 32 windows. Four micro-batches are accumulated before each optimizer update, giving an effective batch of 128 windows per optimizer step. Training uses 16-bit floating-point (FP16) automatic mixed precision and data parallelism. The model, NumPy sampler, central processing unit (CPU) Torch random-number generator (RNG) and all Compute Unified Device Architecture (CUDA) RNGs use seed 17. The selected main checkpoint is the 5.5K-step FullSeq checkpoint chosen by Validation return NLL; the reported Test run loads this serialized checkpoint without further fitting. The canonical main checkpoint uses random seed 17. To test whether its baseline advantage depends on a favorable initialization or training-sample order, the selected HybridContIn con-figuration is subsequently retrained with seeds 29 and 43. All three runs use the same corpus, architecture, optimizer, auxiliary weights, FullSeq supervision scope, 5.5K-step training budget and evaluation protocol. No architecture, hyperparameter or checkpoint rule changes across seeds. Each checkpoint is evaluated on both 2025H1 and 2025H2. This multi-seed experiment evaluates the training stability of the already selected configu-ration. Individual Test results and period-specific means and sample standard deviations are reported without selecting the best seed; seed 17 remains the canonical main checkpoint. All six seed-period comparisons use exactly the same fixed LightGBM fit, whose Test NLL is 3.2057 bits/event in 2025H1 and 3.1785 in 2025H2. 
+
+3.11 Baselines 
+
+The paper uses three primary probabilistic baselines. All are fit only on Train; Validation and Test are transform-only evaluation splits. All baselines output full probability distributions over return buckets rather than only argmax class predictions. The Frequency baseline uses the empirical Train distribution of return buckets with Laplace (Dirichlet) smoothing. Let Ci be the Train count of bucket i among valid targets and let α = 1 . Then 
+
+ˆpi = P (y = i) = Ci + αNTrain + αK ,
+
+where NTrain = P 
+
+> j
+
+Cj and K = 16 . The smoothing constant α = 1 guarantees strictly positive probability on every bucket, so the baseline NLL is finite even if a bucket has zero Train occupancy. The Markov baseline is the Train-fitted first-order conditional transition distribution with the same Laplace prior. Let C(i → j) be the Train count of transitions from bucket i to bucket 
+
+j. Then 
+
+P (yt+1 = j | yt = i) = C(i → j) + αC(i) + αK ,
+
+with α = 1 and K = 16 . The transition matrix includes an extra row for the missing-token state i = 0 .The LightGBM baseline is a tree-based probabilistic classifier implemented using the gradient-boosting framework of Ke et al. [2017] and trained on features available at prediction time. Let ϕ(xa,t ) denote the feature map. In this paper, ϕ(xa,t ) = xa,t : LightGBM consumes the full event vector at the last timestep of the sampled window, with no autoregressive con-text. For the DiscIn variant, all 15 input fields are treated as categorical. For pure ContIn, all 15 25 continuous fields are numerical. For the HybridContIn main-model comparison, LightGBM receives the same 25 numerical fields together with asset identity, asset class and timeframe as categorical features, giving 28 single-bar fields. The predicted distribution is 
+
+ˆpLightGBM  
+
+> j
+
+(xa,t ) = PLightGBM (ya,t +1 = j | ϕ(xa,t )) .
+
+For numerical stability, each baseline probability vector is clipped at ϵ = 10 −12 and then renormalized before NLL computation. For any baseline distribution ˆp, define 
+
+qj = max( ϵ, ˆpj ), ˜pj = qj
+
+PKℓ=1 qℓ
+
+.
+
+The resulting ˜p remains a valid categorical distribution, and the bits-per-event value is 
+
+− log 2 ˜pya,t +1 .
+
+Baseline specification and fairness caveat. Table 1 summarizes the comparison. VAIOM consumes a 512-bar context, whereas LightGBM receives only the current feature vector xa,t .LightGBM is therefore a nonlinear single-bar baseline in the spirit of [Gu et al., 2020], not an autoregressive sequence baseline. Both models predict the same target on the same valid positions, but the comparison measures the combined value of learned sequence representation and temporal context. Appendix G.4 gives the complete LightGBM hyperparameters. Table 1: Baseline specification. Property Frequency Markov LightGBM Input — previous bucket yt xa,t (last bar only) Context unconditional order 1 one bar; no lag stack Features none yt 28 HybridContIn fields Fit Train counts Train transitions Train; pooled; capped at 1M The common fixed LightGBM is fitted once on the pre-2024 Train sample using 25 numerical fields and three categorical metadata identifiers, then applied unchanged to both 2025 Test periods. Its Train holdout NLL is 3.1656 bits/event. 
+
+3.12 Evaluation and Ablation Protocol 
+
+For an evaluation set Deval containing positions that satisfy valid _base a,t = 1 , average return NLL is 
+
+¯Lreturn = − 1
+
+|D eval |
+
+X
+
+> (a,t )∈D eval
+
+log Pθ(ya,t +1 | xa, ≤t).
+
+All comparisons report ¯Lreturn / log 2 in bits per event; lower values are better. For main Test reporting and Validation ablations, Deval contains the final valid position of each sampled window, so each denominator event is one held-out next-return prediction. Unless stated otherwise, 
+
+∆ = model bits − baseline bits ,
+
+so negative ∆ favors VAIOM. The Test split is used only for the selected main model. All design ablations are evaluated on Validation unless explicitly stated otherwise. This separates final held-out reporting from model-design diagnosis. The ablation protocol changes one design axis where possible: 16 1. Input representation: DiscIn versus ContIn. 2. Supervision density: last-position loss versus full-sequence loss. 3. Auxiliary objectives: no auxiliary heads, Gap, VolReg and Ordinal variants. 4. Output head: independent categorical head versus MoMS. 5. Architecture rung: 0.9M, 5M and 15M complete VAIOM rungs. Some historical component ablations are used as diagnostic evidence when exact ContIn-matched variants are unavailable. Such cases are marked in the Results section and are not interpreted as ContIn-only causal claims. 
+
+3.13 Paired Test Uncertainty 
+
+Statistical uncertainty for the selected VAIOM–LightGBM Test comparison is estimated from paired event losses. Let ℓV 
+
+> a,t
+
+and ℓL 
+
+> a,t
+
+denote VAIOM and LightGBM NLL in bits for the same valid event. The paired gain is 
+
+da,t = ℓL 
+
+> a,t
+
+− ℓV
+
+> a,t
+
+,
+
+so da,t > 0 favors VAIOM. This sign convention is the reverse of the VAIOM-minus-baseline deltas in Table 3 and is used here so positive values denote improvement. Because adjacent financial events are temporally dependent, individual events are not treated as independent and identically distributed (IID) bootstrap units. Events are grouped by asset and calendar month, and each asset-month is resampled as one intact block. For a period containing block set B, each bootstrap replicate draws |B| blocks with replacement and computes the event-weighted paired mean 
+
+¯d∗ =
+
+P
+
+> b∈B ∗
+
+P 
+
+> (a,t )∈b
+
+da,t 
+
+P 
+
+> b∈B ∗
+
+|b| .
+
+The reported 95% confidence interval is the 2.5th–97.5th percentile interval from 10,000 block-bootstrap replicates using bootstrap seed 17. Asset-month win-rate is the unweighted fraction of blocks whose within-block mean da,t is positive. Tail deltas are event-weighted paired means restricted to negative-tail buckets 1–4, positive-tail buckets 13–16, or their union. The same paired block-bootstrap protocol is applied to each of the six VAIOM seed-period evaluations. Every comparison uses the same fixed LightGBM event losses, fitted on the same pre-2024 Train sample with the same 28 single-bar fields and fixed hyperparameters. The intervals therefore measure correlated Test-sample uncertainty conditional on each fitted VAIOM and the common fixed LightGBM, while variation in model NLL across VAIOM training seeds is summarized separately by the period-specific sample standard deviation. 
+
+3.14 Complete Capacity Rungs and Corpus Support 
+
+We define a complete VAIOM architecture rung as a predefined configuration that jointly specifies decoder depth, hidden width, attention multiplicity and feed-forward capacity while retaining context length 512 and the complete return and auxiliary-head infrastructure. Table 2 defines this term once for the analysis that follows. The discrete family design follows named Transformer variants and controlled model ladders [Devlin et al., 2019, Dosovitskiy et al., 2021, Bhagia et al., 2025]. 17 Table 2: Predefined complete VAIOM architecture rungs. Rung Layers Heads Hidden Dim Context Total Params 0.9M 4 4 128 512 890,086 5M 6 4 256 512 4,965,222 15M 8 6 384 512 14,726,850 
+
+Architecture-rung motivation. Parameter count alone does not uniquely determine Trans-former architecture. Theoretical and empirical work shows that self-attention performance de-pends on the interaction between depth and width, and that scaling prescriptions are sensitive to architectural shape [Levine et al., 2020, Touvron et al., 2022, Alabdulmohsin et al., 2023, McLeish et al., 2025]. Compound scaling reaches the same general conclusion from a different architec-ture family: balancing structural dimensions can outperform scaling a single dimension [Tan and Le, 2019]. An intermediate parameter count therefore requires an additional depth-width-head allocation choice and is not a neutral point on a one-dimensional capacity axis. 
+
+Definition. The 0.9M, 5M and 15M configurations are the evaluated complete rungs. Inter-mediate 2M–4M variants require a separate depth-width allocation choice and are outside this controlled comparison. 
+
+Corpus-support analysis. The data-capacity analysis asks whether the fixed 1H FX corpus supports the 0.9M rung or additional model capacity. This analysis uses controlled last-position Validation runs and is not used for Test checkpoint selection. Let Nr denote the number of non-positional parameters in complete rung r and U the number of unique valid Train windows. Specifically, Nr equals the exact total trainable parameter count minus only the learned absolute positional embedding, 512 dr. Input projection parameters, output and auxiliary heads, and any input-field or metadata embeddings remain included. The capacity experiment itself uses pure ContIn, so it contains no categorical metadata embeddings. The data-capacity ratio for rung r is 
+
+RU,r = UNr
+
+.
+
+The fixed 1H corpus contains exactly U = 1 ,266 ,989 unique valid Train windows. The exact denominators are 
+
+N0.9M = 890 ,086 − 512 × 128 = 824 ,550 ,N5M = 4 ,965 ,222 − 512 × 256 = 4 ,834 ,150 ,N15M = 14 ,726 ,850 − 512 × 384 = 14 ,530 ,242 .
+
+The 0.9M ratio is therefore 
+
+RU, min = 1,266 ,989 824 ,550 = 1 .5366 .
+
+This value is determined by the fixed corpus and the predefined 0.9M architecture. It is not selected from the Validation result. 
+
+Support criterion. Corpus support for additional capacity is assessed incrementally. Under the same corpus, context, objective, auxiliary setup, optimizer budget and Validation protocol, a larger complete rung is supported only when it improves Validation return likelihood relative to the immediately smaller complete rung. When a larger rung receives fewer unique windows per non-positional parameter and fails to produce an incremental likelihood gain, it is described 18 as underfed under this protocol. This is an operational classification local to the current corpus and model family. Under this definition, RU = 1 .5366 is the minimum supported complete-rung ratio under the evaluated 1H protocol. It is not presented as a continuous universal threshold below which every possible architecture must fail. The Daily low-RU experiments are used as complementary stress evidence for repeated-exposure failure and are not used to estimate a separate numerical threshold. The complete-rung capacity analysis is conducted on the pure ContIn family. HybridContIn is a subsequent metadata-conditioning extension of the selected 0.9M backbone rung and is not used to redefine the complete-rung data-capacity ratio. 
+
+# 4 Results 
+
+This section reports the empirical results for VAIOM under the 1H FX return-distribution mod-eling task. The evaluation target throughout this section is the next-period normalized return bucket. All model comparisons are reported as NLL in bits per return event. Lower values are better. NLL values and deltas are rounded independently from the raw outputs to four decimal places. The paper uses three split names consistently. Train is used for fitting tokenizers, model parameters and train-fitted baselines. Validation is used for checkpoint selection, ablation comparison and model-design diagnosis. Test is the fixed interval 2025 -01 -01 ≤ Datetime < 
+
+2026 -01 -01 , reported as 2025H1 and 2025H2, and is reserved for final held-out reporting of the selected main model. All ablations in Sections 4.2–4.4 are evaluated on Validation only; Test is one final evaluation stage after the main model is fully selected on Validation. No Test result entered any design decision, and observations from 2026 onward are not included in the reported evaluation. The results are organized around four research questions. First, we test whether VAIOM im-proves probabilistic next-return prediction beyond statistical and tree-based baselines. Second, we test whether continuous financial event input improves return-distribution modeling rela-tive to discrete tokenized input. Third, we test whether full-sequence autoregressive supervision improves financial sequence modeling relative to last-position supervision. Fourth, we evalu-ate whether architecture components, including auxiliary objectives and MoMS output heads, improve the main return likelihood. A final subsection reports data-capacity evidence as a supporting result rather than a stan-dalone research question. It compares the predefined 0.9M, 5M and 15M rungs under the same corpus and supervision setting. 
+
+4.1 RQ1: VAIOM Improves Test Return Likelihood beyond Statistical and Tree-Based Baselines 
+
+RQ1 asks whether VAIOM improves held-out probabilistic next-return prediction beyond train-fitted baselines. This question is necessary before representation and architecture ablations become meaningful. If the model cannot beat basic probabilistic baselines, then later comparisons between input types, loss scopes or output heads would only compare weak variants of the same failed setup. The selected main model is the 0.9M Hybrid Continuous Input (HybridContIn) VAIOM with a MoMS return head and Gap/VolReg/Ordinal auxiliary supervision. This configuration was selected after the pure ContIn representation study and the subsequent HybridContIn Validation comparison described in Section 4.2.1. The checkpoint is selected using the Validation split and then evaluated on the 2025 Test split. Table 3 reports results separately for 2025H1 and 2025H2. 19 The model improves over Frequency, Markov and an identity-augmented single-bar LightGBM on both Test halves. Table 3: Main 2025 Test result and paired VAIOM–LightGBM uncertainty. Model / Baseline Input Type Head Aux Setup Params Steps Test Bits/Event ∆ vs Frequency ∆ vs Markov ∆ vs LightGBM                                                                                                        
+
+> 2025H1
+> Frequency baseline —————3.2802 ———Markov baseline —————3.2755 ———LightGBM baseline —————3.2057 ———VAIOM main model HybridContIn MoMS Gap/VolReg/Ordinal 0.9M 5.5K 3.1764 -0.1037 -0.0991 -0.0292
+> 2025H2
+> Frequency baseline —————3.2793 ———Markov baseline —————3.2683 ———LightGBM baseline —————3.1785 ———VAIOM main model HybridContIn MoMS Gap/VolReg/Ordinal 0.9M 5.5K 3.1359 -0.1434 -0.1324 -0.0426 Period Events Blocks Mean Gain 95% Interval Block Wins Win-Rate Negative Tail Positive Tail Combined Tail 2025H1 33,068 66 +0.0292 [+0.0205, +0.0406] 56/66 84.8485% +0.2545 +0.1940 +0.2251 2025H2 33,816 66 +0.0426 [+0.0291, +0.0626] 61/66 92.4242% +0.3509 +0.2428 +0.3001
+> Mean Gain and tail columns report NLL LightGBM −NLL VAIOM in bits/event; positive favors VAIOM.
+
+These Test results establish that VAIOM is not merely reproducing the unconditional return-bucket distribution, a first-order transition table or a tree-based feature model. The model com-presses the held-out return distribution beyond all three baselines. This provides the empirical foundation for the remaining ablations: the later sections explain which design choices make the successful model work. The paired asset-month analysis in the second panel of Table 3 tests whether the LightGBM improvement is stable across the correlated Test sample. VAIOM gains 0.0292 bits/event in 2025H1 and 0.0426 bits/event in 2025H2. The corresponding 95% block-bootstrap intervals are [0.0205, 0.0406] and [0.0291, 0.0626], both excluding zero. VAIOM wins in 56 of 66 asset-month blocks in H1 and 61 of 66 in H2. The average advantage is therefore not generated by a small number of favorable assets or months. The gain is concentrated in difficult tail events. In 2025H1, VAIOM improves negative-tail, positive-tail and combined-tail NLL by 0.2545, 0.1940 and 0.2251 bits/event, compared with 0.0292 bits/event over all events. In 2025H2, the corresponding gains are 0.3509, 0.2428 and 0.3001 bits/event, compared with 0.0426 overall. This decomposition shows that VAIOM’s aggregate compression gain includes materially better probability assignment to realized extreme-return buckets rather than only small improvements around the center of the return distribution. A caveat on baseline fairness: VAIOM conditions on 512 bars of history, whereas LightGBM conditions on the current bar only (see Table 1). The Test improvement over LightGBM therefore reflects the combined value of autoregressive context and learned sequence representation, not the value of the Transformer architecture in isolation. A lag-stacked or context-aggregated LightGBM would be a stronger baseline and is left for future work. 
+
+4.1.1 Multi-Seed Robustness of the Main Test Result 
+
+The selected configuration’s Test advantage is stable across independent training runs. Seeds 17, 29 and 43 use the same 0.9M HybridContIn MoMS Gap/VolReg/Ordinal FullSeq configuration and fixed 5.5K-step budget. Every run achieves lower Test NLL than the same fixed identity-augmented single-bar LightGBM in both 2025H1 and 2025H2. All six paired asset-month block-bootstrap confidence intervals exclude zero. The individual results are reported without selecting the best seed. Across seeds, model NLL is 3.1820 ± 0.0058 bits/event in 2025H1 and 3.1411 ± 0.0061 in 2025H2, where dispersion is the sample standard deviation across the three training seeds. Mean gains over the common LightGBM are 0.0236 and 0.0374 bits/event, respectively. The weakest individual advantage is still positive at 0.0177 bits/event, and its confidence interval also excludes 20 Table 4: Multi-seed robustness on the 2025 Test periods. Mean gain is NLL LightGBM −NLL VAIOM ;positive favors VAIOM. Period Seed Model Bits/Event LightGBM Bits/Event Mean Gain 95% Interval Block Win-Rate 2025H1 17 3.1764 3.2057 +0.0292 [+0.0205, +0.0406] 84.8485% 2025H1 29 3.1880 3.2057 +0.0177 [+0.0088, +0.0284] 71.2121% 2025H1 43 3.1817 3.2057 +0.0239 [+0.0157, +0.0341] 81.8182% 2025H2 17 3.1359 3.1785 +0.0426 [+0.0291, +0.0626] 92.4242% 2025H2 29 3.1478 3.1785 +0.0307 [+0.0183, +0.0490] 83.3333% 2025H2 43 3.1396 3.1785 +0.0388 [+0.0273, +0.0558] 92.4242% zero. The baseline win is therefore not attributable to one favorable initialization or training trajectory. All six comparisons use exactly the same fixed LightGBM event losses. Every independently trained VAIOM therefore significantly outperforms one common baseline in both Test periods. 
+
+4.2 RQ2: Continuous Input Improves Discrete Return Likelihood 
+
+RQ2 asks whether the pure continuous financial-event schema improves next-return distribution modeling relative to the discrete-token schema. Both variants predict the same next-period normalized return bucket and use the same bits-per-event metric, so the output objective is controlled. The input fields in this ablation are not strictly matched: DiscIn contains categorical asset, asset-class and timeframe identifiers, whereas pure ContIn contains no identity metadata or separate asset embedding. The results show that the complete ContIn schema improves Validation return likelihood despite omitting the identity metadata available to DiscIn. This outcome is consistent with a benefit from preserving local numerical geometry, but the schema mismatch prevents attributing the full difference to continuity alone. The output remains a discrete probability distribution over return buckets, so both schemas remain directly comparable under the same likelihood objective. Table 5: Continuous input versus discrete input. Timeframe Input Type Params Steps Validation Bits/Event ∆ vs DiscIn Result 1D DiscIn 0.9M 10K 3.1743 — Reference 1D Pure ContIn 0.9M 10K 3.1649 -0.0094 Win 1H DiscIn 0.9M 50K 3.1633 — Reference 1H Pure ContIn 0.9M 50K 3.1536 -0.0097 Win These comparisons establish that the evaluated ContIn schema outperforms the evaluated DiscIn schema for this return-distribution task without changing the output objective. They do not constitute a field-matched causal estimate of continuity alone. VAIOM retains the dis-crete return-bucket likelihood while changing the representation supplied to the decoder-only backbone. This is the key distinction between VAIOM and a conventional token-only market language model. The model remains probabilistic and token-like at the output, but it does not force all input information through categorical tokenization before representation learning. 
+
+4.2.1 Metadata Augmentation of the Continuous-Input Model 
+
+The primary representation experiment first established that the pure ContIn branch improves Validation return likelihood relative to DiscIn. We subsequently tested whether static market identity information remained useful after the dynamic market variables had already been rep-resented continuously. 21 The HybridContIn extension retains the complete continuous event vector and adds categor-ical embeddings for asset identity, asset class and timeframe. Under the selected 0.9M MoMS Gap/VolReg/Ordinal FullSeq configuration, this metadata augmentation further improves Vali-dation return likelihood from 3.1488 to 3.1465 bits/event. HybridContIn was therefore selected as the final main model and used for the reported Test evaluation. Table 6: Metadata augmentation of the continuous-input model. Variant Dynamic Input Identity Metadata Validation Bits/Event Pure ContIn 25 continuous fields None 3.1488 HybridContIn Same 25 fields Asset + class + timeframe 3.1465 This additional result does not replace the original DiscIn-versus-ContIn representation find-ing. Pure ContIn establishes the value of preserving the numerical geometry of dynamic market variables. The metadata extension shows that cross-asset normalization does not make static identity information redundant and that categorical market metadata can provide complemen-tary conditioning information on top of the continuous representation. 
+
+4.3 RQ3: Full-Sequence Supervision Improves Return Likelihood 
+
+RQ3 asks whether full-sequence autoregressive supervision improves financial return-distribution modeling relative to last-position supervision. This is a supervision-density question rather than a change in model head or input representation. In the last-position setting, each sampled window contributes return loss only at the final position. In the full-sequence setting, every valid position in the sampled sequence contributes next-return loss under the same causal masking rule. This makes training closer to standard autoregressive pretraining: the model learns from many next-step prediction targets inside the same historical window. Full-sequence supervision is conceptually standard in language modeling, but it is not au-tomatically guaranteed to improve financial sequence modeling. Financial windows are highly overlapping, adjacent positions are correlated and early positions may have less effective context than the final position. Therefore, the relevant empirical question is whether denser supervision improves Validation return likelihood under the 1H FX financial corpus. The results support FullSeq. The best FullSeq checkpoint improves over both the 50K and 300K last-position continuous-input references. However, the FullSeq sweep also shows that the optimal checkpoint occurs early; later FullSeq checkpoints can degrade. Therefore, the supported claim is not that more FullSeq steps are always better. The supported claim is that dense autoregressive supervision produces a better best Validation checkpoint when checkpoint selection is properly recalibrated. All rows in Table 7 use the 0.9M pure-ContIn model with a MoMS head and Gap/VolReg/Ordinal auxiliary supervision. Table 7: Last-position versus full-sequence supervision. Loss Scope Steps Validation Bits/Event ∆ vs Last-Position 50K Last-position 50K 3.1536 —Last-position 300K 3.1542 +0.0006 Full-sequence 5K 3.1515 -0.0021 Full-sequence 5.5K 3.1488 -0.0048 
+
+> All runs use the 0.9M model. Gradient accumulation is four except for the 300K last-position reference.
+
+The 5K and 5.5K FullSeq checkpoints show that full-sequence supervision improves the best Validation likelihood relative to last-position supervision. The 5.5K checkpoint is the strongest 22 observed Validation model in this comparison. This supports the use of dense autoregressive supervision for financial return-distribution modeling. Because each sampled window supplies many correlated supervised positions under FullSeq, the model consumes useful training signal faster than in the last-position setting. The Validation optimum therefore shifts earlier, and FullSeq should not inherit the 50K / 300K step schedule from last-position training. 
+
+Optimizer steps versus supervised target exposure. Optimizer steps are not directly comparable across the two supervision scopes, because each step under FullSeq supervises many more target positions than under last-position supervision. For this target-exposure calculation, the effective batch is Beff = 128 (batch 32, grad-accum 4) and context length is C = 512 :Under last-position supervision, Q = 1 , so the 50K reference run exposes 
+
+Dlast raw = S B eff Q = 50000 × 128 × 1 = 6 .4Msupervised targets. Under FullSeq, each 512-length window contains approximately Q ≈ 511 
+
+valid target positions in the 1H FX corpus (masks are rare in clean FX and spot-metal bars), so the 5.5K run exposes 
+
+Dfull raw = 5500 × 128 × 511 ≈ 360 Msupervised targets. The 5.5K FullSeq checkpoint therefore sees roughly 56 × more supervised targets than the 50K last-position reference, despite using 9× fewer optimizer steps. The “fewer steps” observation concerns optimizer-step and wall-clock efficiency, not supervised-target bud-get. FullSeq converts target exposure into Validation improvement more effectively on a per-optimizer-step basis, but the experiment does not show that it requires fewer total supervised targets. Adjacent positions are highly correlated, so the 56 × raw target count overstates the ef-fective information gain; this is consistent with the early Validation optimum and the degradation of later FullSeq checkpoints. 
+
+4.4 RQ4: Architecture Components Improve the Main Return Objective 
+
+RQ4 asks whether VAIOM architecture components improve the main return likelihood. This section evaluates two component groups: auxiliary objectives and the MoMS output head. Both are judged only by their effect on return-bucket likelihood. Auxiliary losses are not treated as separate success metrics, and MoMS latent states are not assigned economic labels. 
+
+4.4.1 Auxiliary Heads Provide Component-Dependent Return-NLL Improvements 
+
+VAIOM uses auxiliary objectives as representation-shaping signals. The auxiliary system con-tains Gap, volatility-regime and ordinal supervision. These heads are not evaluated by their own standalone accuracy in the main results. Their value is measured by whether they improve the main return likelihood. The available component-level auxiliary ablation is the 1H DiscIn sweep. This is reported as auxiliary-head evidence, not as a ContIn-only causal claim. The results support auxiliary supervision as a representation-shaping system, but the contribution is component-dependent. Gap auxiliary supervision provides a mild positive improvement. Volatility-regime supervision does not improve return NLL when isolated as a standalone auxiliary head. Ordinal supervision provides the clearest positive contribution when added to the Gap/VolReg auxiliary reference. The empirical claim is therefore not that every auxiliary target independently improves return prediction. The supported claim is that auxiliary supervision improves the main return objective as a representation-shaping system, with positive evidence from Gap and Ordinal supervision and neutral-to-negative isolated evidence from Volatility-regime supervision. 23 Table 8: Component-level auxiliary-head ablations. 
+
+Panel A: 0.9M isolated auxiliary objectives 
+
+Input Gap VolReg Ordinal Weight Steps Validation Bits/Event DiscIn No No No 0.00 45K 3.1658 DiscIn Yes No No 0.10 45K 3.1648 DiscIn No Yes No 0.10 45K 3.1659 
+
+Panel B: 5M Ordinal increment over Gap/VolReg 
+
+Input Gap VolReg Ordinal Weight Steps Validation Bits/Event ∆
+
+DiscIn Yes Yes No 0.10 180K 3.1719 —DiscIn Yes Yes Yes 0.10 180K 3.1673 -0.0046 
+
+The ordinal result is especially important because return buckets are ordered. A model that assigns probability mass to a nearby bucket should not be treated the same as one that assigns probability mass to a distant tail bucket. The ordinal auxiliary head introduces this geometry during training while preserving the main categorical likelihood for evaluation. 
+
+4.4.2 MoMS Improves over Independent Categorical Heads 
+
+The second architecture component is the MoMS return head. MoMS is tested against an independent categorical return head to determine whether a mixture-parameterized output dis-tribution improves return likelihood. The results show that MoMS provides positive marginal value in matched head ablations. This supports the use of a mixture-style output distribution for return-bucket prediction. How-ever, the result should not be interpreted as proof that the learned mixture components cor-respond to economically identifiable market states. The empirical claim is narrower: mixture-parameterized return heads improve Validation return likelihood relative to independent cate-gorical heads in matched comparisons. Table 9: MoMS versus independent categorical head. Timeframe Input Type Head Params Steps Validation Bits/Event ∆ vs Independent Result 1H Continuous Independent 0.9M 10K 3.1651 — Reference 1H Continuous MoMS 0.9M 10K 3.1563 -0.0088 MoMS improves 4H Discrete Independent 5M 30K 3.1887 — Reference 4H Discrete MoMS 5M 30K 3.1834 -0.0053 MoMS improves MoMS is therefore retained as the output-head design in the main VAIOM configuration. Its value is architectural and probabilistic: it allows the model to express the next-return distribution as a mixture of latent predictive components. The paper does not rely on naming or interpreting these components as explicit market regimes. 
+
+4.5 Supporting Capacity Analysis 
+
+Table 10 reports the controlled complete-rung comparison. The three 1H runs use the same continuous corpus, 512-bar context, MoMS return head, Gap/VolReg/Ordinal objectives and 300K last-position optimizer steps. The changed variable is the complete capacity rung. This capacity comparison is conducted on the pure ContIn family. HybridContIn is a later metadata-conditioning extension of the selected 0.9M backbone rung and does not redefine N ,
+
+RU or the complete-rung family used here. The 0.9M rung achieves the strongest Validation likelihood at 3.1542 bits/event. Increasing capacity to 5M reduces RU from 1.5366 to 0.2621 and worsens Validation likelihood by 0.0038 24 bits/event. Increasing capacity to 15M reduces RU to 0.0872 and worsens Validation likelihood by 0.0065 bits/event relative to 0.9M. Under the incremental criterion in Section 3.14, added parameter capacity is not converted into better Validation compression. The result is local to the current corpus, architecture family, objective and last-position diagnostic. Appendix D.1 reports the Daily stress evidence and frequency-selection development path. Table 10: Controlled 1H complete-rung corpus-support comparison. Rung Non-positional N RU Steps Validation NLL ∆ vs 0.9M 0.9M 824,550 1.5366 300K 3.1542 —5M 4,834,150 0.2621 300K 3.1580 +0.0038 15M 14,530,242 0.0872 300K 3.1607 +0.0065 
+
+4.6 Summary of Empirical Findings 
+
+The selected HybridContIn model improves 2025 Test likelihood beyond all three baselines across three training seeds. Validation comparisons favor the evaluated continuous-input branch, FullSeq supervision and HybridContIn metadata augmentation. Component ablations provide positive but component-dependent evidence for auxiliary supervision and favor MoMS over an independent categorical head. The capacity comparison is supporting evidence: among the eval-uated 1H rungs, 0.9M achieves the strongest Validation likelihood. 
+
+# 5 Discussion 
+
+5.1 Continuous Input and Categorical Output 
+
+VAIOM represents dynamic financial events as continuous vectors while retaining a categori-cal return-distribution target. The two sides of the task need not share one representation. Continuous input preserves numerical relationships among returns, gaps, volatility and calendar variables; categorical output retains cross-entropy training, bits-per-event evaluation and direct comparison with probabilistic baselines. The ContIn–DiscIn result is an end-to-end schema comparison rather than a field-matched estimate of continuity alone. DiscIn contains identity metadata that pure ContIn omits, so the observed difference cannot be assigned uniquely to bucketization. Nevertheless, pure ContIn performs better despite this omission. HybridContIn then improves on pure ContIn by adding asset, asset-class and timeframe embeddings. Volatility normalization therefore creates useful cross-asset comparability without making static identity information redundant. This formulation differs from a fully tokenized market language model. Dynamic market variables retain their continuous geometry, while categorical metadata provides lightweight con-ditioning and the return target remains probabilistic. The evidence does not compare categorical output with a continuous-output density model; that question remains open. 
+
+5.2 Full-Sequence Supervision Changes the Training Regime 
+
+FullSeq uses standard causal autoregressive supervision [Vaswani et al., 2017]. Decoder-only time-series models use the same principle [Das et al., 2024, Rasul et al., 2023]. Its effect here is empirical: supervising every valid causal position improves the best Validation likelihood relative to last-position training on the 1H corpus. The result concerns supervision density, not model architecture or total target budget. AFullSeq window contributes hundreds of correlated targets, so its Validation optimum occurs 25 much earlier in optimizer-step terms even though it receives more raw target exposures. FullSeq therefore requires its own checkpoint schedule. Later checkpoints can degrade as repeated, highly dependent positions add less effective information than their nominal count suggests. 
+
+5.3 Auxiliary Objectives as Representation Shaping 
+
+Auxiliary objectives are useful only when they improve the main return likelihood. Gap and Ordinal supervision provide positive evidence, whereas isolated VolReg supervision does not improve return NLL under the fixed-weight schedule. The result therefore supports auxiliary representation shaping as a component-dependent system, not a claim that every auxiliary target is independently beneficial. Ordinal supervision is well matched to the ordered return buckets: it exposes distance struc-ture during training while leaving the evaluation objective categorical. VolReg is more persistent and easier to predict than next return. Its useful gradient signal may saturate earlier than the main task, after which a constant weight can become redundant or conflicting. 
+
+5.4 MoMS as an Output-Head Hypothesis 
+
+MoMS improves Validation likelihood over independent categorical heads in the matched com-parisons. This supports mixture-parameterized categorical output as an architectural choice. It does not identify economic regimes. The latent components are permutation-invariant and may split, merge or change role across seeds and checkpoints; interpreting them requires diagnostics beyond likelihood improvement. 
+
+5.5 Small-Model Strength and Corpus Support 
+
+The controlled 1H comparison favors the 0.9M rung: neither 5M nor 15M converts additional capacity into better Validation compression. Under the operational criterion used here, the larger rungs are underfed by the present corpus and training protocol. This is a local corpus-support result, not a universal parameter threshold. The Daily–4H–1H development path in Appendix D.1 provides supporting context. Denser corpora produced more stable Validation behavior, but nominal bar count is not equivalent to independent financial information because adjacent windows overlap and finer bars can add mi-crostructure noise. Broader asset coverage, longer history and genuinely incremental observations are alternative ways to increase effective corpus support. 
+
+5.6 Limitations 
+
+The evidence is restricted to one-hour FX and spot-metal data from one source. It does not establish generality across equities, futures, cryptoassets, options, order flow or mixed-frequency corpora. The bucketized target also leaves open whether continuous density, quantile or hybrid output heads would retain more information, particularly in the tails. The representation ablation is not field-matched, and the LightGBM comparison is inten-tionally limited to single-bar features while VAIOM receives 512 bars of context. The baseline result therefore measures the combined value of sequence context and learned representation, not Transformer architecture in isolation. Lag-stacked tree models and finance-specific sequence baselines remain necessary comparisons. Multi-seed and block-bootstrap analyses strengthen the final baseline comparison, but com-ponent ablations remain single-seed controlled experiments. Asset-month resampling preserves dependence within each block but cannot remove all cross-asset or longer-horizon dependence. MoMS components are not economically identified, and the capacity conclusion remains specific to the evaluated family. 26 Finally, likelihood compression is not trading profitability. Deployment would require map-ping predicted distributions to positions, restoring raw-return scale and accounting for transac-tion costs, liquidity, execution, turnover, portfolio construction and risk management. 
+
+5.7 Future Work 
+
+Future evaluation should add lag-stacked and sequence-aware baselines, continuous or hybrid output distributions, broader markets and longer histories. Auxiliary objectives should receive task-specific schedules: VolReg-specific early stopping, head freezing or loss-weight decay can test whether its weak isolated contribution reflects optimization timing rather than an uninfor-mative target. MoMS analysis should examine component usage, separation and stability across seeds. These extensions would test which gains survive stronger baselines, richer corpora and less restrictive output assumptions. 
+
+# 6 Conclusion 
+
+VAIOM adapts decoder-only sequence modeling to continuous financial observations by separat-ing input representation from output likelihood. Continuous multivariate market-event vectors preserve numerical structure, while a categorical distribution over the next volatility-normalized return bucket supports causal cross-entropy training and held-out probabilistic evaluation. The selected 0.9M HybridContIn model consistently outperforms Frequency, Markov and the fixed identity-augmented single-bar LightGBM on both 2025 Test halves. Across three seeds, ev-ery VAIOM run beats LightGBM; the canonical paired gains are 0.0292 and 0.0426 bits per event. Validation experiments favor the evaluated continuous-input branch, HybridContIn metadata augmentation, FullSeq supervision and MoMS, while auxiliary-objective gains are component-dependent. The supporting capacity comparison favors the 0.9M rung over the evaluated 5M and 15M alternatives on the present corpus. These findings concern likelihood compression in one 1H FX setting, not universal architecture scaling or trading profitability. Stronger sequence baselines, field-matched representation studies, alternative output distributions and broader corpora are required to determine how far the formulation generalizes. 27 A Full Experimental Configuration 
+
+This appendix collects the evidence-bearing runs used in the paper. It excludes smoke tests, failed jobs, infrastructure retries and path-repair runs because they do not provide scientific evidence. Unless stated otherwise, likelihoods are Validation negative log-likelihood (NLL) in bits per event on 2024H2. Test results are reported separately in Appendix E. 
+
+A.1 Selected Main Configuration 
+
+Table 11: Exact configuration of the selected Hybrid Continuous Input (HybridContIn) model. Component Setting Corpus / bar frequency V0.2 FX and spot-metal corpus / 1H Dynamic input 25 continuous financial-event fields Static metadata Asset, asset class and timeframe; 8-d embedding each Fusion 25-to-128 MLP; concatenate 24 metadata dimensions; 152-to-128 MLP Backbone 4 pre-norm decoder blocks, 4 heads, width 128, FFN width 512 Position / context Learned absolute position embedding / 512 bars Return head Mixture of Market States (MoMS), 4 latent components, 16 buckets Auxiliary objectives Gap / VolReg / Ordinal; weights 0.1000 / 0.1000 / 0.1000 Supervision Full-sequence (FullSeq) valid-position supervision Parameters / steps 0.9116M total parameters / 5.5K optimizer steps Optimization AdamW, LR 0.0003, weight decay 0.0100, constant schedule Batching Micro-batch 32, gradient accumulation 4, effective batch 128 Regularization Dropout 0.1000, gradient-norm clipping 1.0000 Numerics FP16 automatic mixed precision and data parallelism Training seeds 17 (canonical), 29 and 43 (robustness) Selection rule Lowest 2024H2 Validation return NLL in the prespecified sweep 
+
+A.2 Evidence-Bearing Validation Runs 
+
+Table 12 indexes the formal comparisons used in the main argument. “Aux” abbreviates the three named auxiliary targets only; VolReg is never raw volume. Rows from different panels should not be treated as matched unless the corresponding Results section identifies them as a controlled comparison. 28 Table 12: Formal Validation runs used in the reported comparisons. Comparison Timeframe Input / head Aux / scope Params Steps Validation NLL Role Representation 1D DiscIn / MoMS None / last 0.9M 10K 3.1743 Reference Representation 1D Pure ContIn / MoMS None / last 0.9M 10K 3.1649 Comparator Representation 1H DiscIn / MoMS Gap/VolReg/Ord / last 0.9M 50K 3.1633 Reference Representation 1H Pure ContIn / MoMS Gap/VolReg/Ord / last 0.9M 50K 3.1536 Comparator Metadata 1H Pure ContIn / MoMS Gap/VolReg/Ord / FullSeq 0.9M 5.5K 3.1488 Reference Metadata 1H HybridContIn / MoMS Gap/VolReg/Ord / FullSeq 0.9M 5.5K 3.1465 Selected, seed 17 Metadata 1H HybridContIn / MoMS Gap/VolReg/Ord / FullSeq 0.9M 5.5K 3.1525 Robustness, seed 29 Metadata 1H HybridContIn / MoMS Gap/VolReg/Ord / FullSeq 0.9M 5.5K 3.1450 Robustness, seed 43 Auxiliary 1H DiscIn / MoMS None / last 0.9M 45K 3.1658 Reference Auxiliary 1H DiscIn / MoMS Gap / last 0.9M 45K 3.1648 Isolated Gap Auxiliary 1H DiscIn / MoMS VolReg / last 0.9M 45K 3.1659 Isolated VolReg Auxiliary 1H DiscIn / MoMS Gap/VolReg / last 5M 180K 3.1719 Ordinal reference Auxiliary 1H DiscIn / MoMS Gap/VolReg/Ord / last 5M 180K 3.1673 Ordinal 0.1000 Return head 1H Pure ContIn / Independent Gap/VolReg/Ord / FullSeq 0.9M 10K 3.1651 Reference Return head 1H Pure ContIn / MoMS Gap/VolReg/Ord / FullSeq 0.9M 10K 3.1563 Comparator Return head 4H DiscIn / Independent Gap/VolReg / last 5M 30K 3.1887 Reference Return head 4H DiscIn / MoMS Gap/VolReg / last 5M 30K 3.1834 Comparator Capacity 1H Pure ContIn / MoMS Gap/VolReg/Ord / last 0.9M 300K 3.1542 Rung Capacity 1H Pure ContIn / MoMS Gap/VolReg/Ord / last 5M 300K 3.1580 Rung Capacity 1H Pure ContIn / MoMS Gap/VolReg/Ord / last 15M 300K 3.1607 Rung 
+
+# B Corpus and Tokenizer Audit 
+
+B.1 Chronological Splits and Recorded Sample Counts 
+
+Table 13: Recorded sample counts and split roles for the main 1H study. Interval Boundary Fitting permitted Role Valid events/windows Train t < 2024 -01 -01 Yes Parameter estimation 1,266,989 Buffer 2024H1 No Causal recursive history only —Validation 2024H2 No Selection and ablation 33,911 Test 2025H1 No Held-out reporting 33,068 Test 2025H2 No Held-out reporting 33,816 Reserved t ≥ 2026 -01 -01 No Future holdout —Train determines bucket edges, categorical maps and serialized preprocessing rules. Exponen-tially weighted moving-average (EWMA) states continue causally through the buffer, Validation and Test using past-only observations, but no parameter is refit outside Train. 
+
+B.2 Asset Coverage 
+
+“Rows” in Table 14 counts stored non-synthesized 1H bars across the archive. “Valid Train windows” counts 512-bar context endpoints before 2024 that pass the target and mask rules in Section 3.4. 29 Table 14: Per-asset 1H archive coverage and valid Train-window counts. Asset Class Rows Valid Train Windows First Bar Last Bar AUDUSD FX 140,325 122,905 2003-08-04 00:00 2026-03-13 20:00 EURUSD FX 142,744 126,950 2003-05-05 00:00 2026-03-13 20:00 GBPUSD FX 142,731 126,812 2003-05-05 00:00 2026-03-13 20:00 NZDUSD FX 141,123 124,213 2003-08-04 00:00 2026-03-13 20:00 USDCAD FX 141,162 124,684 2003-08-04 00:00 2026-03-13 20:00 USDCNY FX 85,008 70,346 2012-06-27 00:00 2026-03-13 20:00 USDHKD FX 118,417 95,594 2007-03-14 00:00 2026-03-13 20:00 USDJPY FX 142,714 124,642 2003-05-05 00:00 2026-03-13 20:00 USDSGD FX 133,072 113,855 2004-11-17 00:00 2026-03-13 20:00 XAGUSD Spot metal 135,869 112,262 2003-08-08 15:00 2026-03-09 23:00 XAUUSD Spot metal 138,622 124,726 2003-05-05 00:00 2026-03-09 23:00 Total — 1,461,787 1,266,989 — —
+
+B.3 Complete Input Schemas 
+
+Table 15: Complete DiscIn field list for the reported 1H corpus. Index Field Index Field 1 return_bucket 9 day_of_month 
+
+2 gap_bucket 10 day_of_week 
+
+3 vol_regime 11 day_of_year 
+
+4 asset_id 12 hour 
+
+5 asset_class_id 13 minute 
+
+6 timeframe_id 14 second 
+
+7 years_since_2000 15 mask_any 
+
+8 month_of_year — —30 Table 16: Complete numerical field list for pure ContIn and HybridContIn. Index Field Index Field 1 ret_z 14 hour_sin 
+
+2 gap_z 15 hour_cos 
+
+3 relative_log_vol 16 minute_sin 
+
+4 sigma_through_t 17 minute_cos 
+
+5 years_since_2000_norm 18 second_sin 
+
+6 month_sin 19 second_cos 
+
+7 month_cos 20 mask_missing 
+
+8 day_of_month_sin 21 mask_stale 
+
+9 day_of_month_cos 22 mask_bad_data 
+
+10 day_of_week_sin 23 mask_insufficient_history 
+
+11 day_of_week_cos 24 mask_scale_zero 
+
+12 day_of_year_sin 25 mask_any 
+
+13 day_of_year_cos — —HybridContIn preserves all 25 numerical fields and adds the three categorical metadata iden-tifiers through separate learned embeddings. Raw volume is disabled for the FX and spot-metal corpus and is not among these fields. 
+
+B.4 Return Buckets and Validity Rules 
+
+The reported tokenizer uses 16 non-missing return buckets. Its Train-fitted edges are 
+
+(−∞ , −8, −5, −3, −2, −1.0085 , −0.6241 , −0.2697 , 0.0118 , 0.2833 , 0.6362 , 1.0206 , 2, 3, 5, 8, +∞).
+
+Buckets 1–4 and 13–16 define the negative and positive tails used in the Test decomposition. Index 0 is reserved for invalid or missing targets and never enters a likelihood denominator. The Gap target uses the 20-span past-only EWMA gap scale defined in Methods, with floor 
+
+10 −8. The same signed-edge procedure is fitted on Train: fixed cutoffs (−8, −5, −3, −2, 2, 3, 5, 8) 
+
+are combined with the unique interior quantiles. The serialized 1H Gap edges are 
+
+(−∞ , −8, −5, −3, −2, −0.6776 , −0.3059 , 0, 0.3195 , 0.7012 , 2, 3, 5, 8, +∞).
+
+Duplicate Train quantiles at zero collapse during edge deduplication, so these 15 edges define 14 non-missing Gap buckets. Missing or invalid Gap targets use index 0. Table 17: Serialized row and target validity rules. Flag Exact rule Missing Open or Close is null or non-positive Stale Previous close exists and close-to-close log return equals zero Bad data Absolute close return or open gap exceeds 1.0000 in log units Insufficient history Fewer than 20 preceding clean returns Scale zero Past-only volatility scale is at or below 10 −8            
+
+> Mask any Logical OR of the five row-level flags above Target bad Non-finite, exactly zero or excessive next return, or invalid next Open/Close FullSeq return base Return target index >0, current mask_any false and target_bad false FullSeq auxiliary Return base true and task-specific target index >0
+
+The current experiment registry records these rules and valid-window counts, but not a complete split-by-asset table of mask rates, exact-zero rates or bucket occupancy. No such quantities are reconstructed or inferred here. 31 C Training and Checkpoint Diagnostics 
+
+The available diagnostics are checkpoint-level Validation evaluations rather than continuously sampled curves. They nevertheless show the selection trajectory and the onset of overtraining without requiring interpolation between recorded checkpoints. 
+
+C.1 Selected FullSeq Sweep 
+
+Table 18: Pure-ContIn FullSeq checkpoint sweep used to select the 5.5K reference before meta-data augmentation. Input Params Steps Validation NLL ∆ vs 5.5K Pure ContIn 0.9M 5.0K 3.1515 +0.0028 Pure ContIn 0.9M 5.5K 3.1488 0.0000 Pure ContIn 0.9M 6.0K 3.1497 +0.0009 Pure ContIn 0.9M 6.5K 3.1510 +0.0023 Pure ContIn 0.9M 7.0K 3.1491 +0.0003 Pure ContIn 0.9M 10K 3.1563 +0.0075 Pure ContIn 0.9M 20K 3.2760 +0.1272 The local optimum is visible within the 500-step checkpoint spacing. Validation degradation at 10K and 20K also shows why the earlier last-position training budget was not transferred to FullSeq. 
+
+C.2 Long-Horizon 1H Checkpoint Path 
+
+Table 19: Recorded 1H 5M DiscIn Gap/VolReg last-position checkpoint trajectory. Params 50K 75K 100K 125K 150K 180K 250K 300K 350K 400K 5M 3.2072 3.1914 3.1772 3.1741 3.1677 3.1719 3.1679 3.1631 3.1637 3.1679 This historical trajectory reaches its best recorded checkpoint at 300K and then degrades. It supports Validation-based checkpoint selection but is not directly comparable to the later 0.9M FullSeq sweep because both supervision density and architecture differ. 
+
+C.3 Daily Repeated-Exposure Trajectory 
+
+Table 20: Daily 5M checkpoint trajectories from the prolonged repeated-exposure stress run. Head Params 20K 30K 40K 200K Best recorded step MoMS 5M 3.2072 3.3086 3.8671 8.9647 20K Independent 5M 3.2541 3.4837 4.1994 8.8181 20K Both output heads deteriorate after 20K, despite continued optimization on Train. The common trajectory is evidence of corpus-level repeated exposure rather than a failure unique to the MoMS head. 32 D Additional Ablations and Robustness Checks 
+
+D.1 Frequency-Selection Development Path 
+
+The 1H corpus was selected through a progressive development path rather than a matched causal frequency ablation. Daily provided 1,726 Validation windows, 4H provided 8,882 and 1H provided 33,911. Table 21 records the strongest representative checkpoint at each stage. Architecture and optimizer exposure differ, so the table documents development evidence rather than an isolated frequency effect. Table 21: Daily-to-4H-to-1H corpus-density development path. Timeframe Validation windows Params Input Head / scope Steps Validation NLL 1D 1,726 0.9M Pure ContIn MoMS / last 10K 3.1649 4H 8,882 5M DiscIn MoMS / last 30K 3.1834 1H 33,911 0.9M Pure ContIn MoMS / FullSeq 5.5K 3.1488 The progression does not imply that finer bars are always better. It motivates a denser corpus with more effective unique information; finer bars can also increase dependence and microstructure noise. 
+
+D.2 MoMS State Count, Ordinal Weight and Context Length 
+
+Table 22: Additional MoMS, Ordinal and context diagnostics. Each panel identifies its local reference. Panel Setting Local comparison Params Steps Validation NLL Result MoMS states Kstates = 4 Ordinal 0.1000 reference 5M 180K 3.1673 Reference MoMS states Kstates = 8 Same configuration 5M 180K 3.1707 Worse MoMS states Kstates = 16 Same configuration 5M 180K 3.1659 Better by 0.0014 Ordinal weight 0.0000 Gap/VolReg reference 5M 180K 3.1719 Reference Ordinal weight 0.0500 Same configuration 5M 180K 3.1695 Better by 0.0025 Ordinal weight 0.1000 Same configuration 5M 180K 3.1673 Better by 0.0046 Context CTX512 Gap/VolReg, no Ordinal 5M 300K 3.1631 Local reference Context CTX1024 Gap/VolReg, no Ordinal 5M 175K 3.1604 Best CTX1024 checkpoint Context CTX1024 Gap/VolReg, no Ordinal 5M 250K 3.1691 Later checkpoint Context CTX1024 Gap/VolReg, no Ordinal 5M 300K 3.1663 Later checkpoint The state-count and Ordinal panels are matched at 180K. The context panel is only a check-point diagnostic because the best recorded CTX512 and CTX1024 evaluations occur at different optimizer steps. 
+
+D.3 Additional Capacity Diagnostics 
+
+Table 23: Daily low-RU repeated-exposure stress evidence; U = 0 .0602M for every row. Run Params ( N ) RU Steps Validation NLL Evidence 0.9M ContIn NoAux 0.820M 0.0734 10K 3.1649 Short-run reference 5M MoMS Aux 4.893M 0.0123 200K 8.9647 Validation collapse 5M Independent Aux 4.880M 0.0123 200K 8.8181 Validation collapse 33 Table 24: Exploratory 10-minute capacity checkpoints on the sampled Validation evaluation. Input / head Params Steps Validation NLL Use Pure ContIn / MoMS 5M 5K 3.2193 Early checkpoint Pure ContIn / MoMS 5M 50K 3.1922 Capacity comparator Pure ContIn / MoMS 0.9M 50K 3.1889 Capacity comparator Pure ContIn / MoMS 0.9M 100K 3.1829 Later checkpoint At the matched 50K budget, the 0.9M model is better by 0.0033 bits/event. These runs are exploratory and do not redefine the main 1H complete-rung analysis. 
+
+# E Per-Period and Block-Level Results 
+
+No separate per-asset NLL table is available in the formal registry. The retained decomposition is by Test half and by complete asset-month blocks, which is the dependence unit used for inference. 
+
+E.1 Validation Stability Across Training Seeds 
+
+Table 25: HybridContIn Validation stability under independently specified training seeds. Seed Params Steps Model NLL LightGBM NLL Model advantage 17 0.9M 5.5K 3.1465 3.1756 0.0291 29 0.9M 5.5K 3.1525 3.1756 0.0230 43 0.9M 5.5K 3.1450 3.1756 0.0306 Mean 0.9M 5.5K 3.1480 3.1756 0.0276 Sample SD 0.9M 5.5K 0.0040 0.0000 0.0040 
+
+E.2 Complete Multi-Seed Test Results 
+
+Table 26: All seed-period Test comparisons against the common identity-augmented LightGBM. Gain is NLL LightGBM − NLL VAIOM ; positive favors VAIOM. Period Seed Params Steps Model NLL LightGBM NLL Mean gain 95% interval Block win-rate 2025H1 17 0.9M 5.5K 3.1764 3.2057 +0.0292 [+0.0205, +0.0406] 84.8485% 2025H1 29 0.9M 5.5K 3.1880 3.2057 +0.0177 [+0.0088, +0.0284] 71.2121% 2025H1 43 0.9M 5.5K 3.1817 3.2057 +0.0239 [+0.0157, +0.0341] 81.8182% 2025H2 17 0.9M 5.5K 3.1359 3.1785 +0.0426 [+0.0291, +0.0626] 92.4242% 2025H2 29 0.9M 5.5K 3.1478 3.1785 +0.0307 [+0.0183, +0.0490] 83.3333% 2025H2 43 0.9M 5.5K 3.1396 3.1785 +0.0388 [+0.0273, +0.0558] 92.4242% The three-seed model mean is 3.1820 ± 0.0058 in 2025H1 and 3.1411 ± 0.0061 in 2025H2. All six paired intervals exclude zero. 
+
+E.3 Canonical Tail-Bucket Decomposition 
+
+34 Table 27: Canonical seed-17 paired gain by tail group. Period Params Steps Tail events Negative tail Positive tail Combined tail 2025H1 0.9M 5.5K 2,256 +0.2545 +0.1940 +0.2251 2025H2 0.9M 5.5K 2,279 +0.3509 +0.2428 +0.3001 2025 full year 0.9M 5.5K 4,535 +0.3036 +0.2181 +0.2628 The entries are paired LightGBM-minus-VAIOM NLL differences in bits per event. They use realized buckets 1–4 for the negative tail and 13–16 for the positive tail. 
+
+# F Statistical Inference Details 
+
+F.1 Asset-Month Block Bootstrap 
+
+For each Test half, an observation block is one asset within one calendar month. The event-level paired loss difference is 
+
+di = − log 2 pLightGBM (yi) + log 2 pVAIOM (yi),
+
+so positive values favor VAIOM. A bootstrap replicate samples the observed asset-month blocks with replacement until it contains the original number of blocks, concatenates all events in the sampled blocks and computes the event-weighted mean of di. The reported 95% interval is the 2.5th–97.5th percentile interval over 10,000 replicates generated with bootstrap seed 17. The block win-rate is a separate descriptive statistic: the unweighted fraction of observed asset-month blocks whose within-block mean paired difference is positive. Its interval is obtained by applying the same block-resampling scheme to that block-level indicator. Table 28: Canonical fixed-model block-bootstrap inference. Period Events Blocks Params Steps Replicates Mean gain interval Win-rate Win-rate interval 2025H1 33,068 66 0.9M 5.5K 10,000 [+0.0205, +0.0406] 84.8485% [75.7576%, 92.4242%] 2025H2 33,816 66 0.9M 5.5K 10,000 [+0.0291, +0.0626] 92.4242% [84.8485%, 98.4848%] 2025 full year 66,884 132 0.9M 5.5K 10,000 [+0.0273, +0.0476] 88.6364% [82.5758%, 93.9394%] This procedure estimates Test-sample uncertainty conditional on a trained checkpoint and fixed baseline. Training uncertainty is addressed separately by the three independently trained seeds in Appendix E. No alternative block definition, Brier score, reliability diagram or calibration analysis is reported because those outputs are not present in the retained experiment record. 
+
+# G Implementation and Reproducibility Details 
+
+G.1 Architecture Rungs and Tensor Shapes 
+
+Table 29: Predefined complete VAIOM architecture rungs. Rung Layers Heads Width FFN width Context Total params Non-positional N
+
+0.9M 4 4 128 512 512 890,086 824,550 5M 6 4 256 1,024 512 4,965,222 4,834,150 15M 8 6 384 1,536 512 14,726,850 14,530,242 For pure ContIn, the input multilayer perceptron (MLP) has shape 25 → 128 → 128 with Gaussian Error Linear Unit (GELU) activation. HybridContIn concatenates this 128-dimensional 35 projection with three 8-dimensional metadata embeddings, then applies a 152 → 128 → 128 
+
+fusion MLP. Learned absolute position embeddings are added afterward. Every Transformer block is pre-normalized and contains four-head causal self-attention and a 128 → 512 → 128 
+
+GELU feed-forward network in the selected rung. The independent return head maps 128 → 16 . The selected MoMS head maps each hid-den vector to four mixture logits and four separate 16-bucket component distributions; their probability-weighted sum is the final categorical return distribution. Gap and VolReg are cate-gorical heads, while Ordinal uses 15 cumulative binary logits for the 16 ordered return buckets. 
+
+G.2 Optimization and Numerical Evaluation 
+
+Table 30: Training and evaluation constants for the selected main configuration. Item Value Optimizer AdamW Learning rate / schedule 0.0003 / constant; no warm-up Adam coefficients / epsilon (0 .9000 , 0.9990) / 10 −8
+
+Weight decay / dropout 0.0100 / 0.1000 Gradient clipping Global norm 1.0000 Micro-batch / accumulation / effective batch 32 / 4 / 128 windows Precision / parallelism FP16 automatic mixed precision / data parallel Checkpoint interval / selected step 500 / 5,500 Probability floor 10 −12 , followed by renormalization 
+
+G.3 FullSeq Valid-Position Logic 
+
+For a sampled asset window beginning at u, the serialized base indicator is 
+
+ya,s +1 > 0 ∧ ¬ mask _any a,s ∧ ¬ target _bad a,s .
+
+The implementation stores this conjunction as valid_base . Return and Ordinal use it directly; Gap and VolReg intersect it with their own positive target-index masks. Each head then takes one global mean across all of its valid (window , position ) pairs in the current micro-batch. It does not first average each window. If no valid Gap or VolReg target exists in a micro-batch, that auxiliary term is skipped; return and Ordinal remain nonempty because every sampled window has a return-valid endpoint. Causal attention remains unchanged: the prediction at s can use only positions u:s. Empty, padded, masked and invalid positions contribute to neither numerator nor denominator. 
+
+G.4 LightGBM Hyperparameters 
+
+LightGBM uses 1,000 estimators, 31 leaves, learning rate 0.0300 and min_child_samples =500. Regularization uses L1 = 0 .1000 , L2 = 5 .0000 , subsample 0.8000 and column subsampling 0.8000; the seed is 17. Early stopping uses patience 100 on a 20% Train holdout with multiclass log loss. No hyperparameter search, class weighting or post-hoc calibration is applied. The fit is pooled across assets and capped at one million Train samples. A holdout gate rejects a fit whose NLL exceeds the Frequency baseline by more than 0.0200 bits per event. Predicted probabilities are clipped at 10 −12 and renormalized before evaluation. For the main comparison, LightGBM receives the 25 numerical current-bar fields and three categorical identifiers. It receives no 512-bar sequence; the comparison therefore measures the combined value of sequence context and representation learning. 36 References 
+
+Ibrahim Alabdulmohsin, Xiaohua Zhai, Alexander Kolesnikov, and Lucas Beyer. Getting ViT in shape: Scaling laws for compute-optimal model design. In Advances in Neural Information Processing Systems , volume 36, 2023. URL https://arxiv.org/abs/2305.13035 .Abdul Fatir Ansari, Lorenzo Stella, Caner Turkmen, Xiyuan Zhang, Pedro Mercado, Huibin Shen, Oleksandr Shchur, Syama Sundar Rangapuram, Sebastian Pineda Arango, Shubham Kapoor, Jasper Zschiegner, Danielle C. Maddix, Hao Wang, Michael W. Mahoney, Kari Torkkola, Andrew Gordon Wilson, Michael Bohlke-Schneider, and Yuyang Wang. Chronos: Learning the language of time series. Transactions on Machine Learning Research , 2024. URL 
+
+https://openreview.net/forum?id=gerNCVqqtR .Akshita Bhagia, Jiacheng Liu, Alexander Wettig, David Heineman, Oyvind Tafjord, Ananya Harsh Jha, Luca Soldaini, Noah A. Smith, Dirk Groeneveld, Pang Wei Koh, Jesse Dodge, and Hannaneh Hajishirzi. Establishing task scaling laws via compute-efficient model ladders. In Conference on Language Modeling , 2025. URL https://arxiv.org/abs/2412. 04403 .Christopher M. Bishop. Mixture density networks. Technical Report NCRG/94/004, Neural Computing Research Group, Aston University, 1994. URL https://www.microsoft.com/ en-us/research/publication/mixture-density-networks/ .Wenzhi Cao, Vahid Mirjalili, and Sebastian Raschka. Rank consistent ordinal regression for neural networks with application to age estimation. Pattern Recognition Letters , 140:325–331, 2020. doi: 10.1016/j.patrec.2020.11.008. URL https://doi.org/10.1016/j.patrec.2020. 11.008 .Michael Crawshaw. Multi-task learning with deep neural networks: A survey. arXiv preprint arXiv:2009.09796 , 2020. URL https://arxiv.org/abs/2009.09796 .Abhimanyu Das, Weihao Kong, Rajat Sen, and Yichen Zhou. A decoder-only foundation model for time-series forecasting. In Proceedings of the 41st International Conference on Ma-chine Learning , volume 235 of Proceedings of Machine Learning Research , pages 10148–10167. PMLR, 2024. URL https://proceedings.mlr.press/v235/das24c.html .Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , pages 4171–4186, 2019. doi: 10.18653/v1/n19-1423. URL 
+
+https://doi.org/10.18653/v1/n19-1423 .Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In International Conference on Learning Representations , 2021. URL 
+
+https://openreview.net/forum?id=YicbFdNTTy .Thomas Fischer and Christopher Krauss. Deep learning with long short-term memory networks for financial market predictions. European Journal of Operational Research , 270(2):654–669, 2018. doi: 10.1016/j.ejor.2017.11.054. URL https://doi.org/10.1016/j.ejor.2017.11. 054 .Mononito Goswami, Konrad Szafer, Arjun Choudhry, Yifu Cai, Shuo Li, and Artur Dubrawski. MOMENT: A family of open time-series foundation models. In Proceedings of the 41st In-ternational Conference on Machine Learning , volume 235 of Proceedings of Machine Learning 
+
+37 Research , pages 16115–16152. PMLR, 2024. URL https://proceedings.mlr.press/v235/ goswami24a.html .Shihao Gu, Bryan Kelly, and Dacheng Xiu. Empirical asset pricing via machine learning. The Review of Financial Studies , 33(5):2223–2273, 2020. doi: 10.1093/rfs/hhaa009. URL https: //doi.org/10.1093/rfs/hhaa009 .Ming Jin, Shiyu Wang, Lintao Ma, Zhixuan Chu, James Y. Zhang, Xiaoming Shi, Pin-Yu Chen, Yuxuan Liang, Yuan-Fang Li, Shirui Pan, and Qingsong Wen. Time-LLM: Time series fore-casting by reprogramming large language models. In International Conference on Learning Representations , 2024. URL https://openreview.net/forum?id=Unb5CVPtae .Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Wei Chen, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. LightGBM: A highly efficient gradient boosting decision tree. In Advances in Neural Information Processing Systems , volume 30, 2017. URL https://papers.nips.cc/ paper/6907-lightgbm-a-highly-efficient-gradient-boosting-decision-tree .Chen-Yu Lee, Saining Xie, Patrick W. Gallagher, Zhengyou Zhang, and Zhuowen Tu. Deeply-supervised nets. In Proceedings of the Eighteenth International Conference on Artificial Intel-ligence and Statistics , volume 38 of Proceedings of Machine Learning Research , pages 562–570. PMLR, 2015. URL https://proceedings.mlr.press/v38/lee15a.html .Yoav Levine, Noam Wies, Or Sharir, Hofit Bata, and Amnon Shashua. Limits to depth efficiencies of self-attention. In Advances in Neural Information Processing Sys-tems , volume 33, 2020. URL https://proceedings.neurips.cc/paper/2020/hash/ ff4dfdf5904e920ce52b48c1cef97829-Abstract.html .Junjie Li, Yang Liu, Weiqing Liu, Shikai Fang, Lewen Wang, Chang Xu, and Jiang Bian. MarS: A financial market simulation engine powered by generative foundation model. arXiv preprint arXiv:2409.07486 , 2024. URL https://arxiv.org/abs/2409.07486 .Yong Liu, Tengge Hu, Haoran Zhang, Haixu Wu, Shiyu Wang, Lintao Ma, and Mingsheng Long. iTransformer: Inverted transformers are effective for time series forecasting. In International Conference on Learning Representations , 2024. URL https://openreview.net/forum?id= JePfAI8fah .Juntong Lu. Time-series foundation models in finance: Pretraining corpora, architectures, financial benchmarks, and risk-aware evaluation. In Proceedings of the 2025 2nd Interna-tional Conference on Digital Economy and Computer Science , pages 144–151, 2025. doi: 10.1145/3785706.3785728. URL https://doi.org/10.1145/3785706.3785728 .Dat Mai. StockGPT: A GenAI model for stock prediction and trading. arXiv preprint arXiv:2404.05101 , 2024. URL https://arxiv.org/abs/2404.05101 .Sean McLeish, John Kirchenbauer, David Yu Miller, Siddharth Singh, Abhinav Bhatele, Micah Goldblum, Ashwinee Panda, and Tom Goldstein. Gemstones: A model suite for multi-faceted scaling laws. In Advances in Neural Information Processing Systems , volume 38, 2025. URL 
+
+https://arxiv.org/abs/2502.06857 .Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam. A time series is worth 64 words: Long-term forecasting with transformers. In International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=Jbdc0vTOcol .Eghbal Rahimikia, Hao Ni, and Weiguan Wang. Re(visiting) time series foundation models in finance. Working paper, SSRN, November 2025. URL https://doi.org/10.2139/ssrn. 5770562 .38 Kashif Rasul, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, George Adamopoulos, Roland Riachi, Nadhir Hassen, Marin Biloš, Sahil Garg, Anderson Schneider, Nicolas Chapados, Alexandre Drouin, Valentina Zantedeschi, Yuriy Nevmyvaka, and Irina Rish. Lag-Llama: Towards foundation models for probabilistic time series forecasting. arXiv preprint arXiv:2310.08278 , 2023. URL 
+
+https://arxiv.org/abs/2310.08278 .Sebastian Ruder. An overview of multi-task learning in deep neural networks. arXiv preprint arXiv:1706.05098 , 2017. URL https://arxiv.org/abs/1706.05098 .Xiaoming Shi, Shiyu Wang, Yuqi Nie, Dianqi Li, Zhou Ye, Qingsong Wen, and Ming Jin. Time-MoE: Billion-scale time series foundation models with mixture of experts. arXiv preprint arXiv:2409.16040 , 2024. URL https://arxiv.org/abs/2409.16040 .Yu Shi, Zongliang Fu, Shuo Chen, Bohan Zhao, Wei Xu, Changshui Zhang, and Jian Li. Kronos: A foundation model for the language of financial markets. arXiv preprint arXiv:2508.02739 ,2025. URL https://arxiv.org/abs/2508.02739 .Mingxing Tan and Quoc V. Le. EfficientNet: Rethinking model scaling for convolutional neural networks. In Proceedings of the 36th International Conference on Machine Learning , volume 97 of Proceedings of Machine Learning Research , pages 6105–6114. PMLR, 2019. URL https: //proceedings.mlr.press/v97/tan19a.html .Hugo Touvron, Matthieu Cord, Alaaeldin El-Nouby, Jakob Verbeek, and Hervé Jégou. Three things everyone should know about vision transformers. In European Conference on Computer Vision , pages 497–515, 2022. doi: 10.1007/978-3-031-20053-3_29. URL https://doi.org/ 10.1007/978-3-031-20053-3_29 .Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems , volume 30, 2017. URL https://papers.nips.cc/paper/ 7181-attention-is-all-you-need .Shiyu Wang, Haixu Wu, Xiaoming Shi, Tengge Hu, Huakun Luo, Lintao Ma, James Y. Zhang, and Jun Zhou. TimeMixer: Decomposable multiscale mixing for time series forecasting. In 
+
+International Conference on Learning Representations , 2024. URL https://openreview.net/ forum?id=7oLshfEIC2 .Zhiguang Wang. Machine learning for stock return prediction: Transformers or simple neural networks. Finance Research Letters , 86:108783, 2025. doi: 10.1016/j.frl.2025.108783. URL 
+
+https://doi.org/10.1016/j.frl.2025.108783 .Aaron Wheeler and Jeffrey D. Varner. MarketGPT: Developing a pre-trained transformer (GPT) for modeling financial time series. arXiv preprint arXiv:2411.16585 , 2024. URL https:// arxiv.org/abs/2411.16585 .Gerald Woo, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. Unified training of universal time series forecasting transformers. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pages 53140–53164. PMLR, 2024. URL https://proceedings.mlr.press/v235/ woo24a.html .Haixu Wu, Jiehui Xu, Jianmin Wang, and Mingsheng Long. Autoformer: Decomposition trans-formers with auto-correlation for long-term series forecasting. In Advances in Neural Informa-tion Processing Systems , volume 34, 2021. URL https://proceedings.neurips.cc/paper/ 2021/hash/bcc0d400288793e8bdcd7c19a8ac0c2b-Abstract.html .39 Haixu Wu, Tengge Hu, Yong Liu, Hang Zhou, Jianmin Wang, and Mingsheng Long. TimesNet: Temporal 2d-variation modeling for general time series analysis. In International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=ju_Uqw384Oq .Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu. Are transformers effective for time series forecasting? Proceedings of the AAAI Conference on Artificial Intelligence , 37(9):11121– 11128, 2023. doi: 10.1609/aaai.v37i9.26317. URL https://ojs.aaai.org/index.php/AAAI/ article/view/26317 .Haoyi Zhou, Shanghang Zhang, Jieqi Peng, Shuai Zhang, Jianxin Li, Hui Xiong, and Wancai Zhang. Informer: Beyond efficient transformer for long sequence time-series forecasting. Pro-ceedings of the AAAI Conference on Artificial Intelligence , 35(12):11106–11115, 2021. doi: 10.1609/aaai.v35i12.17325. URL https://ojs.aaai.org/index.php/AAAI/article/view/ 17325 .Tian Zhou, Ziqing Ma, Qingsong Wen, Xue Wang, Liang Sun, and Rong Jin. FEDformer: Fre-quency enhanced decomposed transformer for long-term series forecasting. In Proceedings of the 39th International Conference on Machine Learning , volume 162 of Proceedings of Ma-chine Learning Research , pages 27268–27286. PMLR, 2022. URL https://proceedings.mlr. press/v162/zhou22g.html .Tian Zhou, Peisong Niu, Xue Wang, Liang Sun, and Rong Jin. One fits all: Power general time series analysis by pretrained LM. In Advances in Neural Information Processing Systems ,volume 36, pages 43322–43355, 2023. URL https://proceedings.neurips.cc/paper_files/ paper/2023/hash/86c17de05579cde52025f9984e6e2ebb-Abstract-Conference.html .Zhuohang Zhu, Haodong Chen, Qiang Qu, and Vera Chung. FinCast: A foundation model for financial time-series forecasting. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management , pages 4539–4549, 2025. doi: 10.1145/3746252. 3761261. 40

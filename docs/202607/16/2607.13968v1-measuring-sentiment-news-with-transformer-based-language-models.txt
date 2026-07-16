@@ -1,0 +1,964 @@
+Title: Measuring Sentiment News with Transformer-Based Language Models
+
+URL Source: https://arxiv.org/pdf/2607.13968v1
+
+Published Time: Thu, 16 Jul 2026 01:29:52 GMT
+
+Number of Pages: 49
+
+Markdown Content:
+# Measuring Sentiment News with Transformer-Based Language Models 
+
+Maria Saveria Mavillonio 1, Stefano Borgioli 2, Caterina Giannetti ∗1 , Chiara Ongari 2, and Giampiero M. Gallo 3
+
+> 1
+
+University of Pisa 
+
+> 2
+
+European Central Bank 
+
+> 3
+
+New York University in Florence July 16, 2026 
+
+Abstract 
+
+Measuring sentiment from financial news is a central task in economics and finance, yet most existing indicators rely on dictionary-based approaches that infer sentiment from word counts and only partially capture context, nega-tion, and semantic structure. This paper proposes a framework for construct-ing daily news mood indices using transformer-based language models and evaluates whether they better represent sentiment than dictionary-based al-ternatives. Using 143,755 financial news articles from Factiva, we classify sen-timent at the sentence level with FinBERT and aggregate these predictions into article-level and daily sentiment measures through alternative normal-ization schemes. We compare the resulting indices with benchmark measures based on Shapiro et al., 2022 and Barbaglia et al., 2025. A central contribu-tion is the validation of alternative sentiment measures against human judg-ments. We conducted an incentivized annotation exercise in which 444 partici-pants evaluated a validation subsample of 588 financial news articles. Consen-sus ratings from independent human evaluations serve as an external bench-mark for assessing the quality of automated sentiment measures. Across cor-relation, regression, and classification exercises, transformer-based measures 
+
+> ∗
+
+Corresponding author: Caterina Giannetti, caterina.giannetti@unipi.it. The authors acknowl-edge support from the project ”Teaming-up with social artificial agents”, funded by the Program for Research Projects of National Interest (PRIN), grant no. 2022ALBSWX. 
+
+1arXiv:2607.13968v1 [q-fin.GN] 15 Jul 2026 show stronger agreement with human judgments than vocabulary-based al-ternatives and perform substantially better in distinguishing positive, neutral, and negative articles. Overall, the results suggest that incorporating contextual information through transformer-based language models produces sentiment measures that more closely reflect human assessments of financial news. 
+
+JEL codes: C55, C81, E32, E37, G14 
+
+Keywords: financial news sentiment; daily mood indices; transformer-based lan-guage models; FinBERT; text-as-data; human validation 
+
+# 1 Introduction 
+
+Timely information on the state of the economy is essential for both policymakers and market participants. However, core macroeconomic aggregates—such as GDP, employment, and inflation—are typically observed at relatively low frequency and are released with non-negligible publication lags. A range of approaches has been developed in the economic literature and in practice to address this informational time gap, including “nowcasting” techniques. An alternative class of models ex-ploits information available across heterogeneous media sources and formats. A central component of this research agenda is the construction of sentiment, or “mood,” indices derived from news data, designed to capture systematic variation in the tone of economic reporting at daily or higher frequencies. For instance, large cor-pora of news articles may be transformed into high-frequency time series designed to proxy narratives, expectations, and “animal spirits”; these metrics are subse-quently incorporated into forecasting and structural modelling frameworks. In addition to traditional media, recent contributions increasingly exploit high-frequency digital text, including social media posts (e.g., Twitter/X), online search activity, and other forms of web-based content. These sources are particularly valu-able, as they react very rapidly to economic developments and may capture dimen-sions of attention and sentiment that are not fully reflected in conventional news outlets (Marcucci, 2024). 2A rather recent but already widely used benchmark in this stream of literature is Shapiro et al. (2022), who constructs a news-based measure designed to mimic survey indicators by combining textual information with a transparent aggregation strategy. Such dictionary- and co-occurrence-based estimation procedures, valued for their interpretability and scalability, have become standard tools in economics and finance. At the same time, these approaches share an important limitation: sentiment is inferred primarily from isolated tokens or local word co-occurrence statistics, rather than from the broader semantic context in which language is used. As a result, they are less well equipped to capture subtleties in sentiment such as negation, compositional meaning, and context-dependent interpretations of tone. In economic news, however, polarity is often determined by syntactic structure and pragmatic context. For example, modal expressions (e.g., ”could worsen”) convey uncertainty that affects sentiment, while domain-specific usage can overturn in-terpretations: phrases such as ”lower inflation” are typically associated with posi-tive sentiment, whereas ”lower growth” conveys a negative outlook. In fact, when sentiment is proxied through word counts, such contextual cues are often over-looked, leading to attenuation bias and systematic misclassification—particularly in instances where tonal variation is most economically informative. Consequently, recent research has advanced lexicon-based sentiment measurement through more rigorous domain-specific adaptation. For instance, Barbaglia et al. (2025) introduce an Economic Lexicon (EL) specifically tailored to economic texts, representing an improvement over general-purpose and finance/accounting dictionaries. The EL assigns continuous sentiment scores in the range [-1,1] to words based on human annotation within economic contexts, while excluding highly ambiguous terms. The lexicon is constructed by integrating large corpora of US and UK news with central-bank publications, isolating sentences pertaining to economic concepts, and applying dependency parsing to identify candidate modifiers that convey senti-ment. This paper revisits the construction of daily mood indices by replicating the core analysis of Shapiro et al. (2022) using a more context-sensitive scoring methodol-ogy based on transformer language models (Devlin, 2018). Specifically, we em-3ploy encoder architectures from the BERT family, fine-tuned for financial senti-ment, to map text into sentence-level sentiment probabilities that account for full contextual information. Unlike traditional classifiers, this approach fundamen-tally alters how sentiment is measured: rather than relying on counts of positive and negative words, it infers sentiment from the meaning of each sentence in con-text. The methodology is designed to enhance measurement accuracy in settings where dictionary-based methods typically underperform—such as in the presence of negation, hedging, and complex semantic dependencies—while maintaining the transparent aggregation framework that underpins the practical utility of news-based sentiment indices in economic applications. Our contributions are threefold. First, we construct daily news mood indices us-ing transformer encoders within a transparent and reproducible aggregation frame-work, assessing how alternative treatments of neutrality, text length, and sentiment imbalance affect the resulting time series. Second, we compare the transformer-based indices with a Shapiro-style benchmark and examine whether deviations arise from sentence composition, publisher mix, and calendar effects. Third, we validate the alternative indices through a resource-intensive human annotation ex-ercise, treating human judgments as the ground truth and conducting both in-sample and out-of-sample evaluations. From the operational strategy point of view, we follow Shapiro et al. (2022) se-quential framework, but we modify the scoring stage by employing transformer-based language models. Each article is segmented into sentences, for which we obtain class probabilities across positive, negative, and neutral categories. These sentence-level predictions are then aggregated to the article level using a variety of normalization schemes that balance robustness to neutral content against sensitiv-ity to polarized language. Subsequently, article-level scores are combined across all articles within a given day to construct daily sentiment time series, controlling for publisher-specific variation and calendar effects within a fixed-effects framework. Since our dataset is similar to that of Shapiro et al. (2022), albeit covering a different time period, we compare our daily sentiment indices against established bench-marks, including the Shapiro-style measure and lexicon-based indices following 4the approach of Barbaglia et al. (2024). As a final step, we validate the alternative sentiment indices through a resource-intensive human-labeling exercise (Ludwig et al., 2025). Following principles from experimental economics, we recruit a large sample of paid, incentivized annotators via Prolific (Palan & Schitter, 2018), link-ing compensation to performance. Annotators are rewarded for assigning ratings within one Likert point of the ex-post consensus label for each item—an output-agreement incentive mechanism designed to discourage low-effort responses when ground-truth labels are costly to obtain (Dasgupta & Ghosh, 2013). This validation exercise allows us to assess whether differences across indices reflect only mechan-ical differences in aggregation or instead correspond to improvements in sentiment classification relative to a human benchmark. Empirically, the transformer-based measures differ systematically from the dictionary-based indices. They produce sentiment distributions that are more dispersed and more polarized, with greater mass in both the positive and negative tails. This sug-gests that context-aware models classify a larger share of text as sentiment-bearing, rather than neutral. The human-labeling exercise confirms this pattern: across sev-eral evaluation metrics, transformer-based scores are closer to human annotations than the dictionary-based alternatives. Overall, the results indicate that replicating the benchmark analysis with transformer-based sentiment is useful not only as a robustness exercise, but also as a measurement improvement. The resulting daily mood indices identify sentiment patterns that dictionary-based methods tend to smooth out and therefore differ meaningfully from existing benchmarks. The remainder of the paper is organized as follows. Section 2 reviews related work on news-based indicators and sentiment extraction. Section 3 describes the data and pre-processing steps. Section 4 introduces the transformer scoring model and the construction of article-level sentiment indices. Section 5 aggregates these measures into daily mood indices and compares them to the Shapiro benchmark. Section 6 presents validation results and additional robustness checks, and Section 7 concludes. 52 Literature Review on Text-Based Sentiment Indices 
+
+The literature on text-based sentiment indices in macroeconomics follows a broadly common pipeline—data collection, text pre-processing, sentiment/semantic extrac-tion, temporal aggregation, and forecasting integration—but differs substantially in the extraction and aggregation stages, which are the two main sources of method-ological heterogeneity. Most studies build indices from large news archives, with Dow Jones Factiva widely used in Euro Area and Italian applications (Aprigliano et al., 2023; Ashwin et al., 2024; Barbaglia et al., 2024; Magro & Saiz, 2025), LexisNexis common in UK and US settings (Rambaccussing & Kwiatkowski, 2020; Shapiro et al., 2022), and specialized datasets such as Ravenpack and GDELT used in global macro-finance analyses (Groß-Klußmann, 2024; Y. Zhang, 2025). Geographic cov-erage ranges from country-specific indices (e.g., Italy, Spain, Korea, and the Philip-pines) to Euro Area and cross-country frameworks (Aguilar et al., 2021; Arcin et al., 2025; Barbaglia et al., 2025; de Bondt & Sun, 2025; Kalamara et al., 2022; Seo et al., 2024). Pre-processing choices are relatively standardized (tokenization, lemma-tization, stop-word removal), although multilingual corpora introduce an impor-tant trade-off between translation-based harmonization and native-language ap-proaches (Ashwin et al., 2024; Barbaglia et al., 2024; Magro & Saiz, 2025). The key methodological distinction concerns how sentiment is extracted . A first family uses vocabulary-based methods, in which texts are scored by matching to-kens to predefined lexicons (e.g., positive, negative, or uncertainty terms) and ag-gregating counts into a sentiment measure. These methods are transparent, com-putationally light, and easy to scale to very large corpora, which makes them at-tractive for real-time monitoring and replication (Barbaglia et al., 2025; Kalamara et al., 2022; Shapiro et al., 2022; L. Zhang et al., 2018). Their main limitation is that they treat words largely in isolation and therefore handle context imperfectly (e.g., negation, intensifiers, semantic ambiguity, and domain-specific meanings), unless dictionaries are carefully adapted; recent work addresses this through va-lence shifters and macro-specific lexicons such as the Economic Lexicon (Barbaglia et al., 2025; Shapiro et al., 2022). A second family uses transformer-based models (e.g., 6FinBERT, language-specific encoders, and LLM-based classifiers), which infer sen-timent from contextual embeddings learned through self-attention and typically perform better on complex or ambiguous financial language (Arcin et al., 2025; de Bondt & Sun, 2025; Jiang & Zeng, 2023; Ravi et al., 2025). The trade-off is lower in-terpretability, higher computational cost, and greater dependence on training data, model specification, and fine-tuning choices. A related but more specialized strand combines semantic structure and sentiment through topic–sentiment models; these improve interpretability by linking tone to latent topics, but they add modeling complexity and stronger identification assumptions (Chen & Mankad, 2025). Beyond extraction, a second central challenge is aggregation , especially because news is observed at high frequency (often with thousands of articles per day) while macroeconomic targets such as GDP and inflation are monthly or quarterly. Raw article- or sentence-level sentiment is typically too noisy and composition-sensitive to use directly, so studies must choose both a cross-sectional aggregation rule and a temporal smoothing scheme. Common cross-sectional choices include simple averages, length-weighted averages, diffusion ratios, and volume-adjusted scores (e.g., summing sentiment or scaling by log news volume) (Aprigliano et al., 2023; Arcin et al., 2025; Barbaglia et al., 2023; Magro & Saiz, 2025; Y. Zhang, 2025). Tem-poral aggregation is handled through rolling windows (e.g., 7- or 30-day averages), month-level fixed effects with outlet controls, or cumulative quarter-to-date mea-sures for GDP nowcasting (Aguilar et al., 2021; Kalamara et al., 2022; Rambac-cussing & Kwiatkowski, 2020; Seo et al., 2024; Shapiro et al., 2022). In multi-country settings, sentiment is often first computed at the national level and then aggregated using GDP weights; final indices are typically standardized (z-scores) or rebased to an index level for comparability across time and countries (Aguilar et al., 2021; Ashwin et al., 2024; Magro & Saiz, 2025; Seo et al., 2024). These aggregation choices are not merely technical: they determine whether the final daily or monthly index captures persistent macroeconomic information or instead reflects short-lived news bursts and changes in source composition. Finally, sentiment indices are integrated into mixed-frequency forecasting frame-works such as Bayesian Model Averaging, MIDAS, and regularized regressions 7(e.g., ridge) (Aprigliano et al., 2023; Ashwin et al., 2024; Barbaglia et al., 2023; de Bondt & Sun, 2025). Overall, the literature suggests that vocabulary-based ap-proaches remain strong and interpretable baselines, while transformer-based meth-ods increasingly provide additional predictive gains when contextual interpreta-tion and topic-specific tone are important for the forecasting target (Kalamara et al., 2022). In the Appendix, a summary is provided in Table B.4. 
+
+# 3 Data and Construction of Sentiment Indices 
+
+This section describes the construction of the sentiment measures used in the em-pirical analysis. We first present the news corpus and the sample selection crite-ria. We then describe the transformer-based approach, which classifies sentiment at the sentence level and aggregates sentence-level predictions into document-level indices. Finally, we introduce vocabulary-based benchmark measures used to com-pare the transformer-based indicators with a transparent lexicon-based alternative. 
+
+3.1 Dataset: News Corpus 
+
+Our dataset is sourced from Dow Jones Factiva and spans January 2025 to Decem-ber 2025. We retain English-language news items classified in the finance indus-try and restrict the sample to documents of type article with non-empty full text. Specifically, we exclude observations with missing or blank article bodies and keep only articles with more than 300 words. The resulting sample contains 143,755 ar-ticles. 
+
+3.2 Transformer-Based Sentiment Classification and Document-Level Measures 
+
+We measure the sentiment of each article using FinBERT, a BERT-based language model fine-tuned for financial sentiment classification (Araci, 2019). FinBERT as-signs each text unit to one of three sentiment classes: positive, neutral, or neg-8ative. Because BERT-based transformer models such as FinBERT are subject to input-length constraints, typically 512 tokens, direct classification of many full-length financial news articles is not feasible. 1 We therefore adopt a sentence-level approach: each article is segmented into individual sentences, sentiment is classi-fied separately for each sentence, and the resulting sentence-level predictions are subsequently aggregated into document-level sentiment measures. This approach is computationally scalable and allows the construction of alternative sentiment indicators that emphasize different aspects of article tone. Table 1 reports descriptive statistics for article length and FinBERT sentence-level classifications. On average, articles contain approximately 49 sentences, most of which are classified as neutral, consistent with the largely informational nature of financial news coverage. Sentence-level sentiment predictions are aggregated into six alternative transformer-based document-level indicators. Considering multi-ple aggregation methods allows us to evaluate the robustness of the resulting sen-timent dynamics to alternative definitions of article-level tone. The indices em-phasize different dimensions of sentiment, including overall tone, polarity among sentiment-bearing sentences, sentiment dominance, nonlinear imbalance, opening-sentence tone, and investor confidence. Detailed definitions, formulas, and illustra-tive examples are reported in Appendix A. The baseline measure, index_stat , cap-tures net sentiment relative to the total number of sentences, thereby accounting for neutral content and article length. The opening-sentence measure, index_stat_30 ,applies the same logic to the first 30 sentences, capturing the tone conveyed at the beginning of the article. The polarity-based measure, index_pos_neg , focuses only on sentiment-bearing sentences by comparing positive and negative classifications 
+
+> 1Recent transformer architectures, such as Longformer (Beltagy et al., 2020) and BigBird (Za-heer et al., 2020), can process substantially longer documents through sparse-attention mechanisms. However, their application to financial sentiment analysis would require the development and val-idation of a dedicated sentiment model, including additional labeled data for fine-tuning. In con-trast, FinBERT provides a well-established finance-specific sentiment classifier that can be directly applied at the sentence level. Given the strong performance of transformer-based sentiment models in financial text, we view sentence-level aggregation as a transparent and computationally efficient solution, while leaving the development of long-sequence financial sentiment models for future research.
+
+9while excluding neutral sentences. The dominance measure, index_pos_neg_max ,emphasizes the prevailing sentiment direction within the article. The calibrated measure, index_pos_neg_tanh , applies a nonlinear transformation to sentiment imbalance in order to attenuate extreme values. Finally, the Investor Confidence Index, index_ICI , is based on the log-ratio of positive to negative sentence counts. mean std min 25% 50% 75% max Number of sentence 48.72 53.54 1.00 16.00 27.00 50.00 345.00 Positive 6.36 10.87 0.00 0.00 3.00 8.00 166.00 Neutral 37.23 46.15 0.00 9.00 18.00 40.00 343.00 Negative 5.13 9.15 0.00 0.00 1.00 6.00 162.00 Table 1: Descriptive statistics of sentence counts and sentence-level sentiment labels per article 
+
+3.3 Vocabulary-Based Benchmark Indices 
+
+As a benchmark, we also construct lexicon-based sentiment indices. In particular, we implement a dictionary-based approach following the aggregation procedure in Shapiro et al. (2022) and use the economic vocabulary developed by Barbaglia et al. (2025). Including these measures allows us to compare our transformer-based sentiment indicators with a transparent and widely used alternative in the macro-finance text literature. The key difference with our transformer-based approach concerns the unit of ag-gregation . In the vocabulary-based method, sentiment is observed at the word level only: each token is matched to the lexicon and assigned a polarity (or score), and the document-level indicator is obtained by a simple aggregation of these word-level signals (typically a sum or normalized sum of positive and negative word counts/scores). By contrast, in the transformer-based approach, sentiment is first inferred at the sentence level using contextual information, and document sentiment is then constructed by aggregating sentence-level predictions. This distinction is substantive: lexicon-based indices are simpler and highly interpretable, but they 10 mean std min 25% 50% 75% max index_stat 0.08 0.24 -1.00 -0.04 0.00 0.20 1.00 index_stat_30 0.09 0.25 -1.00 -0.03 0.00 0.22 1.00 index_pos_neg 0.09 0.68 -1.00 -0.43 0.00 0.71 1.00 index_pos_neg_max 0.10 0.72 -1.00 -0.60 0.00 0.83 1.00 index_pos_neg_tanh 0.12 0.40 -1.00 -0.05 0.00 0.31 1.00 index_ICI 0.22 1.27 -4.98 -0.69 0.00 1.10 4.44 index_shapiro 0.05 0.06 -0.33 0.01 0.04 0.07 0.57 index_barbaglia 0.02 0.03 -0.18 -0.00 0.01 0.03 0.25 Table 2: Descriptive statistics of document-level sentiment indices ( 𝑁 = 143 ,755 ). The table reports summary moments for transformer-based and vocabulary-based measures, highlighting differences in central tendency, dispersion, and support across aggregation methods. cannot directly account for sentence context, whereas transformer-based indices are more flexible but require an additional modeling and aggregation layer. This comparison is important for two reasons. First, lexicon-based indices are computationally lightweight and easy to replicate, making them a natural bench-mark for large-scale empirical applications. Second, estimating both approaches on the same corpus allows us to assess whether the richer contextual information embedded in transformer-based sentiment measures translates into materially dif-ferent signals and, ultimately, improved empirical performance. Table 2 reports descriptive statistics for the main document-level sentiment indices ( 𝑁 = 143 ,755 ), while Figure 1 complements these moments by showing their full empirical distri-butions. Across all measures, the central tendency is slightly positive (means above zero and medians that are zero or mildly positive), indicating that the corpus is on average weakly tilted toward positive tone. At the same time, both the table and the histograms show substantial heterogeneity in dispersion, driven by differences in aggregation rules and normalization choices. 
+
+Vocabulary-Based versus Transformer-Based Sentiment Measures The distri-butional evidence in Table 2 and Figure 1 highlights a clear contrast between the 11 benchmark vocabulary-based indices and the transformer-based measures. The benchmark vocabulary-based indices ( index_shapiro and index_barbaglia ) are concentrated in a very narrow interval around zero, with low standard deviations (0.06 and 0.03 , respectively), indicating smooth but low-amplitude variation un-der word-level aggregation. The polarity-conditional indices ( index_pos_neg and 
+
+index_pos_neg_max ), by contrast, are much more dispersed (std = 0.68 and 0.72 )and place substantial mass toward the bounds in the histograms, reflecting stronger sensitivity to polarized content because neutral sentences are excluded. The sentence-normalized indices ( index_stat and index_stat_30 ) are more compressed (std ≈
+
+0.24 –0.25 ) and centered near zero, consistent with neutral-content dilution. The tanh-calibrated index ( index_pos_neg_tanh ) lies between these cases (std = 0.40 ), showing that nonlinear scaling attenuates extreme values while preserving direc-tional variation. Finally, index_ICI has the widest support and the largest disper-sion (std = 1.27 , range [− 4.98 , 4.44 ]), as expected from its unbounded log-ratio construction. Overall, the distributional evidence confirms that the choice of ag-gregation method materially affects the scale, tail behavior, and interpretability of the resulting sentiment signal. 12 4 Daily Mood Indices: Construction and Comparison 
+
+This section describes how the article-level sentiment measures introduced above are aggregated into daily mood indices. The goal is to construct smooth and inter-pretable time series that capture systematic variation in sentiment over the calendar year while accounting for heterogeneity in publication volume and persistent dif-ferences across publishers. Although the underlying sentiment measures differ in their treatment of neutrality, dominance, and nonlinear scaling, they are all aggre-gated using the same procedure, which makes the resulting daily indices directly comparable. For each sentiment index 𝑘 , let 𝑦 (𝑘 ) 
+
+> 𝑖𝑗𝑑
+
+denote the article-level sentiment value for article 𝑗 , published by outlet 𝑖 , on calendar day-of-year 𝑑 . To recover the average sentiment associated with each day net of publisher-specific sentiment levels, we estimate the following fixed-effects regression: 
+
+𝑦 (𝑘 ) 
+
+> 𝑖𝑗𝑑
+
+= 𝛼 (𝑘 ) 
+
+> 𝑖
+
++
+
+’
+
+> 𝑑 ′∈𝒟
+
+𝛽 (𝑘 ) 
+
+> 𝑑 ′
+
+1{𝑑 = 𝑑 ′} + 𝜀 (𝑘 ) 
+
+> 𝑖𝑗𝑑
+
+, (1) where 𝛼 (𝑘 ) 
+
+> 𝑖
+
+captures time-invariant outlet-specific differences in sentiment and 𝛽 (𝑘 )
+
+> 𝑑 ′
+
+is the average sentiment associated with calendar day 𝑑 ′. Estimation uses analytic weights proportional to publication volume so that days with more content receive greater influence. Standard errors are clustered at the publisher level to allow for arbitrary within-outlet dependence over time. The estimated day-of-year coefficients {̂ 𝛽 (𝑘 ) 
+
+> 𝑑
+
+}𝑑 ∈𝒟 define the raw daily mood se-ries for index 𝑘 . Because day fixed effects are identified only up to an additive constant, we recenter each series to have mean zero across observed days. Let 
+
+¯𝛽 (𝑘 ) = 1
+
+|𝒟| 
+
+’
+
+> 𝑑 ∈𝒟
+
+̂
+
+𝛽 (𝑘 ) 
+
+> 𝑑
+
+, (2) and define the normalized daily mood index as 
+
+Mood (𝑘 ) 
+
+> 𝑑
+
+=̂ 𝛽 (𝑘 ) 
+
+> 𝑑
+
+− ¯ 𝛽 (𝑘 ). (3) Figure 1: Empirical distributions of document-level sentiment indices. The figure compares the full distributions of transformer-based and vocabulary-based mea-sures, highlighting differences in scale, dispersion, and tail behavior across aggre-gation methods. 1.0 0.5 0.0 0.5 1.0 
+
+index_stat 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+> Count
+
+1.0 0.5 0.0 0.5 1.0 
+
+index_stat_30 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+35000 
+
+40000 
+
+> Count
+
+1.0 0.5 0.0 0.5 1.0 
+
+index_pos_neg 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+> Count
+
+1.0 0.5 0.0 0.5 1.0 
+
+index_pos_neg_max 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+> Count
+
+1.0 0.5 0.0 0.5 1.0 
+
+index_pos_neg_tanh 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+> Count
+
+4 2 0 2 4
+
+index_ICI 
+
+0
+
+5000 
+
+10000 
+
+15000 
+
+20000 
+
+25000 
+
+30000 
+
+> Count
+
+0.2 0.0 0.2 0.4 0.6 
+
+index_shapiro 
+
+0
+
+500 
+
+1000 
+
+1500 
+
+2000 
+
+2500 
+
+3000 
+
+3500 
+
+> Count
+
+0.1 0.0 0.1 0.2 
+
+index_barbaglia 
+
+0
+
+1000 
+
+2000 
+
+3000 
+
+4000 
+
+5000 
+
+> Count
+
+14 For each day 𝑑 , we also compute a 95% confidence interval, ̂
+
+𝛽 (𝑘 ) 
+
+> 𝑑
+
+± 1.96 SE 
+
+(̂ 
+
+𝛽 (𝑘 )
+
+> 𝑑
+
+)
+
+,
+
+and apply the same recentering transformation to the lower and upper bounds. This normalization ensures that the daily mood profile captures deviations from the annual average sentiment rather than differences relative to an arbitrary omitted day. For visualization and cross-index comparison, we report both the raw daily mood series and a seven-day moving-average version (with corresponding confi-dence bands), as shown in Figure 2. Panel 2a displays the raw transformer-based indices, which exhibit strong co-movement and similar timing of peaks and troughs despite differences in scale and normalization, while Panel 2b adds the vocabulary-based indices and applies seven-day smoothing to all series, reducing short-run volatility and making common dynamics more visible. The figure also highlights the much narrower support of the vocabulary-based indices relative to the polarity-based transformer measures. These daily mood profiles are obtained from the non-parametric day-of-year fixed-effects specification, which allows sentiment to vary flexibly over the calendar year without imposing a parametric dynamic structure. For each day 𝑑 , we compute coverage diagnostics (number of observations and total analytic weight, i.e., publication volume) and flag days below the 5th percentile of the annual weight distribution as low-coverage; these days are retained but explic-itly identified in graphical and tabular outputs. Indices are reported only for days with sufficient underlying observations to enter the estimation sample (days with no usable data are omitted), and all series are recentered to have mean zero so that they are directly comparable across specifications. Overall, despite differences in normalization and smoothness, the indices display strong co-movement, indicating that the main daily sentiment dynamics are robust to the choice of document-level aggregation method. 15 −2 
+
+−1 
+
+0
+
+1
+
+2
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_pos_neg_max 
+
+−1 
+
+−.5 
+
+0
+
+.5 
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_stat_10 
+
+−1 
+
+−.5 
+
+0
+
+.5 
+
+1
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_stat_30 
+
+−2 
+
+−1 
+
+0
+
+1
+
+2
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_pos_neg 
+
+−1.5 
+
+−1 
+
+−.5 
+
+0
+
+.5 
+
+1
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_pos_neg_tanh 
+
+−4 
+
+−2 
+
+0
+
+2
+
+4
+
+> Mood (mean=0)
+
+0 100 200 300 400 
+
+Day 
+
+index_ici 
+
+Daily mood indices (mean=0; propagated CI); NO MA (a) Daily mood indices (raw) −.2 
+
+0
+
+.2 
+
+.4 
+
+.6 
+
+0 100 200 300 400 day_in_year index_stat_10 
+
+−.2 
+
+0
+
+.2 
+
+.4 
+
+.6 
+
+0 100 200 300 400 day_in_year index_stat_30 
+
+−.2 
+
+0
+
+.2 
+
+.4 
+
+.6 
+
+.8 
+
+0 100 200 300 400 day_in_year index_pos_neg 
+
+−.5 
+
+0
+
+.5 
+
+1
+
+0 100 200 300 400 day_in_year index_pos_neg_max 
+
+−.5 
+
+0
+
+.5 
+
+1
+
+0 100 200 300 400 day_in_year index_pos_neg_tanh 
+
+−.5 
+
+0
+
+.5 
+
+1
+
+1.5 
+
+2
+
+0 100 200 300 400 day_in_year index_ici 
+
+−.05 
+
+0
+
+.05 
+
+.1 
+
+.15 
+
+0 100 200 300 400 day_in_year index_shapiro 
+
+−.04 
+
+−.02 
+
+0
+
+.02 
+
+.04 
+
+.06 
+
+0 100 200 300 400 day_in_year index_barbaglia 
+
+Daily mood indices (mean=0; propagated CI); trailing MA7 (past only) 
+
+(b) Daily mood indices (7-day moving average) 
+
+Figure 2: Comparison of alternative daily mood indices 16 4.1 Comovement Across Daily Mood Indices 
+
+To assess the internal consistency of the daily mood measures and quantify the ex-tent to which alternative constructions capture common sentiment dynamics, we compute pairwise correlations across the six daily indices. We report contempora-neous correlations (lag 0) as well as lead–lag correlations at one- and two-day hori-zons, defined as corr (𝑋 𝑡 , 𝑌 𝑡 ), corr (𝑋 𝑡 , 𝑌 𝑡 −1), and corr (𝑋 𝑡 , 𝑌 𝑡 −2). The lead–lag corre-lations help detect whether differences in normalization or calibration induce sys-tematic timing shifts in measured sentiment. Correlations are computed pairwise using all available overlapping observations for each index pair and lag, and we store both the correlation coefficient and the corresponding sample size. Table 3: Summary of pairwise correlations 𝜌 by lag (among the 6 indices, excluding Shapiro/Barbaglia)                                         
+
+> Lag Pairs Mean SD Median Min Max Mean |𝜌 |Med |𝜌 |%(| 𝜌 | ≥ 0.7)%(| 𝜌 | ≥ 0.8)%(| 𝜌 | ≥ 0.9)
+> 015 0.903 0.045 0.895 0.835 0.993 0.903 0.895 100.0 100.0 40.0 115 0.741 0.035 0.746 0.685 0.797 0.741 0.746 93.3 0.0 0.0 215 0.645 0.038 0.630 0.592 0.714 0.645 0.630 6.7 0.0 0.0
+
+Table 3 summarizes the distribution of pairwise correlations among the mood indices at different temporal lags. At lag 0, contemporaneous correlations are very high across all index pairs, with a mean correlation of 0.903 , and all pairs exhibit-ing |𝜌 | ≥ 0.8; 40% of pairs also exceed |𝜌 | ≥ 0.9. This indicates strong same-day comovement across indices constructed from the same underlying information set. Correlations remain positive but decline at lag 1 (mean 0.741 , with 93 .3% of pairs still above |𝜌 | ≥ 0.7. By lag 2, correlations decrease further (mean 0.645 , and only 
+
+6.7% of pairs remain above |𝜌 | ≥ 0.7. Overall, the pattern points to strong contempo-raneous comovement and a rapid decay in cross-index correlation as the temporal lag increases. As an additional consistency check, we compare the two vocabulary-based daily mood indices— index_shapiro and index_barbaglia —with the six transformer-based indices. Table 4 reports summary statistics of the pairwise correlations be-tween each vocabulary-based index and the six transformer-based measures at lags 
+
+0, 1, and 2 (where lag 1 corresponds to corr (𝐿 𝑡 , 𝑋 𝑡 −1)). 17 The results show contemporaneous alignment between vocabulary-based and transformer-based measures, but weaker than the correlations observed within the transformer family. At lag 0, both vocabulary-based indices are moderately to strongly correlated with the six transformer indices: for index_barbaglia , the mean correlation is 0.765 (range [0.706 , 0.840 ]); for index_shapiro , the mean correlation is 0.769 (range [0.719 , 0.826 ]). In both cases, all six pairs exceed |𝜌 | ≥ 0.7, but only half exceed |𝜌 | ≥ 0.8, and none exceed |𝜌 | ≥ 0.9. This contrasts with the much tighter contemporaneous comovement among transformer-based indices, where same-day correlations are substantially higher on average and often close to the upper bound. Correlations remain positive at lag 1 but decay noticeably. For 
+
+index_barbaglia , the mean lagged correlation falls to 0.658 (with only 16 .7% of pairs above |𝜌 | ≥ 0.7); for index_shapiro , it is slightly higher at 0.670 (with 50 .0% of pairs above |𝜌 | ≥ 0.7). By lag 2, correlations decline further to 0.616 for index_barbaglia 
+
+and 0.631 for index_shapiro , and no pair remains above |𝜌 | ≥ 0.7.Overall, the evidence suggests that the vocabulary-based indices capture the same broad daily sentiment dynamics as the transformer-based measures (espe-cially contemporaneously), but with systematically lower alignment and a more compressed signal. This is consistent with the earlier distributional evidence: vocabulary-based indices are smoother and lower-amplitude because they aggregate word-level polarity, whereas transformer-based indices extract sentiment at the sentence level and are more sensitive to contextual polarity and sentiment intensity. Table 4: Summary of pairwise correlations 𝜌 by lag                                                                     
+
+> Lag Pairs Mean SD Median Min Max Mean |𝜌 |Med |𝜌 |%(| 𝜌 | ≥ 0.7)%(| 𝜌 | ≥ 0.8)%(| 𝜌 | ≥ 0.9)
+> Barbaglia vs each of the 6 indices 060.765 0.062 0.761 0.706 0.840 0.765 0.761 100.0 50.0 0.0 160.658 0.054 0.652 0.608 0.725 0.658 0.652 16.7 0.0 0.0 260.616 0.035 0.613 0.580 0.661 0.616 0.613 0.0 0.0 0.0 Shapiro vs each of the 6 indices 060.769 0.051 0.769 0.719 0.826 0.769 0.769 100.0 50.0 0.0 160.670 0.044 0.671 0.623 0.723 0.670 0.671 50.0 0.0 0.0 260.631 0.024 0.635 0.597 0.659 0.631 0.635 0.0 0.0 0.0
+
+As a final consistency check, we examine whether the daily mood indices dis-play mechanical persistence or systematic calendar patterns that could affect the 18 interpretation of the moving-average series. The results, reported in Appendix B, show only modest short-run autocorrelation and little persistence beyond the first lag. Residualizing the daily series with respect to weekday fixed effects leaves the main pattern essentially unchanged, suggesting that the smoothed indices are not primarily driven by serial dependence in daily sentiment. At the same time, daily sentiment displays some heterogeneity across weekdays, which motivates the use of calendar controls when constructing and interpreting the daily mood measures. 
+
+# 5 Human Labeling and Validation Sample 
+
+The preceding sections show that transformer-based and vocabulary-based mea-sures produce related but distinct sentiment signals. However, differences in dis-persion, persistence, or comovement do not by themselves establish which measure better captures the tone perceived by human readers. This is particularly impor-tant in financial news, where sentiment often depends on context, negation, and the economic meaning of a statement rather than on isolated positive or negative words. We therefore validate the alternative text-based sentiment measures against independent human judgments. To do so, we conducted a large-scale annotation exercise on a sample of 588 newspaper articles drawn from the corpus 2. Participants were recruited through 
+
+Prolific (Palan & Schitter, 2018) and each evaluated four randomly assigned articles. Each article was independently rated by exactly three annotators, yielding 1,776 sentiment evaluations from 444 unique participants. 3
+
+Participants assessed the sentiment expressed in each article on a five-point Lik-ert scale ranging from 1 ( Very Negative ) to 5 ( Very Positive ). The instructions em-
+
+> 2The annotation experiment was preregistered prior to data collection on the Open Science Framework (OSF). The preregistration, including the experimental design, recruitment procedure, and analysis plan, is available at https://osf.io/5ruva/overview.
+> 3A pilot study was conducted to test instructions, timing, and survey functionality. Pilot obser-vations were excluded from all analyses. Eligibility for the main study was restricted to participants located in the United Kingdom or the United States who reported English as their first language. Individuals who participated in the pilot were excluded from the main study.
+
+19 phasized that sentiment refers to the tone and emotional content of the language, rather than the economic substance of the article. In addition, participants were asked to predict the sentiment rating that most other participants would assign to the same article. This second task elicited beliefs about social consensus and was incentivized using an output-agreement mechanism (Dasgupta & Ghosh, 2013). Participants received a base payment of £1.40 and could earn a bonus of £0.10 per article if their prediction was within one Likert point of the realized consensus rat-ing. The average bonus payment was £0.195 (SD = 0.113), ranging from £0 to £0.40. To promote independent evaluations, copy-and-paste functionality was disabled and participants were instructed not to leave or refresh the survey page during the task. 4 After data collection, ratings were aggregated at the article level to construct consensus sentiment labels. These labels serve as the benchmark against which automated sentiment measures are evaluated. To assess data quality and the reliability of the human sentiment measure, we examine the agreement between raters. The distribution of ratings shows strong consistency between individual evaluations and article-level averages. The maxi-mum deviation between any individual rating and the mean of the corresponding article is less than one point on the scale of 1–5. The average difference between in-dividual ratings and article means is -0.07, indicating that there is no systematic bias in individual judgments relative to the aggregated measure. A Bland-Altman style analysis 5 further confirms high agreement, with most observations falling within a ±0.5 point range between individual and aggregated ratings. Given that each article is independently rated exactly three times, these results indicate that the ag-gregation is based on a sufficiently dense and balanced structure to ensure a stable measurement of sentiment at the article level. Overall, the high level of inter-rater agreement supports the use of the averaged rating across the three evaluators as a 
+
+> 4Leaving the survey page resulted in the loss of eligibility for the performance-based bonus. These restrictions were implemented to reduce the use of external tools and ensure comparable annotation conditions across participants.
+> 5A Bland–Altman analysis (Bland & Altman, 1999) examines agreement by plotting the differ-ences between paired measurements against their mean, allowing the identification of systematic bias and dispersion.
+
+20 1.5 1.0 0.5 0.0 0.5         
+
+> Average Mean - Personal Mean
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> Count
+> Distribution of Rating Differences
+> Mean diff = -0.070
+> 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0
+> Mean of Personal and Average Ratings
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> Difference (Average - Personal)
+> Bland Altman Agreement Analysis
+> Bias = -0.070
+> +1.96 SD = 0.488
+> -1.96 SD = -0.629
+
+Figure 3: Inter-rater agreement and rating consistency. The figure shows the distri-bution of individual sentiment ratings, their deviation from article-level averages, and the overall agreement structure across the three independent evaluators per article. reliable ground-truth sentiment measure.The plots are reported in Figure 3, which summarizes the agreement between individual ratings and aggregated sentiment at the article-level, as well as the distribution of the rating differences between the evaluators. 
+
+# 6 Validation Against Human Judgments 
+
+The human-labeling exercise described in Section 5 establishes an external bench-mark, or ground truth, against which alternative sentiment measures can be now evaluated. This benchmark was necessary because the previous sections show that transformer-based and vocabulary-based indices recover related but distinct sig-nals, while differences in scale, dispersion, or time-series behavior do not by them-selves reveal which measure better captures the tone perceived by readers. This section therefore uses three complementary exercises the consensus human labels to assess whether transformer-based measures more closely approximate human 21 judgments of financial-news sentiment than vocabulary-based benchmarks. This exercise parallels the correlation analysis in Section 4.1, but focuses on the labeled validation subsample and replaces cross-index comovement with agreement rela-tive to the human benchmark. It therefore provides a simple measure of external validity and allows us to compare the degree to which alternative indices track hu-man perceptions of sentiment. Second, we use each sentiment index separately to predict the human sentiment labels in-sample, both in regressions and in classifica-tion models. This allows us to assess whether each automated measure explains hu-man ratings and correctly classifies articles as negative, neutral, or positive. Third, we evaluate out-of-sample performance using train-test splits. We estimate regres-sion and classification models on a training sample and test them on held-out ob-servations. This provides a stricter validation exercise by showing whether each sentiment measure generalizes to unseen labeled texts rather than only fitting the labeled sample. Together, these exercises assess how closely the automated measures reproduce human sentiment judgments and whether transformer-based methods improve on vocabulary-based benchmarks. 
+
+6.1 Correlation with Human Sentiment Judgments 
+
+Figure 4 presents the correlation matrix for human sentiment ratings and the al-ternative sentiment indices. Consistent with the strong comovement documented in Section 4.1, the automated measures remain highly correlated with one another in the labeled validation sample. The purpose of this exercise, however, is differ-ent: rather than assessing internal consistency among indices, it uses the consensus human labels as an external benchmark for evaluating measurement quality. All automated measures are positively and substantially correlated with the hu-man benchmark, but transformer-based indices consistently display the strongest correlations. This is consistent with the view that contextual language models bet-ter capture semantic nuance in financial news. 6
+
+> 6The highest correlations with the consensus human rating are obtained by the transformer-
+
+22 The matrix also exhibits a pronounced block structure (see green block in Fig-ure 4 ). Human ratings form a distinct cluster ( 𝑟 = 0.94 ), transformer-based mea-sures display very high internal consistency ( 𝑟 = 0.95 –0.99 ), and vocabulary-based indices are themselves highly correlated ( 𝑟 = 0.98 ). These clusters suggest that dif-ferent methodologies recover a common sentiment signal while relying on distinct measurement approaches. At the same time, the transformer-based measures dis-play slightly higher correlations with the human benchmark (approximately 0.75 versus 0.70 for the vocabulary-based measures). This first descriptive comparison suggests a stronger association between transformer-based sentiment scores and human judgments. However, correlation alone does not establish the relative qual-ity of the measures, motivating the regression and classification analyses that fol-low. 
+
+6.2 In-sample analysis 
+
+In this section, we assess in-sample agreement with human sentiment labels using three complementary exercises: multiclass classification performance, confusion matrices, and univariate regressions of human ratings on each automated senti-ment measure. Table 5 reports the in-sample classification performance of the alternative senti-ment measures on the full sample of 588 articles. 7 The results reveal a clear distinc-tion between transformer-based and vocabulary-based approaches. All transformer-based indices achieve similar classification performance, with accuracies ranging from 66% to 68%, balanced accuracies between 0.67 and 0.69, and macro-F1 scores between 0.67 and 0.69. We focus primarily on the macro-F1 score, as it is the har-monic mean of precision and recall computed separately for each class and then averaged across classes. Unlike overall accuracy, this metric accounts for both false             
+
+> based indices (approximately 𝑟 =0.75 –0.76 ), compared with 𝑟 =0.71 –0.70 for the vocabulary-based measures.
+> 7For comparability across sentiment measures, continuous sentiment scores were converted into three sentiment categories (negative, neutral, and positive) using symmetric thresholds of ±0.33 .Scores below −0.33 were classified as negative, scores above 0.33 as positive, and the remaining observations as neutral.
+
+23 player.mood_article 
+
+> player.mood_article_avg
+> index_stat
+> index_stat_10
+> index_stat_30
+> index_pos_neg
+> index_pos_neg_max
+> index_pos_neg_tanh_thre
+> index_pos_neg_tanh
+> index_ICI
+> index_barbaglia
+> index_shapiro
+
+player.mood_article 
+
+player.mood_article_avg 
+
+index_stat 
+
+index_stat_10 
+
+index_stat_30 
+
+index_pos_neg 
+
+index_pos_neg_max 
+
+index_pos_neg_tanh_thre 
+
+index_pos_neg_tanh 
+
+index_ICI 
+
+index_barbaglia 
+
+index_shapiro 
+
+1.00 0.94 0.73 0.73 0.73 0.73 0.73 0.74 0.73 0.75 0.71 0.70 
+
+0.94 1.00 0.74 0.74 0.74 0.75 0.75 0.76 0.75 0.76 0.73 0.72 
+
+0.73 0.74 1.00 0.99 1.00 0.95 0.95 0.98 0.99 0.98 0.81 0.79 
+
+0.73 0.74 0.99 1.00 0.99 0.95 0.95 0.98 0.99 0.98 0.80 0.79 
+
+0.73 0.74 1.00 0.99 1.00 0.95 0.95 0.98 0.99 0.98 0.81 0.79 
+
+0.73 0.75 0.95 0.95 0.95 1.00 1.00 0.94 0.97 0.99 0.81 0.79 
+
+0.73 0.75 0.95 0.95 0.95 1.00 1.00 0.94 0.97 0.99 0.81 0.79 
+
+0.74 0.76 0.98 0.98 0.98 0.94 0.94 1.00 0.98 0.98 0.81 0.79 
+
+0.73 0.75 0.99 0.99 0.99 0.97 0.97 0.98 1.00 0.99 0.81 0.79 
+
+0.75 0.76 0.98 0.98 0.98 0.99 0.99 0.98 0.99 1.00 0.82 0.80 
+
+0.71 0.73 0.81 0.80 0.81 0.81 0.81 0.81 0.81 0.82 1.00 0.98 
+
+0.70 0.72 0.79 0.79 0.79 0.79 0.79 0.79 0.79 0.80 0.98 1.00 
+
+Pearson Correlation Heatmap 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+0.9 
+
+1.0 Figure 4: Pearson Correlation Heatmap 24 positives and false negatives while assigning equal weight to each sentiment cate-gory, making it particularly appropriate for evaluating multiclass sentiment classi-fication. By contrast, the vocabulary-based indices obtain a macro-F1 score of only 0.187, indicating that they perform poorly across the three sentiment categories. Overall, the results suggest that incorporating contextual information through transformer-based language models substantially improves the ability to reproduce the senti-ment judgments of human annotators compared with traditional vocabulary-based methods. Table 5: In-sample classification performance against human sentiment labels Sentiment Measure Accuracy Balanced Accuracy Macro-F1 
+
+Transformer-based measures 
+
+index_stat 0.662 0.670 0.668 index_stat_10 0.668 0.678 0.675 index_stat_30 0.662 0.670 0.668 index_pos_neg 0.682 0.693 0.687 
+
+index_pos_neg_max 0.682 0.693 0.687 
+
+index_pos_neg_tanh 0.682 0.693 0.687 
+
+index_ICI 0.682 0.693 0.687 
+
+Vocabulary-based measures 
+
+index_barbaglia 0.390 0.333 0.187 index_shapiro 0.390 0.333 0.187   
+
+> Notes: Human sentiment labels are constructed from the consensus rating of annotators. Continuous sentiment scores are converted into three classes (negative, neutral, positive) using symmetric thresholds of ±0.33 . Accuracy denotes the share of correctly classified articles, balanced accuracy averages recall across classes, and Macro-F1 is the unweighted average of class-specific F1 scores.
+
+Figure 5 reports the confusion matrices for the alternative sentiment measures. A clear contrast emerges between transformer-based and vocabulary-based approaches. Transformer-based indices successfully recover all three sentiment categories and exhibit a strong concentration of observations along the main diagonal, indicat-ing substantial agreement with human labels. Their classification errors are pri-25 marily local: negative and positive articles are occasionally classified as neutral, while direct confusion between negative and positive articles is rare. This pattern suggests that transformer-based measures capture the direction of sentiment well, with most disagreements arising for articles whose sentiment is relatively weak or ambiguous. In comparison, the vocabulary-based indices display a degenerate classification pattern. Both the Barbaglia and Shapiro measures assign virtually all articles to the neutral category, contrary to the human labelling. As a result, they correctly identify a large share of neutral articles but fail entirely to distinguish between positive and negative sentiment, producing no correct classifications in either extreme category. The confusion matrices therefore illustrate that the supe-rior performance of transformer-based measures stems not only from higher overall accuracy but also from their ability to discriminate across the full sentiment spec-trum, whereas vocabulary-based approaches largely collapse sentiment variation into a single neutral class. Finally, Table 6 reports univariate OLS regressions of the consensus human sen-timent rating on each automated sentiment measure. All coefficients are positive and highly statistically significant ( 𝑝 < 0.001 ), indicating that higher automated sentiment scores are consistently associated with more positive human evaluations. The explanatory power of the models is substantial, with 𝑅 2 values ranging from 0.52 to 0.58. Among the transformer-based measures, the ICI index delivers the strongest performance ( 𝑅 2 = 0.581 )Vocabulary-based indices exhibit slightly lower explanatory power with 𝑅 2 values of 0.534 for the Barbaglia index and 0.518 for the Shapiro index. Overall, the regression results confirm the findings from the corre-lation and classification analyses: while all measures capture meaningful variation in human sentiment judgments, transformer-based approaches provide the closest approximation to the human benchmark. 
+
+6.3 Out-of-Sample Validation 
+
+To assess the external validity of the sentiment measures, in this section we con-duct an out-of-sample prediction exercise using a temporal train–test split. Arti-26 Figure 5: Confusion matrices by sentiment measure. Rows correspond to human sentiment labels and columns to predicted labels. Transformer-based measures show substantial agreement with human evaluations across all sentiment cate-gories, whereas vocabulary-based measures classify most articles as neutral and exhibit limited ability to distinguish positive from negative sentiment. 27 Table 6: In-sample regression performance against human sentiment labels Sentiment Measure 𝑅 2 Adj. 𝑅 2 AIC 
+
+Transformer-based measures 
+
+index_stat 0.551 0.550 195.27 index_stat_10 0.553 0.552 192.76 index_stat_30 0.551 0.550 195.27 index_pos_neg 0.560 0.560 182.99 index_pos_neg_max 0.560 0.560 182.84 index_pos_neg_tanh 0.558 0.557 186.16 index_ICI 0.581 0.581 154.28 
+
+Vocabulary-based measures 
+
+index_barbaglia 0.534 0.533 217.46 index_shapiro 0.518 0.517 236.87 
+
+Notes: The table reports univariate OLS regressions of the consensus human sentiment rat-ing on each automated sentiment measure. Higher 𝑅 2 values indicate stronger agreement with human evaluations, while lower AIC values indicate better model fit. All estimated coefficients are positive and statistically significant at the 1% level. 
+
+cles are ordered chronologically and divided into training and test samples. The training sample is used for model selection and hyperparameter tuning, while all performance metrics are reported on a hold-out test set containing unseen obser-vations. Model selection is performed using three-fold time-series cross-validation (TimeSeriesSplit ) 8, ensuring that validation observations always occur after the 
+
+> 8
+
+We use a time-series split (TimeSeriesSplit from scikit-learn) instead of standard k-fold cross-validation because our data has a natural temporal structure. Newspaper sentiment and human mood ratings are potentially time-dependent, meaning that observations closer in time are more likely to be correlated. Standard k-fold cross-validation would randomly shuffle observations and allow information from the future to leak into the training set, leading to overly optimistic and unrealistic performance estimates. To preserve the temporal ordering of the data, we implement a three-fold rolling time-series split. In this procedure, the data are ordered chronologically, and each fold uses earlier observations for training and later observations for testing. Specifically, in fold 1 the model is trained on the earliest segment of the data and tested on the next time block; in fold 2 the training window is expanded to include both earlier segments and tested on a later block; and in fold 3 the model is trained on all previous data except the final segment, which is used as the test set. This structure ensures that the model is always evaluated on genuinely unseen future obser-vations relative to the training data, thereby providing a more realistic assessment of out-of-
+
+28 corresponding training observations. This design prevents look-ahead bias and mimics a realistic forecasting environment. Hyperparameters are selected using grid search with macro-F1 as the optimization criterion. We consider three classification algorithms. First, a Balanced Random Forest classifier is estimated with the number of trees ∈ 100 , 200 ), maximum tree depth ∈
+
+3, 4, 5), minimum split size ∈ 2, 5), and minimum leaf size ∈ 1, 2) selected via cross-validation. Second, we estimate a Ridge classifier with regularization parameter 
+
+𝛼 ∈ 0.1, 1, 10 , 100 . Third, we estimate a Support Vector Machine (SVM) classifier with penalty parameter 𝐶 ∈ 0.01 , 0.1, 1, 10 , kernel type ( linear , rbf ), and kernel parameter 𝛾 ∈ scale , auto , 0.1, 1. All models are trained on the same three-class sentiment labels used in the in-sample classification exercise. 
+
+Out-of-Sample Classification Performance Table 7 reports classification perfor-mance on the hold-out test sample. Among the machine-learning models, the SVM achieves the highest macro-F1 score (0.627), while the Ridge classifier attains the highest accuracy (0.627) and balanced accuracy (0.639). The Balanced Random For-est exhibits the strongest in-sample performance but experiences a larger decline on the test set, suggesting some degree of overfitting. Across all specifications, positive articles remain the easiest category to classify, whereas neutral articles continue to be the most difficult. A notable result is that the best-performing transformer-based sentiment in-dices perform at least as well as the more complex machine-learning classifiers. The index_pos_neg , and index_ICI measures achieve a macro-F1 score of 0.638 and an accuracy of 0.627, matching or slightly exceeding the predictive performance of the Ridge and SVM classifiers. This finding suggests that the transformer-derived sentiment measures already capture most of the information relevant for reproduc-ing human sentiment judgments. Additional machine-learning layers provide only limited incremental gains. 
+
+> sample predictive performance. It also allows us to evaluate the stability of transformer-based and dictionary-based sentiment measures across different time periods, reducing the risk that results are driven by a single temporal split.
+
+29 In contrast, the vocabulary-based measures perform poorly out of sample. Both the Barbaglia and Shapiro indices achieve a balanced accuracy of 0.33 and a macro-F1 score of 0.16, indicating performance close to random classification. Taken to-gether, the results confirm the superiority of transformer-based approaches and demonstrate that their advantage persists when evaluated on unseen articles. Table 7: Out-of-sample classification performance Method Accuracy Balanced Accuracy Macro-F1 
+
+Machine-learning models 
+
+Balanced Random Forest 0.593 0.601 0.611 Ridge Classifier 0.627 0.639 0.623 SVM 0.610 0.619 0.627 
+
+Transformer-based indices 
+
+index_stat 0.610 0.611 0.622 index_pos_neg 0.627 0.630 0.638 
+
+index_pos_neg_max 0.627 0.630 0.638 
+
+index_ICI 0.627 0.630 0.638 
+
+Vocabulary-based indices 
+
+index_barbaglia 0.322 0.333 0.162 index_shapiro 0.322 0.333 0.162  
+
+> Notes: Models are trained using a temporal train–test split. Hyperparameters are selected via three-fold time-series cross-validation using macro-F1 as the optimization criterion. Re-ported values refer to performance on the hold-out test sample.
+
+Although the machine-learning classifiers are trained directly on our manually labeled dataset, they only marginally outperform the transformer-based sentiment indices on the hold-out sample. This result is noteworthy because the indices are constructed from FinBERT sentiment scores rather than being optimized for our specific classification task. The limited performance gap suggests that the informa-tion captured by the FinBERT-based sentiment indices is already sufficient to ap-proximate the overall mood expressed in the articles, leaving little additional pre-dictive signal for more flexible classifiers to exploit. At the same time, these findings point to a promising direction for future research. Rather than relying on a general-30 purpose financial language model, it may be possible to develop a transformer specifically trained on our corpus, using document-level sentiment annotations in-stead of sentence-level predictions. Such a model could produce a document-level mood index that more accurately captures the contextual and narrative aspects of newspaper articles, potentially improving upon the current FinBERT-based index. 
+
+Out-of-Sample Regression Performance Table 8 reports the results of the out-of-sample regression performance. In general, all machine-learning models trained on transformer embeddings exhibit strong predictive performance on the hold-out test sample, explaining approximately 68–69% of the variation in human sentiment ratings. The Random Forest achieves the highest out-of-sample fit ( 𝑅 2 = 0.688 ), followed closely by Ridge regression with PCA ( 𝑅 2 = 0.685 ) and Support Vector Regression ( 𝑅 2 = 0.679 ). The similarity of these results suggests that the predictive signal contained in the transformer embeddings is robust across alternative mod-eling approaches. Comparison with sentiment indices yields two additional insights. First, the transformer-based sentiment index ( index_stat ) retains substantial predictive pow-er out of sample ( 𝑅 2 = 0.632 ), confirming that a single sentiment score can sum-marize a large share of the information contained in the full embedding represen-tation. Second, vocabulary-based measures perform considerably worse, with out-of-sample 𝑅 2 values of 0.295 for the Shapiro index and 0.183 for the Barbaglia index. These results indicate that contextual language representations capture dimensions of sentiment that are largely missed by traditional vocabulary-based approaches. Taken together, the out-of-sample evidence reinforces the findings of the corre-lation, classification, and in-sample regression analyses. Transformer-based meth-ods consistently provide the closest approximation to human sentiment judgments and maintain their advantage when evaluated on previously unseen articles. 
+
+Model selection. Hyperparameters were selected using three-fold time-series cross-validation on the training sample, with the coefficient of determination ( 𝑅 2) as the optimization criterion. For the Random Forest regressor, the search grid in-31 cluded the number of trees ∈ 100 , 200 ), maximum depth ∈ 3, 4, 5), minimum split size ∈ 2, 5), and minimum leaf size . The selected specification used 200 trees, a maximum depth of 5, a minimum split size of 5, and a minimum leaf size of 2. For Ridge regression and Support Vector Regression (SVR), transformer embeddings were standardized and reduced using Principal Component Analysis (PCA). The optimal Ridge specification retained 10 principal components with a regulariza-tion parameter of 𝛼 = 0.1, while the best-performing SVR retained 10 principal components and employed a linear kernel with 𝐶 = 10 and 𝛾 = scale . Cross-validation scores were remarkably similar across models, ranging from 𝑅 2 = 0.663 
+
+for Random Forest to 𝑅 2 = 0.668 for SVR, suggesting that predictive performance is driven primarily by the information contained in the embeddings rather than by the specific regression algorithm. Table 8: Out-of-sample regression performance Method 𝑅 2 RMSE MAE 
+
+Machine-learning models 
+
+Random Forest 0.688 0.231 0.193 Ridge + PCA 0.685 0.232 0.192 SVR + PCA 0.679 0.234 0.191 
+
+Transformer-based index 
+
+index_stat 0.632 0.251 0.209 
+
+Vocabulary-based indices 
+
+index_shapiro 0.295 0.347 0.299 index_barbaglia 0.183 0.374 0.324   
+
+> Notes: Models are estimated on a training sample and evaluated on a temporally sepa-rated hold-out test sample. Hyperparameters are selected via three-fold time-series cross-validation. Reported metrics include the coefficient of determination ( 𝑅 2), root mean squared error (RMSE), and mean absolute error (MAE).
+
+32 7 Concluding Remarks 
+
+In this paper, we revisit the construction of daily news-based mood indices by replacing traditional dictionary-based sentiment scoring with a context-sensitive transformer approach while preserving a transparent and interpretable aggrega-tion framework. Using a corpus of more than 140,000 financial news articles from Dow Jones Factiva, we classify sentiment at the sentence level with FinBERT, con-struct alternative article-level sentiment measures that differ in their treatment of neutrality, their handling of sentiment imbalance between positive and negative content, and whether they incorporate the positional importance of sentiment-bearing sentences within the document and aggregate these into daily mood indices after controlling for publisher and calendar effects. This framework allows a direct com-parison between transformer-based and vocabulary-based sentiment measures un-der a common empirical design. Our results show that the method used to extract sentiment has important im-plications for the resulting mood indices. Transformer-based measures generate sentiment distributions that are more dispersed and more polarized than vocabulary-based benchmarks, which are concentrated around zero and therefore produce smoother, lower-amplitude signals. Despite differences in article-level aggrega-tion, the alternative transformer-based indices display strong contemporaneous co-movement, indicating that the underlying daily sentiment dynamics are robust to the specific aggregation rule. Vocabulary-based indices capture similar broad movements over time but substantially compress sentiment variation, especially around the neutral category. The analysis also highlights the importance of accounting for calendar effects when constructing daily mood indicators. Although daily sentiment exhibits only limited serial dependence beyond the first lag, both the level and dispersion of sen-timent vary systematically across weekdays. Ignoring these regularities may there-fore introduce unnecessary variation into high-frequency sentiment measures. To assess which approach better reflects perceived sentiment, we validate the indices against a benchmark constructed from an incentivized human annotation 33 exercise conducted on Prolific. Across correlations, regression models, and both in-sample and out-of-sample classification exercises, transformer-based measures consistently outperform vocabulary-based alternatives and provide a substantially closer approximation to human sentiment judgments. The out-of-sample analysis is particularly informative: machine-learning models trained directly on our manu-ally labeled data improve only marginally upon the best transformer-based indices. This finding suggests that the information extracted by FinBERT already captures most of the signal required to reproduce human assessments of financial-news sen-timent, leaving relatively limited scope for additional gains from downstream pre-dictive models. Methodologically, the paper demonstrates that sentiment measurement depends not only on the underlying language model but also on the aggregation strategy used to transform sentence-level predictions into document- and day-level indices. By systematically comparing alternative aggregation schemes within a common framework, we provide a transparent methodology that can be readily adapted to different datasets, languages, and macro-finance applications. Several avenues for future research naturally emerge from our findings. First, while the results indicate that a pre-trained financial language model such as Fin-BERT provides an excellent basis for measuring news sentiment, future work could develop a transformer model trained directly on our annotated corpus. In par-ticular, training the model using document-level human annotations rather than aggregating sentence-level predictions would allow it to learn sentiment from the complete narrative and contextual structure of financial news articles. Such an ap-proach could produce a document-level mood index that more closely reflects hu-man perceptions of economic news while remaining suitable for high-frequency monitoring. Second, future research should explore the broader economic applica-tions of the proposed indices, including their ability to explain and forecast financial-market dynamics, macroeconomic expectations, and business-cycle fluctuations, extending recent work such as Borgioli et al., 2024. Overall, the evidence suggests that transformer-based sentiment analysis rep-resents more than a robustness check against dictionary-based methods. By ex-34 ploiting contextual information, transformer models recover aspects of sentiment that vocabulary-based approaches systematically smooth out while maintaining an aggregation framework that is transparent, interpretable, and easy to replicate. Transformer-based daily mood indices therefore provide a more accurate and infor-mative measure of financial-news sentiment and offer a promising tool for real-time monitoring and empirical research in macroeconomics and finance. 35 A Construction of Document-Level Sentiment Measures 
+
+We begin from sentence-level sentiment predictions generated by a multiclass clas-sifier. For each sentence 𝑠 , the model outputs log-probabilities over three sentiment classes—positive, negative, and neutral—denoted by 
+
+ℓ𝑠 = (ℓ𝑠, pos , ℓ 𝑠, neg , ℓ 𝑠, neu ).
+
+The predicted sentiment label is assigned using the arg max rule. Each sentence-level prediction is then mapped into a one-hot encoded vector in R3, where pos-itive, negative, and neutral labels correspond respectively to [1, 0, 0], [0, 1, 0], and 
+
+[0, 0, 1]. For a given document, sentence-level one-hot vectors are summed across all sentences, yielding document-level counts 
+
+(𝑝𝑜𝑠, 𝑛𝑒 𝑔, 𝑛𝑒𝑢 ) =
+
+’
+
+> 𝑠
+
+one_hot (𝑦 𝑠 ),
+
+which represent the number of positive, negative, and neutral sentences in the text. 
+
+Baseline sentiment index. The first index, denoted index_stat , measures net sentiment per sentence while explicitly accounting for neutral content. It is defined as index_stat = 𝑝𝑜𝑠 − 𝑛𝑒 𝑔 𝑝𝑜𝑠 + 𝑛𝑒 𝑔 + 𝑛𝑒𝑢 ,
+
+and takes values in the interval [− 1, 1]. This index captures average sentiment in-tensity at the sentence level, with neutral sentences diluting polarity. As a result, it is stable and length-aware, but may understate sentiment when documents contain a large fraction of neutral sentences. 
+
+Early-sentiment indices. To account for the possibility that early content dispro-portionately shapes readers’ perceptions, we construct a family of early-sentiment indices, denoted index_stat_n_fun( 𝑛 ). For each document, we retain only the 36 first 𝑛 sentences and compute the average one-hot prediction 
+
+𝑝 = (𝑝 pos , 𝑝 neg , 𝑝 neu ).
+
+The early-sentiment index is then defined as 𝑝 pos − 𝑝 neg . This measure captures first-impression sentiment but discards later content and is sensitive to sentence ordering. 
+
+Polarity-conditional index. The second main index, index_pos_neg , focuses ex-clusively on polarized content by ignoring neutral sentences. It is defined as index_pos_neg =
+
+
+
+0, if 𝑝𝑜𝑠 = 𝑛𝑒 𝑔, 𝑝𝑜𝑠 − 𝑛𝑒 𝑔 𝑝𝑜𝑠 + 𝑛𝑒 𝑔 , otherwise ,
+
+and lies in [− 1, 1]. This index captures net polarity conditional on the presence of non-neutral sentences. While it emphasizes clearly polarized content, it can be unstable when the number of positive and negative sentences is small. 
+
+Dominance-based index. To measure the dominance of the prevailing sentiment, we define index_pos_neg_max as index_pos_neg_max =
+
+
+
+0, if 𝑝𝑜𝑠 = 𝑛𝑒 𝑔, 𝑝𝑜𝑠 − 𝑛𝑒 𝑔 
+
+max (𝑝𝑜𝑠, 𝑛𝑒 𝑔 ) , otherwise .
+
+This index also lies in [− 1, 1] and highlights how strongly the majority sentiment exceeds the minority. However, it is discontinuous at ties and discards information about the overall volume of sentiment-bearing sentences. 37 Tanh-calibrated margin index. To smooth extreme values and reduce sensitivity to large sentiment imbalances, we construct a tanh-calibrated index: index_pos_neg_tanh = tanh 
+
+( 𝑝𝑜𝑠 − 𝑛𝑒 𝑔 
+
+max (𝑛𝑒𝑢, 1)
+
+)
+
+.
+
+This specification normalizes the sentiment margin by the amount of neutral con-tent, thereby penalizing overconfidence in documents with substantial neutral lan-guage. The lower bound on the denominator prevents instability when 𝑛𝑒𝑢 is close to zero. 
+
+Investor Confidence Index (ICI). As an alternative aggregation measure, we adopt an Investor Confidence Index (ICI) inspired by Antweiler and Frank, 2004; Liu et al., 2025, defined as the log ratio of positive to negative sentences: ICI = ln 
+
+( 1 + 𝑝𝑜𝑠 
+
+1 + 𝑛𝑒 𝑔 
+
+)
+
+.
+
+This transformation yields a signed indicator that increases as positive sentences become more prevalent and decreases as negative sentences dominate. By con-struction, ICI = 0 when 𝑝𝑜𝑠 = 𝑛𝑒 𝑔 ; ICI > 0 indicates relatively more positive tone, whereas ICI < 0 indicates relatively more negative tone. The additive constants ensure numerical stability when either 𝑝𝑜𝑠 = 0 or 𝑛𝑒 𝑔 = 0.Because the index is the logarithm of a positive ratio, it is not bounded in [− 1, 1].Its support is ICI ∈ (−∞ , +∞) .
+
+In practice, the empirical range is much narrower because sentence counts are fi-nite. The logarithmic transformation also emphasizes relative differences between positive and negative counts (i.e., ratios), thereby compressing extreme values com-pared with linear count-based measures. 38 Illustrative example. The different document-level indices capture distinct di-mensions of sentiment because they differ in how they treat neutral content , sen-timent imbalance , and scale . The baseline index ( index_stat ) measures net senti-ment relative to total sentences and is therefore length-aware and strongly diluted by neutral content, making it conservative and stable for information-heavy ar-ticles. By contrast, index_pos_neg and index_pos_neg_max focus only on polar-ized sentences: the former measures net polarity conditional on non-neutral content ,while the latter emphasizes dominance of the majority sentiment over the minority. The tanh-based index ( index_pos_neg_tanh ) combines both ideas by smoothing extreme margins and scaling the sentiment gap by neutral content, thus penalizing overconfidence when articles are mostly descriptive. Finally, the Investor Confi-dence Index ( ICI ) summarizes sentiment through a log-ratio of positive to nega-tive counts; it is unbounded and depends on the relative balance between positive and negative tone rather than on total document length. In practice, these indices are complementary: some are better suited for capturing broad document tone (index_stat ), others for extracting pure polarity from opinionated text ( index_pos_neg ,
+
+index_pos_neg_max ), and others for robust nonlinear scaling ( index_pos_neg_tanh ,
+
+ICI ). To illustrate the differences across indices, consider a document with 20 sen-tences, of which 𝑝𝑜𝑠 = 8 are positive, 𝑛𝑒 𝑔 = 5 are negative, and 𝑛𝑒𝑢 = 7 are neutral. The resulting document-level indices are index_stat = 0.15 , index_pos_neg ≈ 0.23 , index_pos_neg_max = 0.375 ,
+
+index_pos_neg_tanh ≈ 0.40 , ICI ≈ 0.41 .
+
+For the early-sentiment index, if the first 𝑛 = 5 sentences contain 2 positive, 1 neg-ative, and 2 neutral labels, then index_stat_n_fun(5) = 𝑝 pos − 𝑝 neg = 2/5 − 1/5 =
+
+0.20 .Now consider a second document with the same sentiment margin (𝑝𝑜𝑠 −𝑛𝑒 𝑔 = 3)but much more neutral content, e.g., 𝑝𝑜𝑠 = 8, 𝑛𝑒 𝑔 = 5, 𝑛𝑒𝑢 = 27 (40 sentences in 39 total). Then index_stat ≈ 0.23 , index_pos_neg_max = 0.375 ,
+
+index_pos_neg_tanh ≈ 0.11 , ICI =≈ 0.41 .
+
+This comparison shows that index_stat and index_pos_neg_tanh are sensitive to neutral-content dilution, whereas index_pos_neg , index_pos_neg_max , and ICI de-pend only on the positive–negative balance. Table A.1: Summary of document-level sentiment aggregation methods 
+
+Index What it captures Range Neutral sentences Main trade-off 
+
+index_stat Overall net sen-timent per sen-tence 
+
+[− 1, 1] Included (dilution) Stable and length-aware, but conservative in neutral-heavy texts 
+
+index_stat_( 𝑛 ) Early-sentence sentiment (first impression) 
+
+[− 1, 1] Included in first-𝑛 
+
+average Captures opening tone, but ignores later content and de-pends on sentence order 
+
+index_pos_neg Net polarity among polarized sentences 
+
+[− 1, 1] Ignored Highlights polarity, but can be unstable when few polar-ized sentences are present 
+
+index_pos_neg_max Dominance of majority senti-ment 
+
+[− 1, 1] Ignored Emphasizes dominance, but ignores sentiment volume and is tie-sensitive 
+
+index_pos_neg_tanh Smoothed polar-ity scaled by neu-tral content 
+
+[− 1, 1] Used in denomina-tor ( max (𝑛𝑒𝑢, 1))Penalizes overconfidence and compresses extremes, but is less directly inter-pretable 
+
+ICI Log-ratio of pos-itive vs. negative sentences 
+
+(−∞ , +∞) Ignored Captures relative balance and compresses extremes, but is unbounded 
+
+# B Serial Dependence and Day-of-Week Effects 
+
+Table B.1 indicates that daily sentiment indices exhibit only modest short-run per-sistence and limited autocorrelation beyond the first lag, both before and after week-40 day adjustment. A useful distinction emerges between transformer-based and vocabulary-based measures. In the raw series (Panel a), the vocabulary-based indices ( index_barbaglia 
+
+and index_shapiro ) show statistically significant positive autocorrelation at lag 1 (both around 0.16 ), whereas most transformer-based indices have smaller and gen-erally insignificant lag-1 coefficients (typically around 0.09 –0.13 , with index_ici 
+
+as an exception at 0.131 ). This pattern is consistent with the smoother, more com-pressed dynamics of vocabulary-based indices. After removing weekday effects (Panel b), the overall picture remains similar: lag-1 persistence is still modest, most intermediate lags remain close to zero, and there is little evidence of sustained serial dependence. At the same time, several indices—including both vocabulary-based measures and some transformer-based variants—display significant negative auto-correlation at longer horizons (especially lag 14), suggesting mild mean reversion or periodic adjustment rather than persistent momentum. Overall, the table shows that the main signal in daily mood indices is not strong serial persistence, and that vocabulary-based indices differ primarily by exhibiting slightly smoother short-run dynamics than the transformer-based measures. 
+
+B.1 Serial Dependence and Day-of-Week Effects 
+
+As a robustness check, we examine serial dependence in the daily sentiment mea-sures before constructing moving-average indices. For each index, we compute au-tocorrelations between the daily series and its 𝑘 -day lag, for 𝑘 = 1, . . . , 14 . Because weekday patterns may mechanically generate apparent persistence, especially at weekly horizons, we also residualize each daily series with respect to weekday fixed effects and recompute the autocorrelations on the residuals. Finally, we compute lag-𝑘 correlations within weekday subsamples to assess whether weekly depen-dence is concentrated on specific calendar days. Table B.1 shows that the daily sen-timent indices exhibit only modest short-run persistence and little autocorrelation beyond the first lag, both before and after weekday adjustment. Vocabulary-based indices display somewhat stronger lag-1 autocorrelation than most transformer-based indices, consistent with their smoother and more compressed dynamics. Af-41 Table B.1: Autocorrelation (lags 1–14): raw vs. weekday-adjusted daily indices 
+
+> (1)  (2)  (3)  (4)  (5)  (6)  (7)  (8)  (9)  (10)  (11)  (12)  (13)  (14)
+> (a) Raw
+> index_barbaglia  0.165**  0.022  0.111  -0.032  0.019  0.019  -0.008  0.012  -0.040  0.009  -0.004  -0.072  -0.019  -0.129* (0.020) (0.769) (0.123) (0.655) (0.793) (0.796) (0.912) (0.865) (0.587) (0.902) (0.956) (0.338) (0.797)  (0.065) index_ici  0.131*  -0.050  -0.067  -0.003  0.033  0.014  0.081  -0.027  -0.121  -0.052  -0.009  -0.069  -0.069  -0.023 (0.066) (0.504) (0.350) (0.961) (0.652) (0.846) (0.246) (0.717) (0.102) (0.475) (0.905) (0.358) (0.347)  (0.747) index_pos_neg  0.101  -0.074  -0.052  -0.023  0.019  -0.001  0.101  0.002  -0.119  -0.039  -0.012  -0.059  -0.080  -0.014 (0.156) (0.316) (0.471) (0.750) (0.795) (0.988) (0.148) (0.982) (0.106) (0.591) (0.871) (0.433) (0.275)  (0.843) index_pos_neg_max  0.103  -0.071  -0.050  -0.017  0.021  -0.008  0.106  -0.009  -0.128*  -0.032  -0.010  -0.073  -0.079  -0.015 (0.148) (0.340) (0.489) (0.812) (0.773) (0.910) (0.130) (0.898) (0.084) (0.660) (0.892) (0.334) (0.281)  (0.830) index_pos_neg_tanh  0.090  0.083  -0.112  0.027  0.062  -0.025  -0.012  -0.044  -0.060  0.011  -0.005  -0.014  -0.054  -0.196*** (0.206) (0.262) (0.119) (0.702) (0.399) (0.732) (0.869) (0.548) (0.414) (0.875) (0.947) (0.848) (0.462)  (0.005) index_shapiro  0.161**  0.032  0.093  -0.039  0.000  0.023  0.053  0.010  -0.050  -0.016  -0.013  -0.086  -0.043  -0.189*** (0.024) (0.668) (0.197) (0.587) (0.995) (0.749) (0.450) (0.894) (0.499) (0.823) (0.853) (0.252) (0.562)  (0.007) index_stat_10  0.102  -0.027  -0.020  0.015  0.035  -0.033  -0.048  0.008  -0.107  0.036  -0.033  -0.103  -0.082  -0.054 (0.151) (0.716) (0.780) (0.836) (0.635) (0.650) (0.495) (0.912) (0.147) (0.622) (0.647) (0.172) (0.267)  (0.442) index_stat_30  0.096  -0.005  -0.059  0.016  0.057  -0.009  0.024  -0.034  -0.082  -0.005  -0.024  -0.031  -0.071  -0.145** (0.180) (0.948) (0.416) (0.824) (0.444) (0.901) (0.728) (0.640) (0.266) (0.942) (0.737) (0.677) (0.333)  (0.039)
+> (b) Weekday-adjusted
+> index_barbaglia  0.147**  0.025  0.142**  -0.001  0.022  0.009  -0.076  0.006  -0.029  0.039  0.023  -0.071  -0.017  -0.209*** (0.040) (0.738) (0.049) (0.988) (0.771) (0.906) (0.278) (0.932) (0.696) (0.589) (0.749) (0.346) (0.812)  (0.003) index_ici  0.147**  -0.059  -0.007  0.077  0.035  -0.010  -0.032  -0.052  -0.124*  0.017  0.051  -0.077  -0.096  -0.157** (0.039) (0.425) (0.928) (0.280) (0.640) (0.887) (0.647) (0.475) (0.094) (0.812) (0.481) (0.306) (0.190)  (0.024) index_pos_neg  0.114  -0.082  0.017  0.069  0.024  -0.030  -0.019  -0.026  -0.119  0.044  0.052  -0.070  -0.116  -0.163** (0.110) (0.271) (0.819) (0.338) (0.745) (0.680) (0.782) (0.721) (0.108) (0.541) (0.472) (0.353) (0.113)  (0.020) index_pos_neg_max  0.115  -0.074  0.021  0.076  0.028  -0.038  -0.012  -0.039  -0.129*  0.052  0.055  -0.084  -0.116  -0.162** (0.107) (0.317) (0.773) (0.289) (0.703) (0.600) (0.863) (0.598) (0.081) (0.471) (0.447) (0.263) (0.115)  (0.020) index_pos_neg_tanh  0.092  0.075  -0.088  0.062  0.058  -0.023  -0.064  -0.043  -0.063  0.039  0.021  -0.035  -0.052  -0.253*** (0.196) (0.310) (0.223) (0.385) (0.436) (0.748) (0.360) (0.555) (0.397) (0.593) (0.776) (0.644) (0.478)  (0.000) index_shapiro  0.143**  0.035  0.132*  -0.003  0.007  0.008  0.002  -0.000  -0.033  0.017  0.017  -0.086  -0.051  -0.243*** (0.044) (0.640) (0.067) (0.969) (0.930) (0.914) (0.972) (0.997) (0.651) (0.811) (0.813) (0.256) (0.491)  (0.001) index_stat_10  0.086  -0.008  -0.003  0.040  0.066  -0.044  -0.123*  -0.004  -0.079  0.058  -0.017  -0.080  -0.088  -0.137* (0.230) (0.910) (0.966) (0.579) (0.375) (0.546) (0.080) (0.952) (0.288) (0.422) (0.813) (0.290) (0.232)  (0.051) index_stat_30  0.086  -0.005  -0.031  0.053  0.062  -0.014  -0.035  -0.038  -0.072  0.026  0.003  -0.035  -0.069  -0.209*** (0.226) (0.949) (0.669) (0.456) (0.403) (0.849) (0.615) (0.601) (0.328) (0.718) (0.970) (0.639) (0.348)  (0.003)
+> Notes:  Panel (a) reports raw autocorrelations of the daily index. Panel (b) reports autocorrelations of residuals after re-moving weekday fixed effects (regressing on  𝑖. weekday). Stars denote significance based on the correlation  𝑝 -value (in parentheses):  ∗ 𝑝  < 0.10 , ∗∗  𝑝  < 0.05 , ∗∗∗  𝑝  < 0.01 .
+
+42 ter removing weekday effects, lag-1 persistence remains limited, intermediate lags are close to zero, and some indices display negative autocorrelation at longer hori-zons, especially around lag 14. Overall, the evidence does not indicate strong serial dependence in daily mood. Instead, part of the apparent weekly dependence ap-pears to reflect calendar-specific variation. Table B.2 reports summary statistics of the daily sentiment index aggregated by weekday, showing clear heterogeneity in sentiment levels across the week. Tuesday exhibits the highest average sentiment (mean = 0.744), together with relatively high dispersion, while Friday is the weak-est day on average (mean = -0.025), suggesting slightly negative or neutral tone at the end of the working week. Midweek days show mixed patterns, with Wednes-day displaying the lowest central tendency and occasional negative values, whereas Thursday shows a rebound in sentiment levels. Weekend days are generally more stable, with Saturday showing relatively low variance and mildly positive senti-ment, while Sunday exhibits higher mean sentiment but also greater variability, indicating occasional extreme observations. Figure B.1 of the sentiment index over time further shows that newspaper mood is highly dynamic, with clear short-run fluctuations and periods of elevated or reduced sentiment rather than a smooth trend, suggesting that sentiment is primarily driven by time-varying news shocks rather than long-run deterministic movements. Table B.3 reports the correlation structure of all sentiment indices across week-days at short-run (lag 1) and medium-run (lag 14) horizons. The results indicate clear evidence of short-run persistence, particularly on Tuesdays, where most in-dices exhibit positive and statistically significant lag-1 correlations, suggesting that sentiment shocks tend to persist within the weekly cycle. By contrast, Fridays show weaker and in some cases negative short-run persistence, consistent with faster mean reversion toward the end of the week. At the 14-day horizon, the pattern becomes more heterogeneous, with several indices displaying reversal effects, es-pecially on Tuesdays and Fridays, where correlations turn negative or lose signifi-cance. Overall, the evidence points to a combination of short-run persistence and medium-run reversion, indicating that sentiment dynamics exhibit both momen-tum and cyclical adjustment depending on the weekday and the time horizon. 2025-01 2025-02 2025-03 2025-04 2025-05 2025-06 2025-07 2025-08 2025-09 2025-10 
+
+> day
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> param
+> weekday
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+
+Figure B.1: Day-of-week patterns in daily sentiment (0 = Monday, 6 = Sunday). The figure shows that Tuesday exhibits the highest average sentiment level over time. Table B.2: Summary statistics of daily sentiment by weekday 
+
+Weekday count mean std min 25% 50% 75% max Monday 37 0.245 0.132 -0.257 0.217 0.265 0.305 0.516 Tuesday 32 0.744 0.418 0.039 0.367 0.770 0.994 1.739 Wednesday 20 0.129 0.236 -0.378 -0.116 0.240 0.294 0.434 Thursday 28 0.416 0.337 -0.174 0.226 0.281 0.522 1.238 Friday 35 -0.025 0.273 -0.453 -0.218 -0.133 0.217 0.538 Saturday 35 0.288 0.089 0.148 0.213 0.300 0.342 0.528 Sunday 16 0.450 0.478 -0.979 0.262 0.623 0.739 1.021 
+
+B.2 Literature Review: Summary of Existing Evidence 
+
+Table B.4 provides a structured overview of the existing literature on sentiment measurement in news and macro-finance, summarizing the scope, methodologies, and main findings of key contributions. Table B.3: Weekday drivers of dependence (lags 1 and 14) 
+
+Index Series Lag Mon Tue Wed Thu Fri Sat Sun index_shapiro raw 1 0.191 0.538*** 0.353 -0.065 -0.070 0.256* 0.530** (0.359) (0.001) (0.134) (0.764) (0.706) (0.093) (0.013) index_shapiro raw 14 -0.094 -0.325* 0.676** 0.193 -0.455*** 0.034 -0.161 (0.538) (0.055) (0.042) (0.365) (0.005) (0.828) (0.508) index_shapiro wdresid 1 0.191 0.538*** 0.353 -0.065 -0.070 0.256* 0.530** (0.359) (0.001) (0.134) (0.764) (0.706) (0.093) (0.013) index_shapiro wdresid 14 -0.094 -0.325* 0.676** 0.193 -0.455*** 0.034 -0.161 (0.538) (0.055) (0.042) (0.365) (0.005) (0.828) (0.508) index_barbaglia raw 1 0.206 0.424*** 0.375 0.021 -0.048 0.389** 0.519** (0.323) (0.007) (0.112) (0.924) (0.796) (0.011) (0.015) index_barbaglia raw 14 0.019 -0.319* 0.590* 0.204 -0.492*** 0.022 -0.143 (0.898) (0.059) (0.077) (0.338) (0.002) (0.888) (0.556) index_barbaglia wdresid 1 0.206 0.424*** 0.375 0.021 -0.048 0.389** 0.519** (0.323) (0.007) (0.112) (0.924) (0.796) (0.011) (0.015) index_barbaglia wdresid 14 0.019 -0.319* 0.590* 0.204 -0.492*** 0.022 -0.143 (0.898) (0.059) (0.077) (0.338) (0.002) (0.888) (0.556) index_ici raw 1 -0.060 0.450*** 0.532** 0.010 0.128 0.020 0.364* (0.775) (0.004) (0.024) (0.964) (0.492) (0.896) (0.088) index_ici raw 14 -0.001 -0.406** 0.362 -0.294 0.240 0.096 0.023 (0.996) (0.016) (0.277) (0.168) (0.139) (0.542) (0.923) index_ici wdresid 1 -0.060 0.450*** 0.532** 0.010 0.128 0.020 0.364* (0.775) (0.004) (0.024) (0.964) (0.492) (0.896) (0.088) index_ici wdresid 14 -0.001 -0.406** 0.362 -0.294 0.240 0.096 0.023 (0.996) (0.016) (0.277) (0.168) (0.139) (0.542) (0.923) index_pos_neg_max raw 1 -0.157 0.458*** 0.491** -0.088 0.070 0.012 0.290 (0.450) (0.003) (0.037) (0.687) (0.707) (0.935) (0.174) index_pos_neg_max raw 14 0.007 -0.436*** 0.284 -0.065 0.304* 0.067 -0.067 (0.966) (0.010) (0.395) (0.761) (0.061) (0.670) (0.784) index_pos_neg_max wdresid 1 -0.157 0.458*** 0.491** -0.088 0.070 0.012 0.290 (0.450) (0.003) (0.037) (0.687) (0.707) (0.935) (0.174) index_pos_neg_max wdresid 14 0.007 -0.436*** 0.284 -0.065 0.304* 0.067 -0.067 (0.966) (0.010) (0.395) (0.761) (0.061) (0.670) (0.784) index_stat_30 raw 1 0.033 0.359** 0.412* -0.047 -0.015 0.011 0.210 (0.873) (0.022) (0.081) (0.829) (0.937) (0.943) (0.325) index_stat_30 raw 14 0.013 -0.457*** 0.387 -0.360* 0.216 0.073 -0.110 (0.932) (0.007) (0.246) (0.091) (0.183) (0.645) (0.650) index_stat_30 wdresid 1 0.033 0.359** 0.412* -0.047 -0.015 0.011 0.210 (0.873) (0.022) (0.081) (0.829) (0.937) (0.943) (0.325) index_stat_30 wdresid 14 0.013 -0.457*** 0.387 -0.360* 0.216 0.073 -0.110 (0.932) (0.007) (0.246) (0.091) (0.183) (0.645) (0.650) 
+
+Notes: Each cell reports the correlation between the current-day value and its lagged value within the indicated weekday subsample (Monday–Sunday), for lags 𝑘 ∈ { 1, 14 }. Statistical significance is based on the correlation 𝑝 -value and is denoted by ∗ 𝑝 < 0.10 , ∗∗ 𝑝 < 0.05 , and  
+
+> ∗∗∗
+
+𝑝 < 0.01 . The second line in each cell reports the corresponding 𝑝 -value in parentheses. Table B.4: Literature Review in a Table 
+
+> Author(s) & Year  Scope  Methodology  Key Findings
+> Aprigliano et al., 2023  Italy  Italian Dict + Valence Shifters Monthly BMA and weekly trackers improve GDP nowcasts, with larger gains in recessions. Arcin et al., 2025  Philippinesvocabularys  vs.  Fin-BERT + NMF A FinBERT-based News Sentiment Index (NSI) captures domestic turning points effectively. Ashwin et al., 2024  Euro Area Translation  +Ridge/NN News sentiment adds most information early in the quarter, when soft data are limited. Barbaglia et al., 2024  Europe  FiGAS + Neural Trans-lation News indicators predict activity across major EU economies and remain robust in real-time settings. Barbaglia et al., 2025  US / UK  Economic Lexicon (EL)  Human-annotated EL scores outperform finance/accounting lexi-cons in macro applications. Aguilar et al., 2021  Spain  DENSI (Directional)  A daily index detects COVID-19 regime shifts faster than tradi-tional confidence surveys. Groß-Klußmann, 2024 Global  Supervised  Autoen-coders Nonlinear latent factors from news analytics outperform linear PCA and PLS benchmarks. Rambaccussing  and Kwiatkowski, 2020 UK  SVM  + Keyword  In-dices Text-implied sentiment improves forecasts of UK unemployment and output growth. Lagerborg et al., 2023  US  IV (Mass Shootings) + SVAR Identifies autonomous sentiment shocks associated with hump-shaped declines in industrial production. Lukauskas et al., 2022  Lithuania  Transformers  + Clus-tering AI-derived negative news sentiment reduces errors in forecasting economic activity. Magro and Saiz, 2025  Euro Area Native-Language  Dic-tionaries Avoiding translation lowers resource costs while preserving now-cast accuracy. Ravi et al., 2025  Financial  LLMs  (Llama3, RoBERTa) LLM-based sentiment (e.g., Llama3) achieves high classification ac-curacy and tracks sentiment-driven moves. Seo et al., 2024  S. Korea  Transformer  Encoder (KoNS) Automated NSI signals inflection points 1–2 months ahead of offi-cial statistics. Shapiro et al., 2022  US  News PMI model  PMI-weighted text sentiment behaves similarly to survey-based measures in macro models. Jiang and Zeng, 2023  US stocks  FinBERT + LSTM  Combining FinBERT text signals with numeric inputs via LSTM improves price-movement prediction. Y. Zhang, 2025  Global FX FinBERT + XGBoost + SHAP Interpretable ML delivers strong cost-adjusted performance in FX and bond markets (Sharpe  > 4). Chen  and  Mankad, 2025 Reviews  STS  (Structural Topic/Sent) A structural topic–sentiment model links document covariates to topic prevalence and discourse slant. de  Bondt  and  Sun, 2025 Euro Area ChatGPT (Zero-shot)  Activity scores from PMI releases improve GDP nowcasts by about 20% versus hard-data benchmarks. Kalamara et al., 2022  UK  Dictionaries  vs.  ML (NN) Dictionary indices are useful baselines, but neural models yield larger marginal forecast gains.
+
+# References 
+
+Aguilar, P., Ghirelli, C., Pacce, M., & Urtasun, A. (2021). Can news help measure economic sentiment? an application in covid-19 times. Economics Letters , 199 ,109730. Antweiler, W., & Frank, M. Z. (2004). Is all that talk just noise? the information con-tent of internet stock message boards. The Journal of finance , 59 (3), 1259–1294. Aprigliano, V., Emiliozzi, S., Guaitoli, G., Luciani, A., Marcucci, J., & Monteforte, L. (2023). The power of text-based indicators in forecasting italian economic activity. International Journal of Forecasting , 39 (2), 791–808. Araci, D. (2019). Finbert: Financial sentiment analysis with pre-trained language models. arXiv preprint arXiv:1908.10063 .Arcin, A. C., Esclanda-Lo, C., Ong, C. A., & Reyes, R. (2025). Constructing high-frequency and thematic economic sentiment indicators from online news articles: Applications in the philippine context (tech. rep.). Bank for International Settle-ments. Ashwin, J., Kalamara, E., & Saiz, L. (2024). Nowcasting euro area gdp with news sentiment: A tale of two crises. Journal of Applied Econometrics , 39 (5), 887– 905. Barbaglia, L., Consoli, S., & Manzan, S. (2023). Forecasting with economic news. 
+
+Journal of Business & Economic Statistics , 41 (3), 708–719. Barbaglia, L., Consoli, S., & Manzan, S. (2024). Forecasting gdp in europe with tex-tual data. Journal of Applied Econometrics , 39 (2), 338–355. Barbaglia, L., Consoli, S., Manzan, S., Tiozzo Pezzoli, L., & Tosetti, E. (2025). Senti-ment analysis of economic text: A lexicon-based approach. Economic Inquiry ,
+
+63 (1), 125–143. Beltagy, I., Peters, M. E., & Cohan, A. (2020). Longformer: The long-document trans-former. arXiv preprint arXiv:2004.05150 .Bland, J. M., & Altman, D. G. (1999). Measuring agreement in method comparison studies. Statistical methods in medical research , 8(2), 135–160. Borgioli, S., Gallo, G. M., & Ongari, C. (2024). Financial returns, sentiment and mar-ket volatility. a dynamic assessment. Chen, L., & Mankad, S. (2025). A structural topic and sentiment-discourse model for text analysis. Management Science , 71 (7), 5767–5787. Dasgupta, A., & Ghosh, A. (2013). Crowdsourced judgement elicitation with en-dogenous proficiency. Proceedings of the 22nd international conference on World Wide Web , 319–330. de Bondt, G. J., & Sun, Y. (2025). Enhancing gdp nowcasts with chatgpt: A novel appli-cation of pmi news releases . ECB Working Paper. Devlin, J. (2018). Bert: Pre-training of deep bidirectional transformers for language understanding. arXiv preprint arXiv:1810.04805 .Groß-Klußmann, A. (2024). Learning deep news sentiment representations for macro-finance. Digital Finance , 6(3), 341–377. Jiang, T., & Zeng, A. (2023). Financial sentiment analysis using finbert with appli-cation in predicting stock movement. arXiv preprint arXiv:2306.02136 .Kalamara, E., Turrell, A., Redl, C., Kapetanios, G., & Kapadia, S. (2022). Making text count: Economic forecasting using newspaper text. Journal of Applied Econo-metrics , 37 (5), 896–919. Lagerborg, A., Pappa, E., & Ravn, M. O. (2023). Sentimental business cycles. The Review of Economic Studies , 90 (3), 1358–1393. Liu, Q., Liu, Y., & Son, H. (2025). From emotion to action: How intraday investor sentiment drives market microstructure. Borsa Istanbul Review , 100775. Ludwig, J., Mullainathan, S., & Rambachan, A. (2025). Large language models: An applied econometric framework (tech. rep.). National Bureau of Economic Re-search. Lukauskas, M., Pilinkienė, V., Bruneckienė, J., Stundžienė, A., Grybauskas, A., & Ruzgas, T. (2022). Economic activity forecasting based on the sentiment anal-ysis of news. Mathematics , 10 (19), 3461. Magro, M. M., & Saiz, L. (2025). What can newspaper articles reveal about the euro area economy? Marcucci, J. (2024). Macroeconomic forecasting with text-based data. Chapters , 425– 468. Palan, S., & Schitter, C. (2018). Prolific. ac—a subject pool for online experiments. 
+
+Journal of behavioral and experimental finance , 17 , 22–27. Rambaccussing, D., & Kwiatkowski, A. (2020). Forecasting with news sentiment: Evidence with uk newspapers. International Journal of Forecasting , 36 (4), 1501– 1516. Ravi, V., Srivastava, V. K., Singh, M. P., Chippagiri, S., Kassetty, N., Vardhineedi, P. N., Burila, R. K., & Prova, N. N. I. (2025). Large language models (llms) for financial sentiment analysis and market forecasting. 2nd International Confer-ence on Sustainable Business Practices and Innovative Models (ICSBPIM-2025) ,681–694. Seo, B., Lee, Y., & Cho, H. (2024). Measuring news sentiment of korea using trans-former. Korean Economic Review , 40 (1), 149–176. Shapiro, A. H., Sudhof, M., & Wilson, D. J. (2022). Measuring news sentiment. Jour-nal of econometrics , 228 (2), 221–243. Zaheer, M., Guruganesh, G., Dubey, K. A., Ainslie, J., Alberti, C., Ontanon, S., Pham, P., Ravula, A., Wang, Q., Yang, L., et al. (2020). Big bird: Transformers for longer sequences. Advances in neural information processing systems , 33 , 17283– 17297. Zhang, L., Fu, S., & Li, B. (2018). Research on stock price forecast based on news sentiment analysis—a case study of alibaba. International Conference on Com-putational Science , 429–442. Zhang, Y. (2025). Interpretable machine learning for macro alpha: A news sentiment case study. arXiv preprint arXiv:2505.16136 .

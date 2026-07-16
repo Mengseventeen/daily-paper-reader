@@ -6,53 +6,39 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-15
-- 运行时间：2026-07-15 21:07:35 UTC
+- 最新运行日期：2026-07-16
+- 运行时间：2026-07-16 20:39:22 UTC
 - 运行状态：成功
-- 本次总论文数：11
+- 本次总论文数：6
 - 精读区：6
-- 速读区：5
+- 速读区：0
 
 ### 今日简报（AI）
-今日共推荐11篇金融科技相关论文，精读6篇、速读5篇。最值得关注的两篇9分论文分别聚焦动态图节点亲和度的机构持仓预测和融合LLM专家与规则信号的实时混合交易智能体。建议优先阅读这两篇高分论文，探索图神经网络与多智能体系统在金融量化中的应用。
-- 详情：[/202607/15/README](/202607/15/README)
+今日精读两篇论文，均获高分评价。Transformer情感分析模型获满分，金融报告质量评估框架达9分。推荐关注情绪提取与报告质量识别领域的突破。
+- 详情：[/202607/16/README](/202607/16/README)
 
 ### 精读区论文标签
-1. [Institutional Equity Holdings Prediction Using Node Affinities of Dynamic Graphs](/202607/15/2607.12067v1-institutional-equity-holdings-prediction-using-node-affinities-of-dynamic-graphs)  
+1. [Measuring Sentiment News with Transformer-Based Language Models](/202607/16/2607.13968v1-measuring-sentiment-news-with-transformer-based-language-models)  
+   标签：评分：10.0/10、query:ai-finance
+   evidence：使用基于Transformer的语言模型（FinBERT）对金融新闻进行情感分析
+2. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/16/2607.12252v2-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：时序图机器学习用于机构股权持有预测
-2. [Fin-Analyst at FinMMEval 2026 Task 3: A Live Hybrid Trading Agent with LLM Specialists and Rule-Based Signals](/202607/15/2607.12233v1-fin-analyst-at-finmmeval-2026-task-3-a-live-hybrid-trading-agent-with-llm-specialists-and-rule-based-signals)  
+   evidence：利用深度研究代理和NLP评估财务报告质量的基准
+3. [Equilibrium Information Aggregation under Machine Learning](/202607/16/2607.13670v1-equilibrium-information-aggregation-under-machine-learning)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：使用LLM专家进行交易，深度学习在金融中的应用，自然语言处理金融数据
-3. [EVOQUANT: Self-Evolving Verifier-Guided Strategy Optimization for Robust Quantitative Trading](/202607/15/2607.12455v1-evoquant-self-evolving-verifier-guided-strategy-optimization-for-robust-quantitative-trading)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：利用LLM优化量化交易策略，深度学习在金融中的应用
-4. [Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator](/202607/15/2607.10960v1-reinforcement-learning-for-execution-under-dynamic-fees-in-a-closed-loop-dex-simulator)  
+   evidence：机器学习应用于资产市场信息汇聚
+4. [AI-Native Insurance for Agentic AI: Pricing, Underwriting, and End-to-End Automation](/202607/16/2607.13230v1-ai-native-insurance-for-agentic-ai-pricing-underwriting-and-end-to-end-automation)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：强化学习用于去中心化交易所动态费用下的交易执行
-5. [When Directional Accuracy Lies: A Base-Rate-Honest Benchmark for LoRA-Adapted TimesFM on Equity Forecasting](/202607/15/2607.12248v1-when-directional-accuracy-lies-a-base-rate-honest-benchmark-for-lora-adapted-timesfm-on-equity-forecasting)  
+   evidence：面向智能体AI的原生保险定价与承保框架
+5. [Explainable Artificial Intelligence for Anomaly Detection in Banking Transactions: An Internal Audit Perspective](/202607/16/2607.13469v1-explainable-artificial-intelligence-for-anomaly-detection-in-banking-transactions-an-internal-audit-perspective)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：股票预测中深度时间序列模型的基准测试
-6. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/15/2607.12252v1-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
+   evidence：可解释人工智能在银行交易异常检测中的应用
+6. [VAIOM: Continuous-Input, Discrete-Output Decoder-Only Financial Sequence Modeling](/202607/16/2607.13929v1-vaiom-continuous-input-discrete-output-decoder-only-financial-sequence-modeling)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：利用LLM评估财务报告质量，自然语言处理用于金融分析
+   evidence：仅解码器Transformer用于外汇金融序列建模，深度学习在金融中的应用
 
 ### 速读区论文标签
-1. [Recovering Structural Organization in Noisy Correlation Networks Using Financial Systems as a Testbed](/202607/15/2607.10297v1-recovering-structural-organization-in-noisy-correlation-networks-using-financial-systems-as-a-testbed)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：金融相关网络的去噪与结构恢复
-2. [From Neural Network Decisions to Training Cases: An Exact Account via Case-Based Decision Theory](/202607/15/2607.11347v1-from-neural-network-decisions-to-training-cases-an-exact-account-via-case-based-decision-theory)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：使用基于案例分解的信用审批决策可解释AI
-3. [Modeling the Dynamic Relationship Between Brent Crude Oil Prices and the Nepal Stock Exchange: An Integrated Econometric and Explainable Machine Learning Approach](/202607/15/2607.11922v1-modeling-the-dynamic-relationship-between-brent-crude-oil-prices-and-the-nepal-stock-exchange-an-integrated-econometric-and-explainable-machine-learning-approach)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：使用机器学习建模股市关系，人工智能在金融中的应用
-4. [Forecasting Inflation with Microdata: An Adaptive Machine Learning Approach](/202607/15/2607.12345v1-forecasting-inflation-with-microdata-an-adaptive-machine-learning-approach)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：使用微观数据的自适应机器学习管道进行通货膨胀预测
-5. [Learning Predictive Ambiguity Sets for Decision-Focused Distributionally Robust Optimization](/202607/15/2607.09820v1-learning-predictive-ambiguity-sets-for-decision-focused-distributionally-robust-optimization)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：基于学习的分布鲁棒优化方法，可应用于金融预测-优化场景
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
