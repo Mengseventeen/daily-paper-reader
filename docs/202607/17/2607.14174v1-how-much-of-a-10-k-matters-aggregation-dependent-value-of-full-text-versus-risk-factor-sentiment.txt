@@ -1,0 +1,214 @@
+Title: How Much of a 10-K Matters? Aggregation-Dependent Value of Full-Text versus Risk-Factor Sentiment
+
+URL Source: https://arxiv.org/pdf/2607.14174v1
+
+Published Time: Fri, 17 Jul 2026 00:15:13 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# How Much of a 10-K Matters? Aggregation-Dependent Value of Full-Text versus Risk-Factor Sentiment 
+
+Sanggyu Sean Choi Artificial Intelligence and its Application Institute University of Edinburgh 
+
+schoi3@ed.ac.uk 
+
+Abstract 
+
+Financial sentiment extraction has largely relied on news text and supervised extraction against return labels alone, leaving 10-K filings — and volatility, the target risk disclosure is arguably best suited to informing — comparatively unexplored. We extend a supervised lexicon-learning approach to 10-K filings and their Item 1A risk-factor sections, training sentiment scores against both return and volatility labels at three levels of aggregation: sector, portfolio, and individual firm. Across 1,383 filings from 94 Nasdaq-100 technology constituents (2006–2023), we evaluate the resulting twelve sentiment metrics on classification accuracy, correlation with realised market outcomes, and qualitative lexical content. Full-filing text produces more accurate sentiment at the sector and portfolio level for both targets, but this reverses at the individual-firm level, where the narrower Item 1A section performs better — an effect we attribute to the interaction between document volume and the amount of independent training signal available at each level of aggregation. A Loughran-McDonald dictionary baseline is consistently, strongly negatively correlated with price at every level tested, underscoring the value of a supervised approach for regulatory disclosure text. These findings, and the design choices they motivate, establish the sentiment-generation methodology underlying a subsequent, larger-scale, multi-source system. 
+
+# 1 Introduction 
+
+Corporate disclosures are a primary channel through which firms communicate information that markets subsequently price. Among these, the 10-K filing – an annual report mandated by the U.S. Securities and Exchange Commission – is distinctive in combining legally required comprehen-siveness with a dedicated risk-disclosure section (Item 1A) that firms use specifically to enumerate forward-looking uncertainties. This makes 10-K text a natural candidate for extracting sentiment signals relevant to both the direction of future returns and the level of future volatility. Most prior work on sentiment-based return prediction, however, has drawn on news text rather than regulatory filings, and has supervised sentiment extraction against return labels alone, leaving volatility – arguably the quantity risk-disclosure language is most directly suited to informing – largely unaddressed. This paper develops and evaluates a supervised sentiment-generation approach for 10-K filings, extending the supervised lexicon-learning framework of Ke et al. [2020] – originally developed for return prediction from news articles – along three dimensions. First, we apply it to regulatory filings rather than news text, and directly compare sentiment generated from the full filing against sentiment generated from the Item 1A risk-factor section alone, testing whether a targeted disclosure section carries more or less predictive sentiment content than the filing as a whole. Second, we 1arXiv:2607.14174v1 [cs.LG] 15 Jul 2026 supervise sentiment generation against both return and volatility labels; to our knowledge, no prior application of this approach – including the one it extends – has used volatility as a supervisory target. Third, we evaluate the resulting sentiment metrics at three levels of aggregation: sector (the technology sector as a whole), portfolio (a ten-firm technology portfolio), and individual firm, allowing us to characterise how sentiment behavior changes with the level of aggregation at which it is measured. We evaluate the resulting sentiment scores on three independent axes: their accuracy against held-out return and volatility labels; their correlation with realised market outcomes, benchmarked against a Loughran–McDonald dictionary baseline [Loughran and McDonald, 2011]; and a qualita-tive analysis of the words driving each model’s scores, which we use to characterise the underlying themes each model has learned to associate with positive and negative sentiment. 
+
+Contributions. 
+
+1. A supervised, lexicon-learning approach to sentiment scoring applied to 10-K filings and their Item 1A risk-factor sections – the first application of this methodology to regulatory filing text. 2. A full-filing versus risk-factor-section ablation, evaluated at sector, portfolio, and firm level, isolating whether targeted risk disclosure or comprehensive filing text carries more predictive sentiment. 3. Sentiment scores supervised against both return and volatility labels, extending a return-only supervision framework to a second, arguably more naturally suited target. 4. A three-axis evaluation – classification accuracy, correlation analysis, and qualitative lexical interpretation – of the resulting twelve sentiment metrics. 
+
+# 2 Related Work 
+
+Lexicon-based sentiment analysis. Financial sentiment extraction has traditionally relied on dictionary-based scoring, in which text is matched against a predefined, polarity-labeled word list. General-purpose dictionaries such as Harvard IV-4 misclassify a substantial share of financial terms – Loughran and McDonald [2011] show three-fourths of Harvard-IV-4-flagged “negative” words in 10-K filings do not carry negative connotation in a financial context – motivating finance-specific dictionaries such as their own, which we use as an evaluation baseline (Section 5). Dictionary methods are transparent and require no training data, but polarity is fixed in advance and does not adapt to the specific target being predicted. 
+
+Supervised and machine-learning approaches. Machine-learning approaches range from classical bag-of-words classifiers to deep architectures (RNNs, CNNs, transformer-based models) capable of capturing contextual and sequential structure, at the cost of longer inference time, larger data requirements, and reduced interpretability. Ke et al. [2020] propose an intermediate approach: a supervised lexicon-learning model in which sentiment-charged words and their associated topic distributions are estimated from data – rather than fixed by a dictionary or learned by an uninter-pretable model – using realised returns as a training signal, applied to news text. This preserves term-level interpretability while adapting to the prediction target and text domain, and is the methodology this paper extends to 10-K filings. 2Textual analysis of regulatory filings. A separate literature examines 10-K and related filings directly, typically using dictionary-based scoring [Loughran and McDonald, 2011] or transformer-based models [Blomme and Dedeyne, 2020] to relate filing tone to abnormal returns. This literature has not, to our knowledge, applied supervised lexicon-learning to filing text, nor supervised senti-ment extraction from filings against a volatility target – the gap this paper addresses. 
+
+# 3 Data 
+
+Universe. We construct our sample around the Invesco QQQ Trust Series 1 (QQQ), an exchange-traded fund tracking the Nasdaq-100 Index, which is conventionally used as a proxy for the U.S. technology sector. Of the 100 constituent firms, 94 file Form 10-K with the SEC; the remaining six are foreign-domiciled and file Form 20-F instead, and are excluded. 
+
+Retrieval. 10-K filings are retrieved from the SEC’s EDGAR system, indexed by each firm’s Central Index Key (CIK) rather than ticker symbol, with requests throttled to EDGAR’s published rate limit of ten requests per second. Filings are retrieved in HTML format, which the large majority of EDGAR filings use natively. In total, 1,383 filings were collected across 94 firms, spanning January 2006 to December 2024. 
+
+Extraction. Figure 1 summarizes the extraction pipeline. For each filing, we extract two docu-ment variants: the full filing text, and the Item 1A risk-factor section alone. Item 1A extraction exploits four structural regularities common to 10-K HTML: (i) non-informative page footers (page numbers, continuation notices, disclaimers) are removed by detecting horizontal-rule and page-break markers; (ii) heading elements are identified via consistent HTML style attributes (bold, underline, italic markup) and demarcated for downstream parsing; (iii) the risk-factor section itself is located between the “Item 1A” heading and the next recognized section heading (e.g., “Item 1B,” “Item 2,” or firm-specific variants such as “Management’s Report”), using a regular-expression pat-tern set tolerant of the spacing and quotation-mark variants EDGAR filings exhibit; and (iv) section titles are distinguished from sub-headings by capitalisation pattern once stopwords are removed. Item 1A disclosure has been a mandatory, separately captioned section since 2005 [Securities and Exchange Commission, 2005], which we use as the natural starting point of the collection window. Aggregated, post-preprocessing word counts across all 94 firms’ filings total approximately 15,863 (full filing) versus 9,030 (Item 1A alone) – the risk-factor section, despite constituting only 10–15% of filing length, retains roughly 57% of the full filing’s post-preprocessing word count, consistent with risk disclosure being disproportionately dense in sentiment-relevant vocabulary. 
+
+Document-term representation. Extracted text is tokenised and converted into a document-term matrix separately for the full-filing and Item 1A variants, feeding the Sentiment Score Pre-diction Model described in Section 4. 
+
+# 4 Methodology 
+
+Let D ∈ Rn×m 
+
+> +
+
+be the document-term matrix over n filings and vocabulary V of size m, with row di
+
+the word-count vector of filing i. We construct D separately for the full-filing and Item 1A variants described in Section 3, yielding two independent document-term representations per stakeholder level. Each filing i is associated with a label yi – return or volatility, depending on the target being trained – measured relative to the filing’s publication date, and is assumed to have an underlying, 3Figure 1: 10-K filing extraction pipeline. A list of firms’ CIK numbers is used to retrieve full 10-K filings in HTML format from EDGAR (2006–2023), from which the Item 1A risk-factor section is isolated via a four-step process: page footer removal, heading extraction, risk-factor section detection, and title extraction. unobserved sentiment score pi ∈ [0 , 1]. Figure 2 summarizes the full pipeline described in this section. 
+
+Model assumptions. The model rests on three assumptions, following Ke et al. [2020]. First, the vocabulary decomposes into sentiment-charged words S and neutral words N (V = S ∪N ), with a filing’s tone determined only by d[S],i , the word counts restricted to S. Second, sentiment-charged word counts follow a mixture multinomial distribution, 
+
+d[S],i ∼ Multinomial  si, p iO+ + (1 − pi)O− , (1) where si = P 
+
+> w∈S
+
+dw,i is the total sentiment-word count in filing i, and O = [ O+, O −] ∈ R|S|× 2+ are word-distribution vectors representing 0 <= pi <= 1 — the purest positive ( pi = 1) and purest negative ( pi = 0) sentiment topics — each summing to one over S. Third, the sentiment score is assumed sufficient for the relationship between filing content and the label: yi | pi ⊥⊥ di.
+
+Estimating sentiment-charged words. A word w is scored by the fraction of its occurrences falling in filings with a positive label, 
+
+fw =
+
+Pni=1 ⊮{dw,i > 0} · ⊮{yi > 0}
+
+Pni=1 ⊮{dw,i > 0} , (2) 4Figure 2: The Sentiment Score Prediction Model. Sentiment-charged words are extracted from 10-K textual data (Eqs. 2–3), used to estimate topic-distribution vectors ˆO under return or volatility labeling (Section 4.1), which in turn determine the penalized-likelihood sentiment score ˆ p (Eq. 5) reported across the three stakeholder levels (sector, portfolio, firm) and both document variants (10-K, Item 1A). and is retained as sentiment-charged if fw is sufficiently far from 0 .5 – governed by threshold parameters α+, α − ∈ (0 , 0.5] – and occurs more than k times across the corpus, excluding rare words for which fw is a noisy estimate: ˆS =
+
+
+
+{w : fw > 0.5 + α+} ∪ { w : fw < 0.5 − α−}
+
+
+
+∩
+
+n
+
+w : Pni=1 ⊮{dw,i > 0} > k 
+
+o
+
+. (3) 
+
+Estimating topic distributions. Since a filing’s true sentiment score is unobserved, ˆO is esti-mated using a proxy ˇ pi constructed from yi (Section 4.1). Writing ˆhi = d[ ˆS],i /ˆsi for the relative sentiment-word frequencies and ˆW = [ˇ pi; 1 − ˇpi]ni=1 for the proxy matrix, ˆO = ˆH ˆW ⊤( ˆW ˆW ⊤)−1, (4) with negative entries clipped to zero and columns renormalized to sum to one. 5Scoring new filings. Given ˆS and ˆO, a new filing’s sentiment score is the maximizer of a penalized log-likelihood under the mixture model of Eq. (1): ˆp = arg max 
+
+> p∈[0 ,1]
+
+ˆs−1 X 
+
+> w∈ˆS
+
+di,w log  p ˆO+ 
+
+> w
+
++ (1 − p) ˆO−
+
+> w
+
+ + λ log  p(1 − p) . (5) The penalty term shrinks ˆ p toward 0 .5, with effect largest for filings with few sentiment-charged words – preventing a handful of extreme words from producing an overconfident score. We set 
+
+λ = 0 .1 throughout. 
+
+4.1 Labeling 
+
+Return. The return proxy is the filing’s percentile rank among all realized returns: ˇ pi = rank( yi)/n ,using open-to-close log returns computed only from price information available up to the filing’s publication date, to avoid look-ahead bias. 
+
+Volatility. Volatility does not admit the same rank-based proxy without discarding its asymmet-ric structure. We instead use a normalized proxy ˇ p∗ 
+
+> i
+
+= ( yi −min( y)) /(max( y)−min( y)), and replace the 0 .5 threshold in Eqs. (2)–(3) with a tunable pair ( θ, q ) separating high- from low-volatility fil-ings, set to the 65th percentile and 0 .65 respectively, tuned on the training window for both sector-and firm-level models. The volatility target is computed from the intra-daily log price range, con-verted to a volatility estimate following Corsi [2009], and averaged over a three-day window to reduce single-day noise. 
+
+4.2 Kalman Filter 
+
+Filing arrivals are irregular across firms, and multiple firms can file on the same day, so raw daily sentiment aggregates are noisy at the sector and portfolio level. We average per-day scores over all filings published that day, ¯ pi = |Ai|−1 P 
+
+> i∈Ai
+
+ˆpi, and smooth the resulting series with a local-level Kalman filter [Durbin and Koopman, 2012]: 
+
+μi+1 = μi + ηi, ηi ∼ N (0 , σ 2 
+
+> η
+
+), (6) ¯pi = μi + εi, εi ∼ N (0 , σ 2 
+
+> ε
+
+), (7) producing a filtered series ˜ pi used for sector- and portfolio-level correlation analysis (Section 5). Firm-level scores are retained unfiltered, since firm-level analysis benefits from preserving filing-specific variation rather than a denoised trend. 
+
+# 5 Experimental Setup and Results 
+
+5.1 Experimental Setup 
+
+For each of the three stakeholder levels – sector (QQQ, all 94 firms), portfolio (top-10 QQQ con-stituents), and firm (Nvidia) – we train the Sentiment Score Prediction Model separately on the full-10-K and Item 1A document variants, against both return and volatility labels, yielding twelve sentiment metrics in total (2 document variants × 2 targets × 3 levels; Figure 3). Sector- and portfolio-level series are Kalman-filtered (Section 4) prior to analysis; firm-level series are analysed unfiltered. 6Figure 3: The twelve sentiment metrics evaluated: three stakeholder levels (sector, portfolio, firm) 
+
+× two document variants (10-K, Item 1A) × two supervisory targets (return, volatility). Kalman filtering is applied at the sector and portfolio level only. We report three independent evaluations for each metric: (i) classification accuracy and loss of the sentiment score against the return/volatility label it was trained on; (ii) Pearson correlation 
+
+among the return-supervised score, the volatility-supervised score, a Loughran–McDonald dictio-nary baseline ˜ pLM , and the corresponding price series; and (iii) a qualitative analysis of the top-15 words driving each model’s positive and negative sentiment classification. 
+
+5.2 Full-10-K versus Item 1A: Accuracy and Loss 
+
+Table 1: Sentiment score classification accuracy and loss by level, document variant, and target. Level Document Acc. (ˆ pRET ) Loss Acc. (ˆ pV OL ) Loss Sector Full 10-K 78% 0.25 92% 0.22 Sector Item 1A 73% 0.25 90% 0.22 Portfolio (Top 10) Full 10-K 76% 0.22 78% 0.20 Portfolio (Top 10) Item 1A 71% 0.23 74% 0.21 Firm (Nvidia) Full 10-K 75% 0.19 69% 0.25 Firm (Nvidia) Item 1A 76% 0.21 75% 0.25 The central ablation finding is that full 10-K text outperforms Item 1A alone at both the sector and portfolio level, for both targets, by margins of 2–5 percentage points. This reverses specifically at the individual-firm level, where the Item 1A model outperforms the full-filing model by 1 point on return and 6 points on volatility. We interpret this as an aggregation effect: at the sector and portfolio level, the larger, more heterogeneous vocabulary of the full filing gives the word-scoring step (Eq. (2)) more material from which to isolate genuinely sentiment-charged terms across many firms’ filings; at the single-firm level, with only one firm’s filings as training signal, the full filing’s boilerplate and financial-statement language dilutes the smaller set of terms that carry real signal, 7whereas Item 1A’s narrower vocabulary is a better match to the amount of training signal available at n = 1.  
+
+> (a) Full 10-K (b) Item 1A only
+
+Figure 4: Sector-level (technology sector, QQQ) sentiment score prediction, full 10-K versus Item 1A. ˜ pRET , ˜ pV OL : Kalman-filtered return- and volatility-supervised scores; ˜ pLM : Loughran– McDonald baseline.  
+
+> (a) Full 10-K (b) Item 1A only
+
+Figure 5: Portfolio-level (top-10 QQQ constituents) sentiment score prediction, full 10-K versus Item 1A. 
+
+5.3 Correlation Analysis 
+
+Figure 7 reports the full set of Pearson correlations across all six models (three levels × two docu-ment variants). At the sector level (full 10-K, filtered), return- and volatility-supervised sentiment are negatively correlated ( r = −0.245, p < 0.005); both are negatively correlated with the LM base-line ( r = −0.359 and −0.173); the LM baseline itself is strongly negatively correlated with QQQ price ( r = −0.91), while return-supervised sentiment is positively correlated with price ( r = 0 .296). 8(a) Full 10-K (b) Item 1A only 
+
+Figure 6: Firm-level (Nvidia) sentiment score prediction, full 10-K versus Item 1A. Firm-level scores are unsmoothed (no Kalman filter). At the portfolio level (Top-10), price correlates strongly and positively with return sentiment under the full-10-K model ( r = 0 .956) and moderately under Item 1A ( r = 0 .893), while the LM baseline again shows a strong negative relationship with price under both variants ( r = −0.841 and 
+
+−0.937 respectively) – a pattern consistent across every level tested, in which the dictionary-based baseline moves opposite to price. At the firm level (Nvidia), the return- and volatility-supervised scores are positively correlated under both document variants – r = 0 .612 (full 10-K) and r = 0 .490 (Item 1A), both significant at 
+
+p < 0.05 – in contrast to the negative RET–VOL relationship observed at the sector and portfolio level. Price correlates positively with volatility sentiment under both variants ( r = 0 .588 full 10-K; 
+
+r = 0 .712 Item 1A), while the LM baseline’s relationship with price flips sign between variants at the firm level ( r = 0 .182, not significant, under full 10-K; r = −0.593, significant, under Item 1A) – the only level at which the LM-price relationship is not consistently negative, worth a dedicated remark in Discussion rather than treating it as noise. 
+
+5.4 Qualitative Word Analysis 
+
+Sector, full 10-K. Positive-return words cluster into two themes: Innovation and Development 
+
+(musk , maximizer , searcher , torque , bolivia – the latter interpreted via lithium’s role in EV batteries [Chan and Devia-Valbuena, 2023]) and Financial Health (gilt , div , memoranda , stance ) [Koijen et al., 2016]. Negative-return words support a Technological Difficulty theme ( transformer , scalar ,
+
+tango , tera – tango referencing Google’s discontinued augmented-reality project [Kastrenakes, 2017, D’Onfro, 2017]). Volatility-increasing words split into COVID-19 (lancet , forearm ) and Innovation and Growth (fang , granularity , renter ). 
+
+Sector, Item 1A. Negative-return words shift toward a distinct Biotechnology theme ( biogen , ki-nase , chemotherapy ) plus an explicit covid token. Volatility-increasing words suggest Cybersecurity 
+
+(spoof , impropriety ) and wearable healthcare technology (clothing , polymeric ). 
+
+Portfolio, full 10-K. Both return- and volatility-increasing word sets converge on Electric Cars 
+
+(battery , solar , roadster , motor ; and autonomous , neural , pilot , ford ). Volatility-decreasing words 9Figure 7: Full Pearson correlation matrices across all six models (sector, portfolio, and firm level; full 10-K and Item 1A document variants). p-RET, p-VOL: return- and volatility-supervised sentiment scores; p-LM: Loughran–McDonald baseline. ∗p < 0.05, ∗∗ p < 0.005. support Stability and Resilience (resilience , tester ). 
+
+Portfolio, Item 1A. The Electric Cars theme persists for return ( roadster , supercharger , sedan ), but Item 1A additionally surfaces a theme absent from the full-text model: Supply Chain Risk 
+
+(subcontractor , entrust , dependence , nationwide ) [The Economist, 2020, Ting-Fang and Li, 2021, Lewis, 2019, Wu et al., 2021]. Volatility words split into Innovation (circuit , virtual , transact )[Mazzucato and Tancioni, 2012, Gharbi et al., 2014, Hai et al., 2020] and Infrastructure and Services 
+
+(depot , host , azure , subscriber ) [Brinkman and Sarma, 2022, Blanc-Brude et al., 2022, Gunnion, 2021]. 
+
+Firm (Nvidia), full 10-K. Positive-return words support Innovation and Development (ther-mal , talent , connect ) and a firm-specific GPU Market Domination theme ( chain , tender , exclusion )[Leswing, 2023, NVIDIA, 2024]. Negative-return words cluster around Market Challenges (grid ,
+
+petition , eastern , enactment ). 
+
+Note on interpretation. Word-to-theme mapping was performed by the authors with reference to contemporaneous industry context; each proposed theme is additionally corroborated by citation to 10 prior literature establishing the relevant relationship. The interpretation is suggestive rather than a validated topic model, but each theme is anchored to an independent, citable empirical claim rather than free association. 
+
+# 6 Discussion 
+
+The central finding, stated precisely. Full-10-K text produces more accurate, better-calibrated sentiment at the sector and portfolio level, for both return and volatility targets, by margins of 2–5 percentage points. This reverses at the individual-firm level, where the Item 1A risk-factor section outperforms the full filing by 1 point on return and 6 points on volatility. We interpret this as an aggregation effect rather than a property of the text itself: at the sector and portfolio level, the model draws on 94 and 10 firms’ filings respectively, and the larger, more heterogeneous vocabulary of the full filing gives the word-scoring step (Eq. (2)) more material from which to isolate genuinely sentiment-charged terms. At the single-firm level, with only one firm’s filings as training signal, the full filing’s boilerplate and financial-statement language – sections unlikely to vary meaningfully in tone from year to year for a single firm – dilutes the smaller set of terms that do carry real signal, whereas the risk-factor section’s narrower, more concentrated vocabulary is a better match to the amount of training signal available at n = 1. 
+
+A structural bias worth reporting plainly, not softening. The Loughran–McDonald dic-tionary baseline is negatively correlated with price at every level we test (sector: r = −0.910; portfolio: r = −0.841 to −0.937 across both document variants), a far stronger and more con-sistent relationship than either supervised score shows in either direction. This is not evidence the dictionary approach is “wrong” so much as evidence of a known structural property: the LM dictionary is deliberately conservative and skews negative by design, and 10-K risk-factor language is itself disclosure-mandated and cautious by convention – three-fourths of Harvard IV-4-flagged negative words don’t carry negative connotation in financial text, which is exactly why Loughran and McDonald [2011] built a domain-specific list in the first place, but the domain-specific list still leans negative on this corpus. We report this as a limitation of dictionary-based scoring on regulatory text specifically, which strengthens the case for the supervised approach used here. 
+
+Risk-factor text surfaces themes full-text does not. At both the portfolio and sector level, the Item 1A-only model recovers themes absent from the full-filing model’s word set – Supply Chain Risk at portfolio level, an explicit covid token and Biotechnology cluster at sector level. This suggests the risk-factor section’s value isn’t purely in its concentration (fewer, more relevant words) but in surfacing forward-looking risk narratives that get diluted by volume in the full filing – a point that complements, rather than just competes with, the accuracy-based ablation result above. 
+
+Limitations. The model operates on a bag-of-words representation and cannot capture multi-word phrases (e.g., “chief executive officer” is scored as three independent unigrams, losing its compositional meaning) – a natural extension is bigram or n-gram support. Sector- and portfolio-level aggregates also do not weight firms by their actual index allocation; an equally-weighted aggregate treats a 9%-weighted constituent identically to a firm with under 1% weight, which could materially shift the aggregate sentiment trend if reweighted. Finally, thematic word interpretation, while reference-supported (above), remains a human-authored reading of model output rather than an independently validated topic labeling. 11 7 Conclusion 
+
+We presented a supervised, lexicon-learning approach to sentiment generation from 10-K filings, extending prior return-only, news-based methodology to (i) regulatory filing text, (ii) volatility as a second supervisory target, and (iii) three levels of stakeholder aggregation. Across sector, portfolio, and firm-level analysis, full-filing text produces more accurate and better-calibrated sentiment scores in aggregate, while the Item 1A risk-factor section becomes the stronger choice specifically at the individual-firm level – a reversal we attribute to the interaction between text volume and the amount of independent training signal available at each level of aggregation, rather than to any inherent superiority of one document variant. The Loughran–McDonald dictionary baseline shows a strong, consistent negative correlation with price at every level tested, underscoring the value of a supervised approach for regulatory disclosure text specifically. These sentiment metrics, and the design choices they motivate, form the basis for a subsequent, larger-scale, multi-source extension of this methodology. 
+
+# References 
+
+Fr´ ed´ eric Blanc-Brude, Wilhelm Schmundt, Thomas Bumberger, Roman Friedrich, Bernhard Georgii, Abhishek Gupta, Leonard Lum, and Maikel Wilms. Infrastructure strategy 2022: Apivot to the digital frontier. Boston Consulting Group, 3 2022. Sander Blomme and Julie Dedeyne. Predicting the effect of 10-k, 10-q and 8-k company reports on abnormal stock returns using finbert nlp methods. Technical report, University of Ghent, 2020. URL https://libstore.ugent.be/fulltxt/RUG01/002/837/812/RUG01-002837812_ 2020_0001_AC.pdf .Marcel Brinkman and Vijay Sarma. Infrastructure investing will never be the same. McKinsey & Company, 8 2022. Luke Chan and Nicol´ as Devia-Valbuena. In the global rush for lithium, bolivia is at a crossroads, 12 2023. URL https://www.usip.org/publications/2023/12/ global-rush-lithium-bolivia-crossroads .Fulvio Corsi. A simple approximate long-memory model of realized volatility. Journal of Financial Econometrics , 7(2):174–196, 2009. Jillian D’Onfro. Google is going to shut down its once-hyped augmented reality project, tango, 12 2017. URL https://www.cnbc.com/2017/12/15/google-kills-project-tango-ar-project. html .James Durbin and Siem Jan Koopman. Time series analysis by state space methods , volume 38. OUP Oxford, 2012. Sami Gharbi, Jean-Michel Sahut, and Fr´ ed´ eric Teulon. R&d investments and high-tech firms’ stock return volatility. Technological Forecasting and Social Change , 88:306–312, 2014. doi: 10.1016/j.techfore.2013.10.006. Lester Gunnion. Infrastructure investment: An economist’s view from the ground up, 7 2021. B. Hai, Q. Gao, X. Yin, and J. Chen. R&d volatility and market value: the role of executive over-confidence. Chinese Management Studies , 14(2):411–431, 2020. doi: 10.1108/CMS-05-2019-0170. 12 Jacob Kastrenakes. Google’s project tango is shutting down because arcore is al-ready here, 12 2017. URL https://www.theverge.com/2017/12/15/16782556/ project-tango-google-shutting-down-arcore-augmented-reality .Zheng Ke, Bryan T. Kelly, and Dacheng Xiu. Predicting returns with text data. University of Chicago, Becker Friedman Institute for Economics Working Paper , (2019-69), September 2020. doi: 10.2139/ssrn.3389884. URL https://ssrn.com/abstract=3389884 . Yale ICF Working Paper No. 2019-10, Chicago Booth Research Paper No. 20-37. Ralph S.J. Koijen, Tomas J. Philipson, and Harald Uhlig. Financial health economics. Economet-rica , 84:195–242, 2016. doi: 10.3982/ECTA11182. Kif Leswing. Meet the $10,000 nvidia chip powering the race for a.i. https://www.cnbc.com/ 2023/02/23/nvidias-a100-is-the-10000-chip-powering-the-race-for-ai-.html , 2023. J. Lewis. Learning the superior techniques of the barbarians: China’s pursuit of semiconductor independence . CSIS, Washington, 2019. Tim Loughran and Bill McDonald. When is a liability not a liability? textual analysis, dictionaries, and 10-ks. The Journal of Finance , 66(1):35–65, 2011. M. Mazzucato and M. Tancioni. R&d, patents and stock return volatility. Journal of Evolutionary Economics , 22:811–832, 2012. doi: 10.1007/s00191-012-0289-x. NVIDIA. Nvidia industries: Retail - supply chain management. https://www.nvidia.com/en-gb/ industries/retail/supply-chain-management/ , 2024. Securities and Exchange Commission. Securities and exchange commission final rule, release no. 33–8591 (fr-75). http://sec.gov/rules/final/33-8591.pdf , 2005. The Economist. America’s war on huawei nears its endgame. The Economist , July 2020. URL https://www.economist.com/briefing/2020/07/16/ americas-war-on-huawei-nears-its-endgame .C. Ting-Fang and L. Li. Us-china tech war: Beijing’s secret chipmaking champions. 
+
+Nikkei Asia , May 2021. URL https://asia.nikkei.com/Spotlight/The-Big-Story/ US-China-tech-war-Beijing-s-secret-chipmaking-champions .D. Wu, Y. Lee, and Y. Ngui. Chip shortage set to worsen as covid rampages through malaysia. 
+
+Bloomberg , August 2021. URL https://www.bloomberg.com/news/articles/2021-08-23/ chip-shortage-set-to-worsen-as-covid-rampages-through-malaysia .13
