@@ -6,39 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-19
-- 运行时间：2026-07-19 21:14:21 UTC
+- 最新运行日期：2026-07-20
+- 运行时间：2026-07-20 20:34:02 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：0
-- 速读区：6
+- 本次总论文数：4
+- 精读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日速读3篇论文，涵盖多变量时间序列、非参数随机优化及变分推断。最值得关注的是《Multi-Scale Convolution with Optimal Transport Attention Effect on Multivariate Time Series》，其多尺度卷积与最优传输注意力结合的方法有启发。建议普通读者优先研读该篇，理解如何利用最优传输处理时间序列依赖。
-- 详情：[/202607/19/README](/202607/19/README)
+今日精读两篇高分论文，聚焦AI交易与量化投资；速读一篇可解释策略论文。最值得关注的方向：利用大模型进行技术市场分析，以及从企业披露中构建点对点经济图谱用于量化投资。建议普通读者关注LLM在金融分析中的实际应用场景。
+- 详情：[/202607/20/README](/202607/20/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [AI Trading: Evaluating Large Language Models for Technical Market Analysis](/202607/20/2607.15414v1-ai-trading-evaluating-large-language-models-for-technical-market-analysis)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：评估LLM在技术市场分析和股票交易中的能力
+2. [LLM Latent Edge Measurement: Point-in-Time Economic Graphs for Quantitative Investing from Corporate Disclosures](/202607/20/2607.15640v1-llm-latent-edge-measurement-point-in-time-economic-graphs-for-quantitative-investing-from-corporate-disclosures)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：利用LLM从财务披露中提取经济关系图
+3. [CLaC@FinMMEval 2026 Task 3: Sentiment-Augmented Deep Reinforcement Learning for Active Trading -- An Alpha-Reward Approach](/202607/20/2607.16028v1-clacfinmmeval-2026-task-3-sentiment-augmented-deep-reinforcement-learning-for-active-trading----an-alpha-reward-approach)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：情感增强的深度强化学习用于比特币和特斯拉的主动交易
 
 ### 速读区论文标签
-1. [Multi-Scale Convolution with Optimal Transport Attention Effect on Multivariate Time Series](/202607/19/2607.10740v1-multi-scale-convolution-with-optimal-transport-attention-effect-on-multivariate-time-series)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：多尺度卷积与最优传输注意力用于多变量时间序列
-2. [Contextual Stochastic Optimization with Decision-Dependent Uncertainty via Nonparametric Learning](/202607/19/2607.11714v1-contextual-stochastic-optimization-with-decision-dependent-uncertainty-via-nonparametric-learning)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：非参数学习用于具有决策依赖不确定性的上下文随机优化，可应用于金融组合优化
-3. [Indirect Variational Inference: Applications to Earnings Dynamics](/202607/19/2607.15168v1-indirect-variational-inference-applications-to-earnings-dynamics)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：变分推断在收入动态中的应用
-4. [TabLoRA: Parameter-Efficient Low-Rank Ensemble Learning for Large-Scale Tabular Data](/202607/19/2607.10077v1-tablora-parameter-efficient-low-rank-ensemble-learning-for-large-scale-tabular-data)  
+1. [Counterfactual Optimal Action Trees (COAT): Interpretable Prescriptive Policies from Observational Data](/202607/20/2607.14318v1-counterfactual-optimal-action-trees-coat-interpretable-prescriptive-policies-from-observational-data)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：深度学习在表格数据上的应用
-5. [(Early) AI Compute Asset Pricing](/202607/19/2607.12156v1-early-ai-compute-asset-pricing)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：针对AI算力的资产定价框架，涉及AI经济与期货市场
-6. [NeuralChaos: Optimal Adapted Approximation of Square Integrable Predictable Processes](/202607/19/2607.14361v1-neuralchaos-optimal-adapted-approximation-of-square-integrable-predictable-processes)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：神经算子应用于数学金融
+   evidence：可解释处方策略框架，可迁移应用于金融决策
 
 
 <div class="dpr-home-promo-card">

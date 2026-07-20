@@ -1,0 +1,1058 @@
+Title: Counterfactual Optimal Action Trees (COAT): Interpretable Prescriptive Policies from Observational Data
+
+URL Source: https://arxiv.org/pdf/2607.14318v1
+
+Published Time: Fri, 17 Jul 2026 00:20:30 GMT
+
+Number of Pages: 48
+
+Markdown Content:
+# Counterfactual Optimal Action Trees (COAT): Interpretable Prescriptive Policies from Observational Data 
+
+Youssef Drissi Markus Ettl Shivaram Subramanian † Wei Sun † Zack Xue 
+
+IBM Research 
+
+We introduce COAT (Counterfactual Optimal Action Tree), a framework for learning interpretable prescrip-tive policies from observational data. COAT combines counterfactual outcome estimation with large-scale mixed-integer optimization, using column generation to translate causal predictions into feasible, transparent decisions under business and regulatory constraints. We apply COAT to airline ancillary pricing, a setting characterized by complex business rules and limited experimental flexibility. In a 17-week field pilot with a major global airline, COAT increased upsell revenue per booking by 6.9%, with the airline projecting $50– 
+
+$150 million in incremental annual premium seat revenue across eligible domestic markets. The success of the pilot led to scaled adoption and informed broader AI-driven decision initiatives within the organization. 
+
+Key words : Prescriptive analytics, counterfactual estimation, mixed-integer optimization, column generation, artificial intelligence 
+
+# 1. Introduction 
+
+Artificial intelligence (AI) is increasingly embedded in high-stakes business decisions across indus-tries. In retail, it supports personalized recommendations and dynamic offers (Yang et al. 2022, Cao et al. 2019); in financial services, credit risk assessment and fraud detection (Goyal et al. 2025, Fritz-Morgenthal et al. 2022); and in logistics and supply chains, demand forecasting and routing decisions (Khedr et al. 2024). Across these domains, AI promises faster adaptation, finer-grained personalization, and improved operational efficiency. Pricing is among the most visible and consequential applications of this transformation, and air-lines provide a particularly compelling setting. Airlines were early adopters of revenue management (RM) systems that forecast demand, allocate capacity across fare classes, and dynamically open or close price buckets. While these systems represented a major advance over static pricing, they remain constrained by human-designed structures and relatively simple statistical models. Recent advances in AI raise the prospect of moving beyond fare buckets entirely, learning pricing policies directly from large-scale data and adapting them dynamically to changing conditions. 
+
+> †
+
+Equal contributors. 
+
+> 1arXiv:2607.14318v1 [cs.LG] 15 Jul 2026
+
+This prospect has begun to materialize in practice. Delta Air Lines disclosed the deployment of AI-based pricing tools on a subset of domestic routes, reporting strong revenue gains and announc-ing plans to expand AI pricing from roughly 3% to 20% of fares by the end of 2025 (Fortune 2025, ABC News 2025). According to company executives, these systems process thousands of signals, such as booking patterns, competitor fares, and schedule changes, far more rapidly than traditional analyst-driven workflows. At the same time, the announcement triggered public and regulatory scrutiny, with concerns raised about fairness, transparency, and compliance. Delta emphasized that its approach does not rely on personal data and operates within existing fare filing systems (Delta Air Lines 2025, Reuters 2025). This episode illustrates a broader challenge in enterprise AI adoption. While modern AI systems excel at prediction and scale, deploying them responsibly in high-stakes decision environments requires more than predictive accuracy. Decisions must be interpretable, auditable, and consistent with regulatory, fairness, and operational constraints. In many applications, these requirements are binding constraints that determine whether an AI system can be deployed at all. Bridging the gap between predictive AI and deployable decision-making remains a central challenge. To address this challenge, we introduce the Counterfactual Optimal Action Tree (COAT ) frame-work, a prescriptive decision-making approach that learns interpretable policies directly from obser-vational data. COAT integrates counterfactual outcome estimation with large-scale mixed-integer optimization to construct policies that explicitly respect operational constraints. The framework proceeds in two stages: estimating counterfactual outcomes for alternative actions, and solving a constrained optimization problem to produce an interpretable policy in the form of an action tree. To ensure scalability, we develop a path-based formulation solved via column generation, enabling optimization over large policy spaces. Our central contribution is the design and field validation of this framework in a live, regulated deployment; the accompanying theoretical results characterize when the path-based formulation remains tractable and interpretable at deployment scale, and serve that end rather than standing alone. We validate COAT in collaboration with a major international airline, focusing on premium seat pricing as a high-value ancillary revenue stream. In a 17-week live pilot, COAT achieved a 6.9% uplift in upsell revenue per booking, which the airline projected would translate to $50– $150 million in incremental annual premium seat revenue across eligible domestic markets. The impact was evaluated using the synthetic control method, providing credible causal evidence in a setting where randomized experiments were infeasible. Following the pilot, the airline scaled adoption of 
+
+COAT and initiated broader enterprise efforts around AI-enabled decision systems. More broadly, this work highlights the role of operations research (OR) in the era of AI. While advances in machine learning have dramatically expanded predictive capabilities, large-scale 2deployments that directly optimize decisions under operational constraints remain rare. By inte-grating causal estimation, scalable optimization, and interpretable policy design, COAT demon-strates how OR can serve as a decision layer that bridges predictive AI and real-world deployment. The results suggest that the practical value of AI lies not only in better prediction, but in better-designed decision systems that align performance with organizational and societal requirements. 
+
+# 2. Literature Review 
+
+This paper connects several streams of research, including explainable AI, tree-based prescriptive optimization, causal decision making, and airline pricing. While each literature addresses important aspects of decision support, none alone resolves the joint challenges of learning from observational data, optimizing decisions under operational constraints, and producing interpretable policies suit-able for deployment. We review the most closely related work and position COAT relative to these streams. 
+
+2.1. Explainable AI (XAI) 
+
+Interpretability has become a central concern in artificial intelligence as complex models are increas-ingly deployed in high-stakes business and policy settings (Allen et al. 2023, Arrieta et al. 2020, Du et al. 2019). Beyond trust and transparency, interpretability is often a prerequisite for regulatory compliance, auditing, and organizational adoption. Existing work broadly falls into two categories. Intrinsic interpretability approaches embed trans-parency directly into the model structure, including decision trees and rule lists (Lakkaraju et al. 2016), generalized additive models and their variants (Rudin 2019, Caruana et al. 2015), as well as prototype-based and self-explaining architectures (Kim et al. 2016, Li et al. 2018, Alvarez Melis and Jaakkola 2018). These models aim to avoid black-box behavior altogether. A complementary line of research develops post-hoc explanation methods that rationalize the behavior of trained black-box models. Prominent examples include local approximation and attri-bution techniques such as LIME and SHAP (Ribeiro et al. 2016, Lundberg and Lee 2017), as well as counterfactual explanations (Tsiourvas et al. 2024) and knowledge distillation, in which complex models are summarized using simpler, interpretable surrogates (Hinton et al. 2015, Puiutta and Veith 2020). Our work is closest in spirit to this latter line, but differs in two important ways. First, we focus on the prescriptive setting, where the objective is to recommend optimal actions rather than explain predictions. Second, the interpretable policy in COAT is not a surrogate approximation of a black-box decision rule. Instead, it is learned directly by optimizing over counterfactual outcomes produced by a causal model. This separation allows COAT to combine the expressive power of modern predictive models with the transparency and auditability of tree-based decision policies. 32.2. Tree-Based Prescriptive Methods 
+
+Decision trees have long been valued for their interpretability and rule-based structure (Zhu et al. 2020). Because learning optimal trees is NP-complete (Laurent and Rivest 1976), early methods such as CART relied on greedy heuristics (Breiman et al. 1984). More recent advances learn globally optimal trees, either via mixed-integer programming (MIP) (Aghaei et al. 2019, 2024, Bertsimas and Dunn 2017) or via specialized dynamic-programming and branch-and-bound algorithms with analytical bounds, which scale to substantially larger instances by exploiting the recursive structure of the tree (Hu et al. 2019, Lin et al. 2020, van der Linden et al. 2022). While this literature originated in prediction, similar ideas have been extended to prescriptive settings, where the goal is to recommend actions rather than predict outcomes. Prescriptive (or policy) trees have been learned using greedy approaches (Biggs et al. 2021, Kallus 2017) and optimal formulations (Amram et al. 2022, Bertsimas et al. 2019, Ikeda et al. 2023, Jo et al. 2021, Pace et al. 2022). Related work has also explored neural network–based policies that can be post-hoc converted into prescriptive trees (Sun and Tsiourvas 2023). The core algorithmic idea underlying COAT first appeared in an anonymized conference pub-lication (Anonymous 2022), which introduced the path-based formulation and column-generation algorithm and reported computational comparisons against arc-based and other prescriptive-tree methods on synthetic and publicly available real datasets. The present paper substantially extends that foundation by developing theoretical results that characterize the formulation’s behavior under deployment constraints, and by addressing the design, scalability, and live deployment of prescrip-tive policies in a real-world operational setting. Our approach departs from prior prescriptive tree methods in its underlying optimization for-mulation. Existing MIP-based approaches typically adopt an arc-based representation, introducing decision variables for each possible branch at each depth; the resulting formulations grow expo-nentially with tree depth, creating scalability limitations (Bertsimas and Dunn 2017). Specialized dynamic-programming and branch-and-bound methods (Hu et al. 2019, Lin et al. 2020, van der Linden et al. 2022) substantially improve the scalability of optimal-tree learning, but they are developed primarily for the predictive setting and do not readily accommodate the operational and inter-rule constraints that are central to prescriptive deployment. In contrast, COAT adopts a path-based formulation that treats each root-to-leaf path as a deci-sion unit. This representation enables solution via column generation (Bach 2008, Jawanpuria et al. 2011), dynamically generating only the most promising paths. Beyond computational efficiency, the path-based structure naturally supports rich operational, regulatory, and fairness constraints defined over complete decision rules. It also yields multiway-split trees that are typically more compact and interpretable than their binary-split counterparts, as each feature appears at most once along any root-to-leaf path. 42.3. Causal Analysis 
+
+This paper relates to the emerging literature on causal decision making , which integrates causal modeling with optimization to recommend actions (Fern´ andez-Lor´ ıa and Provost 2022, Tsiourvas et al. 2025). This perspective differs from classical causal inference, which primarily focuses on estimating treatment effects (Athey and Imbens 2016), rather than mapping those estimates into optimal decisions under constraints. Recent work by Harsha et al. (2025) combines counterfactual cost estimation with column generation in a contextual bandit framework to prescribe resource allocation decisions under service-level constraints. In our setting, causal modeling provides counterfactual estimates of purchase behavior under alternative prices. However, such estimates alone do not yield feasible or optimal policies. COAT 
+
+bridges this gap by embedding counterfactual predictions within a large-scale optimization frame-work that explicitly incorporates operational and business constraints, resulting in interpretable prescriptive policies. Causal inference also plays a central role in evaluation. In many high-stakes applications, ran-domized A/B testing is infeasible, as was the case in our airline deployment. To address this, we employ the synthetic control method (SCM) (Abadie et al. 2010), which constructs a weighted com-bination of control units to replicate pre-intervention outcomes of treated units. We refer readers to Abadie (2021) for a comprehensive review. 
+
+2.4. Airline Pricing and Pricing Field Experiments 
+
+Pricing has long been a central application of operations research and management science, with airlines serving as one of its most prominent success stories (Talluri and Van Ryzin 2006, Phillips 2021). Classical revenue management systems focus on capacity control, allocating limited inven-tory across predefined fare classes rather than directly setting prices. Recent work has increasingly explored dynamic and data-driven pricing approaches (Shukla et al. 2019, Fiig et al. 2018, McAfee and Te Velde 2006). Our work differs by focusing on ancillary products and directly optimizing prices using counterfactual demand estimates derived from obser-vational data. In addition to methodological contributions, we demonstrate the approach in a live airline deployment, providing rare field-based evidence in a highly regulated pricing environment. More broadly, our study contributes to the growing literature on pricing field experiments and evaluations, including large-scale deployments in e-commerce and retail (Liu et al. 2019, Cooprider and Nassiri 2023, Chen and Zhao 2020, Caro and Gallien 2012, Gao et al. 2022). By conducting a multi-month live pilot in airline ancillary pricing, we extend this line of work to a domain charac-terized by complex operational constraints, regulatory scrutiny, and strong fairness considerations. 53. Problem Setup and Prescriptive Framework 
+
+This section formalizes the causal decision-making problem and introduces the notation used throughout. We describe the observational data setting and causal assumptions needed to identify counterfactual outcomes, and then present the COAT framework, which decouples counterfactual estimation from policy optimization over interpretable policy trees. This formulation underpins the mixed-integer programming model and the algorithm developed in subsequent sections. 
+
+3.1. Setup and Notation 
+
+We consider a decision-maker who selects an action (or treatment) from a discrete set [ m] := 
+
+{1, . . . , m } for each subject characterized by covariates X ∈ Rk. Each subject has potential out-comes {Y (1) , . . . , Y (m)}, where Y (t) denotes the outcome that would be observed if action t were assigned. The outcome Y may be discrete or continuous. For example, in the pricing application in Section 6, Y ∈ { 0, 1} indicates whether a purchase occurred, whereas in personalized medicine, 
+
+Y may represent a continuous health metric such as blood sugar level (Johansson et al. 2016). We observe n i.i.d. samples {(Xi, T i, Y i)}ni=1 , where Xi are covariates, Ti ∈ [m] is the action assigned by the historical policy, and Yi := Yi(Ti) is the observed outcome. The data are observa-tional : for each subject, only the factual outcome Yi(Ti) is observed, while counterfactual outcomes 
+
+{Yi(t) : t̸ = Ti} remain unobserved. This defines the central challenge of causal decision-making, i.e., learning optimal actions when only one potential outcome per subject is observed. To identify causal effects from observational data, we impose the standard assumptions of uncon-foundedness, positivity, and consistency. Specifically, (unconfoundedness) potential outcomes are conditionally independent of treatment assignment given covariates, Y (t) ⊥⊥ T | X; (positivity) each action occurs with positive probability over the relevant covariate space, P(T = t | X = x) > 0; and 
+
+(consistency) observed outcomes coincide with the corresponding potential outcomes under the realized treatment (i.e., if Ti = t, then Yi = Yi(t)). These assumptions are commonly invoked in operational settings where actions are determined by explicit policies based on observed contextual features. In pricing, marketing, and recommendation systems, treatment assignment is often driven by recorded covariates (e.g., booking time, fare class, or demand signals), supporting unconfoundedness. Positivity is typically ensured through initial experimentation or policy variation that prevents actions from being deterministically excluded. 
+
+3.2. The COAT Framework: Estimation and Prescriptive Optimization 
+
+Our objective is to learn a policy τ : Rk → [m] that maps covariates X to an action τ (X) in order to maximize the expected counterfactual outcome. For interpretability and operational transparency, we restrict τ to a feasible class of tree-based policies T , where each internal node splits on a 6covariate and each leaf prescribes an action. We refer to such policies as action trees or prescriptive trees .The learning process proceeds in two stages: 1. Counterfactual Estimation. Estimate the potential outcome model f (X, t ) using observa-tional data. 2. Action Tree Optimization. Optimize over a constrained class of feasible trees Tfeas ⊆ T to identify a policy that maximizes the expected objective. Formally, the policy optimization problem is 
+
+τ ∗ = arg max  
+
+> τ∈T feas
+
+EX [g(f (X, τ (X)))] , (1) where g(·) denotes a possibly transformed objective of interest. For example, in pricing, f (X, t )represents purchase probability and g(f (X, t )) = t · f (X, t ) captures expected revenue. In practice, the expectation in (1) is approximated by the empirical average over the observed samples. This modular design facilitates real-world deployment: counterfactual estimation and policy optimization are decoupled, allowing flexible predictive models upstream and a model-agnostic optimization downstream. Moreover, the feature sets used in the two stages may often differ, i.e., rich features can be used for estimation, while the action tree can depend on a smaller, deployment-ready subset suitable for real-time implementation. While accurate counterfactual estimation is essential, our primary contribution lies in the opti-mization of interpretable action trees under operational constraints; accordingly, we treat the estimation step as modular and focus the remainder of the paper on the policy learning problem. 
+
+3.3. Counterfactual Outcome Estimation 
+
+We aim to estimate the counterfactual outcome model 
+
+f (X, t ) := E[Y (t) | X],
+
+where Y (t) denotes the potential outcome under action t. Under the assumptions of consistency, unconfoundedness, and positivity, this quantity is identified from observational data as 
+
+E[Y (t) | X] = E[Y | X, T = t].
+
+In the observational setting, however, only the factual outcome Yi = Yi(Ti) is observed for each sam-ple, and non-random treatment assignment may induce selection bias, rendering na¨ ıve supervised learning inconsistent. A variety of causal estimation methods have been proposed to address this challenge. Matching methods reduce confounding by pairing treated and untreated samples with similar covariates, but 7Figure 1 An example of a multiway-split prescriptive tree for airline ancillary pricing 
+
+they become inefficient in high-dimensional settings (Stuart 2010, Abadie and Imbens 2006). Inverse propensity weighting (IPW) reweights observations by estimated treatment probabilities to achieve covariate balance, though extreme propensities can substantially inflate variance (Rosenbaum 1987, Hirano et al. 2003). Outcome modeling approaches, including S-, T-, and X-learners, directly estimate potential outcomes using machine learning models (K¨ unzel et al. 2019, Nie and Wager 2021). In this work, we adopt a doubly robust (DR) estimator (Dud´ ık et al. 2011), which combines outcome modeling with propensity score reweighting and yields consistent estimates if either com-ponent is correctly specified. Doubly robust estimators have also been successfully incorporated into prescriptive tree learning frameworks (Biggs et al. 2021, Amram et al. 2022, Jo et al. 2021). 
+
+3.4. Action Tree Optimization Problem 
+
+Given the estimated counterfactual outcomes ˆf (Xi, t ), we compute gi,t := g( ˆf (Xi, t )) for each sam-ple i and action t. This defines the unconstrained, individual-level optimal action: 
+
+τ ∗(Xi) = arg max 
+
+> t∈[m]
+
+gi,t . (2) While this policy maximizes outcomes on a per-sample basis, it is complex and impractical to deploy. We therefore constrain τ to interpretable decision trees. Prior work has focused on binary trees of fixed depth d, denoted TB (d) (Biggs et al. 2021, Amram et al. 2022, Jo et al. 2021). We generalize this to multiway-split trees with at most l leaves, denoted TM (l) (see Figure 1). A multiway tree with l leaves has expressiveness comparable to a binary tree of depth d satisfying 2 d = l, while often yielding more compact representations. 8The resulting empirical optimization problem is max   
+
+> τ∈T M(l)
+> n
+
+X
+
+> i=1
+
+gi,τ (Xi). (3) In the next section, we present a mixed-integer programming formulation and an efficient column-generation algorithm that exploit the structure of multiway-split trees by representing candidate policies as paths in a policy graph. 
+
+# 4. Policy Optimization via Path-Based Trees 
+
+To learn an interpretable policy, we construct a space of candidate decision rules represented as paths in a policy graph (Figure 2). Each path corresponds to a rule that assigns an action based on a subset of features. The policy learning task then reduces to selecting a small, non-overlapping subset of paths that together form a valid decision tree and maximize the overall counterfactual objective. This selection problem is formulated as a mixed-integer program (MIP), whose solution induces an interpretable prescriptive tree (Figure 1). In this section, we first describe the construction of the feature path space and the resulting optimization formulation. The solution algorithm, based on column generation, is presented in Section 4.3. We then show, in Section 4.4, how this framework can be extended to incorporate business and operational constraints. 
+
+4.1. Policy Graph Construction 
+
+We construct an acyclic multi level directed graph G where each node represents a unique feature value. Each feature corresponds to a distinct level in the graph, with its values represented as nodes, and nodes from one level fully connected to those in the next. The graph also includes a source and a sink node. For every feature except the action feature π, we introduce a dummy node labeled SKIP . Figure 2 illustrates an example with three features: Market , Book to Flight Days ,which indicates how far in advance the ticket is purchased, Depart Time , and Price as the action feature. A policy (or decision rule) corresponds to a path p ∈ P from the source to the sink in G. When a path traverses a SKIP node, the associated feature is omitted from that rule. The inclusion of SKIP 
+
+nodes allows paths to represent all possible feature combinations, thereby defining a comprehensive rule set P from which the optimal subset of policies will be selected. Given any path p, we can determine the set of samples that satisfy its conditions and compute their associated counterfactual outcomes. The objective is to select a subset of rules that maximizes the total counterfactual outcome. However, because the policy space grows exponentially with the number of features k, naive enumeration becomes infeasible for high dimensional data. Section 4.3 9Figure 2 Policy graph with three features and Price as the action 
+
+presents an algorithm that efficiently navigates this space by dynamically generating paths as needed. For clarity, we assume throughout this section that all features are categorical. In Section EC.1, we extend the framework to handle numerical features through discretization and adaptive splitting. 
+
+4.2. Mixed-Integer Programming Formulation 
+
+By construction, a sample may satisfy multiple candidate paths in the policy graph, for example, a path that matches its exact feature values as well as other paths that traverse SKIP nodes. To recover a valid tree, however, the selected paths must form a non-overlapping partition of the sample space, so that each sample is ultimately assigned to exactly one rule (F¨ urnkranz 2017). We enforce this structure through a mixed-integer programming (MIP) formulation whose feasible solutions correspond to valid multiway decision trees. 
+
+Candidate policies. Let j = 1 , . . . , |P| index the set of candidate policies (paths) derived from the policy graph. Each policy j prescribes an action tj ∈ [m] and covers a subset of samples Sj ⊆{1, . . . , n }, where a sample i ∈ Sj satisfies all feature conditions along path j.The total reward associated with policy j is defined as 
+
+rj = X
+
+> i∈Sj
+
+gi,t j ,
+
+where gi,t j denotes the predicted reward of assigning action tj to sample i.Define the binary incidence matrix aij by 
+
+aij =
+
+(
+
+1 if sample i satisfies policy j, 
+
+0 otherwise .
+
+Then the policy reward can be written compactly as 
+
+rj =
+
+> n
+
+X
+
+> i=1
+
+aij gi,t j .
+
+10 Decision variables. We introduce the following variables: 
+
+• zj ∈ { 0, 1}, indicating whether policy j is selected; 
+
+• si ≥ 0, a slack variable associated with sample i.Slack variables are introduced to ensure feasibility of the restricted master problem during column generation when coverage may be temporarily incomplete. In practice, we initialize the algorithm with a trivial path that assigns a common action to all samples, so that all slack variables are zero. At optimality, the penalty coefficients ci are chosen sufficiently large to ensure that all slack variables are driven to zero, thereby enforcing exact coverage. 
+
+The COAT formulation. The Counterfactual Optimal Action Tree problem is formulated as: 
+
+(COAT) max 
+
+> |P|
+
+X
+
+> j=1
+
+rj zj −
+
+> n
+
+X
+
+> i=1
+
+cisi (4) s.t. 
+
+> |P|
+
+X
+
+> j=1
+
+aij zj + si = 1 , ∀i = 1 , . . . , n (Coverage) (5) 
+
+> |P|
+
+X
+
+> j=1
+
+zj ≤ l, (Tree size) (6) 
+
+z ∈ Z , (Additional constraints) (7) 
+
+zj ∈ { 0, 1}, ∀j = 1 , . . . , |P| 
+
+si ≥ 0, ∀i = 1 , . . . , n. 
+
+Here, l is a user-defined upper bound on the number of selected policies (i.e., leaf nodes), and Z
+
+represents additional structural or business constraints which we detail in Section 4.4. While a training sample may satisfy multiple candidate policies due to SKIP nodes, con-straint (5) ensures that, at optimality, each sample is assigned to exactly one selected policy. At test time, if a previously unseen feature combination arises, we assign a default action or match the observation to the closest training samples to determine an appropriate policy. 
+
+Theorem 1 (Equivalence to Multiway Decision Trees) . Under the COAT formulation, any optimal solution z∗ induces a collection of active paths P(z∗) ⊆ P that can be represented as a feasible multiway decision tree T ∗ 
+
+> M
+
+(l) with at most l leaves. Moreover, the objective value attained by T ∗ 
+
+> M
+
+(l) coincides with the optimal objective value of the COAT problem. 
+
+For clarity of exposition, proofs of all theoretical results are deferred to the electronic companion. While the COAT formulation admits a compact conceptual representation, the number of can-didate paths grows exponentially with the number of features, rendering direct solution of the MIP intractable in large-scale settings. In the next section, we develop an efficient solution approach that dynamically constructs only the most promising policies. 11 4.3. Scalable Algorithm via Column Generation 
+
+The COAT formulation is computationally challenging due to the combinatorial nature of jointly selecting a set of non-overlapping decision rules and their associated actions, which subsumes the classical set partitioning problem. Because the number of candidate paths grows exponentially with the number of features, explicitly enumerating all policies is infeasible in large-scale settings. To address this challenge, we develop a column generation (CG) algorithm that exploits the path-based structure of the formulation. Rather than enumerating all candidate rules, CG iteratively solves a restricted master problem over a small subset of paths and dynamically generates new, high-value paths through a pricing subproblem. This approach is enabled by the path-based representation underlying COAT . In contrast to arc-based decision tree formulations, which require binary variables for each possible branch at each depth and explicitly model sample-to-node assignments, resulting in formulations with O(2 dn)variables, where d denotes the depth of the binary tree. Our formulation operates directly at the level of complete root-to-leaf paths. This structure admits a natural decomposition between rule selection and rule generation, making CG an effective and scalable solution method. Comprehensive computational experiments establishing the scalability and solution-quality advantages of this path-based formulation over arc-based and other prescriptive-tree methods, on both synthetic and real datasets, were reported in the conference version of this work (Anonymous 2022). The present paper takes that formulation as given and focuses on theoretical extensions, deployment-oriented design, and field validation. Column generation begins with a restricted master problem (RMP) containing only a small subset of variables and iteratively augments it by identifying improving variables through a pricing subproblem. The process terminates when no variables with positive reduced cost remain, at which point the RMP solution is optimal for the linear relaxation of the full problem. 
+
+Restricted Master Problem (RMP). Let P′ ⊆ P denote the current subset of candidate paths included in the RMP. Relaxing integrality, we allow zj ∈ [0 , 1] for all j ∈ P ′. The RMP is formulated as: 
+
+(RMP) max X
+
+> j∈P ′
+
+rj zj −
+
+> n
+
+X
+
+> i=1
+
+cisi
+
+s.t. X
+
+> j∈P ′
+
+aij zj + si = 1 , ∀i = 1 , . . . , n, (8) 
+
+X
+
+> j∈P ′
+
+zj ≤ l, (9) 
+
+zj ≥ 0, ∀j ∈ P ′,si ≥ 0, ∀i = 1 , . . . , n. 
+
+12 The additional constraint set Z introduced in Eq. (7) is temporarily omitted here and reintro-duced in Section 4.4. 
+
+Pricing Subproblem. Let λi and μ denote the dual variables associated with the coverage constraints (8) and the cardinality constraint (9), respectively. The dual of the RMP is: 
+
+(Dual of RMP) min 
+
+> n
+
+X
+
+> i=1
+
+λi + lμ 
+
+s.t. 
+
+> n
+
+X
+
+> i=1
+
+aij λi + μ ≥ rj , ∀j ∈ P ′, (10) 
+
+λi ≥ − ci, ∀i = 1 , . . . , n, μ ≥ 0.
+
+At optimality of the RMP, all paths j ∈ P ′ satisfy dual feasibility. Any path j ∈ P \ P ′ that violates constraint (10) has positive reduced cost 
+
+πj = rj −
+
+> n
+
+X
+
+> i=1
+
+aij λi + μ
+
+!
+
+, (11) and can improve the RMP objective when added. The pricing subproblem therefore seeks paths with πj > 0. This can be formulated as a shortest-path problem with appropriately defined arc costs, where the total path cost corresponds to −πj
+
+(Horne 1980, Irnich and Desaulniers 2005). In practice, it suffices to identify a small number of paths with positive reduced cost at each iteration. 
+
+CG Iteration and Final MIP. The column generation procedure alternates between solving the RMP and the pricing subproblem until no paths with positive reduced cost are identified or a predefined iteration limit is reached. At termination, the RMP solution is optimal for the linear relaxation of the full COAT problem. Dual stabilization and regularization terms are added to mitigate stalling and accelerate convergence for large-scale instances (Subramanian and Sherali 2008). Finally, integrality constraints on z are reinstated, and the MIP is solved over the generated column set using branch-and-bound or branch-and-price techniques (Barnhart et al. 1998) to obtain an integral solution. In the resulting optimal solution, all slack variables are zero and the selected paths define a valid multiway decision tree. 
+
+4.4. Incorporating Operational Constraints 
+
+A key strength of the COAT framework lies in the flexibility of its path-based formulation, which enables the incorporation of a wide range of constraints introduced abstractly in Eq. (7), ensure that the learned policies are not only optimal with respect to counterfactual outcomes, but also feasible, 13 interpretable, and aligned with real-world operational requirements. We categorize constraints into two types based on their scope: inter-rule constraints , and intra-rule constraints , which interact with the column generation algorithm in fundamentally different ways. 
+
+4.4.1. Inter-Rule Constraints Inter-rule constraints govern relationships across multiple rules and are enforced at the master problem level. A basic example is the cardinality constraint in Eq. (6), which limits the total number of selected rules. More generally, inter-rule constraints from Eq. (7) can be expressed as linear inequalities over the rule selection variables z:
+
+qm ≤
+
+> |P|
+
+X
+
+> j=1
+
+ρmj zj ≤ qm, ∀m = 1 , . . . , M, (12) where ρmj captures the contribution of rule j to constraint m, and qm and qm represent lower and upper bounds, respectively. Because each selected path corresponds to a mutually exclusive leaf of the decision tree, inter-rule constraints can naturally be applied to arbitrary subsets of rules , rather than uniformly across the entire population. This is particularly important in practice, where operational limits often apply only to specific segments, markets, or actions. In the airline pricing application (Section 6), for example, ρmj may represent the expected demand contributed by rule j in market m, while qm
+
+and qm encode minimum sales targets, capacity limits, or business commitments that apply only to certain routes or booking contexts. To incorporate inter-rule constraints into the column generation algorithm, let τ m ≥ 0 and τ m ≥ 0denote the dual variables associated with the upper and lower bounds, respectively. These dual variables modify the reduced cost of a candidate path j as follows: 
+
+πj = rj −
+
+> n
+
+X
+
+> i=1
+
+aij λi + μ +
+
+> M
+
+X
+
+> m=1
+
+ρmj (τ m − τ m)
+
+!
+
+. (13) As a result, inter-rule constraints directly influence the pricing subproblem by guiding the genera-tion of paths toward globally feasible and operationally compliant solutions. 
+
+4.4.2. Intra-Rule Constraints Intra-rule constraints restrict the internal structure of indi-vidual decision rules to ensure interpretability and consistency with business logic. Unlike inter-rule constraints, they do not couple multiple rules and are therefore enforced locally within the pricing subproblem. Typical examples include limits on rule length (analogous to tree depth), minimum sample coverage requirements, and restrictions on allowable combinations of features or actions. Some of these constraints are difficult, or impossible, to express as linear constraints at the arc level. For 14 instance, business rules such as “features A and B must not appear together,” or “features B and C must either both appear or both be absent,” impose logical dependencies across multiple features within a single rule. Encoding such constraints in arc-based formulations would require nontrivial linearizations and additional auxiliary variables. In the COAT framework, intra-rule constraints are naturally enforced during path construction. As candidate paths are incrementally extended on the policy graph G, feasibility checks are applied at each step, and infeasible paths are immediately pruned. By enforcing intra-rule constraints directly within the pricing subproblem, the algorithm avoids explicit linearization of complex logical conditions, reduces the effective search space, and preserves the interpretability of the resulting decision rules. This separation between inter-rule and intra-rule constraints, coupled with their integration at different stages of the CG procedure, highlights a key advantage of the path-based formulation: it supports rich, context-dependent operational constraints while preserving scalability and algorith-mic tractability. 
+
+Remark 1. Such flexibility is difficult to achieve in arc-based tree formulations. Because arc-based models do not explicitly represent complete root-to-leaf paths, constraints that apply to entire decision rules or to subsets of the population defined by feature combinations are cum-bersome to express and often require auxiliary variables and complex linearizations. In contrast, 
+
+COAT represents each path as a complete, semantically meaningful rule, allowing constraints to be imposed naturally both across rules and within individual rules. 
+
+# 5. Design for Scalable and Deployable Prescriptive Policies 
+
+Large-scale deployment of prescriptive decision policies imposes requirements that extend beyond computational efficiency, including interpretability, governance, and real-time execution under operational constraints. This section examines how the COAT framework is explicitly designed to respect such deployment constraints while remaining computationally tractable at scale. The results in this section are deliberately modest in their mathematical machinery; their role is to make precise why specific design choices, namely bounded depth, prescriptive-feature restriction, and equality-based categorical tests, yield tractable, auditable policies in practice, rather than to establish new optimization theory. 
+
+5.1. Depth Constraints as an Operational Design Choice 
+
+In real-world decision systems, policy complexity is constrained not only by computational con-siderations, but also by interpretability, latency, and governance requirements. Policies should be sufficiently simple to be audited, explained to stakeholders, and executed reliably in real time. These considerations naturally limit the number of features that a policy may condition on. In tree-based representations, this translates directly into bounding the depth of the tree. 15 Implications for the Policy Search Space. To formalize the effect of depth constraints, consider a setting with k prescriptive features, each taking at most η distinct values. Each path in the decision tree corresponds to a rule defined by selecting a subset of features and assigning values to them. 
+
+Proposition 1 (Size of the Unconstrained Path Space) . The number of possible paths in the unconstrained search space satisfies |P| = O(ηk).
+
+Proposition 1 highlights the fundamental combinatorial challenge faced by prescriptive policy optimization: the number of candidate rules grows exponentially with the number of features, rendering exhaustive enumeration infeasible even for moderate values of k.
+
+Depth-Constrained Policies. A depth constraint limits the number of features that a policy rule may reference. When the depth of the decision tree is restricted to d, each feasible path may involve at most d feature–value assignments. Let Pd ⊆ P denote the set of paths with at most d active feature conditions. 
+
+Proposition 2 (Size of the Depth-Constrained Path Space) . If the depth of the decision tree is restricted to d, the number of feasible paths satisfies |P d| = O   kd
+
+ηd.
+
+Proposition 2 shows that depth constraints simultaneously enforce operational simplicity and dramatically reduce the size of the policy search space. For example, with binary features ( η = 2) and depth d = 2, the unconstrained space grows as O(2 k), whereas the depth-constrained space grows as O(k2). 
+
+Optimization Implications of Depth Constraints. Depth constraints also yield favorable compu-tational properties: for fixed d and bounded η, the LP relaxation of the depth-constrained COAT 
+
+model has polynomial size and can be solved in polynomial time. 
+
+Proposition 3 (Polynomial-Time LP Relaxation for Fixed Depth) . For fixed depth d
+
+and bounded feature cardinality η, the LP relaxation of the depth-constrained COAT formulation can be solved in time polynomial in k and n.
+
+Depth constraints therefore serve a dual role: they encode operational simplicity while placing policy optimization within a computationally tractable regime. 
+
+5.2. Exact State Aggregation in Policy Prescription 
+
+A key advantage of the COAT framework is its decoupled design: the counterfactual outcome estimator may depend on the full feature vector X ∈ Rk, while the prescriptive policy is restricted to a smaller, operationally feasible subset of features. This separation reflects practical deployment constraints, as many predictive features may be unavailable or inadmissible at decision time. In the airline pricing application (Section 6), purchase probabilities were estimated using a rich set of booking, flight, and passenger attributes, while the prescriptive pricing policy was restricted 16 to a small, interpretable feature set consistent with regulatory fare filing rules. In other applications, prescriptive features must also be available in real time, as recommendations need to be computed and displayed instantaneously when a customer searches for a product. Restricting the policy to real-time–accessible features enabled low-latency deployment while still leveraging rich upstream predictive models. This asymmetry implies that many observations share identical prescriptive features but differ only in predictive attributes. Such observations are decision-equivalent : they satisfy the same set of feasible policy rules and differ only in their contribution to the objective. They can therefore be aggregated without loss of feasibility or optimality, allowing the policy optimization problem to be reformulated exactly over unique prescriptive feature profiles and yielding a strictly smaller but equivalent problem. Decision-equivalence does not imply outcome-equivalence. Although observations within the same group satisfy the same prescriptive rules, their counterfactual rewards may differ because the estimator f (X, t ) is evaluated on the full feature vector X, not on the reduced prescriptive representation Z. Aggregation thus preserves heterogeneity in expected outcomes while restricting only the structure of the decision policy. This distinction is central to COAT : predictive models can exploit rich feature sets without constraining the interpretability or deployability of the learned policy. 
+
+Grouping by Prescriptive Feature Profiles. Let Zi := R(Xi) ∈ Ω denote the prescriptive feature vector, where R(·) restricts Xi to features available at decision time and k′ ≪ k. Define the equiv-alence relation i ∼ i′ if and only if Zi = Zi′ , which partitions the dataset into groups G1, . . . , GN ′ ,where N ′ = |{ Zi : i = 1 , . . . , n }| .Because candidate policy rules depend only on Z, all observations within a group Gi′ satisfy the same set of policy paths, implying that the coverage indicator is constant within each group. We therefore define ai′j := aij for any i ∈ G i′ .For each group i′, define the aggregated penalty ci′ := P 
+
+> i∈G i′
+
+ci and aggregated reward under pol-icy j as ri′j := P 
+
+> i∈G i′
+
+gi,t j . The total reward of policy j can then be written as rj = PN ′ 
+
+> i′=1
+
+ai′j ri′j =
+
+Pni=1 aij gi,t j , which coincides exactly with the original definition. Aggregation therefore preserves both feasibility and objective value for every feasible policy. The full reduced mixed-integer formu-lation and proof of equivalence are provided in Section EC.2. 
+
+Computational Implications All computational gains arise from an exact reduction in problem dimension rather than approximation. In the original formulation, the coverage constraints take the form Az + s = 1, with A ∈ { 0, 1}n×|P| . After aggregation, the reduced formulation becomes 
+
+A′z + s′ = 1, where A′ ∈ { 0, 1}N ′×|P| , with the same decision variables z but substantially fewer constraints since N ′ ≪ n.17 This reduction improves the conditioning of LP relaxations and accelerates column generation: the dual vector is shorter, reduced-cost computations are cheaper, and pricing problems become smaller. The final branch-and-bound phase also benefits from fewer constraints and tighter relax-ations. 
+
+Theorem 2 (Reduction in Problem Size from Prescriptive Dimensionality) . Let the dataset contain n samples and k categorical features, each taking at most η distinct values. Suppose the prescriptive feature set is restricted to k′ < k features. Then: 
+
+1. The number of unique prescriptive feature profiles satisfies N ′ ≤ ηk′
+
+.
+
+2. Consequently, the reduced COAT formulation contains at most ηk′
+
+coverage constraints. In particular, when n ≥ ηk′
+
+, the number of coverage constraints is independent of n, and the problem size is reduced by at least nN ′ ≥ nηk′ .
+
+Theorem 2 shows that the number of coverage constraints in the prescriptive optimization prob-lem scales with the number of distinct prescriptive states , rather than with the total number of sam-ples. Once the dataset is sufficiently large to populate all feasible prescriptive feature combinations, the number of coverage constraints—and hence the row dimension of the master problem—becomes independent of n. The number of candidate columns |P| and the size of the pricing subproblem are instead governed by the policy-graph dimensions and are unaffected by this reduction. 
+
+Remark 2. Aggregation is not unique to COAT : arc-based tree formulations may also collapse observations with identical feature vectors. However, such aggregation typically occurs after the tree structure is fixed and does not reduce the underlying structural complexity of the model. In contrast, aggregation in COAT operates directly at the level of prescriptive states prior to policy construction, yielding an exact reduction in both data dimension and effective search space. 
+
+5.3. Data Degeneracy and Reachable Prescriptive States 
+
+In operational settings, the realized data typically occupies only a small and highly structured subset of the combinatorial prescriptive feature space. Let Z ∈ Ω denote the prescriptive feature vector, and define the empirical support induced by the observed data as bΩ := {Zi : i = 1 , . . . , n } ⊆ Ω. In practice, |bΩ| ≪ | Ω|, reflecting dependencies among features, business rules, instrumentation constraints, and regulatory requirements. We refer to this phenomenon as data degeneracy .In the COAT framework, prescriptive policies are represented as paths in a policy graph, where each path corresponds to a (possibly partial) assignment of prescriptive features. Let Sℓ denote the set of all prescriptive states at depth ℓ, i.e., partial assignments involving ℓ feature–value conditions. We define the set of reachable prescriptive states as bSℓ := s ∈ S ℓ : ∃ i such that Zi satisfies s .States outside bSℓ have zero empirical support and cannot be satisfied by any observed sample. 18 Consequently, the policy search space can be restricted to paths that are empirically reachable. Let Pd denote the set of all depth-d paths in the policy graph, and define the subset of reachable paths as bPd := p ∈ P d : ∃ i such that Zi satisfies p . Paths containing unsupported partial assign-ments are excluded by construction. As a result, the effective policy space satisfies | bPd| ≪ |P d| ≤ |P| .This reduction is further reinforced by deployment-driven modeling constraints. Limits on tree depth restrict the complexity of individual rules, prescriptive feature restrictions confine atten-tion to deployable attributes, and cardinality constraints bound the number of selected paths. Together, these restrictions ensure that the optimization problem scales with the number of reach-able, decision-relevant prescriptive states , rather than with the size of the ambient feature space. From a computational perspective, data degeneracy aligns naturally with column generation. Pricing subproblems and reduced-cost computations are performed only over bPd, and columns cor-responding to unsupported paths are never generated. This tight coupling between empirical sup-port and policy representation is a key reason why COAT remains tractable in high-volume produc-tion environments, even when the upstream counterfactual models operate over high-dimensional feature spaces. 
+
+5.4. Representational Choices: Path-Based and Arc-Based Trees 
+
+The flexibility to incorporate operational constraints, the ability to perform exact state aggregation, and the favorable interaction with data degeneracy are not independent features of the COAT 
+
+framework. Rather, they arise directly from the underlying path-based representation of prescriptive policies. To clarify the role of this modeling choice, we contrast the path-based formulation with traditional arc-based decision tree formulations and discuss the resulting design implications. 
+
+Equivalence in an Unrestricted Binary Setting. We first consider an unrestricted binary setting, in which all 2 k feature assignments can be represented. In this unrestricted setting, both arc-based and path-based formulations can represent any mapping {0, 1}k → A , where A denotes the action set. Although the resulting tree structures and symbolic rules may differ, both formulations can achieve the same optimal objective value. 
+
+Divergence under Structural Constraints. This equivalence is fragile and breaks down once struc-tural constraints are introduced. In an arc-based formulation, a depth constraint implicitly requires simultaneous decisions over which features appear along a path and the order in which those fea-tures are tested. As a result, depth constraints induce a combinatorial search over both feature subsets and feature permutations. In contrast, the path-based formulation underlying COAT imposes a fixed canonical ordering of prescriptive features. A path may include or skip features, but their order is predetermined. Depth constraints therefore limit only the number of feature conditions appearing in a rule, with-out introducing additional ordering decisions. This interpretation aligns rule depth directly with decision complexity and operational simplicity, rather than with tree geometry. 19 Multiway Representation of Categorical Features. The treatment of categorical features further distinguishes arc-based and path-based representations. In binary-split trees, a split on a categor-ical feature requires selecting a subset of category values, introducing substantial combinatorial complexity and often producing rules that are difficult to interpret, audit, or justify operationally. By contrast, COAT employs equality-based tests of the form Xf = v, yielding a fixed and trans-parent set of atomic conditions per categorical feature. Multiway branching is realized implicitly through distinct paths rather than explicit subset splits, eliminating unnecessary structural ambi-guity. 
+
+Proposition 4 (Split Enumeration for Categorical Features) . For a categorical feature with η distinct values, a binary-split tree admits 2η−1 − 1 distinct nontrivial splits, whereas the equality-based multiway representation used in COAT admits exactly η atomic tests of the form 
+
+Xf = v.
+
+While Proposition 4 highlights the combinatorial explosion of categorical splits in binary trees, the next result formalizes how this combinatorial complexity translates into additional depth in binary-split trees. 
+
+Proposition 5 (Depth Overhead for Categorical Features in Binary trees) .
+
+Consider k categorical prescriptive features, each taking at most η distinct values. Let TM be a multiway prescriptive tree in which each root–to–leaf path tests at most d features using equality conditions of the form Xf = v. Then there exists a binary-split decision tree TB that implements the same policy with depth at most d⌈log 2 η⌉. Conversely, there exist prescriptive policies over 
+
+{1, . . . , η }k such that any binary-split decision tree representation requires depth at least ⌈k log 2 η⌉.
+
+Proposition 5 shows that depth in arc-based binary tree formulations conflates decision complex-ity with categorical encoding, whereas depth in the COAT framework directly reflects the number of prescriptive conditions in a rule. 
+
+Implications for Scalable and Deployable Policy Optimization. Taken together, these distinctions show that arc-based and path-based formulations coincide only in a narrow, unrestricted setting. Once depth limits, categorical features, or operational constraints are introduced, the path-based formulation used in COAT offers a more structured and interpretable representation. By fixing feature order, avoiding subset-based categorical splits, and operating directly on decision-relevant paths, the formulation complements the exact state aggregation and data degeneracy properties discussed earlier. These design choices help explain why COAT remains scalable and practical in large-scale operational environments. 20 6. Operational Deployment in Airline Ancillary Pricing 
+
+This section presents a real-world deployment of the COAT framework. We describe the operational constraints that shaped the modeling choices, present the system architecture, and report results from a live pilot with a global airline, evaluated using the synthetic control method. 
+
+6.1. Background and Deployment Challenges 
+
+Ancillary products, such as premium seats, baggage, meals, and in-flight WiFi, have become an increasingly important revenue stream for airlines, reaching a record $117.9 billion globally in 2023 (IdeaWorks 2023). While airlines have long employed sophisticated RM systems to dynamically optimize economy fares (Talluri and Van Ryzin 2006, Phillips 2021), ancillary pricing has histor-ically relied on static, manually crafted rules, representing a significant missed opportunity for data-driven and adaptive optimization (Holloway 2016, McKinsey & Company 2017). In partnership with a major global airline, we explored how ancillary pricing could be modernized while respecting operational and regulatory constraints. A central requirement is compliance with industry-standard fare filing rules governed by the Airline Tariff Publishing Company (ATPCO), through which airlines publish pricing logic to global distribution systems and online travel agencies such as Expedia and Travelocity (ATPCO 2024). The ATPCO framework supports a standardized but limited set of attributes for defining pricing logic, including origin–destination pairs, booking windows, departure time bands, fare restrictions, and stay duration limits (TravelPort 2024). As a result, ancillary pricing policies must be expressed as transparent, rule-based logic over a constrained feature space. A typical rule takes the form: 
+
+“If the flight is between Airports A and B, the ticket was purchased within 7 days of departure, and the departure time is on a weekday before 11 a.m. ⇒ set the upsell price for first-class seats to $650.” 
+
+Beyond fare filing, ancillary pricing deployments face three recurring challenges: (i) scalability with interpretability in large-scale, regulated settings; (ii) adherence to complex business con-straints, such as monotonicity, consistency, and fairness across customer segments; and (iii) inte-gration with existing RM infrastructure, where deeply embedded systems make invasive changes operationally risky and long-term robustness to upstream model changes essential. Taken together, these considerations imply that a successful ancillary pricing solution must be interpretable, constraint-aware, system-compatible, and decoupled from specific predictive archi-tectures. 
+
+6.2. High-Level Architecture 
+
+Figure 3 illustrates the system architecture of the proposed solution. Rather than optimizing abso-lute ancillary prices, we treat the economy fare produced by the airline’s RM system as an input 21 Figure 3 System architecture for airline ancillary pricing optimization layer 
+
+and formulate the decision problem as selecting an optimal markup over this base fare. This design anchors ancillary pricing to the existing fare structure while preserving core RM workflows. Formulating the problem in terms of upsell markups enables a modular pricing layer that can be deployed on top of existing RM infrastructure with minimal engineering complexity and operational risk. It also ensures that prescribed prices remain interpretable and consistent with published fare rules, facilitating governance and ATPCO compliance. The ancillary pricing policy is learned using the COAT framework introduced earlier in the paper. Here, COAT acts as a prescriptive optimization layer that takes counterfactual demand estimates as inputs and outputs a compact, rule-based pricing policy represented as a multiway policy tree. The policy depends only on a small set of deployable features, supporting real-time execution and regulatory compliance, while remaining agnostic to the upstream predictive model. We next describe the end-to-end deployment of this architecture for pricing seat upgrades (e.g., premium economy and first-class seating). The same design extends naturally to other ancillary products, such as baggage, meals, and in-flight WiFi, by modifying the feature set and action space. 
+
+6.3. Data 
+
+We had access to several years of transactional booking data spanning early 2019 through the most recent period. For model training, we restrict attention to data from mid-2022 onward to align with current market conditions, reflecting post–COVID-19 structural shifts in travel behavior and demand patterns and ensuring consistency with the pilot deployment period. The resulting train-ing corpus, spanning mid-2022 through mid-2023, comprises approximately 43 million individual transaction records and is used to fit the counterfactual outcome and propensity models. The pilot itself is evaluated on the test and control markets described in Section 6.6. 22 For the seat-upgrade pricing use case, each observation is a triplet {X, T, Y }, where X denotes the booking context, T is the upsell markup (the price difference between the premium seat and the corresponding economy fare), and Y ∈ { 0, 1} indicates whether the customer accepted the offer. The feature vector X integrates information from three sources, providing a rich representation of the pricing context and supporting demand modeling for seat upgrades. 
+
+Booking-related features capture booking timing and channel characteristics, including calendar indicators, book-to-flight time, trip type, weekend stays, sales channel, premium seat availability at booking, and the economy fare, which serves as the reference price for optimizing the markup. 
+
+Flight-level features describe route and schedule attributes, including origin–destination pairs, flight distance and duration, departure date and time, time-of-day indicators, and seasonality variables capturing holidays, weekends, and peak travel periods. 
+
+Passenger-level features reflect the customer’s relationship with the airline and past behavior, including loyalty program enrollment, tier status, frequent flyer indicators, and summary measures of recency, frequency, and cumulative spend. 
+
+6.4. Counterfactual Outcome Estimation 
+
+The first stage of the COAT framework estimates counterfactual outcomes, namely, the probability that a customer would purchase an upgrade if offered an alternative markup. Because upgrade prices are not randomly assigned, higher prices are often deployed in contexts with anticipated higher demand, naive predictive models trained on observational data can suffer from selection bias and may incorrectly infer upward-sloping demand curves. Correcting for this bias is essential for reliable pricing decisions. To address this challenge, we adopt a doubly robust (DR) estimator (Dud´ ık et al. 2011), which combines outcome modeling with propensity score estimation and yields consistent estimates if either component is correctly specified. The outcome model estimates the probability of upgrade acceptance at a given markup, while the propensity model estimates the probability of observing that markup given the booking context. Both the outcome model and the propensity model were trained using an automated ML pipeline for algorithm selection, feature engineering, and hyperpa-rameter tuning. In this application, gradient-boosted decision trees (XGBoost) (Chen and Guestrin 2016) were selected for both components. The feasible markup grid for each market was defined based on historical price distributions and business input. Long-haul routes used coarser increments (e.g., $5), while short-haul routes used finer granularity. Across markets, the grid typically consisted of 10 to 25 discrete price points. During live deployment, the grid was periodically refined to introduce new price points and improve learning of price-response behavior. 23 Once trained, the counterfactual model was used to generate predictions gi,t , representing the estimated probability that booking i would accept an upgrade at price point t ∈ [m] defined in the price grid. These predictions form the sole inputs to the downstream prescriptive optimization model. In markets with limited historical price variation, raw model predictions occasionally produced economically implausible price-response curves, such as locally positive price elasticities. Before passing the predictions to the optimization layer, we therefore applied a lightweight calibration step. For each observed booking context, we fixed non-price covariates, evaluated the model on the feasible price grid, and adjusted the resulting response curve to satisfy economically plausible elasticity bounds (Pindyck and Rubinfeld 2018). The calibrated curve was anchored at the factual observation and informed by analyst-provided elasticity ranges and standard demand-modeling principles. The resultant calibration task is a low-dimensional curve-fitting problem in the space of the price covariates that can be executed in seconds. This transformation preserves the modular structure of COAT while improving the suitability of the counterfactual inputs for price optimiza-tion. A related practical challenge arose when new prices introduced during the pilot had zero histor-ical support, rendering inverse propensity weights undefined. After evaluating several alternatives, including propensity smoothing, we adopted an outcome-only modeling strategy for these cases due to its robustness and implementation simplicity. Additional discussion is provided in Section EC.3. 
+
+6.5. Policy Graph and Constraint Modeling for Ancillary Pricing 
+
+Regulatory and operational constraints require ancillary pricing policies to depend on a restricted, interpretable feature set, which in turn defines the policy graph over which prescriptive decisions are optimized. While a rich set of features is used for counterfactual estimation, the prescriptive policy is limited to attributes compatible with ATPCO fare filing rules and real-time execution. The final feature set was determined in collaboration with the airline and includes origin–destination pairs, flight timing, book-to-flight days, fare class, and trip type, i.e., features that are operationally accessible and suitable for publication. Following extensive experimentation, the airline imposed a user-defined upper bound of 50 rules per market, reflecting a tradeoff between revenue optimality and policy complexity for governance and auditability. 
+
+Capacity constraints. Capacity constraints are modeled as inter-rule constraints. Ideally, such constraints would be formulated using real-time inventory or load-factor information. However, because inventory data were not available at decision time and pricing policies were refreshed weekly, we instead imposed surrogate constraints based on predicted outcomes. Specifically, for each origin–destination pair and product, we constrained the aggregate predicted upgrade conversion rate under the prescribed prices to remain within a tolerance band around 24 historical levels. These constraints serve as stability guardrails, preventing abrupt demand shifts while still allowing meaningful price differentiation across customer segments. 
+
+Domain-specific pricing logic. Additional business rules, such as monotonicity with respect to booking time (e.g., higher prices closer to departure), arbitrage prevention (e.g., ensuring that two one-way upgrades do not undercut a round-trip upgrade), and systematic price differentiation for itineraries without weekend stays, which are typically associated with business travel—are also modeled as inter-rule constraints. 
+
+Guardrail constraints. To control the risk of systematic overpricing or underpricing, we integrate pricing recall metrics directly into the optimization as guardrail constraints . We adopt the price-decrease recall (PDR) and price-increase recall (PIR) metrics introduced by Ye et al. (2018), which provide interpretable proxies for pricing quality in settings where ground-truth optimal prices are unavailable. Whereas prior work typically uses these metrics for post-hoc evaluation, we incorporate them explicitly during policy optimization to regulate aggregate pricing behavior. Intuitively, PDR and PIR measure how frequently the prescribed prices decrease or increase relative to historical prices across observed transactions, including both upgrade and non-upgrade outcomes. Bounding these quantities limits excessive upward or downward price movements in aggregate, helping mitigate revenue risk, customer dissatisfaction, and fairness concerns arising from systematic price shifts. Let zj indicate whether rule j is selected, δj denote the number of observations covered by rule 
+
+j for which the prescribed price is lower than the historical price, and ηj denote the total number of observations covered by that rule. The aggregate PDR constraint is given by PDR lb ≤
+
+P 
+
+> j
+
+δj zj
+
+P 
+
+> j
+
+ηj zj
+
+≤ PDR ub . (14) This constraint anchors the learned policy to historical pricing behavior in aggregate while still allowing targeted deviations where supported by the data. As shown in Section EC.4.8, the constraint can be reformulated as a mixed-integer linear constraint using a Charnes–Cooper trans-formation and enforced either globally in the master problem or locally during path generation. 
+
+Rule-validity constraints. Rule-validity constraints ensure interpretability, statistical reliability, and compliance with airline pricing practices. These include limits on rule length, prohibitions on disallowed feature combinations, and minimum sample coverage requirements. Because these constraints apply to individual paths rather than collections of rules, they are modeled as intra-rule constraints and enforced directly during path construction in the policy graph. Infeasible paths are pruned early in the pricing subproblem, avoiding the need to linearize complex logical constraints in the master problem. 25 Forward-looking customer mix. Because the booking mix varies over time, we adjust the sample weights used in policy optimization to better reflect the expected customer mix during deployment. In implementation, path-level sample counts are updated using a lightweight exponential-smoothing forecast based on recent booking patterns. This allows the policy to optimize against a forward-looking distribution rather than the historical sample distribution alone. As discussed in Section 4.4, this separation between inter-rule and intra-rule constraints is critical for scalability. Aggregate business logic is handled through dual prices in the master problem, while rule-level feasibility is enforced locally during column generation. This design enables the generation of compact, interpretable, and operationally valid pricing policies suitable for enterprise deployment. 
+
+6.6. Pilot Design 
+
+We conducted a live field pilot with a major global airline in 2023 to evaluate whether AI-driven, interpretable pricing policies could deliver measurable business impact while operating under real-world regulatory, fairness, and operational constraints. The pilot was initially planned as a 12-week engagement, with pricing policies refreshed weekly and models retrained using the most recent transaction data. Encouraged by early results, the pilot was extended and ultimately transitioned into sustained operation. This section describes the experimental design, evaluation methodology, and deployment out-comes. Particular attention is paid to causal identification and fairness considerations, which play a central role in airline pricing and preclude the use of standard randomized experimentation. 
+
+6.6.1. Evaluation Metrics The primary business metric used to evaluate pricing perfor-mance is upsell revenue per booking , defined as total premium ancillary revenue normalized by the number of bookings: Upsell Revenue per Booking = Total Upsell Revenue Number of Bookings . (15) This normalization is essential in airline settings, where booking volumes vary substantially over time due to seasonality, demand shocks, and macroeconomic factors. Measuring revenue on a per-booking basis enables meaningful comparisons across time periods and markets, independent of traffic fluctuations. Conversion rate (number of upgrades sold) and yield (revenue per upgrade) are tracked as secondary metrics to help interpret the drivers of revenue changes. 
+
+6.6.2. Evaluation Design and Identification In principle, the gold standard for estimating treatment effects is a randomized controlled trial or A/B test. In airline pricing applications, how-ever, such experiments are often infeasible. Offering different prices to customers who are otherwise indistinguishable based on observable booking context (e.g., origin–destination, fare class, travel 26 dates, loyalty status) raises legal, regulatory, and ethical concerns related to price discrimination and fairness. Several alternative designs were considered. Temporal alternating between AI pricing and legacy pricing was rejected due to the advance-purchase nature of airline bookings, which makes it impos-sible to cleanly align treatment timing with observed outcomes. Year-over-year comparisons were also unsuitable, as demand patterns during 2020–2022 were heavily distorted by the COVID-19 pandemic and do not provide a stable baseline. Given these constraints, the airline adopted a test-versus-control market design. Twelve test markets were selected across short-, medium-, and long-haul routes. For each test market, three to four control markets were identified based on geographic similarity, historical booking volumes, ancillary attach rates, and expected demand stability, yielding 30 distinct control markets. While this design provides a reasonable baseline, direct comparisons remain vulnerable to time-varying confounders such as seasonality and demand shifts, motivating the use of a more rigorous causal evaluation method. 
+
+6.6.3. Synthetic Control Method To isolate the causal effect of the AI-driven pricing policy, we employ the synthetic control method (SCM) (Abadie et al. 2010). As Athey and Imbens (2017) note, “arguably the most important innovation in the evaluation literature in the last 15 years is the synthetic control approach” , particularly in settings where randomized experimentation is infeasible. SCM constructs a data-driven counterfactual for each treated market using a weighted com-bination of control markets, with weights chosen to closely match the treated market’s outcome trajectory during a pre-pilot period. By explicitly aligning pre-intervention trends, SCM provides a more credible benchmark than simple averaging across matched controls, especially in envi-ronments with strong seasonality and evolving demand conditions. More details can be found in Section EC.5.1. In our deployment, SCM weights were estimated using a nine-week pre-pilot window. Figure 4 illustrates the resulting weight distributions, which are highly non-uniform across control mar-kets. This heterogeneity reflects the importance of data-driven weighting in reproducing historical dynamics and highlights the limitations of nominal control averages. By anchoring inference on observed pre-treatment behavior, SCM enables a rigorous and interpretable assessment of the pricing policy’s causal impact in a real-world operational setting. 
+
+6.7. Pilot Results 
+
+To evaluate the performance of the AI-driven pricing pilot, we align all test and control markets on a common weekly timeline. Week 1 corresponds to the start of the pre-pilot observation period in 27 Figure 4 Histogram of synthetic control weights across matched control markets. 
+
+2023, and the intervention begins in Week 10, when the prescriptive tree policy was deployed in pro-duction. From that point onward, upsell prices in the 12 designated test markets were determined by AI-generated policies, updated on a weekly cadence. Although the pilot was initially planned to run for 12 weeks, strong business performance led the airline to extend the deployment. We report results observed through Week 26. 
+
+6.7.1. Quantitative Impact on Revenue We evaluate the revenue impact of the AI-driven pricing policy using the synthetic control method (SCM). Control weights are estimated using the pre-pilot period (Weeks 1–9), and post-intervention effects are assessed by comparing the treatment markets to their synthetic counterparts from Week 10 onward. For reference, we also report a nominal control benchmark constructed by uniformly averaging the same control markets. Figure 5 shows the resulting KPI trajectories over the 26-week evaluation horizon. The synthetic control closely tracks the pre-intervention trend of the treatment group, whereas the nominal control exhibits larger deviations prior to deployment. Following the intervention, the treatment group consistently outperforms both benchmarks, indicating a positive revenue impact of the AI-driven pricing policy. The difference in pre-pilot fit between the two benchmarks is economically meaningful. Because the synthetic control lies above the nominal control for much of the post-pilot period, reliance on uniform averaging would have overstated the treatment effect. This comparison highlights the importance of using a well-matched counterfactual in observational field settings. Figure 6 reports the estimated treatment effect, defined as the difference between the treatment KPI and its synthetic control. We summarize it as the average weekly gap over each window. Early gains were negligible, averaging 0 .5% during Weeks 10–15. The impact strengthened over time, 28 Figure 5 Normalized weekly KPI trajectories for the treatment group under COAT, synthetic control, and nominal control. The vertical dashed line marks the pilot launch.  
+
+> Figure 6 Estimated weekly treatment effect under COAT relative to the synthetic control.
+
+averaging 8 .9% during Weeks 16–26. Over the full post-intervention period (Weeks 10–26), the average weekly treatment effect is 6 .9% relative to the synthetic control. This increasing effect reflects an operational learning dynamic: early in deployment, limited historical price variation constrained inference of fine-grained demand responses. As the pricing policy was retrained weekly and the price grid was progressively refined, richer variation improved learning and enabled more precise price differentiation across segments. Placebo-based SCM tests support the robustness of these results, rejecting the null of no effect at the 5% level ( p = 0 .032); details are provided in Section EC.5.2. 
+
+6.7.2. Behavioral and Fairness Analysis Beyond aggregate revenue gains, a central con-cern for the airline was whether AI-generated prices would remain stable, interpretable, and fair. 29 Figure 7 Distribution of AI-recommended prices relative to historical benchmarks 
+
+To assess these dimensions, we examine how recommended prices vary across booking segments relative to historical baselines. Figure 7 visualizes AI-recommended prices at the segment level. Each bubble represents a seg-ment (scaled by booking volume), with the horizontal axis indicating the historical conversion rate and the vertical axis showing the percentage change in recommended price relative to legacy pricing. The policy systematically increases prices for high-conversion, price-inelastic segments and decreases prices for low-conversion, price-elastic segments. Crucially, this behavior arises under the explicit guardrail constraints embedded in the opti-mization model. These inter-rule constraints bound the aggregate frequency of price increases and decreases relative to historical pricing, anchoring the policy to observed market behavior and pre-venting systematic overpricing or underpricing at the market level. As a result, the policy adapts to heterogeneous willingness to pay while avoiding abrupt pricing shocks or discriminatory patterns. Notably, the learned policy recommends more price decreases than increases in aggregate, directly benefiting price-sensitive customers. By contrast, the flat legacy upsell prices were often less attrac-tive to price-sensitive leisure travelers, while leaving revenue unrealized among late-booking busi-ness travelers, who typically exhibit higher willingness to pay. Moreover, the policy established a baseline upsell increment that allowed the airline to continue applying its inventory-driven opera-tional adjustments without conflict. These gains were achieved with minimal changes to the existing business process and without requiring extensive changes to core revenue-management infrastruc-ture. 
+
+6.7.3. Secondary Metrics and Operational Implications Table 1 reports secondary per-formance metrics, including conversion rate and yield. While the AI-driven pricing policy led to a modest decline in upgrade conversion (–0.6%), it delivered a substantial increase in yield (+16.4%), indicating improved monetization efficiency. 30 This pattern reflects intentional tradeoffs. By raising prices for price-insensitive segments and lowering prices elsewhere, the model sells fewer upgrades overall but at more appropriate price points. From an operational perspective, the reduction in paid upgrades was viewed positively: it preserved premium inventory for high-value uses such as complimentary upgrades for loyal cus-tomers, supporting broader customer experience objectives. Taken together, these results demonstrate that the AI-driven pricing policy achieves revenue gains not through indiscriminate price increases, but through controlled, interpretable price differ-entiation that respects fairness and operational constraints.  
+
+> Table 1 Relative performance of test markets compared to control markets.
+
+Overall By sub-period Metric (%) Weeks 10–26 Weeks 10–15 Weeks 16–26 Revenue per booking 6.9 0.5 8.9 Conversion rate -0.6 -0.6 -0.7 Yield (Revenue per upgrade) 16.4 11.9 20.5 
+
+6.7.4. Organizational Adoption and Strategic Impact Encouraged by early results, the initial 12-week pilot was extended by an additional five weeks and ultimately transitioned into con-tinuous operation. The system has remained in production use since the pilot, indicating durability well beyond the initial evaluation window. Based on observed performance during the pilot, the airline projected that scaling the approach across eligible domestic markets could generate approx-imately $50– $150 million in incremental annual premium seat revenue, substantially exceeding the original success threshold of a 2–3% uplift. The airline further noted that the revenue potential is likely higher in international markets, where ancillary markups are typically larger. As a result, the COAT framework was formally adopted as a strategic component of the airline’s long-term ancillary pricing strategy. Beyond financial impact, the pilot marked a shift in internal perceptions of AI, from an exploratory capability to a reliable driver of measurable business value. As one senior business sponsor remarked: 
+
+“This is the first success we have had at the airline in getting AI to deliver measurable business results.” 
+
+This shift was enabled by the framework’s emphasis on interpretability and operational align-ment. By integrating counterfactual inference with large-scale optimization, COAT produced pric-ing policies that respected regulatory and business constraints while remaining transparent and auditable. The rule-based structure allowed pricing analysts and business stakeholders to inspect, 31 validate, and adjust decisions, fostering cross-functional trust and easing organizational adop-tion. Taken together, the pilot demonstrates how a rigorously formulated prescriptive optimization framework can translate causal modeling advances into sustained, enterprise-scale impact. 
+
+6.8. Managerial Insights 
+
+This study offers several lessons for managers deploying AI in high-stakes operational settings, where decisions must balance performance, fairness, interpretability, and operational constraints. 
+
+From prediction to prescription. Many enterprise AI initiatives emphasize predictive accuracy, such as forecasting demand, conversion, or willingness to pay. However, business value is realized only when predictions are translated into decisions that respect operational constraints. The COAT framework makes the decision problem explicit: it learns counterfactual outcomes and optimizes over a constrained action space, thereby targeting decision quality rather than intermediate pre-dictive metrics. In the airline pricing application, this shift enabled measurable revenue gains while preserving managerial control over when and how prices change. 
+
+Interpretability and constraints can enable adoption. In regulated and customer-facing domains, interpretability and compliance are often viewed as obstacles to AI-driven optimization. Our deploy-ment suggests the opposite. Representing policies as interpretable prescriptive trees and embedding business and regulatory constraints made the system easier to audit, validate, and deploy. These features were central to addressing governance concerns and external scrutiny around pricing fair-ness. Rather than limiting performance, interpretability and constraints helped build organizational trust and enabled sustained adoption. 
+
+Modular deployment reduces risk but limits upside. The deployed system optimized ancillary prices as markups over existing economy fares, treating the airline’s revenue management system as an upstream input rather than pursuing full end-to-end integration. This modular design reduced engineering complexity and operational risk, allowing rapid deployment without disrupting legacy infrastructure. At the same time, modularity limits responsiveness because the pricing layer does not directly incorporate real-time capacity and demand signals, such as remaining seat inventory or booking dynamics. A promising direction for future operational gains is to integrate prescriptive decision layers more tightly with core operational systems while preserving auditability and control. 
+
+Credible evaluation and fairness controls are essential. Evaluating AI-driven decisions is difficult when randomized experimentation is infeasible due to legal, ethical, or operational constraints. In this setting, rigorous causal evaluation methods, including synthetic control, provided credible estimates of the deployed policy’s incremental impact and helped build stakeholder confidence. Equally important, fairness-oriented guardrails within the optimization model helped ensure that revenue gains were not driven by systematic overpricing or unintended distributional effects. For managers, this highlights the importance of pairing prescriptive AI systems with both credible evaluation frameworks and explicit fairness controls. 32 AI adoption requires a decision layer. The broader managerial lesson is that successful AI adop-tion is not simply a matter of improving prediction or replacing existing decision processes. Modern machine learning can expand predictive capabilities, but organizations still need principled ways to optimize decisions under uncertainty, constraints, and governance requirements. COAT illustrates how operations research can provide this decision layer, translating AI advances into deployable, auditable, and high-impact operational systems. 
+
+# 7. Conclusion 
+
+This paper introduced the Counterfactual Optimal Action Tree (COAT) framework, which inte-grates causal inference and large-scale optimization to learn interpretable decision policies from observational data. By decoupling counterfactual outcome estimation from policy optimization, COAT constructs decision rules that are data-driven, interpretable, and explicitly aware of oper-ational and regulatory constraints. In a large-scale airline pricing deployment, the framework delivered statistically and economically significant revenue gains, demonstrating the feasibility of prescriptive AI at enterprise scale. Beyond the specific application, the results highlight a broader opportunity for operations research in AI-enabled decision-making. While modern machine learning excels at prediction, trans-lating predictive insights into actionable, auditable, and compliant decisions remains a central challenge in practice. COAT shows how OR methods can bridge this gap by providing a struc-tured optimization layer that aligns AI-driven decisions with business objectives and real-world constraints. Several directions for future research remain. One is to extend COAT to multi-period settings that capture intertemporal tradeoffs, learning effects, and demand dynamics. Another is to incorpo-rate uncertainty in counterfactual estimates, model misspecification, or distributional shifts directly into the optimization stage. These extensions would further strengthen the role of structured, optimization-based decision frameworks in supporting reliable and resilient AI deployments. 
+
+# References      
+
+> Abadie A (2021) Using synthetic controls: Feasibility, data requirements, and methodological aspects. Journal of Economic Literature 59(2):391–425. Abadie A, Diamond A, Hainmueller J (2010) Synthetic control methods for comparative case studies: Esti-mating the effect of California’s tobacco control program. Journal of the American statistical Associa-tion 105(490):493–505. Abadie A, Imbens GW (2006) Large sample properties of matching estimators for average treatment effects.
+> econometrica 74(1):235–267.
+
+33 ABC News (2025) How delta is using AI for ticket pricing and what it means for air travel. URL https://ab cnews.go.com/GMA/Travel/delta-ai-ticket-pricing-means-air-travel/story?id=124343088 ,online; accessed: 1-October-2025. Aghaei S, Azizi MJ, Vayanos P (2019) Learning optimal and fair decision trees for non-discriminative decision-making. Proceedings of the AAAI Conference on Artificial Intelligence , volume 33, 1418–1426. Aghaei S, G´ omez A, Vayanos P (2024) Strong optimal classification trees. Operations Research 73(4):2223– 2241. Allen GI, Gan L, Zheng L (2023) Interpretable machine learning for discovery: Statistical challenges and opportunities. Annual Review of Statistics and Its Application 11. Alvarez Melis D, Jaakkola T (2018) Towards robust interpretability with self-explaining neural networks. 
+
+Advances in neural information processing systems 31. Amram M, Dunn J, Zhuo YD (2022) Optimal policy trees. Machine Learning 111(7):2741–2768. Anonymous (2022) Title omitted for blind review. Proceedings of the AAAI Conference on Artificial Intelli-gence .Arrieta AB, D´ ıaz-Rodr´ ıguez N, Del Ser J, Bennetot A, Tabik S, Barbado A, Garc´ ıa S, Gil-L´ opez S, Molina D, Benjamins R, et al. (2020) Explainable artificial intelligence (XAI): Concepts, taxonomies, opportunities and challenges toward responsible AI. Information fusion 58:82–115. Athey S, Imbens G (2016) Recursive partitioning for heterogeneous causal effects. Proceedings of the National Academy of Sciences 113(27):7353–7360. Athey S, Imbens GW (2017) The state of applied econometrics: Causality and policy evaluation. Journal of Economic perspectives 31(2):3–32. ATPCO (2024) Pricing data: Powering modern airline retailing with data. https://www.atpco.net/solu tions/pricing/pricing-data , online; accessed: 1-June-2024. Bach F (2008) Exploring large feature spaces with hierarchical multiple kernel learning. Advances in Neural Information Processing Systems 21. Barnhart C, Johnson EL, Nemhauser GL, Savelsbergh MW, Vance PH (1998) Branch-and-price: Column generation for solving huge integer programs. Operations research 46(3):316–329. Bertsimas D, Dunn J (2017) Optimal classification trees. Machine Learning 106(7):1039–1082. Bertsimas D, Dunn J, Mundru N (2019) Optimal prescriptive trees. INFORMS Journal on Optimization 
+
+1(2):164–183. Biggs M, Sun W, Ettl M (2021) Model distillation for revenue optimization: Interpretable personalized pricing. International Conference on Machine Learning , 946–956. Breiman L, Friedman J, Stone CJ, Olshen RA (1984) Classification and regression trees (CRC press). 
+
+34 Cao J, Sun W, Shen ZJM (2019) Doubly adaptive cascading bandits with user abandonment. Available at SSRN 3355211 .Caro F, Gallien J (2012) Clearance pricing optimization for a fast-fashion retailer. Operations research 
+
+60(6):1404–1422. Caruana R, Lou Y, Gehrke J, Koch P, Sturm M, Elhadad N (2015) Intelligible models for healthcare: Predicting pneumonia risk and hospital 30-day readmission. Proceedings of the 21th ACM SIGKDD international conference on knowledge discovery and data mining , 1721–1730. Chen J, Zhao Y (2020) High price or low price? an experimental study on a markdown pricing policy. 
+
+European Journal of Operational Research 284(1):240–254. Chen T, Guestrin C (2016) XGBoost: A scalable tree boosting system. Proceedings of the 22nd acm sigkdd international conference on knowledge discovery and data mining , 785–794. Cooprider J, Nassiri S (2023) Science of price experimentation at amazon. Business Economics 58(1):34–41. Delta Air Lines (2025) Delta responds to misinformation around AI pricing. URL https://news.delta.c om/delta-responds-misinformation-around-ai-pricing , online; accessed: 1-October-2025. Du M, Liu N, Hu X (2019) Techniques for interpretable machine learning. Communications of the ACM 
+
+63(1):68–77. Dud´ ık M, Langford J, Li L (2011) Doubly robust policy evaluation and learning. Proceedings of the 28th International Conference on International Conference on Machine Learning , 1097–1104. Fern´ andez-Lor´ ıa C, Provost F (2022) Causal decision making and causal effect estimation are not the same. . . and why it matters. INFORMS Journal on Data Science 1(1):4–16. Fiig T, Le Guen R, Gauchet M (2018) Dynamic pricing of airline offers. Journal of Revenue and Pricing Management 17(6):381–393. Fortune (2025) Delta moves toward eliminating set prices in favor of AI that determines how much you personally will pay for a ticket. URL https://fortune.com/2025/07/16/delta-moves-toward-e liminating-set-prices-in-favor-of-ai-that-determines-how-much-you-personally-will-p ay-for-a-ticket/ , online; accessed: 10-June-2025. Fritz-Morgenthal S, Hein B, Papenbrock J (2022) Financial risk management and explainable, trustworthy, responsible AI. Frontiers in artificial intelligence 5:779799. F¨ urnkranz J (2017) Decision Lists and Decision Trees , 328–329. Gao H, Kumar S, Tan Y, Zhao H (2022) Socialize more, pay less: Randomized field experiments on social pricing. Information Systems Research 33(3):935–953. Goyal K, Garg M, Malik S (2025) Adoption of artificial intelligence-based credit risk assessment and fraud detection in the banking services: a hybrid approach (sem-ann). Future Business Journal 11(1):44. 
+
+35 Harsha P, Subramanian C, Abe N, Subramanian S, Ba A, Fern´ andez Rom´ an KA, Longinos Garrido M, Narayanaswami C (2025) Practical contextual bandits for large-scale structured discrete constrained optimization problems. Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 850–859. Hinton G, Vinyals O, Dean J (2015) Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 .Hirano K, Imbens GW, Ridder G (2003) Efficient estimation of average treatment effects using the estimated propensity score. Econometrica 71(4):1161–1189. Holloway S (2016) Straight and level: Practical airline economics (Routledge). Horne G (1980) Finding the k least cost paths in an acyclic activity network. Journal of the Operational Research Society 31(5):443–448. Hu X, Rudin C, Seltzer M (2019) Optimal sparse decision trees. Advances in Neural Information Processing Systems , volume 32. IdeaWorks (2023) Airline ancillary revenue reaches record $117.9 billion worldwide for 2023. https://id eaworkscompany.com/wp-content/uploads/2023/10/Press-Release-178-Worldwide-Estimate-2 023.pdf , online; accessed: 29-May-2024. Ikeda S, Nishimura N, Sukegawa N, Takano Y (2023) Prescriptive price optimization using optimal regression trees. Operations Research Perspectives 11:100290. Irnich S, Desaulniers G (2005) Shortest path problems with resource constraints. Column generation , 33–65 (Springer). Jawanpuria P, Nath JS, Ramakrishnan G (2011) Efficient rule ensemble learning using hierarchical kernels. 
+
+ICML .Jo N, Aghaei S, G´ omez A, Vayanos P (2021) Learning optimal prescriptive trees from observational data. 
+
+arXiv preprint arXiv:2108.13628 .Johansson F, Shalit U, Sontag D (2016) Learning representations for counterfactual inference. International conference on machine learning , 3020–3029. Kallus N (2017) Recursive partitioning for personalization using observational data. Proceedings of the 34th International Conference on Machine Learning-Volume 70 , 1789–1798. Karmarkar N (1984) A new polynomial-time algorithm for linear programming. Proceedings of the sixteenth annual ACM symposium on Theory of computing , 302–311. Khachiyan LG (1980) Polynomial algorithms in linear programming. USSR Computational Mathematics and Mathematical Physics 20(1):53–72. Khedr AM, et al. (2024) Enhancing supply chain management with deep learning and machine learning techniques: A review. Journal of Open Innovation: Technology, Market, and Complexity 10(4):100379. 
+
+36 Kim B, Khanna R, Koyejo OO (2016) Examples are not enough, learn to criticize! criticism for interpretabil-ity. Advances in neural information processing systems 29. K¨ unzel SR, Sekhon JS, Bickel PJ, Yu B (2019) Metalearners for estimating heterogeneous treatment effects using machine learning. Proceedings of the national academy of sciences 116(10):4156–4165. Lakkaraju H, Bach SH, Leskovec J (2016) Interpretable decision sets: A joint framework for description and prediction. Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , 1675–1684. Laurent H, Rivest RL (1976) Constructing optimal binary decision trees is np-complete. Information pro-cessing letters 5(1):15–17. Li O, Liu H, Chen C, Rudin C (2018) Deep learning for case-based reasoning through prototypes: A neural network that explains its predictions. Proceedings of the AAAI conference on artificial intelligence ,volume 32. Lin J, Zhong C, Hu D, Rudin C, Seltzer M (2020) Generalized and scalable optimal sparse decision trees. 
+
+International Conference on Machine Learning , 6150–6160. Liu J, Zhang Y, Wang X, Deng Y, Wu X (2019) Dynamic pricing on e-commerce platform with deep reinforcement learning: A field experiment. arXiv preprint arXiv:1912.02572 .Lundberg SM, Lee SI (2017) A unified approach to interpreting model predictions. Advances in neural information processing systems , 4765–4774. McAfee RP, Te Velde V (2006) Dynamic pricing in the airline industry. Handbook on economics and infor-mation systems 1:527–67. McKinsey & Company (2017) How airlines can gain a competitive edge through pricing. https://www.mc kinsey.com/industries/travel-logistics-and-infrastructure/our-insights/how-airline s-can-gain-a-competitive-edge-through-pricing , online; accessed 29-May-2024. Nie X, Wager S (2021) Quasi-oracle estimation of heterogeneous treatment effects. Biometrika 108(2):299– 319. Pace A, Chan A, van der Schaar M (2022) Poetree: Interpretable policy learning with adaptive decision trees. International Conference on Learning Representations .Phillips RL (2021) Pricing and revenue optimization (Stanford university press). Pindyck RS, Rubinfeld DL (2018) Microeconomics (Boston, MA: Pearson), 9 edition. Puiutta E, Veith EM (2020) Explainable reinforcement learning: A survey. International Cross-Domain Conference for Machine Learning and Knowledge Extraction , 77–95 (Springer). Reuters (2025) Delta air assures US lawmakers it will not personalize fares using AI. URL https://www. reuters.com/business/delta-air-assures-us-lawmakers-it-will-not-personalize-fares-u sing-ai-2025-08-01/ , online; accessed: 1-October-2025. 
+
+37 Ribeiro MT, Singh S, Guestrin C (2016) ” why should i trust you?” explaining the predictions of any classifier. Proceedings of the 22nd ACM SIGKDD international conference on knowledge discovery and data mining , 1135–1144. Rosenbaum PR (1987) Model-based direct adjustment. Journal of the American statistical Association 
+
+82(398):387–394. Rudin C (2019) Stop explaining black box machine learning models for high stakes decisions and use inter-pretable models instead. Nature machine intelligence 1(5):206–215. Shukla N, Kolbeinsson A, Otwell K, Marla L, Yellepeddi K (2019) Dynamic pricing for airline ancillaries with customer context. Proceedings of the 25th ACM SIGKDD International Conference on knowledge discovery & data mining , 2174–2182. Stuart EA (2010) Matching methods for causal inference: A review and a look forward. Statistical science: a review journal of the Institute of Mathematical Statistics 25(1):1. Subramanian S, Sherali HD (2008) An effective deflected subgradient optimization scheme for implementing column generation for large-scale airline crew scheduling problems. INFORMS Journal on Computing 
+
+20(4):565–578. Sun W, Tsiourvas A (2023) Learning prescriptive ReLU networks. International Conference on Machine Learning , 33044–33060. Talluri KT, Van Ryzin GJ (2006) The theory and practice of revenue management , volume 68 (Springer Science & Business Media). TravelPort (2024) ATPCO & fare filing assistance. https://support.travelport.com/webhelp/Fares AndPricing/Content/ATPCO.htm , online; accessed: 1-June-2025. Tsiourvas A, Sun W, Perakis G (2024) Manifold-aligned counterfactual explanations for neural networks. 
+
+International Conference on Artificial Intelligence and Statistics , 3763–3771. Tsiourvas A, Sun W, Perakis G (2025) Causal LLM routing: End-to-end regret minimization from observa-tional data. Advances in Neural Information Processing Systems .van der Linden J, de Weerdt M, Demirovi´ c E (2022) Fair and optimal decision trees: A dynamic programming approach. Advances in Neural Information Processing Systems 35:38899–38911. Yang C, Feng Y, Whinston A (2022) Dynamic pricing and information disclosure for fresh produce: An artificial intelligence approach. Production and Operations Management 31(1):155–171. Ye P, Qian J, Chen J, Wu Ch, Zhou Y, De Mars S, Yang F, Zhang L (2018) Customized regression model for Airbnb dynamic pricing. Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , 932–940. Zhu H, Murali P, Phan D, Nguyen L, Kalagnanam J (2020) A scalable MIP-based method for learning optimal multivariate decision trees. Advances in Neural Information Processing Systems , volume 33, 1771–1781. 
+
+38 Electronic Companion: Counterfactual Optimal Action Trees (COAT) 
+
+# EC.1. Additional Algorithmic Details on Handling Numerical Features 
+
+This section supplements Section 4.1 of the main paper and describes how numerical features are incorporated into the COAT framework. Tree-based methods typically require numerical features to be discretized before policy learning. A common approach is to partition a continuous feature into a fixed set of disjoint intervals. For example, consider a numerical feature with support on [0 , 1] discretized into κ = 3 bins, [0 , 0.33), [0 .33 , 0.67), and [0 .67 , 1.0). In a multiway-split tree, this corresponds to creating three mutually exclusive nodes, one per interval. While simple, this representation can be restrictive. In particular, it cannot capture threshold-based decisions commonly expressed in binary trees, such as x ≤ 0.67 or x > 0.33, without introduc-ing additional tree depth. To address this limitation, we adopt a cumulative binning (CB) scheme that allows overlapping intervals. Under cumulative binning, in addition to the original disjoint bins, we create nodes correspond-ing to unions of adjacent intervals. In the above example, this yields the additional intervals [0 , 0.67), [0 .33 , 1.0), and [0 , 1.0), resulting in a total of six candidate nodes. This construction enables multiway-split trees to represent threshold-type rules within a single level, thereby improv-ing expressiveness without increasing tree depth. We employed cumulative binning in the live airline pilot to capture operationally meaningful pricing thresholds while preserving a shallow and interpretable policy structure. The cumulative binning approach generalizes naturally: discretizing a numerical feature into κ
+
+base bins produces κ(κ + 1) /2 cumulative intervals. While this increases the size of the policy graph, the resulting growth in the policy space is handled effectively by the column generation algorithm, which dynamically introduces only those paths that improve the objective. Finally, we note that the COAT formulation enforces a coverage constraint to ensure that the selected rules do not overlap in their sample assignments. This guarantees that, despite the presence of overlapping bins, the final prescriptive policy remains well-defined and assigns a unique action to each observation. 
+
+# EC.2. Exact State Aggregation in Policy Prescription 
+
+This section provides the formal details underlying the exact state aggregation described in Sec-tion 5.2 of the main paper. In particular, we present the reduced mixed-integer formulation induced by aggregating decision-equivalent observations and establish its equivalence to the original COAT 
+
+formulation. ec1 EC.2.1. Decision-Equivalent State Aggregation 
+
+Let Xi ∈ Rk denote the full feature vector for observation i, and let Zi = R(Xi) ∈ Ω denote the prescriptive feature vector obtained by restricting Xi to features available at decision time. Obser-vations with identical prescriptive features are said to be decision-equivalent .Formally, define the equivalence relation 
+
+i ∼ i′ ⇐⇒ Zi = Zi′ ,
+
+which partitions the dataset into N ′ equivalence classes 
+
+G1, . . . , GN ′ , N ′ = {Zi : i = 1 , . . . , n } .
+
+Because all prescriptive policy rules depend only on Z, every observation within a group Gi′ sat-isfies exactly the same set of candidate paths in the policy graph. Consequently, coverage indicators are constant within each group. 
+
+EC.2.2. Reduced Mixed-Integer Formulation 
+
+Let aij denote the coverage indicator specifying whether path j covers observation i in the original formulation. For each group Gi′ , define 
+
+ai′j := aij for any i ∈ G i′ .
+
+Define the aggregated penalty and reward for group i′ under path j as 
+
+ci′ := X
+
+> i∈G i′
+
+ci, ri′j := X
+
+> i∈G i′
+
+gi,t j ,
+
+where gi,t j denotes the counterfactual reward of assigning action tj to observation i.Using these grouped quantities, the COAT problem admits the following exact reformulation: 
+
+(Reduced–COAT) max 
+
+> |P|
+
+X
+
+> j=1
+
+rj zj − 
+
+> N′
+
+X
+
+> i′=1
+
+ci′ si′
+
+s.t. 
+
+> |P|
+
+X
+
+> j=1
+
+ai′j zj + si′ = 1 , ∀i′ = 1 , . . . , N ′,
+
+> |P|
+
+X
+
+> j=1
+
+zj ≤ l, z ∈ Z ,zj ∈ { 0, 1}, si′ ≥ 0.
+
+Because all observations within Gi′ share identical coverage constraints, replacing individual con-straints with a single group-level constraint is exact. The reduced formulation therefore preserves feasibility and objective value for every feasible policy. ec2 EC.2.3. Equivalence to the Original COAT Formulation 
+
+First, for any feasible solution ( z, s ) to the original COAT formulation, define si′ := P 
+
+> i∈G i′
+
+si.Because coverage indicators are constant within each group, the group-level coverage constraints are satisfied exactly, and the objective value is preserved by linearity. Conversely, given any feasible solution ( z, s ′) to the reduced formulation, one can construct a feasible solution to the original formulation by assigning the same slack si′ to each observation 
+
+i ∈ G i′ . Feasibility and objective value are again preserved. Therefore, the original and reduced formulations are equivalent: they admit the same optimal objective value and the same set of optimal policy selections z.
+
+# EC.3. Practical Adaptation of Counterfactual Estimation for Expanding Action Spaces 
+
+A key challenge in our setting is that not all upsell prices are historically observed, particularly as the feasible price grid is expanded during deployment. Standard doubly robust (DR) estimators combine an outcome regression with inverse propensity weighting (IPW) to achieve consistency when either component is correctly specified. For a given price t and covariates Xi, the DR estimator takes the form ˆY DR  
+
+> i
+
+(t) = ˆf (Xi, t ) + I(Ti = t)ˆe(Xi, t )
+
+ Yi − ˆf (Xi, t ),
+
+where ˆf (Xi, t ) denotes the outcome model and ˆ e(Xi, t ) = P (Ti = t | Xi) the propensity score. When ˆe(Xi, t ) = 0, however, the estimator is undefined. This reflects a structural limitation rather than estimation error: inverse propensity weighting cannot be applied to actions outside the historical support. Consequently, standard DR methods cannot be directly used when policies are allowed to select prices not previously observed. We considered two approaches to address this issue. 
+
+(1) Outcome-only modeling. This approach omits the IPW correction and relies solely on the regression model to impute counterfactual outcomes across the feasible price grid. For each obser-vation i,ˆYi(t) = ˆf (Xi, t ), ∀t ∈ T i,
+
+where Ti ⊆ T denotes the set of admissible prices for that instance. These estimates are used directly in the downstream policy optimization problem. While this sacrifices the double-robustness guarantee, it avoids undefined estimators and permits extrapolation to unseen prices, provided the outcome model generalizes appropriately. ec3 (2) Propensity smoothing. As an alternative, we explored smoothing the propensity function over continuous prices to retain a DR-style correction. Specifically, we approximate ˆe(Xi, t ) ≈ X
+
+> t′∈T obs
+
+Kσ (t, t ′) ˆ e(Xi, t ′),
+
+where Kσ is a smoothing kernel and Tobs denotes observed prices. While this reduces the inci-dence of zero propensities, it imposes strong smoothness assumptions on pricing behavior and can substantially increase variance when historical support is sparse. 
+
+Final implementation. Given operational requirements for stability, scalability, and frequent retraining, we adopted the outcome-only approach in production. Models were retrained weekly, progressively expanding the observed support over T and improving generalization to new price points. In this setting, outcome-only estimation provided a stable and interpretable basis for policy evaluation while accommodating an expanding action space. 
+
+Relation to the identification assumptions. We note a tension with the identification assumptions of Section 3.3: prices newly introduced during the pilot have zero historical support, so the positivity condition P (T = t | X = x) > 0 fails for precisely the actions the policy may select, and the doubly robust correction is undefined there. For these actions we necessarily rely on the outcome model’s extrapolation rather than on a consistency guarantee. We mitigate the resulting risk in three ways. First, weekly retraining progressively expands the observed support, restoring overlap for prices that enter the live grid and thereby re-establishing positivity for those actions over time. Second, the guardrail (PDR/PIR) constraints bound the aggregate deviation of prescribed prices from historical pricing, limiting the policy’s reliance on poorly-supported regions of the action space. Third, our headline evaluation is based on the synthetic-control analysis of realized revenue (Section 6.7), which measures the deployed policy’s causal impact directly and is therefore agnostic to extrapolation error in the upstream estimator. Tighter handling of expanding action spaces, for example via bounds on the extrapolation bias or constrained exploration that guarantees support before deployment, is an important direction for future work. 
+
+# EC.4. Proofs of Theoretical Results 
+
+EC.4.1. Proof of Theorem 1 
+
+Proof. Each path p ∈ P corresponds to a conjunction of feature-value tests arranged in a fixed global feature order, where SKIP nodes indicate omitted features. Consequently, every path rep-resents a valid rule that assigns an action to all samples satisfying its conditions. At optimality, the coverage constraint (5) ensures that the selected paths P(z∗) are mutually exclusive and collectively exhaustive over the sample set, with each sample covered by exactly one active path. ec4 We construct a multiway decision tree by merging the selected paths into a trie ordered by the global feature sequence, sharing common prefixes and branching on feature values whenever paths diverge. Because each path contains at most one test per feature and follows the same ordering, this construction yields a valid multiway decision tree with one leaf per selected path and at most 
+
+l leaves. Finally, since each sample is assigned to exactly one leaf and each leaf corresponds to a selected path, the total reward of the constructed tree equals the sum of rewards of the active paths, which is exactly the objective value of the COAT solution z∗.
+
+EC.4.2. Proof of Proposition 1 
+
+Proof. Each of the k features can independently assume up to η values. Any unconstrained rule may involve any combination of feature assignments, and thus the number of distinct feature–value combinations is at most ηk.
+
+EC.4.3. Proof of Proposition 2. 
+
+Proof. A path of depth d may involve at most d features. There are  kd
+
+ ways to select the subset of active features, and for each such subset there are at most ηd possible value assignments. Hence, 
+
+|P d| ≤ 
+
+kd
+
+
+
+ηd.
+
+EC.4.4. Proof of Proposition 3 
+
+Proof. By Proposition 2, |P d| = O   kd
+
+ηd, which is polynomial in k when d and η are fixed. The LP relaxation of COAT over Pd therefore has polynomially many variables and n cover-age constraints, and can be solved in polynomial time using standard linear programming meth-ods (Khachiyan 1980, Karmarkar 1984). 
+
+EC.4.5. Proof of Theorem 2 
+
+Proof. With k′ categorical features each taking at most η possible values, there are at most 
+
+ηk′
+
+distinct prescriptive feature combinations, establishing N ′ ≤ ηk′
+
+. Substituting this bound into the ratio n/N ′ yields the stated reduction factor. For completeness, writing n = 2 δ gives the equivalent expression 
+
+nN ′ ≥ 2 δ−k′ log 2 η ,
+
+which makes explicit the exponential dependence on k′ and η. When n < η k′
+
+, the bound is trivially at least 1, which can be expressed using the positive-part notation ( x)+ = max {x, 0} as 
+
+nN ′ ≥ 2(δ−k′ log 2 η)+
+
+.
+
+ec5 EC.4.6. Proof of Proposition 4 
+
+Proof. A binary split on a categorical feature with η values corresponds to a partition of the value set into two nonempty parts, say S and Sc. There are 2 η − 2 nonempty proper subsets 
+
+S ⊂ { 1, . . . , η }, but the partition ( S, S c) is identical to ( Sc, S ). Identifying complements therefore yields (2 η − 2) /2 = 2 η−1 − 1 distinct nontrivial binary splits. In the equality-based representation, admissible tests are exactly {Xf = v : v ∈ { 1, . . . , η }} , hence there are η atomic tests. 
+
+EC.4.7. Proof of Proposition 5 
+
+Proof. We first show the upper bound. Consider any multiway node that tests a categorical feature Xf ∈ { 1, . . . , η } via equality branches. This η-way split can be implemented by a binary decision tree that identifies the value of Xf using at most ⌈log 2 η⌉ binary tests, for example by encoding the category index in binary and querying its bits, or by using a balanced binary search over the η labels. Thus each multiway test contributes at most ⌈log 2 η⌉ to binary depth. Along any root–to–leaf path with at most d tested features, the total binary depth is therefore at most 
+
+d⌈log 2 η⌉, yielding a binary tree TB that implements the same policy. We now consider the lower bound. Consider the prescriptive domain {1, . . . , η }k, which contains 
+
+ηk distinct feature profiles. Define a policy that assigns a distinct action (or, more generally, a distinct leaf label) to each profile. 1
+
+Any binary-split decision tree of depth D has at most 2 D leaves and thus can separate at most 2D distinct input profiles into distinct terminal regions. To implement the policy above, the tree must have at least ηk leaves, so 2 D ≥ ηk. Taking log 2 yields D ≥ k log 2 η, hence D ≥ ⌈ k log 2 η⌉.
+
+EC.4.8. Exact MIP reformulation of the PDR constraint 
+
+This subsection provides algorithmic details for the guardrail constraints introduced in Section 4.4. These constraints regulate aggregate pricing behavior by bounding the frequency of price increases and decreases relative to historical pricing, as measured by price-increase recall (PIR) and price-decrease recall (PDR). By constraining these quantities at the policy level, the optimization mit-igates the risk of systematic overpricing or underpricing, while still allowing targeted deviations supported by the data. We focus here on the exact mixed-integer linear reformulation of the PDR constraint; the PIR constraint is handled analogously.      
+
+> 1If the action set is smaller than ηk, one may instead define a policy that still requires distinguishing all ηkprofiles, e.g., by mapping each profile to a distinct leaf label and then merging labels as needed; the depth lower bound concerns separation of inputs rather than the cardinality of actions.
+
+ec6 Proposition EC.1 (Exact MILP reformulation of the PDR constraint) . Assume at least one rule is selected so that P 
+
+> j
+
+ηj zj ≥ 1. Then the constraint 
+
+PDR lb ≤
+
+P 
+
+> j
+
+δj zj
+
+P 
+
+> j
+
+ηj zj
+
+≤ PDR ub (EC.1) 
+
+admits an exact mixed-integer linear reformulation. Proof. Let zj ∈ { 0, 1} denote whether rule j is selected. Define 
+
+N (z) := X
+
+> j
+
+δj zj , D(z) := X
+
+> j
+
+ηj zj .
+
+By assumption, D(z) ≥ 1 for all feasible solutions. Introduce a continuous variable w ≥ 0 and auxiliary continuous variables yj ≥ 0 for all j, intended to represent 
+
+w = 1
+
+D(z) , yj = wz j ∀j. (EC.2) Enforce (EC.2) via the linear constraints 
+
+X
+
+> j
+
+ηj yj = 1 , (EC.3) 0 ≤ yj ≤ w, ∀j, (EC.4) 
+
+yj ≤ zj , ∀j, (EC.5) 
+
+yj ≥ w + zj − 1, ∀j. (EC.6) Constraints (EC.4)–(EC.6) are the standard McCormick/RLT linearization for the bilinear terms 
+
+yj = wz j when zj is binary and 0 ≤ w ≤ 1. (The bound w ≤ 1 follows from D(z) ≥ 1 and w = 1 /D (z)enforced by (EC.3) and nonnegativity.) We now show exactness. Fix any feasible ( z, w, y ) satisfying (EC.3)–(EC.6). If zj = 0, then (EC.5) implies yj ≤ 0, hence yj = 0. If zj = 1, then (EC.4) gives yj ≤ w and (EC.6) gives yj ≥ w, hence 
+
+yj = w. Therefore, for all j,
+
+yj = wz j exactly .
+
+Plugging this identity into (EC.3) yields 
+
+X
+
+> j
+
+ηj (wz j ) = 1 ⇐⇒ w X
+
+> j
+
+ηj zj = 1 ⇐⇒ w = 1
+
+D(z) ,
+
+so (EC.2) holds. Under (EC.2), 
+
+N (z)
+
+D(z) = X
+
+> j
+
+δj zj
+
+!
+
+· w = X
+
+> j
+
+δj (wz j ) = X
+
+> j
+
+δj yj .
+
+ec7 Hence the fractional constraint (EC.1) is equivalent to the pair of linear constraints PDR lb ≤ X
+
+> j
+
+δj yj ≤ PDR ub , (EC.7) together with (EC.3)–(EC.6). This reformulation is exact, because any feasible z with D(z) ≥ 1can be extended to ( w, y ) by setting w = 1 /D (z) and yj = wz j , and conversely any feasible ( z, w, y )satisfies (EC.2) and therefore induces the same PDR value as in (EC.1). This yields an exact MILP representation. 
+
+# EC.5. Evaluation Methodology 
+
+EC.5.1. Synthetic Control Design and Identification 
+
+We use the synthetic control method (SCM) to construct a counterfactual outcome trajectory for each treated market as a weighted combination of control markets. Let s ∈ { 1, . . . , S } index time periods (e.g., weeks). Let Y T 
+
+> s
+
+denote the observed outcome (e.g., upsell revenue per booking) of the treated market at time s, and let Y (j) 
+
+> s
+
+denote the outcome of control market j ∈ { 1, . . . , J } at time s. SCM defines the synthetic control as 
+
+Y SC  
+
+> s
+
+=
+
+> J
+
+X
+
+> j=1
+
+wj Y (j) 
+
+> s
+
+, (EC.8) where the weights wj form a convex combination: 
+
+wj ≥ 0 ∀j, 
+
+> J
+
+X
+
+> j=1
+
+wj = 1 . (EC.9) Let Pre ⊂ { 1, . . . , S } denote the pre-intervention periods. The SCM weights are chosen to best match the treated market’s pre-intervention trajectory by solving the constrained least-squares problem min 
+
+> w∈RJ
+
+X
+
+> s∈Pre
+
+Y T 
+
+> s
+
+−
+
+> J
+
+X
+
+> j=1
+
+wj Y (j)
+
+> s
+
+!2
+
+s.t. (EC.9) . (EC.10) Given the fitted weights w⋆, the treatment effect at time s is estimated as the gap between the treated outcome and its synthetic counterpart: 
+
+τs = Y T 
+
+> s
+
+− Y SC  
+
+> s
+
+. (EC.11) Let Pilot denote the set of post-intervention (pilot) periods with Spilot := |Pilot |. The average treatment effect over the pilot window is ¯τ = 1
+
+Spilot 
+
+X
+
+> s∈Pilot
+
+τs. (EC.12) ec8 Figure EC.1 Comparison of the treatment group effect under COAT (black line) with placebo effects estimated for each control market (gray lines). 
+
+EC.5.2. Robustness via Placebo-Based Inference 
+
+To further assess the robustness of the estimated treatment effect, we conduct a placebo test using SCM. This approach evaluates whether the observed effect in the treated group could plausibly have arisen by chance, and it is particularly valuable in observational field settings where randomized experiments are infeasible. Recall that Y T 
+
+> s
+
+denote the observed outcome for the treatment group at time s, and let Y SC 
+
+> s
+
+denote the outcome of its corresponding synthetic control, as constructed in Section 6.6.3. Once the pilot begins, the treatment effect at each time s is estimated as: 
+
+τs = Y T 
+
+> s
+
+− Y SC  
+
+> s
+
+.
+
+For placebo analysis, we iteratively apply the SCM procedure to each control market j ∈ C ,treating it as if it were exposed to the intervention. Let Y (j) 
+
+> s
+
+denote the observed outcome of control market j, and let Y (j, SC)  
+
+> s
+
+denote the synthetic control constructed for that placebo unit using the remaining markets as donors. The placebo effect (or gap) for unit j at time s is then: 
+
+τ (j) 
+
+> s
+
+= Y (j) 
+
+> s
+
+− Y (j, SC)  
+
+> s
+
+.
+
+Each placebo synthetic control is refit independently with the same optimizer and predictor spec-ification used for the treated unit, so that the placebo distribution reflects the same estimation procedure. Our donor pool comprises the N − 1 = 30 control markets, yielding 30 placebo trajec-tories in addition to the treated unit, for N = 31 units in total. ec9 Figure EC.1 displays the actual treatment effect trajectory τs (black line), along with placebo trajectories τ (j) 
+
+> s
+
+(gray lines) over the full evaluation window. During the pre-intervention period (Weeks 1–9), the treated and synthetic trajectories align closely, and the estimated treatment effect τs lies within the range of placebo effects, validating the pre-treatment fit and justifying the counterfactual construction. Following the intervention (Week 10 onward), τs diverges sharply from the distribution of placebo trajectories, consistently lying in the upper tail. This provides strong evidence that the observed uplift is unlikely to result from noise or latent confounding. 
+
+Inference via the RMSPE ratio. To convert this visual evidence into a formal hypothesis test of the sharp null of no treatment effect, we follow Abadie et al. (2010) and rank units by the ratio of post- to pre-intervention root mean squared prediction error (RMSPE). For each unit j, define 
+
+rj =1
+
+T − T0
+
+X
+
+> s>T 0
+
+ τ (j)
+
+> s
+
+2
+
+1
+
+T0
+
+X
+
+> s≤T0
+
+ τ (j)
+
+> s
+
+2 ,
+
+where T0 indexes the last pre-intervention period (Week 9) and T the end of the evaluation window. Normalizing the post-intervention gap by the pre-intervention fit is essential: a placebo unit may exhibit a large post-period gap simply because its synthetic control fits poorly even before any intervention, and dividing by the pre-period MSPE penalizes such poorly-fit units rather than rewarding them. The associated permutation p-value is the share of units whose ratio is at least as large as the treated unit’s, 
+
+p = #{ j : rj ≥ rT }
+
+N .
+
+Empirically, the treated unit attains the largest post/pre RMSPE ratio among all 31 units ( rT ≈
+
+11 .0), exceeding every placebo; the next-largest ratio is 10 .4, after which the placebo distribution drops sharply (the third-largest ratio is 3 .2). With the treated unit ranked first out of 31, the resulting p-value is 1 /31 ≈ 0.032, rejecting the sharp null of no effect at the 5% level. This is consistent with the post-pilot average treatment effect of 6.9% reported earlier, which lies well outside the placebo distribution. These results reinforce the causal interpretation of the AI pricing policy’s impact. Placebo SCM serves as a useful nonparametric inference method, offering internal validity checks without relying on parametric assumptions or randomized experimentation. We note that the resolution of the p-value is bounded below by 1 /N : with 31 units the smallest attainable value is 0 .032, so the treated unit’s first-place ranking already delivers the strongest rejection the donor pool can support. ec10

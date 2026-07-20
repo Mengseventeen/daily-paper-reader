@@ -1,0 +1,452 @@
+Title: LLM Latent Edge Measurement: Point-in-Time Economic Graphs for Quantitative Investing from Corporate Disclosures
+
+URL Source: https://arxiv.org/pdf/2607.15640v1
+
+Published Time: Mon, 20 Jul 2026 00:40:02 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# LLM Latent Edge Measurement: Point-in-Time Economic Graphs for Quantitative Investing from Corporate Disclosures 
+
+Fan Yang 
+
+VinePeak Research 
+
+fyang@vinepeak.com 
+
+Lin Zhang 
+
+VinePeak Research 
+
+linzhang@vinepeak.com 
+
+Abstract 
+
+Standard industry classifications such as GICS assign each firm to exactly one sector, yet the economic ties that transmit shocks between firms—supply agreements, customer concentra-tion, IP licensing, cloud and power contracts— routinely cross sector boundaries and are dis-closed only in unstructured text. We treat the construction of a firm-level adjacency ma-trix as a measurement problem and propose an LLM-based pipeline that reads corporate disclosures and outputs a weighted, directed, point-in-time network. The pipeline combines (i) multi-agent evidence collection, in which independent filing-reading and background-knowledge agents emit calibrated relationship records; (ii) entity resolution of both named and latent (unnamed but inferable) counterpar-ties; (iii) logit-pooled fusion of agent votes; (iv) an inverse-document-frequency weighting that down-weights ubiquitous counterparties (“economic stop-words” such as TSMC or Sam-sung); and (v) a double-sided relative thresh-old, borrowed from international-trade network construction, that forms an edge whenever ei-ther firm is an important partner of the other. Applied to 42 Nasdaq-100 constituents using their most recent 10-K/20-F filings, the pipeline produces a 149-edge network in which an ad-versarial audit confirms 88% of sampled edges with weight ≥ 0.1 (100% including plausible-but-weakly-documented ties), and all refuted edges concentrate in the lowest-weight tail. The measured network agrees with GICS where it should (1.9 × within-sector lift) while recov-ering economically real cross-sector edges that GICS cannot represent, such as nuclear power purchase agreements linking a utility to hyper-scalers and the GPU-cloud dependencies of an AI-infrastructure ecosystem. Ablations show that each component—multi-agent fusion, IDF filtering, and relative thresholding—contributes measurably to edge quality. 1
+
+> 1Code, extraction records, and the measured matrices are released with the paper.
+
+1 Introduction 
+
+A large fraction of quantitative finance treats the cross-section of firms as a set of independent ob-servations grouped by an industry label. Yet firms are nodes in a web of contracts: NVIDIA’s data-center revenue is a function of Microsoft’s capital expenditure; Micron’s equipment spending flows to ASML and Lam Research; Constellation Energy’s earnings now depend on twenty-year power pur-chase agreements with hyperscalers. When infor-mation arrives at one node it propagates along these edges with measurable delay (Cohen and Frazz-ini, 2008; Menzly and Ozbas, 2010), and portfo-lios sorted on linked-firm returns earn predictable spreads precisely because the links are hard to ob-serve. The binding constraint is not the economet-rics of spillover but the measurement of the graph itself .Existing sources of firm networks each have a blind spot. Commercial supply-chain databases (FactSet Revere, Bloomberg SPLC) rely on analyst curation of the same disclosures we study, with documented coverage and disclosure biases (Cu-lot et al., 2023). Text-similarity networks such as TNIC (Hoberg and Phillips, 2016) capture product-market relatedness but not the direction or type of an economic dependency: two firms can sell sim-ilar products while one is also the other’s largest customer. Regulation S-K customer-concentration disclosures (Cohen and Frazzini, 2008) are precise but sparse—firms must disclose customers above 10% of revenue, and may do so without naming them (“Customer A represented 17% of revenue”). The counterparty is then latent : absent from any structured field, yet frequently inferable from con-text by a reader with market knowledge. This paper argues that large language models are well suited to exactly this measurement task, and makes the task—not community detection, not return prediction—the object of study. We ask: arXiv:2607.15640v1 [stat.AP] 17 Jul 2026 can an LLM-based pipeline convert unstructured, partially anonymized corporate disclosure into a well-calibrated adjacency matrix? Three design ideas, adapted from network construction in other domains, do most of the work. 
+
+Relative, double-sided importance. 
+
+International-trade networks face extreme size heterogeneity: an absolute trade-volume threshold connects every country to the United States and nothing to small open economies. The standard remedy is a relative threshold—connect 
+
+i and j if j is a top trading partner of i, or vice versa. Firm networks have the same pathology (Apple’s smallest disclosed supplier relationship can exceed the entire revenue of a mid-cap firm), and we import the same fix (§4.5). 
+
+Ubiquity filtering. In legislative co-sponsorship networks, bills with very many co-sponsors carry little information about latent political alignment and are excluded before network construction. The corporate analogue: a tie to TSMC, Samsung, or a hyperscaler cloud is so widespread that sharing it says little about whether two firms belong to the same economic community. We formalize this as an inverse-document-frequency weight on shared counterparties (§4.4). 
+
+Measurement with uncertainty. A single LLM asked “are firms i and j related?” produces a point answer with unknown reliability. We instead run independent evidence agents with different infor-mation sets—filing readers constrained to quote verbatim evidence, and background-knowledge agents prompted for calibrated priors—and fuse their votes by weighted logit pooling around a sparse prior (§4.3), preserving edge-level uncer-tainty in the final matrix. We instantiate the pipeline on 42 constituents of the Nasdaq-100 (the universe of the Invesco QQQ trust), chosen to span an AI-infrastructure ecosystem (semiconductors, semi equipment, EDA, hyperscalers, AI cloud, power) plus deliberately distant control groups (consumer staples, biotech). All filing evidence is drawn from each firm’s most recent annual report on SEC EDGAR, giving a point-in-time snapshot as of each filing date. Our contributions: (1) a formalization of LLM la-tent edge measurement, including explicit handling of unnamed counterparties and evidence prove-nance; (2) a multi-agent fusion scheme with entity-IDF filtering and double-sided relative thresholds; (3) an empirical demonstration on real EDGAR filings with an adversarial precision audit, GICS comparison, and component ablations; and (4) a released dataset of ∼950 relationship records with verbatim evidence quotes and the resulting matri-ces. 
+
+2 Related Work 
+
+Economic links and spillover. Cohen and Frazz-ini (2008) use mandated customer disclosures to show customer–supplier return predictability; Menzly and Ozbas (2010) find the same along input–output links, and Ali and Hirshleifer (2020) show analyst co-coverage subsumes many link-momentum effects. All take the graph as given; our contribution is upstream of theirs. 
+
+Firm networks from text. Hoberg and Phillips (2010, 2016) build product-similarity networks from 10-K text; Lee et al. (2015) use EDGAR co-search; Kaustia and Rantala (2021) use shared ana-lysts; Schwenkler and Zheng (2019) extract links from news co-mentions. Vamvourellis et al. (2023) show LLM embeddings recover industry structure from business descriptions. These capture related-ness; none measures typed, directed dependencies with evidence. 
+
+Relation extraction in finance. Supervised fi-nancial RE datasets include FinRED (Sharma et al., 2022) and REFinD, built specifically over SEC filings (Kaur et al., 2023); Rajpoot and Parikh (2023) show in-context LLM extraction is com-petitive. Supply-chain extraction from news and public sources has moved from feature-based deep models (Wichmann et al., 2020) to LLM and RAG pipelines (Liu and Meidani, 2024; AlMahri et al., 2025; Jackson et al., 2025). Closest to us, FinDKG (Li, 2024) and FinReflectKG (Arun et al., 2025) build financial knowledge graphs from news and S&P-100 filings with agentic LLM pipelines, and Chen et al. (2023) let ChatGPT emit a firm graph for GNN stock prediction, while Chung and Tanaka-Ishii (2023) discover links from documents for momentum spillover. Relative to this line we add: latent (unnamed) counterparty resolution as a first-class problem, multi-agent probabilistic fusion rather than single-pass extraction, ubiquity filtering, and size-adjusted thresholding—together with an audit protocol that measures whether the resulting 
+
+matrix (not just individual triples) is good. Graphs for stock prediction and network model selection. GNN stock models consume firm graphs whose provenance strongly affects accuracy (Chen et al., 2018; Feng et al., 2019; Kim et al., 2019); a measured, documented adjacency matrix is a better input than a scraped one. Downstream of measurement, block models (Holland et al., 1983) and network cross-validation (Chen and Lei, 2018; Li et al., 2020; Wang and Bickel, 2017) provide the model-selection machinery for the community-detection questions we defer to companion work. 
+
+3 Problem Formulation 
+
+Let V be a universe of N firms. At time t we seek a weighted graph Gt = ( V, E t, W t) where Wij,t ≥ 0
+
+measures the strength of the economic relationship between i and j using only information available by t. The primitive object is not the edge but the 
+
+directed dependency 
+
+di→j,t ∈ [0 , 1] , (1) the economic importance of counterparty j to firm 
+
+i (share of revenue, criticality of supply, licensing dependence). Dependencies are asymmetric by construction: a supplier earning 40% of its revenue from Apple has dsupplier →AAPL high while Apple’s reverse exposure may be negligible. The measurement input is a corpus Dt =
+
+{D1, . . . , D N } of firm disclosures (we use annual reports; the framework extends to transcripts and news). Disclosure text names some counterparties explicitly (“ Three Mile Island Unit 1 . . . supported by a 20-year power purchase agreement with Mi-crosoft ”), leaves others latent (“ one customer ac-counted for approximately 17% of revenue ”), and describes many exposures only at the category level (“ we depend on a limited number of foundries ”). An edge-measurement system must (i) resolve enti-ties across these levels, flagging which resolutions are inferred rather than stated; (ii) attach type, direc-tion, strength, and confidence to each relationship; and (iii) preserve provenance so that any edge can be audited back to text. 
+
+4 Method 
+
+Figure 1 summarizes the pipeline; we describe each stage. 
+
+4.1 Multi-agent evidence collection 
+
+We deploy two types of evidence agents, instanti-ated with the same underlying LLM but different information sets and instructions.                         
+
+> Stage 1: Multi-agent evidence collection
+> Filing agents (EDGAR 10-K/20-F, verbatim quotes)
+> ∥Knowledge agents A, B (calibrated priors)
+> ↓relationship records (i, j, type , s, c, explicit? )
+> Stage 2: Entity resolution
+> alias map; latent-mention resolution; category mentions dropped & counted
+> ↓
+> Stage 3: Fusion
+> weighted logit pooling of agent votes around sparse prior
+> π0;directed dependencies di→j=pij sij
+> ↓
+> Stage 4: Layers
+> direct layer max( di→j, d j→i)⊕shared-counterparty layer with entity-IDF
+> ↓
+> Stage 5: Double-sided relative threshold
+> Aij =1{Wij ≥min( Qi(τ), Q j(τ)) ∧Wij ≥w0}
+
+Figure 1: The latent edge measurement pipeline. 
+
+Filing agents retrieve each firm’s most recent annual report from EDGAR and emit relationship records 
+
+r = ( i, j, type , dir , s, c, explicit , quote ),
+
+where s ∈ [0 , 1] is the economic importance of the relationship to the source firm , c ∈ [0 , 1] the agent’s confidence that the relationship currently exists, explicit indicates whether the counterparty is named in the text, and quote is a verbatim evidence span ( ≤50 words). Types cover supplier, customer, competitor, partner, licensor/licensee, input depen-dency, and distribution channel. Crucially, agents are instructed to resolve latent mentions when con-text permits—mapping “our largest customer” in a memory maker’s filing to NVIDIA, or “a limited number of advanced foundry partners” to TSMC— but must then set explicit = false , cap confidence, and retain the anonymized quote. This keeps the inference auditable and lets downstream users ex-clude inferred edges entirely. 
+
+Knowledge agents receive no documents. Two independent instances enumerate material bilat-eral relationships in the universe from paramet-ric knowledge alone, with calibrated confidences; the second is explicitly prompted to be skeptical and to down-weight stale or terminated ties (e.g., Apple–Intel after the silicon transition). Their role is that of a prior: they vote on edges the filings under-document, and their disagreement with filing agents is itself a useful signal (§6.5). 4.2 Entity resolution 
+
+Records refer to counterparties at three levels: uni-verse tickers, external companies (TSMC, Ope-nAI, McKesson), and non-entity categories (“third-party payment processors”, “uranium suppliers”). A curated alias map canonicalizes the first two levels (Azure →Microsoft, AWS →Amazon, Sam’s Club →Walmart, AmerisourceBergen →Cencora); category mentions cannot be resolved to nodes and are dropped from the graph but counted, since their volume measures how much disclosed exposure remains unmeasurable at the entity level. In our experiment 28.3% of filing-agent records are such category mentions—a direct quantification of the residual opacity of disclosure text. External com-panies are retained as auxiliary nodes: they do not appear in the final matrix but power the shared-counterparty layer. 
+
+4.3 Fusion by weighted logit pooling 
+
+For an ordered pair (i, j ), let agent a report con-fidence p(a) 
+
+> ij
+
+with reliability weight ωa. We pool votes around a sparse prior π0:
+
+pij = σ
+
+
+
+logit π0 +X
+
+> a
+
+ωa
+
+  logit p(a) 
+
+> ij
+
+−logit π0
+
+
+
+,
+
+(2) so that an agent reporting exactly the prior con-tributes nothing, agreement compounds, and a lone low-reliability vote cannot push pij far from π0.We set π0 = 0 .02 (an agnostic sparse-graph prior), 
+
+ω = 1 .0 for explicit filing evidence, 0.6 for in-ferred filing evidence, 0.4 for filing records whose retrieval failed, and 0.5 for each knowledge agent; within a channel, the strongest record casts the vote and duplicates contribute at quarter weight. De-pendency strength is the reliability-weighted mean 
+
+sij of reported strengths, and the fused directed dependency is di→j = pij sij .
+
+4.4 Layers and economic stop-words 
+
+The direct layer symmetrizes fused dependen-cies, W dir  
+
+> ij
+
+= max( di→j , d j→i), retaining the di-rected matrix for asymmetry analysis. The shared-counterparty layer connects firms with common external dependencies. Let Bik = di→k for exter-nal entity k and let nk be the number of universe firms materially tied to k. We weight each shared counterparty by its informativeness, 
+
+IDF( k) = log N
+
+1 + nk
+
+, W sh  
+
+> ij
+
+∝ X
+
+> k
+
+Bik Bjk IDF( k),
+
+(3) the network analogue of removing stop-words: in our data TSMC ( nk = 18 ), Samsung ( 14 ), Ope-nAI ( 11 ), and SK Hynix ( 8) receive the smallest weights, while a shared dependence on, say, a spe-cific flavor-ingredient supplier remains informative. The final weighted matrix is a convex combination 
+
+W = α1 fW dir +α2 fW sh with (α1, α 2) = (0 .7, 0.3) 
+
+and each layer max-normalized. 
+
+4.5 Double-sided relative threshold 
+
+Binary adjacency uses per-node quantile thresh-olds. With Qi(τ ) the τ -quantile of firm i’s positive weights, 
+
+Aij = 1
+
+n
+
+Wij ≥ min  Qi(τ ), Q j (τ ) ∧ Wij ≥ w0
+
+o
+
+,
+
+(4) with τ = 0 .6 and a small floor w0 = 0 .04 . The 
+
+min implements the trade-network rule: an edge forms if j is among i’s important partners or i
+
+among j’s, preserving the one-sided relationships (small supplier, dominant customer) that an abso-lute cutoff destroys. We show in §6.5 that a global threshold matched to the same edge count isolates peripheral firms and concentrates degree on hubs. 
+
+5 Experimental Setup 
+
+Universe. 42 Nasdaq-100 constituents spanning semiconductors (NVDA, AMD, AVGO, QCOM, INTC, MU, ARM, MRVL, TXN, ADI, NXPI), semi equipment (ASML, AMAT, LRCX, KLAC), EDA (CDNS, SNPS), hyperscalers and platforms (MSFT, GOOGL, AMZN, META, AAPL, TSLA), software and internet (NFLX, PLTR, CRWV, DDOG, CRWD, PANW, ADBE), utilities with data-center exposure (CEG, AEP, XEL), consumer staples (PEP, COST, MDLZ, MNST, SBUX), and biotech (AMGN, GILD, VRTX, REGN). The de-sign embeds one dense expected ecosystem (AI infrastructure) and two control groups expected to be nearly disconnected from it. 
+
+Documents. Each firm’s most recent 10-K or 20-F on SEC EDGAR (fiscal 2025 for most firms; fil-ing dates 2025-07 to 2026-05), retrieved and read by the filing agents at experiment time. All evi-dence is therefore point-in-time as of each firm’s filing date. CoreWeave’s first 10-K (filed 2026-03) is included, giving the pipeline a firm with essen-tially no history in any curated database. 
+
+Agents. Seven filing agents (six firms each) and two knowledge agents, all instantiated from the records resolved Filing agents (42 filings) 547 392 explicit (named in text) 234 inferred (latent mention) 148 degraded (failed retrieval) 10 category mention (dropped) 155 —Knowledge agent A 188 187 Knowledge agent B 220 220 Ordered pairs with evidence 601 External entities 100 Final edges ( N =42 ) 149 
+
+Table 1: Evidence collection and resolution statistics. 
+
+same frontier LLM (Claude); an independent ad-versarial audit agent with web search is used only for evaluation (§6.2). Filing agents produced 547 records, of which 392 (71.7%) resolved to enti-ties (234 explicit, 148 inferred, 10 degraded after failed retrieval); knowledge agents contributed 407 records. Fusion covers 601 ordered pairs over the 42 universe firms and 100 external entities. 
+
+6 Results 
+
+6.1 The measured network 
+
+The pipeline yields 149 edges (density 0.173), de-gree range 1–20 (median 6), with no isolated firms. Figure 2 shows the weighted matrix with firms or-dered by fine-grained group: the AI-infrastructure block (semis, equipment, EDA, hyperscalers, AI cloud) is dense and internally structured, staples and biotech form their own small blocks, and utility–hyperscaler edges appear exactly where power purchase agreements exist. Figure 3 shows the binary graph: one large component organized around the NVDA–hyperscaler core, a staples clus-ter attached through the AMZN–COST retail edge, and a separate biotech component—structure dis-covered entirely from disclosure text, with GICS labels used only for coloring. The highest-weight edges are economically exact: CRWV–NVDA ( W =0 .73 ; CoreWeave’s fleet is 100% NVIDIA GPUs), ASML–INTC (0.69), AMD–INTC (0.67), ARM–QCOM (0.66), META–NVDA (0.65), AVGO–GOOGL (0.65; cus-tom TPU co-design), ASML–MU (0.64), AMZN– MSFT (0.64), AMGN–REGN (0.63), CDNS– SNPS (0.63). 
+
+6.2 Precision: adversarial audit 
+
+An independent audit agent with web access re-ceived a stratified sample of 30 edges (every 5th edge of the weight-sorted list) and was instructed ADI  
+
+> AMD
+> ARM
+> AVGO
+> INTC
+> MRVL
+> MU
+> NVDA
+> NXPI
+> QCOM
+> TXN
+> AMAT
+> ASML
+> KLAC
+> LRCX
+> CDNS
+> SNPS
+> AMZN
+> GOOGL
+> META
+> MSFT
+> CRWV
+> AAPL
+> TSLA
+> NFLX
+> ADBE
+> DDOG
+> PLTR
+> CRWD
+> PANW
+> AEP
+> CEG
+> XEL
+> COST
+> MDLZ
+> MNST
+> PEP
+> SBUX
+> AMGN
+> GILD
+> REGN
+> VRTX
+> ADI
+> AMD
+> ARM
+> AVGO
+> INTC
+> MRVL
+> MU
+> NVDA
+> NXPI
+> QCOM
+> TXN
+> AMAT
+> ASML
+> KLAC
+> LRCX
+> CDNS
+> SNPS
+> AMZN
+> GOOGL
+> META
+> MSFT
+> CRWV
+> AAPL
+> TSLA
+> NFLX
+> ADBE
+> DDOG
+> PLTR
+> CRWD
+> PANW
+> AEP
+> CEG
+> XEL
+> COST
+> MDLZ
+> MNST
+> PEP
+> SBUX
+> AMGN
+> GILD
+> REGN
+> VRTX 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> edge weight  Wij
+
+Figure 2: Measured weighted adjacency matrix W ,firms ordered by fine-grained group (semis → equip-ment → EDA → hyperscalers → software → utilities 
+
+→ staples → biotech). Hairlines mark group bound-aries. 
+
+weight bucket n conf. plaus. refuted 
+
+W ≥ 0.3 21 20 1 0
+
+0.1 ≤ W < 0.3 4 2 2 0
+
+W < 0.1 5 1 1 3all 30 23 4 3
+
+Table 2: Adversarial audit of 30 stratified-sampled edges. Errors concentrate entirely in the low-weight tail. 
+
+to refute each: find evidence the relationship is ab-sent, stale, or immaterial as of 2025–2026. Results: 23 CONFIRMED , 4 PLAUSIBLE (real but weakly documented), 3 REFUTED . Precision is sharply weight-dependent (Table 2): among sampled edges with W ≥ 0.1 (122 of 149 edges), 88% are con-firmed and none refuted; all three refuted edges lie in the W < 0.1 tail, and two of the three are shared-counterparty-only edges with no direct evidence channel (e.g., KLAC–QCOM, linked only through IDF-damped foundry exposure). The weight itself is thus a usable reliability score, and a user wanting a high-precision graph can simply raise w0.
+
+6.3 Agreement and disagreement with GICS 
+
+The measured network should correlate with indus-try classification without collapsing into it. 70.5% of edges are within-GICS-sector against 37.3% ex-pected under random placement (lift 1.9); at the finer 13-group level the lift is 2.9. The interesting AAPL  
+
+> ADBE
+> ADI
+> AEP
+> AMAT
+> AMD
+> AMGN
+> AMZN
+> ARM
+> ASML
+> AVGO
+> CDNS
+> CEG
+> COST
+> CRWD
+> CRWV
+> DDOG
+> GILD
+> GOOGL
+> INTC
+> KLAC
+> LRCX
+> MDLZ
+> META
+> MNST
+> MRVL MSFT
+> MU
+> NFLX
+> NVDA
+> NXPI
+> PANW
+> PEP
+> PLTR
+> QCOM
+> REGN
+> SBUX
+> SNPS
+> TSLA
+> TXN
+> VRTX
+> XEL
+> Information Technology
+> Communication Services
+> Consumer Discretionary
+> Utilities
+> Consumer Staples
+> Health Care
+
+Figure 3: Binary network A (149 edges), node color = GICS sector, node size ∝ degree, edge weight ∝ Wij .The AI-infrastructure core, the staples cluster (attached via AMZN–COST), and the disconnected biotech com-ponent emerge from text alone. 
+
+edge sectors W
+
+META–NVDA Comm. × IT 0.65 AVGO–GOOGL IT × Comm. 0.65 AMZN–MSFT Cons. Disc. × IT 0.64 AMZN–COST Cons. Disc. × Staples 0.57 CRWV–META IT × Comm. 0.54 CEG–MSFT Utilities × IT 0.52 NVDA–TSLA IT × Cons. Disc. 0.50 CEG–META Utilities × Comm. 0.41 
+
+Table 3: Selected cross-sector edges: economically real ties that no single-label classification can encode. 
+
+mass is the 44 cross-sector edges, which are not noise but the pipeline’s core product—relationships GICS is structurally unable to represent (Ta-ble 3). These include the utility–hyperscaler power edges (CEG–MSFT from the Crane Clean En-ergy Center PPA; CEG–META from the Clinton clean-energy agreement), AI-cloud dependencies (CRWV–META, backed by a disclosed $14.2B or-der), the NVDA–TSLA compute relationship, the AMZN–COST retail edge, and the PEP–SBUX ready-to-drink distribution partnership. A GICS-based factor model treats CEG as interchangeable with regulated utilities like XEL; in the measured weighted matrix, by contrast, all of CEG’s con-nectivity runs to the hyperscaler block—its only edges are the two disclosed PPA counterparties, Microsoft and Meta. 0.0 0.2 0.4 0.6 0.8            
+
+> larger dependency max( dij,dji)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> smaller dependency  min
+> symmetric
+> 2:1 asymmetry
+> AMD INTC
+> QCOM ARM
+> INTC ASML
+> MU ASML
+> CRWV META
+> CRWV NVDA
+> META NVDA
+
+Figure 4: Directed dependencies are asymmetric: each point is a firm pair, plotting the larger against the smaller of (di→j , d j→i). Labels name the dependent firm (arrow points to the firm depended upon). 
+
+variant edges Jacc. Gini isol. full pipeline 149 — 0.40 0filing channel only 109 0.61 — 2knowledge channel only 135 0.72 — 0no IDF weighting 153 0.92 — 0absolute threshold † 149 0.69 0.45 1
+
+Table 4: Ablations. Jacc. = edge-set Jaccard similarity with the full pipeline; Gini = degree concentration; isol. = isolated firms. †Global threshold matched to the same edge count. 
+
+6.4 Asymmetry of dependencies 
+
+Because the pipeline measures di→j and dj→i sep-arately, it recovers the size asymmetries that moti-vated relative thresholding (Figure 4). Among 137 firm pairs with a material dependency, the mean relative asymmetry |di→j − dj→i|/ max( ·) is 0.27, and 12.4% of pairs are more than 2:1 one-sided. The extremes are textbook cases: CRWV →META (0.67) vs. META →CRWV (0.04)—a $14B order that is existential for CoreWeave and an imple-mentation detail for Meta; MU →ASML (0.76) vs. ASML →MU (0.35); QCOM →ARM (0.82) vs. ARM →QCOM (0.50). A symmetric similarity measure cannot represent this information, and an absolute threshold would erase exactly these edges. 
+
+6.5 Ablations Channels are complementary. Filing-only and knowledge-only networks overlap at Jac-card 0.435—each channel sees ties the other misses. The filing channel contributes verbatim-documented edges the knowledge channel underrates (e.g., the CEG PPAs, CRWV’s dis-closed concentration percentages); the knowledge channel covers relationships filings leave unnamed (42 firms’ filings name essentially no equipment vendors, yet MU–LRCX is real). 57.7% of final edges are supported by both channels, and 41.6% are anchored by at least one explicit named-entity quote. 
+
+IDF removes shared-hub artifacts. Without Eq. (3) , the shared-counterparty layer manufac-tures edges between firms whose only common-ality is a ubiquitous counterparty: AMD–QCOM, ASML–QCOM, AAPL–CDNS, GOOGL–INTC, and MU–TSLA all enter the no-IDF graph via shared TSMC/Samsung exposure. These are pre-cisely the “uses semiconductors”-grade non-edges the senator-network analysis warns against. 
+
+Relative thresholds protect the periphery. Aglobal threshold matched to the same 149 edges reallocates them toward hubs: degree Gini rises from 0.40 to 0.45, the maximum degree rises, VRTX becomes isolated, and one-sided but real edges (AAPL–ADI’s residual supplier tie, AMAT– ASML, ARM–TSLA’s architecture licensing) are destroyed. The double-sided rule keeps every firm attached through its own most important re-lationships, which is the property a downstream community-detection or spillover model needs. 
+
+7 Discussion and Limitations 
+
+Point-in-time discipline. Filing-channel evi-dence is point-in-time by construction (each record carries its filing date), but knowledge-channel ev-idence inherits the LLM’s training cutoff and is 
+
+not reconstructible for historical dates: a 2021 backtest cannot use a 2026 model’s priors without look-ahead. Historical applications should either restrict to the filing channel—which our ablation shows sacrifices recall (109 vs. 149 edges) but not precision—or use models with controlled cutoffs. 
+
+Retrieval fragility. Large filings are read through an extraction interface that truncates; several con-centration disclosures were recovered only from XBRL exhibit tables, and 1.8% of records fell back to knowledge-grade confidence after failed re-trieval. The 28.3% of records dropped as category mentions bound what entity-level measurement can extract from disclosure alone; matching category mentions to entities via structured data (customs records, input–output tables) is the natural exten-sion. 
+
+Inferred edges carry model risk. 41% of re-solved filing records involve latent-mention infer-ence. Our audit shows errors concentrate in low-weight, single-layer edges rather than in inferences per se (the MU →NVDA resolution of “one cus-tomer, 17% of revenue” is confirmed by subsequent disclosure), but every inferred edge retains its flag, quote, and confidence so users can apply their own tolerance. 
+
+Scope. We measure one snapshot of 42 firms; the design scales linearly in firms and time (each filing is processed independently), and the com-panion work applies dynamic community detection and cross-entity signal propagation to the resulting matrix sequence. We deliberately make no return-predictability claims here: the contribution is the measurement instrument, audited on its own terms. 
+
+8 Conclusion 
+
+We posed adjacency-matrix construction as an LLM measurement problem and showed that a multi-agent pipeline with entity resolution, logit-pooled fusion, ubiquity filtering, and relative thresholding produces a firm network that is pre-cise where it claims to be (88% audited precision on W ≥ 0.1 edges, errors confined to the flagged low-weight tail), agrees with industry classifica-tion exactly as much as it should, and recovers the cross-sector dependencies—power purchase agreements, GPU supply chains, retail channels— that make firm networks worth measuring. The released records, with verbatim evidence and ex-plicit/inferred flags, are intended as a reusable sub-strate for community detection, spillover estima-tion, and graph-based asset pricing. 
+
+Acknowledgments 
+
+Filing text was obtained from SEC EDGAR. All extraction, fusion, and audit code accompanies the paper. 
+
+References        
+
+> Usman Ali and David Hirshleifer. 2020. Shared ana-lyst coverage: Unifying momentum spillover effects.
+> Journal of Financial Economics , 136(3):649–675. Sara AlMahri, Liming Xu, and Alexandra Brin-trup. 2025. Enhancing supply chain visibility
+
+with knowledge graphs and large language mod-els. International Journal of Production Research .ArXiv:2408.07705. Abhinav Arun, Fabrizio Dimino, Tejas Prakash Agar-wal, Bhaskarjit Sarmah, and Stefano Pasquali. 2025. FinReflectKG: Agentic construction and evaluation of financial knowledge graphs. In Proceedings of the 6th ACM International Conference on AI in Finance (ICAIF) .Kehui Chen and Jing Lei. 2018. Network cross-validation for determining the number of commu-nities in network data. Journal of the American Sta-tistical Association , 113(521):241–251. Yingmei Chen, Zhongyu Wei, and Xuanjing Huang. 2018. Incorporating corporation relationship via graph convolutional neural networks for stock price prediction. In Proceedings of the 27th ACM Inter-national Conference on Information and Knowledge Management (CIKM) .Zihan Chen, Lei Zheng, Cheng Lu, Jialu Yuan, and Di Zhu. 2023. ChatGPT informed graph neural net-work for stock movement prediction. arXiv preprint arXiv:2306.03763 .Alex Chung and Kumiko Tanaka-Ishii. 2023. Modeling momentum spillover with economic links discovered from financial documents. In Proceedings of the 4th ACM International Conference on AI in Finance (ICAIF) .Lauren Cohen and Andrea Frazzini. 2008. Economic links and predictable returns. The Journal of Finance ,63(4):1977–2011. Giovanna Culot, Matteo Podrecca, Guido Nassimbeni, Guido Orzes, and Marco Sartor. 2023. Using supply chain databases in academic research: A methodolog-ical critique. Journal of Supply Chain Management ,59(1):3–25. Fuli Feng, Xiangnan He, Xiang Wang, Cheng Luo, Yiqun Liu, and Tat-Seng Chua. 2019. Temporal re-lational ranking for stock prediction. ACM Transac-tions on Information Systems , 37(2):1–30. Gerard Hoberg and Gordon Phillips. 2010. Product market synergies and competition in mergers and acquisitions: A text-based analysis. The Review of Financial Studies , 23(10):3773–3811. Gerard Hoberg and Gordon Phillips. 2016. Text-based network industries and endogenous product differen-tiation. Journal of Political Economy , 124(5):1423– 1465. Paul W. Holland, Kathryn Blackmond Laskey, and Samuel Leinhardt. 1983. Stochastic blockmodels: First steps. Social Networks , 5(2):109–137. Ilya Jackson, Maria Jesus Saenz, Bill Jiaqi Ma, and Dmitry Ivanov. 2025. Supply chain mapping through retrieval-augmented generation: Applications to the electronics industry. Journal of the Operational Re-search Society .Simerjot Kaur, Charese Smiley, Akshat Gupta, Joy Sain, Dongsheng Wang, Suchetha Siddagangappa, Toyin Aguda, and Sameena Shah. 2023. REFinD: Rela-tion extraction financial dataset. In Proceedings of the 46th International ACM SIGIR Conference on Research and Development in Information Retrieval .Markku Kaustia and Ville Rantala. 2021. Common analysts: Method for defining peer firms. Journal of Financial and Quantitative Analysis , 56(5):1505– 1536. Raehyun Kim, Chan Ho So, Minbyul Jeong, Sanghoon Lee, Jinkyu Kim, and Jaewoo Kang. 2019. HATS: A hierarchical graph attention network for stock move-ment prediction. arXiv preprint arXiv:1908.07999 .Charles M. C. Lee, Paul Ma, and Charles C. Y. Wang. 2015. Search-based peer firms: Aggregating investor perceptions through internet co-searches. Journal of Financial Economics , 116(2):410–431. Tianxi Li, Elizaveta Levina, and Ji Zhu. 2020. Net-work cross-validation by edge sampling. Biometrika ,107(2):257–276. Xiaohui Victor Li. 2024. FinDKG: Dynamic knowl-edge graphs with large language models for detecting global trends in financial markets. In Proceedings of the 5th ACM International Conference on AI in Finance (ICAIF) .Tong Liu and Hadi Meidani. 2024. Supply chain network extraction and entity classification lever-aging large language models. arXiv preprint arXiv:2410.13051 .Lior Menzly and Oguzhan Ozbas. 2010. Market seg-mentation and cross-predictability of returns. The Journal of Finance , 65(4):1555–1580. Pawan Kumar Rajpoot and Ankur Parikh. 2023. GPT-FinRE: In-context learning for financial relation ex-traction using large language models. In Proceedings of the Sixth Workshop on Financial Technology and Natural Language Processing (FinNLP) .Gustavo Schwenkler and Hannan Zheng. 2019. The network of firms implied by the news. SSRN Working Paper No. 3320859 .Soumya Sharma, Tapas Nayak, Arusarka Bose, Ajay Kumar Meena, Koustuv Dasgupta, Niloy Gan-guly, and Pawan Goyal. 2022. FinRED: A dataset for relation extraction in financial domain. In Compan-ion Proceedings of the Web Conference 2022 (Fin-Web) , pages 595–597. Dimitrios Vamvourellis, Máté Toth, Snigdha Bhagat, Dhruv Desai, Dhagash Mehta, and Stefano Pasquali. 2023. Company similarity using large language mod-els. arXiv preprint arXiv:2308.08031 .Y. X. Rachel Wang and Peter J. Bickel. 2017. Likelihood-based model selection for stochastic block models. The Annals of Statistics , 45(2):500– 528. Pascal Wichmann, Alexandra Brintrup, Simon Baker, Philip Woodall, and Duncan McFarlane. 2020. Ex-tracting supply chain maps from news articles using deep neural networks. International Journal of Pro-duction Research , 58(17):5320–5336. 
+
+A Reproducibility Details 
+
+Hyperparameters. Sparse prior π0 = 0.02 ;channel weights ω: explicit filing 1.0, inferred filing 0.6, failed-retrieval filing 0.4, knowledge agents 0.5 each; duplicate votes within a channel 0.25 ×; layer mix (α1, α 2) = (0 .7, 0.3) ; node quan-tile τ = 0 .6; floor w0 = 0 .04 . Confidences are clamped to [0 .05 , 0.98] before pooling. 
+
+Record schema. Each filing record: source ticker, resolved target, relation type (8 values), ex-plicit flag, inferred flag, strength, confidence, ver-batim quote ( ≤50 words), document id, filing date. Each knowledge record: entity pair, relation type (7 values), strength, confidence, one-line justification. 
+
+Audit protocol. Stratified sample of 30 edges (every 5th of the weight-sorted 149); auditor instructed to refute; verdicts CON -
+
+> FIRMED
+
+/PLAUSIBLE /REFUTED with a source URL per verdict. The auditor shares no state with extraction agents. 
+
+B Economic Stop-Words 
+
+Most-connected external entities and their IDF weights (normalized): TSMC ( nk=18 , 0.21), Sam-sung (14, 0.28), OpenAI (11, 0.34), SK Hynix (8, 0.41), Walmart (5, 0.52), ASE Group, Dell, Cen-cora, Foxconn (4, 0.57), Cisco, Sony, STMicroelec-tronics, McKesson, Coca-Cola, Arrow Electronics (3, 0.63). Rare shared counterparties (specialty suppliers, single collaborators) retain weight near 1.0.
