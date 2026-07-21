@@ -6,32 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-20
-- 运行时间：2026-07-20 20:34:02 UTC
+- 最新运行日期：2026-07-21
+- 运行时间：2026-07-21 20:39:56 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：6
 - 精读区：3
-- 速读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读两篇高分论文，聚焦AI交易与量化投资；速读一篇可解释策略论文。最值得关注的方向：利用大模型进行技术市场分析，以及从企业披露中构建点对点经济图谱用于量化投资。建议普通读者关注LLM在金融分析中的实际应用场景。
-- 详情：[/202607/20/README](/202607/20/README)
+今日推荐6篇论文，精读重点包括深度强化学习构建市场中性组合及多智能体RAG框架用于SEC文件问答。最值得关注的方向是强化学习在量化投资与金融信息检索中的应用。建议优先精读这两篇高分论文，尝试将方法迁移至实际交易策略或自动化分析工具。
+- 详情：[/202607/21/README](/202607/21/README)
 
 ### 精读区论文标签
-1. [AI Trading: Evaluating Large Language Models for Technical Market Analysis](/202607/20/2607.15414v1-ai-trading-evaluating-large-language-models-for-technical-market-analysis)  
+1. [AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios](/202607/21/2607.18001v1-alphazerobeta-deep-reinforcement-learning-for-market-neutral-portfolios)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：评估LLM在技术市场分析和股票交易中的能力
-2. [LLM Latent Edge Measurement: Point-in-Time Economic Graphs for Quantitative Investing from Corporate Disclosures](/202607/20/2607.15640v1-llm-latent-edge-measurement-point-in-time-economic-graphs-for-quantitative-investing-from-corporate-disclosures)  
+   evidence：深度强化学习用于市场中性投资组合
+2. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/21/2607.18102v1-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用LLM从财务披露中提取经济关系图
-3. [CLaC@FinMMEval 2026 Task 3: Sentiment-Augmented Deep Reinforcement Learning for Active Trading -- An Alpha-Reward Approach](/202607/20/2607.16028v1-clacfinmmeval-2026-task-3-sentiment-augmented-deep-reinforcement-learning-for-active-trading----an-alpha-reward-approach)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：情感增强的深度强化学习用于比特币和特斯拉的主动交易
+   evidence：面向SEC文件问答的多智能体RAG，应用NLP进行金融分析
+3. [Dynamic mean-variance portfolio selection with no-shorting constraints and unknown investment opportunity sets](/202607/21/2607.16625v1-dynamic-mean-variance-portfolio-selection-with-no-shorting-constraints-and-unknown-investment-opportunity-sets)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：强化学习用于带卖空约束的均值方差投资组合选择
 
 ### 速读区论文标签
-1. [Counterfactual Optimal Action Trees (COAT): Interpretable Prescriptive Policies from Observational Data](/202607/20/2607.14318v1-counterfactual-optimal-action-trees-coat-interpretable-prescriptive-policies-from-observational-data)  
+1. [AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization](/202607/21/2607.17281v1-aigb-r1-self-evolving-generative-auto-bidding-via-hierarchical-planner-executor-optimization)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：AI生成式自动竞价优化在线广告出价
+2. [Volatility-Aware Extreme Event Detection in High-Frequency Financial Markets](/202607/21/2607.17555v1-volatility-aware-extreme-event-detection-in-high-frequency-financial-markets)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：高频金融市场极端事件检测
+3. [Econometrics with Pre-Trained Embeddings for Unstructured Data](/202607/21/2607.17378v1-econometrics-with-pre-trained-embeddings-for-unstructured-data)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：可解释处方策略框架，可迁移应用于金融决策
+   evidence：计量经济学中应用预训练嵌入处理非结构化数据，可迁移至金融文本分析
 
 
 <div class="dpr-home-promo-card">
