@@ -6,38 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-21
-- 运行时间：2026-07-21 20:39:56 UTC
+- 最新运行日期：2026-07-22
+- 运行时间：2026-07-22 21:23:53 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：4
+- 精读区：4
+- 速读区：0
 
 ### 今日简报（AI）
-今日推荐6篇论文，精读重点包括深度强化学习构建市场中性组合及多智能体RAG框架用于SEC文件问答。最值得关注的方向是强化学习在量化投资与金融信息检索中的应用。建议优先精读这两篇高分论文，尝试将方法迁移至实际交易策略或自动化分析工具。
-- 详情：[/202607/21/README](/202607/21/README)
+今日精读两篇9分论文，聚焦金融文档智能问答与多智能体推理。  
+FinSAgent通过语料对齐的多智能体RAG提升SEC文件回答的证据质量，FinanceComplexQA则构建了首个工业级财务文档的agent推理基准。  
+建议关注多智能体RAG在金融合规中的应用，并利用此基准测试复杂财务推理能力。
+- 详情：[/202607/22/README](/202607/22/README)
 
 ### 精读区论文标签
-1. [AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios](/202607/21/2607.18001v1-alphazerobeta-deep-reinforcement-learning-for-market-neutral-portfolios)  
+1. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/22/2607.18102v2-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：深度强化学习用于市场中性投资组合
-2. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/21/2607.18102v1-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
+   evidence：面向SEC文件证据问答的多智能体RAG框架
+2. [FinanceComplexQA: Benchmarking Agentic Reasoning on Industrial-grade Financial Documents](/202607/22/2607.19238v1-financecomplexqa-benchmarking-agentic-reasoning-on-industrial-grade-financial-documents)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向SEC文件问答的多智能体RAG，应用NLP进行金融分析
-3. [Dynamic mean-variance portfolio selection with no-shorting constraints and unknown investment opportunity sets](/202607/21/2607.16625v1-dynamic-mean-variance-portfolio-selection-with-no-shorting-constraints-and-unknown-investment-opportunity-sets)  
+   evidence：金融文档NLP推理基准
+3. [Prediction of bank transaction fraud using TabNet an adaptive deep learning architecture](/202607/22/2607.18616v1-prediction-of-bank-transaction-fraud-using-tabnet-an-adaptive-deep-learning-architecture)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：强化学习用于带卖空约束的均值方差投资组合选择
+   evidence：深度学习用于银行交易欺诈检测
+4. [Benchmarking Generalization in Financial Statement Fraud Detection: robust evaluation and novel tasks](/202607/22/2607.19259v1-benchmarking-generalization-in-financial-statement-fraud-detection-robust-evaluation-and-novel-tasks)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：利用大型语言模型和文本数据进行财务报表欺诈检测
 
 ### 速读区论文标签
-1. [AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization](/202607/21/2607.17281v1-aigb-r1-self-evolving-generative-auto-bidding-via-hierarchical-planner-executor-optimization)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：AI生成式自动竞价优化在线广告出价
-2. [Volatility-Aware Extreme Event Detection in High-Frequency Financial Markets](/202607/21/2607.17555v1-volatility-aware-extreme-event-detection-in-high-frequency-financial-markets)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：高频金融市场极端事件检测
-3. [Econometrics with Pre-Trained Embeddings for Unstructured Data](/202607/21/2607.17378v1-econometrics-with-pre-trained-embeddings-for-unstructured-data)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：计量经济学中应用预训练嵌入处理非结构化数据，可迁移至金融文本分析
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
