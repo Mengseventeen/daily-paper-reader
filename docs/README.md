@@ -6,34 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 20:31:01 UTC
+- 最新运行日期：2026-07-24
+- 运行时间：2026-07-24 21:07:41 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
+- 本次总论文数：6
+- 精读区：4
 - 速读区：2
 
 ### 今日简报（AI）
-今日精选4篇金融AI论文，重点推荐多智能体情感分析和反事实图神经网络风险评估。
-《TriAgent》通过分歧感知委员会降低情感分析成本；《CausalGraphX》用反事实推理提升系统性风险评估可解释性。
-建议关注多智能体协作和因果推理在金融中的应用，可进一步探索成本效率与可解释性的平衡。
-- 详情：[/202607/23/README](/202607/23/README)
+1）今日6篇金融AI研究聚焦前沿金融判断与动态投资组合优化，精读两篇9分论文分别探讨agent预测股票驱动因素和拓扑数据分析结合新闻情绪的再平衡策略。  
+2）最值得关注的两个方向：智能体对stock price驱动因素的判断能力，以及拓扑数据分析+新闻情绪在动态投资组合中的实证效果。  
+3）建议普通读者优先阅读这两篇高分解读，并关注可解释状态空间模型（速读7分）对交易序列建模的补充应用。
+- 详情：[/202607/24/README](/202607/24/README)
 
 ### 精读区论文标签
-1. [TriAgent: Divergence-Aware Multi-Agent Committees for Cost-Efficient Financial Sentiment Analysis](/202607/23/2607.19794v1-triagent-divergence-aware-multi-agent-committees-for-cost-efficient-financial-sentiment-analysis)  
+1. [Frontier Financial Judgement: Can agents tell what might move a stock?](/202607/24/2607.20645v1-frontier-financial-judgement-can-agents-tell-what-might-move-a-stock)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：使用LLM多智能体委员会进行金融情感分析
-2. [CausalGraphX: A Counterfactual Graph Neural Network Framework for Explainable Systemic Risk Assessment](/202607/23/2607.14416v1-causalgraphx-a-counterfactual-graph-neural-network-framework-for-explainable-systemic-risk-assessment)  
+   evidence：评估智能体判断股票信息影响的能力
+2. [Portfolio Optimization under Dynamic Rebalancing via Topological Data Analysis and News Sentiments](/202607/24/2607.21170v1-portfolio-optimization-under-dynamic-rebalancing-via-topological-data-analysis-and-news-sentiments)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：利用拓扑数据分析和FinBERT情感进行投资组合优化
+3. [Optimal Market Making in Prediction Markets](/202607/24/2607.17991v1-optimal-market-making-in-prediction-markets)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：图神经网络用于金融系统性风险评估
+   evidence：预测市场的最优做市策略，使用随机控制
+4. [Mens: Nonlinear shrinkage estimation in nonparanormal models for financial applications](/202607/24/2607.19825v1-mens-nonlinear-shrinkage-estimation-in-nonparanormal-models-for-financial-applications)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：金融应用中的非线性收缩估计
 
 ### 速读区论文标签
-1. [Overview of FinMMEval 2026 Task 1: Multilingual Financial Multiple-Choice Question Answering](/202607/23/2607.19856v1-overview-of-finmmeval-2026-task-1-multilingual-financial-multiple-choice-question-answering)  
+1. [User-Centric Modeling of Transactional Sequences with Explainable State Space Models](/202607/24/2607.20228v1-user-centric-modeling-of-transactional-sequences-with-explainable-state-space-models)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：NLP用于金融分析：多语言多项选择问答
-2. [Quantum Kernels and the Cross-Section of Stock Returns: Anatomy of a Vanishing Advantage](/202607/23/2607.20168v1-quantum-kernels-and-the-cross-section-of-stock-returns-anatomy-of-a-vanishing-advantage)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：研究量子核在横截面股票收益预测中的应用
+   evidence：基于状态空间模型的交易序列用户建模
+2. [Gaussian Boson Sampling for Asset Clustering in Statistical Arbitrage Portfolios](/202607/24/2607.19279v1-gaussian-boson-sampling-for-asset-clustering-in-statistical-arbitrage-portfolios)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：量子AI资产聚类用于统计套利
 
 
 <div class="dpr-home-promo-card">
