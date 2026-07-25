@@ -6,40 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-24
-- 运行时间：2026-07-24 21:07:41 UTC
+- 最新运行日期：2026-07-25
+- 运行时间：2026-07-25 21:13:27 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：4
+- 本次总论文数：4
+- 精读区：2
 - 速读区：2
 
 ### 今日简报（AI）
-1）今日6篇金融AI研究聚焦前沿金融判断与动态投资组合优化，精读两篇9分论文分别探讨agent预测股票驱动因素和拓扑数据分析结合新闻情绪的再平衡策略。  
-2）最值得关注的两个方向：智能体对stock price驱动因素的判断能力，以及拓扑数据分析+新闻情绪在动态投资组合中的实证效果。  
-3）建议普通读者优先阅读这两篇高分解读，并关注可解释状态空间模型（速读7分）对交易序列建模的补充应用。
-- 详情：[/202607/24/README](/202607/24/README)
+今日精读2篇、速读2篇，聚焦资本市场LLM可靠性与金融洗钱识别。最值得关注的是《CM-LRS评分9.0》从合理到可银行级，以及《可解释洗钱识别管线》8.0分。建议优先研读这两篇，把握金融AI可靠性评估与反洗钱自动化前沿。
+- 详情：[/202607/25/README](/202607/25/README)
 
 ### 精读区论文标签
-1. [Frontier Financial Judgement: Can agents tell what might move a stock?](/202607/24/2607.20645v1-frontier-financial-judgement-can-agents-tell-what-might-move-a-stock)  
+1. [Capital Markets LLM Reliability Score (CM-LRS): From Plausible to Bankable](/202607/25/2607.21340v1-capital-markets-llm-reliability-score-cm-lrs-from-plausible-to-bankable)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：评估智能体判断股票信息影响的能力
-2. [Portfolio Optimization under Dynamic Rebalancing via Topological Data Analysis and News Sentiments](/202607/24/2607.21170v1-portfolio-optimization-under-dynamic-rebalancing-via-topological-data-analysis-and-news-sentiments)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：利用拓扑数据分析和FinBERT情感进行投资组合优化
-3. [Optimal Market Making in Prediction Markets](/202607/24/2607.17991v1-optimal-market-making-in-prediction-markets)  
+   evidence：提出CM-LRS评估资本市场工作流中的LLM可靠性
+2. [Detection, Attribution, Narration: An End-to-End Pipeline for Explainable Money Mule Identification](/202607/25/2607.17586v1-detection-attribution-narration-an-end-to-end-pipeline-for-explainable-money-mule-identification)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：预测市场的最优做市策略，使用随机控制
-4. [Mens: Nonlinear shrinkage estimation in nonparanormal models for financial applications](/202607/24/2607.19825v1-mens-nonlinear-shrinkage-estimation-in-nonparanormal-models-for-financial-applications)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融应用中的非线性收缩估计
+   evidence：利用大语言模型生成金融欺诈检测的可解释叙述
 
 ### 速读区论文标签
-1. [User-Centric Modeling of Transactional Sequences with Explainable State Space Models](/202607/24/2607.20228v1-user-centric-modeling-of-transactional-sequences-with-explainable-state-space-models)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：基于状态空间模型的交易序列用户建模
-2. [Gaussian Boson Sampling for Asset Clustering in Statistical Arbitrage Portfolios](/202607/24/2607.19279v1-gaussian-boson-sampling-for-asset-clustering-in-statistical-arbitrage-portfolios)  
+1. [Observable Matrix Dynamics of Stocks](/202607/25/2607.19005v1-observable-matrix-dynamics-of-stocks)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：量子AI资产聚类用于统计套利
+   evidence：可观察矩阵动力学应用于标普500危机，用于股票市场分析
+2. [Observable Matrix Dynamics of Stocks](/202607/25/2607.19005v2-observable-matrix-dynamics-of-stocks)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：可观察矩阵动力学应用于标普500危机，用于股票市场分析
 
 
 <div class="dpr-home-promo-card">
