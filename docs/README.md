@@ -6,32 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-25
-- 运行时间：2026-07-25 21:13:27 UTC
+- 最新运行日期：2026-07-26
+- 运行时间：2026-07-26 21:08:29 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
-- 速读区：2
+- 本次总论文数：5
+- 精读区：4
+- 速读区：1
 
 ### 今日简报（AI）
-今日精读2篇、速读2篇，聚焦资本市场LLM可靠性与金融洗钱识别。最值得关注的是《CM-LRS评分9.0》从合理到可银行级，以及《可解释洗钱识别管线》8.0分。建议优先研读这两篇，把握金融AI可靠性评估与反洗钱自动化前沿。
-- 详情：[/202607/25/README](/202607/25/README)
+今日推荐了金融审计辅助的虚假信息检测与解释、优化遗憾策略等5篇论文，其中精读两篇高分研究。最值得关注的是虚假信息检测在金融审计中的应用以及遗憾优化问题。建议优先阅读《Financial Audit Assistance using Misinformation Detection and Explanation》了解如何将检测技术落地。
+- 详情：[/202607/26/README](/202607/26/README)
 
 ### 精读区论文标签
-1. [Capital Markets LLM Reliability Score (CM-LRS): From Plausible to Bankable](/202607/25/2607.21340v1-capital-markets-llm-reliability-score-cm-lrs-from-plausible-to-bankable)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：提出CM-LRS评估资本市场工作流中的LLM可靠性
-2. [Detection, Attribution, Narration: An End-to-End Pipeline for Explainable Money Mule Identification](/202607/25/2607.17586v1-detection-attribution-narration-an-end-to-end-pipeline-for-explainable-money-mule-identification)  
+1. [Financial Audit Assistance using Misinformation Detection and Explanation](/202607/26/2607.17797v1-financial-audit-assistance-using-misinformation-detection-and-explanation)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：利用大语言模型生成金融欺诈检测的可解释叙述
+   evidence：人工智能用于财务报表审计和虚假信息检测
+2. [Optimizing Regret](/202607/26/2607.18866v1-optimizing-regret)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：基于梯度下降的投资组合倾斜与遗憾最小化
+3. [HindsightBench: A Black-Box Behavioral Audit Protocol for Parametric Hindsight in Time-Indexed LLM Decision Tasks](/202607/26/2607.18867v1-hindsightbench-a-black-box-behavioral-audit-protocol-for-parametric-hindsight-in-time-indexed-llm-decision-tasks)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：LLM金融决策任务中参数事后性审计协议
+4. [Overview of FinMMEval 2026 Task 2: Multilingual Financial Short-Answer Question Answering](/202607/26/2607.19867v1-overview-of-finmmeval-2026-task-2-multilingual-financial-short-answer-question-answering)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：多语言金融问答评估
 
 ### 速读区论文标签
-1. [Observable Matrix Dynamics of Stocks](/202607/25/2607.19005v1-observable-matrix-dynamics-of-stocks)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：可观察矩阵动力学应用于标普500危机，用于股票市场分析
-2. [Observable Matrix Dynamics of Stocks](/202607/25/2607.19005v2-observable-matrix-dynamics-of-stocks)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：可观察矩阵动力学应用于标普500危机，用于股票市场分析
+1. [Denoising Subordinated Probabilistic Models: Diffusion with a Tempered-Stable Volatility Clock, and What the Noise Mechanism Actually Controls](/202607/26/2607.19218v1-denoising-subordinated-probabilistic-models-diffusion-with-a-tempered-stable-volatility-clock-and-what-the-noise-mechanism-actually-controls)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：用深度扩散过程建模金融收益波动率
 
 
 <div class="dpr-home-promo-card">

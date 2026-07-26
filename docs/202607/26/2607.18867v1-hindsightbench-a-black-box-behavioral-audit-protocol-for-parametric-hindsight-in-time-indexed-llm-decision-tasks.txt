@@ -1,0 +1,244 @@
+Title: HindsightBench: A Black-Box Behavioral Audit Protocol for Parametric Hindsight in Time-Indexed LLM Decision Tasks
+
+URL Source: https://arxiv.org/pdf/2607.18867v1
+
+Published Time: Wed, 22 Jul 2026 00:43:53 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# HindsightBench: A Black-Box Behavioral Audit Protocol for Parametric Hindsight in Time-Indexed LLM Decision Tasks 
+
+Haozhe Jia University College Dublin 
+
+haozhe.jia@ucdconnect.ie 
+
+July 2026 
+
+Abstract 
+
+Large language models leak parametric knowledge of realized outcomes into historical financial decision tasks. Existence is settled; what production users lack is a cheap way to audit a given model for it. We present HindsightBench , a black-box behavioral audit protocol that profiles parametric hindsight in any time-indexed LLM decision task at probe-level cost (no backtests, no logprobs, no training-corpus access). The protocol bundles previously separate ingredients into one preregistered causal design run on a single task: a four-arm date-manipulation matrix (revealed / date-only / masked / historically transplanted), dual memory probes (date recovery; outcome recall), and six per-model metrics — trigger strength, transplant effect, post-cutoff placebo, recoverability, behaviorally effective knowledge cutoff, and a recall–accuracy dissociation coefficient — with explicit gates for the metrics whose identifiability is data-dependent. Applying it to 15 models from seven vendors on a 258-node vintage-correct macro panel yields three headline patterns: (i) the date-trigger reflex tracks training generation, not scale — absent across the 2024 open-weight generation from 1B to 70B, present in every 2026-generation model tested down to 3B active parameters, and switching on within a single vendor lineage (Qwen3 
+
+→ Qwen3.6) at fixed MoE architecture and 3B active parameters; (ii) behaviorally effective cutoffs span 22 months across vendors and precede vendor-reported dates by up to eight months, which invalidates calendar-window placebo designs and motivates the model-relative windows the protocol computes; (iii) audit results are not invariant to serving details — the trigger estimate loses mutual-CI stability under BF16 serving of an FP8-referenced model while AWQ-INT4 preserves it, and one vendor’s locked reasoning regime makes an entire probe non-convergent — so the protocol ships with operational requirements (pin quantization, pin the thinking regime, disclose parser and sampling policy) as part of the benchmark contract. We release the panel, frozen preregistrations, per-model audit rows with measured dollar costs, transcripts, and one-command regeneration. 
+
+# 1 Introduction 
+
+An LLM asked to reason about a dated historical decision — “it is September 2008; here is the macro data; generate trading hypotheses” — can silently draw on parametric knowledge of what came next. The existence of this leak is no longer in question: look-ahead advantages survive entity anonymization (Glasserman and Lin, 2023), are exposed by events unpredictable ex ante (Sarkar and Vafa, 2024), inflate in-sample forecasts (Liang, 2026), and decay LLM trading-agent Sharpe ratios past the training cutoff by half (Li et al., 2025). What a practitioner deploying a specific model on a specific time-indexed task still cannot do is cheaply answer four operational questions: 1arXiv:2607.18867v1 [cs.LG] 21 Jul 2026 Does my model exhibit hindsight on this task? What triggers it? Where does the model’s behavioral knowledge actually end? And do those answers survive my serving configuration? 
+
+HindsightBench is a protocol for answering these questions by black-box behavioral measurement alone. It requires only API access at probe-level cost — a full audit row for a mid-tier commercial model cost us $19–30 at 2026 list prices (§5) — and no backtest infrastructure, no logprobs, and no knowledge of the training corpus. 
+
+What is new. Every individual ingredient of the protocol has a predecessor, and we position against each occupant explicitly (§2). Paired true/fake-date prompts exist (Eliseev and Seleznev, 2026); date-only recall probes exist (Gao et al., 2025); masking designs exist (Glasserman and Lin, 2023; Zhu et al., 2026); effective-cutoff probing exists at the resource level (Cheng et al., 2024) and the freshness level (Pęzik et al., 2025; Spohn, 2025). Our claims are three: 1. An integrated causal protocol. The components are chained into a single attribution design on one task: the four-arm matrix separates the trigger (the date token) from date-identifying context and from data content; the transplantation arm tests whether a remembered narrative 
+
+relocates to an asserted date; the dual probes separate what is recoverable from what is 
+
+recalled and both from what is behaviorally active ; and identifiability gates state when the data-dependent metrics (placebo, recoverability, cutoff, dissociation) are defined. No prior work runs this chain end-to-end, which is what allows per-model attribution rather than per-model detection. 2. A multi-metric hindsight profile leaderboard. 15 models from seven vendors, each summarized in one audit row of six metrics under a frozen protocol with per-model deviations disclosed. Existing model sweeps are single-axis: freshness (Pęzik et al., 2025), numeric recall (Kotawala, 2026), cutoff-instruction compliance (Li et al., 2026b). The profile view is what surfaces our headline pattern — the trigger reflex tracks training generation, not scale, and switches on within a vendor lineage (Qwen3 → Qwen3.6) at fixed MoE architecture and 3B active parameters. 3. In-task cutoff co-location. The behaviorally effective knowledge cutoff is measured on the same task and stimuli as the hindsight profile, rather than on a separate freshness instrument. This is the surviving role of the cutoff locator — two deployed tools already locate cutoffs in general (Pęzik et al., 2025; Spohn, 2025) — and it matters because placebo windows, post-cutoff safety claims, and train/test splits are only valid relative to the boundary of the task at hand (§6). Measured cutoffs span 22 months across our vendors and precede vendor-reported dates by up to eight months. 
+
+A fourth, unglamorous contribution is a set of measured protocol invariance results and operational requirements (§7): the audit’s headline metric is not stable under serving quantization changes (BF16 vs. the FP8 reference on the same weights breaks mutual-CI containment; AWQ-INT4 does not), and one vendor’s provider-locked reasoning regime makes an entire probe non-convergent. A benchmark of behavioral reflexes must therefore pin serving details as part of its contract, and we specify which ones, with evidence. We release the vintage-correct panel, all frozen preregistrations (with SHA-256 hashes), per-model transcripts and audit rows, measured per-row dollar costs with an explicit gap ledger, and one-command regeneration of every table and figure from frozen row files. 1
+
+> 1https://github.com/Khaozhe/hindsightbench
+
+22 Related Work 
+
+We cut the literature along three lines, then list the component occupants our protocol integrates. 
+
+End-to-end decay. One line measures hindsight by its downstream footprint: portfolio perfor-mance that collapses past the training cutoff. Look-Ahead-Bench standardizes the measurement of look-ahead bias in point-in-time financial LLMs via alpha decay across temporally distinct market regimes (Benhenda, 2026); Profit Mirage audits seven LLM trading-agent frameworks and finds 51–62% Sharpe decay past cutoff (Li et al., 2025); Liang (2026) quantifies the pre/post-cutoff forecast-error discontinuity; Didisheim et al. (2025) tie memorization strength to entity frequency, aggregation, and scale. These designs need a full trading-evaluation stack, and they observe model and evaluation harness jointly — they detect that leakage happened, not what triggered it. Look-Ahead-Bench’s own positioning explicitly sets itself apart from approaches that “primarily test inner lookahead knowledge via Q&A”; that is the space this protocol occupies. 
+
+Detection with white-box access. A second line detects memorization statistically: membership-inference-style probes and recall-interaction regressions requiring logprobs (Gao et al., 2025). Our adaptation of the recall probe (§3) is black-box — a frequency approximation over repeated sampling — and our benchmark shows its identifying assumption (contamination as accuracy gain) is model-conditional, which detection pipelines calibrated on one model inherit silently. 
+
+Freshness-level cutoff location. Cheng et al. (2024) introduced the effective-vs-reported cutoff distinction at the resource level; LLMLagBench locates training-data boundaries behaviorally via news-event QA with changepoint detection on 35 models (Pęzik et al., 2025); CutoffBench deploys an independent estimator as a web tool (Spohn, 2025). We do not compete on general freshness: our locator is in-task — same stimuli, same task as the audit — because the boundary that matters for a placebo window or a train/test split is task-relative (§6). 
+
+Component occupants. Paired true/fake-date macro prompts: Eliseev and Seleznev (2026) (distributional test against far-future dates; our transplant arm asserts historical dates and reads a directional narrative field). Anonymization/masking: Glasserman and Lin (2023), and a memory-controlled benchmark for LLM trading agents on Chinese equities (CSI300): Zhu et al. (2026). Cutoff-instruction compliance: simulated ignorance fails systematically — cutoff instructions leave a 52% performance gap against true ignorance (Li et al., 2026b), consistent with Lopez-Lira et al. (2025)’s finding that instructed forgetting fails — our complement is that date assertion is obeyed almost without question. Ex-ante inference under temporal constraints: Liu et al. (2025). Numeric benchmark leakage profiling: Kotawala (2026). Vintage blur in macro recall: Crane et al. (2025) — addressed here by a vintage-correct panel. Mitigation — chronologically consistent pretraining (He et al., 2025a,b; Yan et al., 2026), counterfactual-anchored decoding (Li et al., 2026a), and inference-time logit adjustment against a pair of forget/retain models (Merchant and Levy, 2025) — solves a problem whose per-model diagnosis is our subject; an audit row tells a deployer whether they need these tools at all. 
+
+Audit-methodology lineage. As an audit instrument, the protocol sits at the model layer of the governance/model/application taxonomy of Mökander et al. (2023). Casper et al. (2024) argue that black-box access alone is insufficient for rigorous AI audits; our serving-precision results (§7.1) supply empirical support from the opposite direction — even the black-box measurement itself is 3Figure 1: Protocol overview. Each vintage-correct decision node fans out into four arms that manipulate only the dating information; the same nodes feed two memory probes. Arms and probes jointly identify the six metrics and their identifiability gates, producing one audit row per model under a hash-frozen preregistration. unstable unless deployment details are pinned — and the protocol’s identifiability gates are the instrument-level response: metrics that stop being identified are reported as undefined rather than estimated. 
+
+# 3 The BM-1 Protocol 
+
+One audit row per model (Figure 1); BM-1 is the protocol’s preregistration codename (experiment codenames — BM-∗ here, GD-∗ for the cross-domain checks — index the hash-frozen freeze registry shipped with the artifact). The protocol was frozen (SHA-256 fbcdffc1 ) before any non-development model was called; an English companion of the preregistration ships with the artifact. Arm-contrast estimates use paired bootstrap CIs ( B = 10 ,000 , fixed seed); the dissociation coefficient uses a HAC regression t-statistic (§3.3); probe rates are raw shares. Cross-model inference is deliberately restricted to descriptive ranking and group contrasts — no pairwise significance forest. 
+
+3.1 Task and arms 
+
+The carrier task is macro hypothesis generation on a vintage-correct panel (§4): given a monthly macro snapshot as of decision date t, produce eight structured hypothesis sketches with direction calls. Four arms manipulate only the dating information: 
+
+• R (revealed) : date and auxiliary context as-is; 
+
+• D (date-only) : the masked prompt plus the explicit date string — isolating the date token as a channel; 
+
+• M (masked) : date removed and date-identifying auxiliary context scrubbed; 
+
+• W (wrong date / transplant) : true data relabeled with a date shifted 66 months (cyclically); a companion 72-month month-preserving variant controls the seasonal confound (the effect survives it: +18 .4pp [5.4, 27.7], within 6.9pp of the 66-month arm and inside the preregistered 
+
+10 pp shift-family band). If a crisis narrative follows the asserted date onto mismatched data, memory of the period, not properties of the data, drives the behavior. 4The behavioral readout is the crisis–calm bearish gap : the difference in bearish-call share between a preregistered crisis set (11 dates, an ex-ante event list — six global-financial-crisis months 2008-09 through 2009-02, COVID 2020-03/04, and the 2022 inflation bear 2022-06/09/10 — not the output of any recession indicator) and a calm-year set (all 36 dates of 2013/2014/2017). Membership enters at analysis time only; prompts are partition-independent, and a post-freeze perturbation ablation (leave-one-event-out, drop-one-date jackknife, alternative calm years, balanced counts) flips no frozen-significant row’s sign — 6/208 flipped cells, all on rows statistically indistinguishable from zero, and the CI keeps excluding zero in 57/60 leave-one-event-out cells. Scoring reads only the structured direction field: W-arm free text does retrieve the asserted period — fake-date-year mentions reach 86–100% of completions on the most affected rows, recognizable event references up to 77% — which is the transplant mechanism itself made visible; a 15-model transcript audit finds true-date-year references rare ( ≤ 6% per row, fake-vantage-consistent on inspection) and dated strings essentially absent from masked-arm text (one occurrence in 6,396 full-tier masked completions). Perturbation and transcript-audit outputs ship with the artifact. 
+
+3.2 Probes 
+
+Date recovery (REC) : shown the masked snapshot, the model is asked to date it (temperature 0); scored as calendar-year accuracy, ±12-month accuracy, and median month offset, pre- and post-cutoff (tables print calendar-year accuracy). Outcome recall (LAP) : a date-only query for the realized outcome, adapted from Gao et al. (2025) to the black-box setting as a frequency approximation over 20 samples at temperature 1.0. LAP per month yields both a recall rate and — through its collapse — the effective cutoff. Aggregating the sampled directions per month also yields the recall hit rate : the share of pre-cutoff months whose net recalled direction matches the realized outcome — the guessing gate for the cutoff metric below. 
+
+3.3 Six metrics and their gates 
+
+1. E2 (date trigger) = Gap( D) − Gap( M ).2. E3 (transplant) = Gap fake (W ) − Gap true (W ): the same W generations scored once under the asserted (fake) date labels and once under the true ones. 3. P1 (post-cutoff placebo) = D − M bearish-share difference on post-cutoff dates, where no memory exists to trigger. Gate : if the measured cutoff falls inside the calendar placebo window, the window is recomputed model-relatively (§6); both computations are frozen per model. 4. REC (recoverability) . Gate : a window is reported only with n ≥ 10 convergent probe answers (one vendor’s reasoning mode fails this row-wide, §7; one reduced-tier row fails it in both windows). 5. Effective cutoff : the last month with LAP > 0.1 in the monthly LAP series. Gate : defined only when the recall hit rate exceeds chance — for three small models the probe measures guessing, and their never-collapsing “cutoffs” are artifacts, reported as undefined. 6. δ (dissociation) : the signal × LAP interaction in a correctness regression (HAC, lag 6) — does recall load on accuracy or on narrative? Gate : undefined when LAP variance on the regression’s estimation dates is ≤ 10 −4 (interaction collinear with signal; the degenerate regression once produced δ = 12 .5 before gating). Near-saturated rows — LAP ≈ 1 on every estimation date — fall under this gate; one such cell is disclosed in Table 1. 5VALID (schema-compliant generation share) is reported for every row; models that cannot carry the task exit with the record kept rather than being silently dropped. 
+
+3.4 Does the protocol transfer across tasks? 
+
+The protocol is task-generic by construction; as evidence, a reduced 65-date audit on a second domain (10-year Treasury yield direction, sign pinned so that bearish = yields fall) reproduced the trigger and transplant effects cross-model with asset-appropriate signs: E2/E3 both significant on two of three models tested (up to +63 .2pp [45.9, 80.0] trigger and +64 .3pp [23.6, 104.2] transplant), the third positive but with a structurally wide transplant CI under the reduced window (§7.4). Domain-transfer requires re-pinning the direction semantics and re-deriving the crisis/calm sets; nothing else changes. 
+
+# 4 Panel and Artifact 
+
+Panel. 258 monthly decision nodes: 240 pre-cutoff (2005-01–2024-12) and 18 post-cutoff (2025-01–2026-06, refreshed on a rolling basis; §8). Of the 18, the calendar placebo window (P1, §3.3) evaluates the 17 dates from 2025-02: 2025-01 is the reference model’s vendor-reported cutoff month and is excluded as a boundary month (preregistered), while the LAP locator scans all 18. Each node is a vintage-correct macro snapshot assembled from archival data vintages (ALFRED), so the information set at node t contains exactly what was published by t — this removes the cross-vintage blur that Crane et al. (2025) show LLMs themselves exhibit, and makes the masked arm meaningful: what remains after masking is a historically faithful, date-scrubbed information set. 
+
+Licensing. The underlying vintage series are public-domain (U.S. federal statistical releases via ALFRED). Market-derived direction labels are released in conservative aggregate form (direction and coarse magnitude bins, not raw index levels). 
+
+What ships. (i) The panel snapshots and arm-transformation code; (ii) every frozen preregistration with SHA-256 hashes and freeze timestamps, including the data-dependent extensions with their decision rules; (iii) full per-model transcripts for all arms and probes; (iv) per-model audit-row JSONs — the single numeric source from which the leaderboard table, the CSV export, and both papers’ table files are generated by one script with a drift-check mode; (v) the usage ledgers and the cost-attribution script behind the measured-cost column; (vi) runner and analysis code with per-model adapter notes. The artifact is the versioned public repository at https://github.com/Khaozhe/hindsightbench ,with the v1.0 release archived on Zenodo (DOI 10.5281/zenodo.21453191); Croissant (core + RAI) metadata and dataset hosting are planned for the archival submission. 
+
+Reproducibility discipline. Every number in this paper is generated from frozen row files by scripts in the artifact; the leaderboard generator has a –check mode that fails if any published table drifts from the frozen rows, and the same generated row block is included by both this paper and the companion findings paper, so the two cannot silently diverge. 
+
+# 5 The 15-Model Leaderboard 
+
+Table 1 gives the audit rows for 15 models from seven vendors (OpenAI, Anthropic, Google, DeepSeek, Alibaba/Qwen, Moonshot, Meta), spanning three training generations and 1B–70B(+) parameters. 6Model Gen E2 E3 P1 REC pre/post LAP pre/post (hit) Cutoff δ (t) VALID GPT-5.5 2026 +.215 [.10,.33] +.161 [.09,.23] −.073 m 100%/94% .999/.161 (100%) 2025-06 —v 100% Claude Sonnet 5 2026 +.326 [.19,.46] +.450 [.26,.64] −.062 m 95%/69% 1.000/.556 (92%) 2025-10 —v 100% p                                                                                                                       
+
+> Kimi-K2.6 2026 +.332 [.25,.41] +.385 [.26,.51] −.062 m—r.330/.008 (98%) 2025-02 +.254 (2.99) 100% Qwen3.6-35B-A3B 2026 +.237 [.12,.35] +.346 [.24,.46] −.029 26%/0% .982/.000 (78%) 2024-12 +.514 (1.19) 100% Qwen3.6-27B 2026 +.193 [.11,.28] +.181 [.11,.25] −.055 9%/0% .919/.000 (72%) 2024-11 +.271 (1.23) 100% GPT-5.4-mini 2026 +.144 [.07,.22] +.187 [.08,.29] +.014 m49%/18% 1.000/.414 (74%) 2025-09 —v100% p
+> Claude Haiku 4.5 2025 +.383 [.30,.47] +.495 [.34,.64] −.007 20%/0% .838/.000 (69%) 2024-10 +.162 (1.35) 100% DeepSeek v4-flash 2025 +.416 [.30,.54] +.309 [.14,.48] +.040 m95%/65% .815/.103 (89%) 2025-07 +.019 (0.13) 100% Gemini 2.5 Flash 2025 +.256 [.14,.37] +.311 [.20,.43] −.025 80%/6% .337/.000 (94%) 2024-06 −.266 (−2.03) 100% Gemini 2.5 Pro 2025 +.167 [.10,.24] +.242 [.13,.36] —c96%/33% .922/.000 (98%) 2024-05 +.235 (0.29) 100% Qwen3-30B-A3B n2025 +.063 [ −.10,.24] +.016 [ −.14,.18] +.066 18%/0% .807/.000 (67%) 2024-04 −.133 ( −1.11) 100% Llama 3.1 70B 2024 −.047 [ −.12,.03] +.008 [ −.10,.11] +.004 18%/0% .854/.000 ( 68% )2023-12 +.007 (0.13) 100% Llama 3.1 8B 2024 +.056 [ −.10,.20] +.076 [ −.02,.18] +.051 5%/0% .954/.144 (50%) g—g—g100% Llama 3.2 3B 2024 +.252 [ −.05,.51] −.520 [ −.70, −.30] s−.033 5%/0% .921/.544 (48%) g—g—g52% Llama 3.2 1B 2024 −.096 [ −.24,.05] −.162 [ −.35, −.01] s+.055 —/— .522/.450 (43%) g—g—g79%
+
+Table 1: Audit rows in benchmark-table order (by training generation). REC prints calendar-year accuracy; an em-dash in REC marks a window below the n ≥ 10 convergence gate (§3.3) — Kimi-K2.6 row-wide r, and Llama 3.2 1B in both windows (0 convergent pre-cutoff answers, 1 post-cutoff). Boldface marks the three cells read as headline evidence in §5.1: the largest transplant effect, the significantly negative δ, and the genuine-recall hit rate of a no-trigger model. m model-relative placebo window (measured cutoff falls inside the calendar window; both computations frozen per model). n row added after the fourteen-row freeze from a preregistered pilot’s GO/KILL stage; BM-1-compatible protocol; the date-recovery probe was deferred at row freeze and backfilled under the identical serving configuration (no other cell changed); inclusion is data-dependent and disclosed. 
+
+c post-cutoff arms not generated (cost decision). r probe non-convergent under the provider-locked reasoning regime (§7). v δ undefined: LAP variance ≤ 10 −4 on the regression’s estimation dates (interaction collinear with signal). The GPT-5.5 cell printed +.065 (t = 2 .96 ) in its initially frozen row, which predated the variance gate; on its 152 estimation dates LAP is exactly saturated (variance zero — the one sub-saturation month is excluded by the regression’s own sample rule), so the gated pipeline voids the cell; disclosed as a post-freeze correction rather than silently regenerated. p parser v2 recovery (uniform trailing-comma normalization; disclosed in §7). g recall hit rate at chance: cutoff and δ undefined. s sparse-cell artifact of the reduced 65-date tier under low compliance. Protocol tiers and quantization per row are recorded in the artifact registry. The row block is machine-generated from the frozen per-model row files (identical, by construction, to the companion paper’s appendix table). 
+
+5.1 Core patterns 
+
+The trigger tracks training generation, not scale. Significant date-trigger (E2) and transplant (E3) effects appear in 6/6 tested 2026-generation models — including a 3B-active MoE and the cheapest tier of its family — in 4/5 of the 2025 cohort, and in 0/4 of the 2024 open-weight generation from 1B to 70B (Figure 2; the only 2024 CIs excluding zero are the two negative sparse-cell E3 artifacts flagged s in Table 1). The decisive observation is within-vendor : Qwen3-30B-A3B (2025) has real outcome memory (recall hit 67%, measured cutoff 2024-04) but no trigger (E2 +6 .3pp 
+
+[−9.7, +23 .6] ; E3 +1 .6pp [−14 .1, +17 .5] ), while Qwen3.6 MoE — same vendor, same architecture family, same 3B active — triggers at +23 .7pp . Whatever installs the reflex changed between those two training pipelines at fixed scale. One attribution confound is explicit: ordered by measured cutoff, trigger status steps exactly once (absent through 2024-04, present from 2024-05 onward), so generation is collinear with corpus period in this sample; the companion paper’s robustness appendix weighs the pure corpus-period reading and finds it strained — boundary adjacency (one 71B 3B 8B 27B 70B  
+
+> active parameters (open weights)
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> E2 date-trigger e ff ect  35B-A3B
+> (3B act.)
+> 27B
+> 30B-A3B 70B
+> 8B
+> 3B
+> 1B
+> 2024 generation
+> 2025 generation
+> 2026 generation
+> low compliance (52–79%)
+> Gemini Flash
+> Gemini Pro
+> DeepSeek
+> GPT-5.4-mini
+> GPT-5.5
+> Kimi-K2.6
+> Haiku 4.5
+> Sonnet 5
+> API models (size undisclosed)
+
+Figure 2: E2 date-trigger effect (95% bootstrap CI) against parameter scale, colored by training generation. Left: open-weight models at known active-parameter counts. Right: API models (sizes undisclosed). No 2024-generation estimate is distinguishable from zero at any scale; every 2026-generation model triggers; at the same 3B-active MoE scale the 2025-generation Qwen3 is null while the 2026-generation Qwen3.6 is significantly positive. measured month between the last non-trigger and the first trigger) and memory-without-reflex both cut against it — without settling attribution. 
+
+Memory without trigger; trigger without reconstruction. Two models (Llama 3.1 70B, hit 68%; Qwen3-30B-A3B, hit 67%) carry genuine outcome memory that never activates behaviorally — and both sit at date-recovery rates that round to the same 18%: weak reconstruction, real recall, no reflex. A post-freeze per-date cross-tabulation sharpens the dissociation: dates of high generic recall show no trigger elevation in any of four models examined; elevation concentrates where recall coincides with crisis semantics. Conversely, the trigger does not require date-reconstruction ability: Qwen3.6-27B recovers the date of masked data in only 9% of months yet triggers at +19 .3pp , and the largest transplant effect in the table belongs to a model with 20% recovery (Claude Haiku 4.5, E3 +49 .5pp ; its sibling Sonnet 5 is second at +45 .0pp ). Elicitable, recalled, and behaviorally active are three different properties; single-axis audits conflate them. 
+
+The dissociation coefficient has both signs. δ is significantly negative on Gemini 2.5 Flash (−0.266 , t = −2.03 ) and significantly positive on Kimi-K2.6 ( +0 .254 , t = 2 .99 , well-identified) — so recall probes calibrated to accuracy inflation will miss, or mis-sign, directionally expressed contamination depending on the model. Detection pipelines should treat δ’s sign as a per-model measurement, not an assumption. 
+
+5.2 Measured cost 
+
+Costs are ledgered per call and attributed mechanically (fixed time windows with exact expected call counts, asserted). Representative full-protocol rows with repo-frozen rates: Claude Haiku 4.5 $29.45 (10.5M tokens), GPT-5.4-mini $19.30 (8.5M); GPT-5.5’s premium output pricing makes it 82005 2007 2009 2011 2013 2015 2017 2019 2021 2023 2025               
+
+> Llama 3.1 70B (2023-12)
+> Qwen3-30B-A3B (2024-04)
+> Gemini 2.5 Pro (2024-05)
+> Gemini 2.5 Flash (2024-06)
+> Claude Haiku 4.5 (2024-10)
+> Qwen3.6-27B (2024-11)
+> Qwen3.6-35B-A3B (2024-12)
+> Kimi-K2.6 (2025-02)
+> GPT-5.5 (2025-06)
+> DeepSeek v4-fl ash (2025-07)
+> GPT-5.4-mini (2025-09)
+> Claude Sonnet 5 (2025-10)
+> measured cuto ff (LAP collapse) vendor-reported cuto ff
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> LAP
+
+Figure 3: Monthly LAP (outcome-recall propensity) per model, rows ordered by measured cutoff; the collapse from color to white is the behaviorally effective cutoff (red tick), against the vendor-reported date (dotted black tick) where one is published. Guessing-tier models are excluded (cutoff undefined). The right edge forms a 22-month staircase. the most expensive row at ≥$115 (output-side lower bound). The ledger states its gaps explicitly: one API row predates the ledger entirely; several rows carry exact token counts but no repo-frozen billing rate (reported tokens-only); the batch-run row’s tokens are harvested from the retrievable batch results but await a billing-anchored rate; self-hosted rows are GPU-rental time. An audit row is, in every case, orders of magnitude cheaper than a backtest-grade evaluation stack. 
+
+# 6 In-Task Cutoff Co-Location 
+
+The effective cutoff — the last month at which the model’s date-only outcome recall stays above threshold on this task’s stimuli — is a by-product of the LAP probe, not a separate instrument. Three findings (Figure 3): 
+
+Measured cutoffs span 22 months (2023-12 to 2025-10) across the twelve real-memory rows, under one protocol and one panel. Any multi-model comparison that fixes a single calendar placebo window is therefore comparing different memory regimes across models. 
+
+Vendor-reported dates are biased in both directions. Where an official date exists (7 of 12 real-memory rows), the measured boundary is: exact (Llama 3.1), within one month (GPT-5.4-mini), and early by six months (GPT-5.5: 2025-06 vs. 2025-12), seven to eight months (both Gemini 2.5 tiers vs. 2025-01), three months (Claude Sonnet 5 vs. its “reliable” tier 2026-01), and four months (Claude Haiku 4.5 vs. 2025-02). Anthropic’s two-tier disclosure (reliable/training) itself documents that the behavioral boundary is not the data boundary; our measurements fall earlier than even the conservative tier. Where no official date exists (DeepSeek, Qwen, Moonshot), third-party tracker estimates conflict with each other and with the measurement in both directions — DeepSeek’s measured 2025-07 postdates circulating estimates. The behavioral locator, not disclosure or tracker consensus, is the auditable quantity. This extends the effective-vs-reported gap of Cheng et al. (2024) and the declared-vs-detected divergence of Pęzik et al. (2025) from the freshness level to the in-task level. 
+
+Post-cutoff windows must be model-relative. For five rows the measured cutoff falls inside 
+
+the calendar post-cutoff window that a designer would naively draw, so the placebo is recomputed 9on each model’s own post-boundary months, with both computations frozen and released per model (Table 1 prints the model-relative placebo m; its REC and LAP post columns print calendar-window values). For the placebo the five corrections happen to be small; for the recovery probe the same correction flips the reading outright — one model “recovers” the dates of 69% of its convergent calendar post-cutoff probes (11/16 over the 17-month window), but 9 of those 17 months are still inside its measured memory; on its model-relative window, where recall is provably zero, recovery drops to 38% (3/8), which is the number that can be interpreted as pure inference. A column label like post-cutoff is only as meaningful as the boundary it is relative to. The same logic applies to any train/test split or “post-cutoff safe” deployment claim: safety is relative to the measured, task-level boundary, and §5.1’s memory-without-trigger rows show the converse — a date inside the memory window is not automatically dangerous either. Freshness-level locators (Pęzik et al., 2025; Spohn, 2025) and this in-task locator are complements: the former audit the model in general, the latter audits the evaluation you are actually running. 
+
+# 7 Protocol Invariances and Operational Requirements 
+
+A benchmark of behavioral reflexes is only portable if its numbers survive the details of serving. We tested this directly where it is cheapest to get wrong, and codify the results as requirements. 
+
+7.1 Quantization is not neutral (BM-2a) 
+
+We re-ran the full arm matrix on the same weights (Qwen3.6-27B) under three serving precisions, with a preregistered mutual-CI stability criterion against the frozen FP8 reference row (E2 +19 .3pp [10.8, 28.5]): 
+
+• AWQ-INT4: stable. E2 +17 .2pp [6.6, 28.0]; E3 and the measured cutoff also stable (within one month). 
+
+• BF16: unstable. Pooled over two full reps, E2 falls to +5 .6pp [−2.3, +13 .4] — the CI no longer contains the reference point estimate, failing mutual containment on double data. E3 (+15 .4pp [6.3, 24.3]) and the cutoff (identical month) remain stable. Decomposition localizes the entire divergence to the masked arm: the D-arm crisis–calm gap is tier-invariant, while the BF16 M-arm gap is positive ( +6 .6pp [0.1, 12.9], pooled) where the FP8 reference is null ( −3.5pp ). Under the preregistered decision rule for the follow-up rep, this passes the letter of the “masked arm leaks at full precision” criterion — but only at the evidence boundary (hairline CI, strong between-rep heterogeneity), and we report it as boundary evidence, not a mechanism claim. The protocol-level conclusion does not depend on the mechanism: audit rows must pin and report the serving quantization, and comparisons across quantizations of “the same model” are not valid without a stability check . Existing multi-model sweeps that mix official APIs with community-quantized checkpoints inherit this silently. This is the audit-metric face of a broader finding in the quantization-evaluation literature: compression can preserve aggregate accuracy while flipping individual predictions (Dutta et al., 2024), with effects uneven across tasks and behavioral dimensions (Li et al., 2024; Fu et al., 2025); AWQ-INT4’s stability here is consistent with its weight-only, activation-aware design (Lin et al., 2024). 
+
+7.2 The reasoning regime can disable a probe 
+
+On Kimi-K2.6 (provider-locked thinking, temperature locked to 1), the date-recovery probe fails to converge: 256 of 258 dates exhaust a 16,384-token budget reasoning without emitting an answer, 10 reproduced across JSON-mode on/off and batch/direct serving; the two convergent dates used 
+
+∼7k tokens. The arms and the LAP probe converge at full strength — so date assertion and date 
+
+inference dissociate even at the compute level, and the REC column is reported as unmeasurable rather than extrapolated from n = 2 . Separately, during probe calibration we observed that compressing a model’s thinking budget can flip its recall-answer distribution outright; cross-model comparisons must therefore pin the thinking regime per model and disclose provider locks. Batch serving also truncated reasoning-heavy generations at a far higher rate than direct serving on the same requests — batch output budgets need independent headroom. 
+
+7.3 Parsing, sampling, and compliance policy 
+
+Parser policy is part of the measurement. Our v2 parser adds one uniform recovery (retry after trailing-comma normalization). It changes nothing on 13 of 15 rows but recovers 100 generations on one model (shifting its E2 by +5 .8pp ) and 10 on a second ( −0.2pp ) — a pure artifact of strict-JSON scoring, not of the models’ hindsight. Report the parser version; apply changes uniformly; disclose per-row deltas. Sampling locks : providers that reject non-default sampling get preregistered exceptions recorded in the row (one row runs at provider defaults). Retrieval off. Several 2026-generation endpoints enable retrieval or tool use by default; every metric here presupposes pure parametric behavior, and the post-cutoff placebo’s premise (no memory to trigger) is void under live retrieval. Rows must pin retrieval/tools off and record the setting; all fifteen rows here are plain completions. Compliance and identifiability gates : rows with sub-threshold schema compliance keep their VALID number and lose the metrics that stop being identified (§3.3) — and the three small models gated by the recall-hit-rate condition are the existence proof that ungated columns would report artifacts (never-collapsing “cutoffs”). 
+
+7.4 Cross-domain check (GD-2) 
+
+A reduced 65-date audit on 10-year Treasury direction, three models, one rep, direction semantics pinned before running: Claude Haiku 4.5 E2 +63 .2pp [45.9, 80.0] and E3 +62 .9pp [24.6, 98.1]; DeepSeek v4-flash +42 .3pp [11.7, 71.7] and +64 .3pp [23.6, 104.2]; GPT-5.4-mini E2 +20 .6pp [7.3, 34.1] with E3 positive but not significant ( +13 .8pp [−5.3, +28 .2] ) under the reduced window’s structurally wide transplant CI (the preregistration’s prediction failed partially on this model; reported as-is). Bond-domain effects exceed the same models’ equity effects on five of the six arm-level contrasts (the exception is GPT-5.4-mini’s transplant, itself not significant under the reduced window), consistent with the flight-to-safety asymmetry in the companion paper. Total marginal cost of the cross-domain check: $4.89. 
+
+# 8 Maintenance and Versioning 
+
+Frozen protocol, rolling window. The protocol (arms, probes, metric definitions, gates, bootstrap conventions) is frozen by hash and does not change with new entrants. The post-cutoff placebo window rolls forward for new audits as calendar time passes: new months are appended to the extension panel, and a new row’s model-relative window is derived from its measured cutoff at audit time. Published rows keep the windows they were frozen with; re-auditing an existing model under an extended window produces a new row version (below). The benchmark therefore does not silently expire as models’ knowledge advances. 11 Row versioning. Each row records its protocol tier (full or reduced), rep count, sampling configuration, serving quantization, thinking-regime setting (including provider locks), retrieval/tool setting, parser version, and adapter; re-audits of the same model under a new serving configuration are new rows, not overwrites (the quantization result of §7.1 is why). Vendor-reported cutoffs are stored alongside measured ones with retrieval dates, since vendor documentation changes. 
+
+Adding a model. A new entrant requires an API key, one smoke run with manual inspection (2 dates × 4 arms, gated in the preregistration), the full run, and one analysis command that emits the row JSON. The leaderboard table, CSV, and both papers’ table files regenerate from row JSONs by one script whose –check mode acts as a drift gate; display metadata (names, generation assignment, disclosure marks) lives in a single registry file. Data-dependent additions after a table freeze are permitted but must be marked as such on the row and disclosed (the disclosed addition Qwen3-30B-A3B, note n in Table 1, is the worked example). 
+
+Retirement and correction. Rows are never deleted; superseded rows (deprecated endpoints, corrected artifacts) are flagged with a reason and kept in the history. Corrections that change any published number require a regeneration of all derived tables — which the drift gate makes mechanical — and a dated changelog entry. 
+
+# 9 Limitations 
+
+One primary carrier task. The profile rows are measured on a single monthly U.S. macro panel; the cross-domain check (§7.4) is a reduced-protocol audit on one additional domain and three models, not a second full leaderboard. Task-conditionality is real — the companion paper’s dissociation results differ from single-stock evidence — so rows should be read as “on this task class.” 
+
+Masked-arm estimates are lower bounds : masking removes the trigger, not the knowledge. 
+
+Black-box probes approximate. Without logprobs, LAP is a frequency estimate from 20 samples (10 on the reduced tier and on the disclosed post-freeze row); the collapse-threshold convention (LAP 
+
+> 0.1) is frozen but not canonical. Post-freeze sensitivity checks bound both choices: re-sweeping the threshold across [0 .05 , 0.2] moves the measured cutoff by at most one month on 11 of 14 gated rows (at most nine months anywhere, on the lowest-recall row), and on three re-probed rows doubling to 40 samples moves no cutoff by more than one month — while re-probing the same rows at temperature 0.3/0.7 moves one cutoff by four months, so the sampling regime, not estimator resolution, is the binding convention (§7). Coverage is uneven by construction. REC is unmeasured on two rows (one non-convergent reasoning regime; one reduced-tier row whose probe yields almost no convergent answers, below the n ≥ 10 gate); one row’s placebo arms were not generated (cost decision); the cost ledger has disclosed gaps. Reduced-tier rows carry systematically wider CIs by construction (65 dates, fewer reps); comparisons that lean on them are correspondingly weaker. We prefer explicit holes to imputed values. Breadth is not causal depth. The leaderboard identifies patterns (generation-not-scale, both-sign δ); the causal anatomy behind them rests on the companion paper’s three-model core, and the within-vendor Qwen contrast, while controlled for vendor, architecture, and scale, is one lineage and does not hold corpus period fixed (§5.1). 
+
+Rows profile the generation layer. An audit row measures generation-level behavior; how much profiled hindsight survives into decisions depends on the surrounding pipeline and aggregation architecture (the companion paper measures that propagation directly), so deployment relevance is pipeline-conditional. Direction-only readout. The behavioral field is directional (bearish share); magnitude and calibration hindsight are out of scope. English-only prompts on a U.S.-centric 12 panel; corpus-culture effects on the trigger are an open question the leaderboard’s vendor spread hints at but cannot settle. 
+
+# Ethics and Dual Use 
+
+HindsightBench localizes where a model retains behaviorally active outcome knowledge. The same rows that warn a deployer could, in principle, guide an adversarial user toward the model whose memory of a target period is strongest — for instance, to make a backtest look better than it is. We judge the marginal risk limited: an audit row reveals dated, direction-level, aggregate knowledge already implied by training-data coverage, not private information, and the protocol’s primary deployment effect is to invalidate misleading backtests rather than to enable them — the same measurement that finds residual hindsight is the disclosure that discounts it. The released protocol pins retrieval off, freezes prompts and configurations before measurement, and ships transcripts for independent review; the panel is public-domain government macro data (ALFRED vintages) with no personal information. Cost disclosure (§5.2) keeps the audit reproducible by independent parties rather than only by the vendor being audited. 
+
+# References 
+
+Mostapha Benhenda. Look-Ahead-Bench: a standardized benchmark of look-ahead bias in point-in-time LLMs for finance. arXiv preprint arXiv:2601.13770 , 2026. Stephen Casper, Carson Ezell, Charlotte Siegmann, Noam Kolt, Taylor Lynn Curtis, Benjamin Bucknall, Andreas Haupt, Kevin Wei, Jérémy Scheurer, Marius Hobbhahn, Lee Sharkey, Satyapriya Krishna, Marvin Von Hagen, Silas Alberti, Alan Chan, Qinyi Sun, Michael Gerovitch, David Bau, Max Tegmark, David Krueger, and Dylan Hadfield-Menell. Black-box access is insufficient for rigorous AI audits. In Proceedings of the 2024 ACM Conference on Fairness, Accountability, and Transparency (FAccT) , 2024. doi: 10.1145/3630106.3659037. Jeffrey Cheng, Marc Marone, Orion Weller, Dawn Lawrie, Daniel Khashabi, and Benjamin Van Durme. Dated data: Tracing knowledge cutoffs in large language models. arXiv preprint arXiv:2403.12958 , 2024. Leland D. Crane, Akhil Karra, and Paul E. Soto. Total recall? Evaluating the macroeconomic knowledge of large language models. Finance and Eco-nomics Discussion Series 2025-044, Board of Governors of the Federal Re-serve System, 2025. URL https://www.federalreserve.gov/econres/feds/ total-recall-evaluating-the-macroeconomic-knowledge-of-large-language-models. htm .Antoine Didisheim, Martina Fraschini, and Luciano Somoza. AI’s predictable memory in financial analysis. Economics Letters , 256:112602, 2025. doi: 10.1016/j.econlet.2025.112602. Abhinav Dutta, Sanjeev Krishnan, Nipun Kwatra, and Ramachandran Ramjee. Accuracy is not all you need. In Advances in Neural Information Processing Systems , volume 37, 2024. arXiv:2407.09141. Alexander Eliseev and Sergei Seleznev. Fake date tests: Can we trust in-sample accuracy of LLMs in macroeconomic forecasting? arXiv preprint arXiv:2601.07992 , 2026. 13 Yao Fu, Xianxuan Long, Runchao Li, Haotian Yu, Mu Sheng, Xiaotian Han, Yu Yin, and Pan Li. Quantized but deceptive? A multi-dimensional truthfulness evaluation of quantized LLMs. In 
+
+Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 2025. arXiv:2508.19432. Zhenyu Gao, Wenxi Jiang, and Yutong Yan. Detecting lookahead bias in LLM forecasts. arXiv preprint arXiv:2512.23847 , 2025. Paul Glasserman and Caden Lin. Assessing look-ahead bias in stock return predictions generated by GPT sentiment analysis. arXiv preprint arXiv:2309.17322 , 2023. Songrun He, Linying Lv, Asaf Manela, and Jimmy Wu. Chronologically consistent large language models. arXiv preprint arXiv:2502.21206 , 2025a. Songrun He, Linying Lv, Asaf Manela, and Jimmy Wu. Instruction tuning chronologically consistent language models. arXiv preprint arXiv:2510.11677 , 2025b. Anany Kotawala. NumLeak: Public numeric benchmarks as latent labels in foundation models. 
+
+arXiv preprint arXiv:2605.30393 , 2026. Shiyao Li, Xuefei Ning, Luning Wang, Tengxuan Liu, Xiangsheng Shi, Shengen Yan, Guohao Dai, Huazhong Yang, and Yu Wang. Evaluating quantized large language models. In Proceedings of the 41st International Conference on Machine Learning (ICML) , volume 235 of Proceedings of Machine Learning Research , 2024. arXiv:2402.18158. Weixian Waylon Li, Mengyu Wang, and Tiejun Ma. Summoning the oracle to slay it: Mitigating look-ahead bias in financial backtesting with large language models. arXiv preprint arXiv:2605.24564 ,2026a. Xiangyu Li, Yawen Zeng, Xiaofen Xing, Jin Xu, and Xiangmin Xu. Profit mirage: Revisiting information leakage in LLM-based financial agents. arXiv preprint arXiv:2510.07920 , 2025. Zehan Li, Yuxuan Wang, Ali El Lahib, Ying-Jieh Xia, and Xinyu Pi. Simulated ignorance fails: A systematic study of LLM behaviors on forecasting problems before model knowledge cutoff. 
+
+arXiv preprint arXiv:2601.13717 , 2026b. Chuan Liang. Look-ahead bias in financial forecasts generated by large language models. SSRN Work-ing Paper No. 6772819, 2026. URL https://papers.ssrn.com/sol3/papers.cfm?abstract_ id=6772819 .Ji Lin, Jiaming Tang, Haotian Tang, Shang Yang, Wei-Ming Chen, Wei-Chen Wang, Guangxuan Xiao, Xingyu Dang, Chuang Gan, and Song Han. AWQ: Activation-aware weight quantization for LLM compression and acceleration. In Proceedings of Machine Learning and Systems (MLSys) ,volume 6, 2024. arXiv:2306.00978. Yachuan Liu, Xiaochun Wei, Lin Shi, Xinnuo Li, Bohan Zhang, Paramveer Dhillon, and Qiaozhu Mei. ExAnte: A benchmark for ex-ante inference in large language models. arXiv preprint arXiv:2505.19533 , 2025. Alejandro Lopez-Lira, Yuehua Tang, and Mingyin Zhu. The memorization problem: Can we trust LLMs’ economic forecasts? arXiv preprint arXiv:2504.14765 , 2025. 14 Humzah Merchant and Bradford Levy. A fast and effective solution to the problem of look-ahead bias in LLMs. arXiv preprint arXiv:2512.06607 , 2025. Jakob Mökander, Jonas Schuett, Hannah Rose Kirk, and Luciano Floridi. Auditing large lan-guage models: a three-layered approach. AI and Ethics , 4:1085–1115, 2023. doi: 10.1007/ s43681-023-00289-2. Piotr Pęzik, Konrad Kaczyński, Maria Szymańska, Filip Żarnecki, Zuzanna Deckert, Jakub Kwiatkowski, and Wojciech Janowski. LLMLagBench: Identifying temporal training boundaries in large language models. arXiv preprint arXiv:2511.12116 , 2025. Suproteem K. Sarkar and Keyon Vafa. Lookahead bias in pretrained language models. SSRN Working Paper No. 4754678, 2024. URL https://papers.ssrn.com/sol3/papers.cfm?abstract_id= 4754678 .Philipp Spohn. CutoffBench: Knowledge cutoff benchmark. https://cutoffbench.com , 2025. Yutong Yan, Raphael Tang, Zhenyu Gao, Wenxi Jiang, and Yao Lu. DatedGPT: Preventing looka-head bias in large language models with time-aware pretraining. arXiv preprint arXiv:2603.11838 ,2026. Taojie Zhu, Wentao Zhao, Rui Sun, Beidi Luan, Jiacheng Lu, Sinuo Wang, Jing Li, Daxin Jiang, Yonghong He, and Zuo Bai. From knowing to doing: A memory-controlled benchmark for LLM trading agents on stock markets. arXiv preprint arXiv:2605.28359 , 2026. 15
