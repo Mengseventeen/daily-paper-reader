@@ -6,35 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-26
-- 运行时间：2026-07-26 21:08:29 UTC
+- 最新运行日期：2026-07-27
+- 运行时间：2026-07-27 20:31:21 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：4
-- 速读区：1
+- 本次总论文数：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日推荐了金融审计辅助的虚假信息检测与解释、优化遗憾策略等5篇论文，其中精读两篇高分研究。最值得关注的是虚假信息检测在金融审计中的应用以及遗憾优化问题。建议优先阅读《Financial Audit Assistance using Misinformation Detection and Explanation》了解如何将检测技术落地。
-- 详情：[/202607/26/README](/202607/26/README)
+今日精读一篇高分论文，探讨易感储层架构在体制条件波动预测中的应用，速读涵盖趋势跟踪系统与随机卷积时间序列分类。  
+最值得关注的是《Susceptible Reservoir Architectures for Regime-Conditional Volatility Forecasting》（8.0分），其提出的架构设计对波动预测有显著改进。  
+建议普通读者可深入该论文的方法论，并尝试将趋势跟踪系统中的条件逻辑与其结合，拓展实际应用场景。
+- 详情：[/202607/27/README](/202607/27/README)
 
 ### 精读区论文标签
-1. [Financial Audit Assistance using Misinformation Detection and Explanation](/202607/26/2607.17797v1-financial-audit-assistance-using-misinformation-detection-and-explanation)  
+1. [Susceptible Reservoir Architectures for Regime-Conditional Volatility Forecasting](/202607/27/2607.22491v1-susceptible-reservoir-architectures-for-regime-conditional-volatility-forecasting)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：人工智能用于财务报表审计和虚假信息检测
-2. [Optimizing Regret](/202607/26/2607.18866v1-optimizing-regret)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于梯度下降的投资组合倾斜与遗憾最小化
-3. [HindsightBench: A Black-Box Behavioral Audit Protocol for Parametric Hindsight in Time-Indexed LLM Decision Tasks](/202607/26/2607.18867v1-hindsightbench-a-black-box-behavioral-audit-protocol-for-parametric-hindsight-in-time-indexed-llm-decision-tasks)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：LLM金融决策任务中参数事后性审计协议
-4. [Overview of FinMMEval 2026 Task 2: Multilingual Financial Short-Answer Question Answering](/202607/26/2607.19867v1-overview-of-finmmeval-2026-task-2-multilingual-financial-short-answer-question-answering)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：多语言金融问答评估
+   evidence：用于股票和ETF波动率预测的储层架构
 
 ### 速读区论文标签
-1. [Denoising Subordinated Probabilistic Models: Diffusion with a Tempered-Stable Volatility Clock, and What the Noise Mechanism Actually Controls](/202607/26/2607.19218v1-denoising-subordinated-probabilistic-models-diffusion-with-a-tempered-stable-volatility-clock-and-what-the-noise-mechanism-actually-controls)  
+1. [The Science and Practice of Trend-Following Systems](/202607/27/2607.19497v1-the-science-and-practice-of-trend-following-systems)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：用深度扩散过程建模金融收益波动率
+   evidence：趋势跟踪系统统一分析方法，与投资组合管理和智能投资顾问相关
+2. [In-Context Time Series Classification with Random Convolutional Features](/202607/27/2607.19234v1-in-context-time-series-classification-with-random-convolutional-features)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：时间序列分类方法可应用于股票市场分析
 
 
 <div class="dpr-home-promo-card">
