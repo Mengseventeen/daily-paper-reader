@@ -1,0 +1,1020 @@
+Title: MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction
+
+URL Source: https://arxiv.org/pdf/2607.24131v1
+
+Published Time: Tue, 28 Jul 2026 01:40:50 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction 
+
+# Yu-Chen Den ∗† 
+
+SinoPac Holdings Taipei, Taiwan abnerden@sinopac.com 
+
+# Kuan-Yu Chen ∗
+
+SinoPac Holdings Taipei, Taiwan lavamore@sinopac.com 
+
+# Kendro Vincent 
+
+National Chengchi University Taipei, Taiwan kendrov@g.nccu.edu.tw 
+
+# Tien-Hao Chang 
+
+SinoPac Holdings Taipei, Taiwan darby@sinopac.com 
+
+## Abstract 
+
+Classical alpha mining achieves strong risk-adjusted returns by combining many low-correlated predictive signals, yet deep learn-ing stock-ranking methods typically produce a single alpha per stock, rely on increasingly complex architectures with diminish-ing gains, and obtain diversity only through separate models or implicit routing, without explicitly controlling inter-alpha correla-tion. We introduce MAPLE ( Multi-Alpha Position-aware Listwise 
+
+Ensembling), a backbone-agnostic framework that recovers this diversity principle within a single training pass. MAPLE combines a unified, capacity-scaled prediction head with an extreme-rank weighted listwise ranking loss and a diversity regularizer that ex-plicitly penalizes pairwise correlation across alphas. Across four equity markets spanning the US, China, and Japan, MAPLE achieves the best average Sharpe and Calmar ratios among nine baselines, using up to 55 × fewer parameters and 2.5 × less training time, and generalizes across five backbone architectures with Sharpe and Calmar Ratio gains of 10–23% and 17–43%, respectively. Behavioral analysis further shows why each component works: the unified head already reduces inter-alpha correlation before any diversity loss is applied, and the extreme-rank loss lets diversity regular-ization improve rather than erode per-alpha ranking quality as capacity scaling sustains this balance at scale. These results show that principled loss design and capacity allocation, rather than architectural complexity, drive diverse and effective multi-alpha generation. 
+
+## CCS Concepts 
+
+• Information systems → Data mining ; • Applied comput-ing → Economics ; • Computing methodologies → Machine learning . 
+
+> ∗Equal contribution
+> †Corresponding author Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference’17, Washington, DC, USA
+> ©2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-x-xxxx-xxxx-x/YYYY/MM https://doi.org/10.1145/nnnnnnn.nnnnnnn
+
+## Keywords 
+
+Quantitative Finance, Alpha Mining, Ensemble, Learning to Rank, Self Attention 
+
+ACM Reference Format: 
+
+Yu-Chen Den, Kuan-Yu Chen, Kendro Vincent, and Tien-Hao Chang. 2026. MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Con-struction. In . ACM, New York, NY, USA, 14 pages. https://doi.org/10.1145/ nnnnnnn.nnnnnnn 
+
+## 1 Introduction 
+
+Classical alpha mining aims to discover predictive signals that can be transformed into trading strategies and ultimately combined into portfolios. Traditionally, such signals relied on economic in-tuition, fundamental analysis, and handcrafted features [ 9 ]. To overcome the pace limitation of manual discovery, researchers have explored automated approaches including genetic program-ming [ 40 ], reinforcement learning [ 31 , 43 , 45 ], and LLM-based agents [ 32 , 34 ]. Among these, deep learning stock ranking has emerged as the dominant paradigm for alpha signal learning: it is end-to-end trainable directly from price and volume data, scales naturally with data availability, and has produced strong empiri-cal results across diverse market settings [ 11 , 18 , 22 , 30 ]. The core workflow is straightforward—a model predicts the cross-sectional return of each stock, and a portfolio is constructed by selecting the top-ranked names. Despite this progress, two fundamental limitations remain un-addressed. First, in pursuit of better single-model performance, recent architectures have grown increasingly complex—stacking multi-layer Transformers with intra- and inter-stock attention [ 22 ], or incorporating graph networks [ 18 ], Mixture-of-Experts rout-ing [ 5, 25 , 44 ], and diffusion-based components [ 5 ]. While these designs improve expressiveness, they yield diminishing perfor-mance gains at substantially higher computational cost. Simpler architectures have been shown to match or outperform complex Transformer variants on financial tasks [ 7], suggesting that archi-tectural complexity alone is not the bottleneck. Moreover, their architecture-specific nature makes them difficult to transfer or ex-tend across different backbone settings, as each new design requires substantial re-engineering to apply elsewhere. Second, a central principle in classical alpha mining is signal diversity: individual alphas are susceptible to regime shifts and structural changes, making low-correlated ensembles essential for arXiv:2607.24131v1 [cs.LG] 27 Jul 2026 Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+managing concentrated exposure and improving risk-adjusted re-turns [ 1, 15 , 35 ]. Yet most deep learning methods generate only a single alpha score per stock [ 22 , 25 , 30 , 39 , 42 ], overlooking the di-versification benefit that multi-alpha ensembles provide. Attempts to address this have relied on training multiple independent models, either with passive diversity through random seeds or architectural variation [ 29 , 33 ], with explicit routing mechanisms [ 5, 25 , 44 ], or with multi-stage distillation training [ 7]. All of these methods mul-tiply the already high training cost of individual models, without explicitly controlling inter-alpha correlation. This raises a natural question: can we simultaneously achieve efficient single-model prediction and diverse multi-alpha generation, without com-plex architectures or multi-stage pipelines? 
+
+To address this, we introduce MAPLE ( Multi-Alpha Position-aware Listwise Ensembling), a backbone-agnostic framework for efficient and diverse multi-alpha portfolio construction. MAPLE replaces previous complex architectures with a unified prediction head that fuses an intra-stock path with a lightweight inter-stock attention path directly in prediction space. This head is further paired with an extreme-rank weighted listwise ranking loss that lets each alpha focus on the extreme-rank positions relevant to portfolio construction, and a diversity regularizer that explicitly penalizes pairwise correlation across alphas. We further scale per-alpha capacity within both paths of the prediction head as the number of alphas grows, preventing the degradation observed in naive multi-alpha designs. Together, these components recover the classical alpha-mining diversity principle within a single model and a single training pass. Our contributions are threefold: 
+
+• A Unified, Capacity-Scaled Multi-Alpha Framework. We propose MAPLE, combining a unified prediction head, an extreme-rank weighted listwise ranking loss with a diversity regularizer, and a capacity-scaling scheme into a single model, without re-lying on separate models, specialized routing, or multi-stage pipelines to obtain diversity across multiple alphas. 
+
+• State-of-the-Art Performance, Efficiency and Generaliza-tion. Across four equity markets, MAPLE achieves the best aver-age Sharpe and Calmar ratios among nine baselines at a fraction of their parameter and training cost. Ablation studies confirm that each component contributes incremental gains, and MAPLE generalizes consistently across five backbone architectures with fundamentally different inductive biases, with Sharpe and Calmar Ratio gains of 10–23% and 17–43%, respectively. 
+
+• Mechanistic Evidence for Each Component. Through com-plementary behavioral analyses, we show why each component works: the unified head already reduces inter-alpha correlation before any diversity loss is applied; anchoring the ranking loss within the extreme-rank region lets diversity regularization im-prove rather than erode per-alpha ranking quality; and capacity scaling prevents this balance from collapsing as more alphas are added, letting a single trained model match the diversification benefit of an explicit multi-model ensemble without its training cost. 
+
+## 2 Preliminary 2.1 Problem Formulation 
+
+Portfolio construction can be formulated as a learning-to-rank task across stocks using the future return as target. During training, given historical information 𝑿 ∈ R𝑆 ×𝑇 ×𝐹 as input (i.e., 𝐹 features over 𝑇 past timesteps for each of the 𝑆 stocks), a model 𝑓 𝜃 learns to predict the value or relative ranking of the 𝑞 -day future return 𝒚 ∈
+
+R𝑆 for each stock, typically optimized with a pointwise, pairwise, or listwise objective: min 𝜃 ℒ  𝒚 , 𝑓 𝜃 (𝑿 ). During inference, for each trading day 𝑡 , a 𝑞 -day long-only portfolio is formed by selecting the top-𝑘 ranked stocks under 𝑓 𝜃 ’s prediction, with portfolio weights 
+
+𝒘 𝑡 ∈ R𝑘 controlling the aggregation strength of each selected stock. The portfolio performance is usually measured with Sharpe and Calmar Ratios, calculated from the daily return stream 𝒑 𝑡 = 𝒘 ⊺ 
+
+> 𝑡
+
+𝑪 𝑡 ,where 𝑪 𝑡 ∈ R𝑘 ×𝑞 collects the realized returns of the selected stocks over the following 𝑞 days. 
+
+## 2.2 Stock Prediction Architectures 
+
+The model 𝑓 𝜃 generally comprises three sequential components: a temporal encoder 𝑡 𝜃 that extracts intra-stock representations from historical data, a cross-sectional module 𝑔 𝜃 that captures relational context across stocks, and a prediction head ℎ𝜃 that produces the final alpha signals. 
+
+Temporal Encoder 𝒕 𝜽 . The temporal encoder processes each stock independently along the time axis, using architectures such as recurrent networks [ 6], Transformers [ 36 ], or Mamba blocks [ 16 ]. Given input 𝑿 ∈ R𝑆 ×𝑇 ×𝐹 , it produces an intra-stock hidden repre-sentation 𝑯 = 𝑡 𝜃 (𝑿 ) ∈ R𝑆 ×𝐷 , where 𝐷 is the hidden dimension. Since each stock is processed independently, cross-sectional struc-ture is left to the downstream components. 
+
+Cross-Sectional Module 𝒈 𝜽 . A stock’s return is influenced not only by its own history but also by the behavior of related assets [ 8]. The cross-sectional module addresses this by refining 𝑯 through relational context aggregated across the stock universe, such that 
+
+𝑯 ′ = 𝑔 𝜃 (𝑯 ) ∈ R𝑆 ×𝐷 . The function 𝑔 𝜃 may be implemented using mechanisms such as inter-stock self-attention [ 22 , 42 ], graph neural networks [ 18 ], and hypergraph-based methods [ 30 , 39 ]. Regardless of the mechanism, the resulting representation 𝑯 ′ retains the same shape, R𝑆 ×𝐷 . Without cross-sectional modeling, 𝑔 𝜃 reduces to the identity mapping, yielding 𝑯 ′ = 𝑯 .
+
+Prediction Head 𝒉 𝜽 . The prediction head maps 𝑯 ′ to a scalar alpha score for each stock, yielding ˆ𝒚 = ℎ𝜃 (𝑯 ′) ∈ R𝑆 . In most existing work, ℎ𝜃 is a simple linear projection that produces a single ranking score per stock. MAPLE redesigns both 𝑔 𝜃 and ℎ𝜃 
+
+as a unified module that produces diverse alpha signals within a single forward pass, as described in Section 3.1. 
+
+## 3 MAPLE 3.1 Multi-Alpha Generation Head 
+
+Given the per-stock hidden representation 𝑯 ∈ R𝑆 ×𝐷 produced by any backbone (Section 2.2), MAPLE projects it to 𝑁 𝛼 alpha signals jointly in a single forward pass, an overview of MAPLE architecture is provided in Fig. 1a. Unless otherwise specified, our experiments use a 2-layer Transformer with causal masking as the MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA (a) (b) 
+
+Figure 1: MAPLE overview. (a) The unified head produces 𝑁 𝛼 signals. (b) Ranking and diversity losses combined as full objective. 
+
+default temporal encoder 𝑡 𝜃 (architectural details in Appendix A.2). We further verify generalization across additional backbones in Section 4.4. The alpha generation head produces predictions via two paths that operate directly in prediction space rather than in hidden space, and whose outputs are summed to yield the final alpha signals. Before entering the two paths, 𝑯 is normalized via Layer Normalization [ 2] over the hidden dimension, applied identically to every stock: ˜𝑯 = LayerNorm (𝑯 ) ∈ R𝑆 ×𝐷 , which serves as the shared input to both paths described next. 
+
+Intra-Stock Path. The normalized representation ˜𝑯 is pro-jected to 𝑁 𝛼 alpha predictions via a two-layer MLP with ReLU activation: 
+
+ˆ𝒀 intra = MLP ( ˜𝑯 ) ∈ R𝑆 ×𝑁 𝛼 , (1) where the hidden dimension is set to ⌊𝐷 · ( 𝑁 𝛼 /8)⌋ , scaling propor-tionally with the number of alphas. This gives the model sufficient capacity to learn distinct intra-stock representations for each al-pha, allowing different alphas to develop heterogeneous behaviors without interfering with each other’s ranking quality. 
+
+Inter-Stock Path. To inject relational context across the stock universe, we compute multi-head attention over the stock axis, assigning one head per alpha ( ℎ = 𝑁 𝛼 ) so that each alpha has its own independent set of query and key parameters. ˜𝑯 is projected into query, key, and value spaces: 
+
+𝑸 = ˜𝑯𝑾 𝑄 , 𝑲 = ˜𝑯𝑾 𝐾 , 𝑽 = ˜𝑯𝑾 𝑉 , (2) where 𝑾 𝑄 , 𝑾 𝐾 ∈ R𝐷 ×𝑑 emb , 𝑾 𝑉 ∈ R𝐷 ×𝑁 𝛼 , and the embedding di-mension is set to 𝑑 emb = ⌊2 · 𝐷 · ( 𝑁 𝛼 /8)⌋ . This scaling ensures that the per-head key dimension 𝑑 𝑘 = 𝑑 emb /𝑁 𝛼 remains approximately constant regardless of 𝑁 𝛼 , so that adding more alphas does not reduce the capacity of each individual head. For each of the 𝑁 𝛼 
+
+heads, the 𝑖 -th head output 𝑨 (𝑖 ) ∈ R𝑆 ×1 is computed as: 
+
+𝑨 (𝑖 ) = softmax 𝑸 (𝑖 ) 𝑲 (𝑖 )⊤
+
+√𝑑 𝑘 
+
+!
+
+𝑽 (𝑖 ) , (3) where 𝑸 (𝑖 ) , 𝑲 (𝑖 ) ∈ R𝑆 ×𝑑 𝑘 and 𝑽 (𝑖 ) ∈ R𝑆 ×1. Each head indepen-dently produces a scalar ranking score per stock, and the outputs are concatenated to form the inter-stock path output: 
+
+ˆ𝒀 inter = Concat 
+
+
+
+𝑨 (1) , . . . , 𝑨 (𝑁 𝛼 ) 
+
+∈ R𝑆 ×𝑁 𝛼 . (4) 
+
+Prediction-level Residual Aggregation. Unlike a standard Trans-former block, which applies the residual connection in hidden space followed by an FFN and a separate output head, the two paths here are summed in the output space to produce the final predictions: 
+
+ˆ𝒀 = ˆ𝒀 intra + ˆ𝒀 inter ∈ R𝑆 ×𝑁 𝛼 . (5) This design empirically outperforms a full Transformer block across all backbones and markets (Table 2). We further examine why this design is more effective in Section 5.1, showing that it provides a favorable starting point for the diversity regularizer introduced later. The resulting ˆ𝒀 ∈ R𝑆 ×𝑁 𝛼 contains 𝑁 𝛼 alpha signals. However, producing multiple outputs does not by itself guarantee diversity: without explicit encouragement, the 𝑁 𝛼 signals may converge to similar predictions, yielding a redundant ensemble that offers little diversification benefit [ 35 ]. The following sections describe how we address this through a loss design that jointly optimizes each alpha’s predictive quality (Section 3.2) and penalizes inter-alpha correlation (Section 3.3). 
+
+## 3.2 Trainable Position-Aware Listwise Ranking 
+
+Since portfolio construction depends on the relative ordering of assets rather than exact return values [ 3 , 7, 21 , 38 ], a natural choice is adopting a listwise objective that directly maximizes the Spear-man rank correlation between predicted and target scores over all 
+
+𝑆 stocks: 
+
+ℒspearman = − 1
+
+𝑁 𝛼 𝑁 𝛼 ∑︁ 
+
+> 𝑖 =1
+
+𝜌 (𝜙 ( ˆ𝒚 𝑖 ), 𝜙 (𝒚 )) , (6) where 𝜌 (· , ·) is the Spearman rank correlation and 𝜙 (·) is a differ-entiable rank surrogate [ 11 ]. However, we find that optimizing a global Spearman objective conflicts with diversity regularization: because the diversity penalty must differentiate alphas across the entire ranking range, it disrupts rather than complements per-alpha ranking quality, leading to worse performance when the two are combined (see Table 2). Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+1 (top) 𝑐 (center) 𝑆 (bottom) 
+
+0
+
+0.5
+
+1
+
+𝑐 
+
+𝛿 1, 𝛿 2
+
+𝛿 3
+
+Rank position 𝑠 (top to bottom)    
+
+> Weight  𝑣 𝑠
+> 𝜉 1=4,𝛾 1=0.5
+> 𝜉 2=1.5,𝛾 2=0.5
+> 𝜉 3=4,𝛾 3=0.2
+
+Figure 2: Position-aware weight 𝑣 𝑠 shown across different sharpness 𝜉 and scale 𝛾 values. Larger 𝜉 produces a sharper transition, while larger 𝛾 shifts the margin 𝛿 further from the center, narrowing the range of top-ranked stocks that receive nonzero weight. 
+
+Extreme-Rank Weighted Spearman Loss. To resolve this con-flict, we concentrate each alpha’s learning signal on the extreme-rank positions, so that diversity regularization only needs to differ-entiate alphas within this smaller, already-profitable region rather than across the full ranking range—an effect we verify in Section 5.2. We instantiate this as an extreme-rank profile that concentrates weight on stocks occupying extreme rank positions in the target 
+
+𝒚 , which is a natural choice since portfolio strategies typically act only on the extreme-rank positions [ 22 , 33 ]. Crucially, the weight of each stock is determined by its true rank in 𝒚 rather than a fixed po-sition index, and is injected at the summation step of the Spearman correlation rather than before the rank surrogate computation. Specifically, each alpha 𝑖 ∈ { 1, · · · , 𝑁 𝛼 } has two learnable pa-rameters for calculating the position weight: a sharpness 𝜉 (𝑖 ) > 0
+
+controlling the steepness of the transition between extreme and center positions, and a scale 𝛾 (𝑖 ) ∈ ( 0, 1) determining a margin 
+
+𝛿 (𝑖 ) = 𝛾 (𝑖 ) (𝑆 − 1)/ 2 that sets where the transition begins. As illus-trated in Fig. 2, the resulting weight profile concentrates near 1 at the top-rank positions and near 0 at the center and below. Allowing 
+
+𝜉 (𝑖 ) and 𝛾 (𝑖 ) to be learned independently per alpha lets each alpha develop its own extreme-rank profile, which may further support diversity within this anchored region. The full computation of the Extreme-Rank Weighted Spearman Loss is given in Algorithm 1, yielding: 
+
+ℒextreme = − 1
+
+𝑁 𝛼 𝑁 𝛼 ∑︁ 
+
+> 𝑖 =1
+
+𝐶 (𝑖 )
+
+> 𝑆
+
+∑︁ 
+
+> 𝑠 =1
+
+˜𝜙 ( ˆ𝒚 𝑖 )𝑠 · ˜𝜙 (𝒚 )𝑠 · 𝑣 (𝑖 ) 
+
+> 𝑠
+
+, (7) where ˜𝜙 (·) denotes the demeaned and ℓ2-normalized rank surrogate vector, 𝑣 (𝑖 ) 
+
+> 𝑠
+
+is the position weight of stock 𝑠 under alpha 𝑖 , and 𝐶 (𝑖 ) =
+
+1 + 2𝛿 (𝑖 ) /𝑆 is a coverage ratio that compensates for the reduced gradient magnitude when focusing on a narrow range of extreme positions, where we show the design concept in Appendix B. Note that ℒextreme concentrates the learning signal on extreme-rank positions but does not by itself enforce correct ordering else-where, we therefore retain ℒspearman alongside it to preserve global ranking quality. The full training objective combining both terms with the diversity regularizer is given in Section 3.3. 
+
+Algorithm 1 Extreme-Rank Weighted Spearman, PyTorch-style         
+
+> # y_hat: (N_alpha, S) predicted alpha scores # y: (S,) target returns # xi, gamma: (N_alpha,) learnable per-alpha params # c: center index, (S-1)/2
+> def rank_surrogate(x):
+> return sigmoid(1.83 * (x - x.mean()) / (2 * x.std() + eps))
+> def normalize(phi): # demean and L2-normalize phi = phi - phi.mean()
+> return phi / (phi.norm() + eps) phi_y = normalize(rank_surrogate(y)) # (S,) r = true_rank(y) # (S,) integer rank, r=0 for top stock d = clip(c - r, min =0) # (S,) top-rank distance from center L = 0
+> for iin range (N_alpha): phi_yi = normalize(rank_surrogate(y_hat[i])) # (S,) delta = gamma[i] * c # transition margin for alpha i z = sigmoid(xi[i] * (d - delta)) # (S,) raw position activation v = z / (z. max () + eps) # (S,) position weight in [0,1] rho = (phi_yi * phi_y * v). sum () # position-weighted rank corr C = 1 + 2 * delta / S # coverage correction factor L = L + C * rho loss = -L / N_alpha # negated mean loss over all alphas
+
+## 3.3 Diversity-Controlled Multi-Alpha Ensemble 
+
+To this end, we introduce a diversity regularizer during training and an equal-weighted ensemble scheme across alphas at inference. 
+
+Diversity Regularization. We penalize redundancy among al-pha heads by discouraging pairwise absolute correlation in their predicted signals: 
+
+ℒdiversity = 1
+
+𝑁 𝛼 (𝑁 𝛼 − 1)∑︁ 𝑖 ≠𝑗 
+
+𝜌  𝜙 ( ˆ𝒚 𝑖 ), 𝜙 ( ˆ𝒚 𝑗 ) , (8) where 𝜌 (· , ·) and 𝜙 (·) are as in Eq. (6). We use the absolute value because two strongly negatively correlated alphas select from op-posite ends of the ranking, making one of them a poor alpha rather than a diversifier under a long-only constraint. 
+
+Full Training Objective. As discussed in Section 3.2, ℒspearman 
+
+preserves global ranking quality while ℒextreme emphasizes the extreme-rank positions most relevant to portfolio construction. The final training objective combines both per-alpha ranking losses with the diversity regularizer (Fig. 1b): 
+
+ℒ = ℒspearman + ℒextreme + 𝜆 ℒdiversity , (9) which we hereafter abbreviate as ℒspr , ℒext , and ℒdiv , respectively. Here, 𝜆 > 0 controls the trade-off between per-alpha predictive quality and inter-alpha diversity. Unless otherwise specified, we set 𝜆 = 0.1 throughout this paper. 
+
+Alpha Aggregation. At inference time, each alpha indepen-dently constructs its own portfolio by selecting its top-𝑘 ranked stocks for each trading day (Appendix A.4). The final portfolio return is the equal-weighted average across all 𝑁 𝛼 portfolios: 
+
+𝑝 𝑡 = 1
+
+𝑁 𝛼 𝑁 𝛼 ∑︁ 
+
+> 𝑚 =1
+
+𝑝 (𝑚 ) 
+
+> 𝑡
+
+, (10) MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA 
+
+where 𝑝 (𝑚 ) 
+
+> 𝑡
+
+denotes the return of the portfolio constructed by the 
+
+𝑚 -th alpha at trading day 𝑡 . This aggregation scheme is consistent with classical alpha mining practice, where each alpha operates independently and the ensemble benefit arises from signal diversity rather than explicit score fusion. 
+
+## 4 Experiments 4.1 Experimental Setup 
+
+Datasets. We evaluate MAPLE across four major equity mar-kets: CSI300 and CSI500 (China, 295 and 514 stocks), NI225 (Japan, 209 stocks), and SP500 (United States, 525 stocks). Following prior works [ 7, 13 , 33 , 42 ], we construct datasets using eight temporal features, including OHLCV and moving averages for each market. Models are trained on data from 2008–2019, validated on 2020, and tested on 2021–2024. Exact feature definitions and label formula-tions are provided in Appendix A.1. 
+
+Baselines and Evaluation Metrics. We compare MAPLE against nine baselines spanning the architectural families discussed in Sec-tions 1 and 2.2: RankLSTM [ 13 ] (intra-stock only); FinGAT [ 18 ], MASTER [ 22 ], StockMixer [ 10 ], and CI-STHPAN [ 39 ] (graph, atten-tion, MLP-mixing, and hypergraph inter-stock mechanisms, respec-tively); MERA [ 25 ] and DHMoE [ 5 ] (MoE routing, with DHMoE additionally using a diffusion module); AlphaMix [ 33 ] (explicit multi-model ensemble); and TIPS [ 7] (multi-architecture distilla-tion). We report Annual Return (AR), Sharpe Ratio (SR), and Cal-mar Ratio (CR), with metric definitions and evaluation protocol in Appendix A.4. Hyperparameter and implementation details for baselines and MAPLE are in Appendix A.2 and A.3, respectively. 
+
+## 4.2 Main Result 
+
+Table 1 reports the evaluation results across all four markets. MAPLE achieves the best average portfolio performance, with an aver-age SR of 1.690 and CR of 2.175, outperforming every baseline on average—including the most recent MoE-based (MERA, DHMoE) and distillation-based (TIPS) methods—and attaining the highest SR in all four individual markets. On CR, MAPLE leads on CSI300 and SP500 and is effectively tied with TIPS on NI225 (0.783 vs. 0.784), but trails both DHMoE and TIPS on CSI500. Results with transaction costs are reported in Appendix C.1. This is achieved with only 186K parameters—an order of magnitude fewer than DHMoE (10.3M) and nearly 8x fewer than MERA (1.46M)—a training time of 3.60s per epoch that is roughly 2–2.5x faster than the three heaviest base-lines (TIPS, MERA, CI-STHPAN), and inference-time FLOPs of just 0.130G, one to two orders of magnitude lower than attention- and MoE-based baselines (MASTER, MERA). As discussed in Section 1, this confirms that architectural complexity does not translate into proportional performance gains, while the lighter baselines all trail MAPLE by at least 0.23 SR—a gap that matters in practice, where portfolio models are frequently retrained on new market data. The following sections examine which components of MAPLE drive this performance (Section 4.3) and whether these gains persist under scaling and across backbones (Sections 4.4 and 5.3). 
+
+## 4.3 Ablation Studies 
+
+Table 2 progressively builds from a vanilla intra-stock-only Trans-former to the full MAPLE design, organized into two groups, each broken down into labeled components (a)–(e) that we reference throughout this analysis. 
+
+Group I: Lightweight intra-/inter-Stock Architecture . In-creasing number of alpha outputs (a) from 1 to 8 alone already improves performance, confirming that multi-alpha diversity has value even without further design changes. For inter-stock mod-eling (b), lightweight attention alone trades return for stability relative to the alternative (AR drops, while SR and CR rise); adding prediction-level aggregation on top of this lightweight attention partially recovers this trade-off and improves all three metrics, outperforming both the standard Transformer alternative and the intra-only design (a) in SR and CR, and confirming that inter-stock modeling adds value beyond intra-stock modeling alone. 
+
+Group II: Diverse Alpha Ensemble through Single Model . For the loss design (c), combining vanilla Spearman correlation with the diversity regularizer degrades performance relative to Group I’s final configuration, consistent with the conflict discussed in Section 3.2. Replacing it with our extreme-rank, position-aware loss instead improves all metrics, and adding diversity control further raises SR and CR despite a corresponding drop in AR (1.035 to 0.830). Scaling per-alpha capacity (d) in the attention and MLP paths yields further gains, consistent with a capacity bottleneck once alpha outputs must share the same backbone. Combining all components and scaling to 24 alphas (e) gives the full MAPLE configuration, achieving the best overall performance. 
+
+## 4.4 Generalizability Across Backbones 
+
+Fig. 3 evaluates whether MAPLE generalizes beyond its default Transformer backbone by attaching it to four additional intra-stock encoders: TCN, GRU, LSTM, and Mamba. Across all five backbones, MAPLE improves average SR and CR in every case, with SR gains ranging from 10% (Mamba) to 23% (GRU) and CR gains ranging from 17% (Mamba) to 43% (GRU). The best overall result is achieved when MAPLE is paired with the Transformer backbone, but sub-stantial gains are observed consistently across all five. These results indicate that MAPLE’s benefits stem from principled design choices rather than architecture-specific tuning, and transfer reliably across backbones with fundamentally different inductive biases. Full per-market results are provided in Appendix C.2. 
+
+## 5 Behavioral Analysis 
+
+In this section, we examine why MAPLE’s design choices are effec-tive and how far their benefits extend. We show that MAPLE’s gains do not come from architectural complexity or from aggressively sup-pressing correlation, but from three complementary mechanisms: an inter-stock structure that already provides a favorable starting point for diversity before any diversity loss is applied (Section 5.1); a loss design that lets diversity regularization refine this starting point without eroding per-alpha ranking quality and portfolio re-turn (Section 5.2); and a capacity-scaling scheme that sustains this balance not only as the number of alphas grows (Section 5.3), but Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+Table 1: Main results across four equity markets. Portfolio performance is evaluated through SR and CR, while Bold and underline denote the best and second best among all methods. For efficiency, we report both training-time and inference-time costs: model parameter count and training time per epoch for training; FLOPs, GPU memory usage, and inference time with a synthesized single-batch input matrix for inference. All efficiency metrics are lower-is-better. Portfolio Performance Efficiency Performance Markets CSI300 CSI500 NI225 SP500 Avg. Training Inference Metrics → SR CR SR CR SR CR SR CR SR CR Params Tr. Time(s) FLOPs(G) Mem(MB) Inf. Time(ms) RankLSTM 0.753 0.663 0.869 0.699 0.610 0.447 1.414 2.138 0.912 0.987 52289 0.338 0.614 44.957 0.228 FinGAT 0.820 0.536 1.175 1.063 0.789 0.634 0.485 0.428 0.817 0.665 35686 2.140 0.025 44.249 3.370 MASTER 0.991 0.879 1.198 1.044 0.730 0.616 1.477 2.398 1.099 1.234 726601 1.479 8.725 72.210 1.343 AlphaMix 0.708 0.584 1.064 0.959 0.543 0.458 1.574 2.486 0.972 1.122 41257 0.715 0.482 36.268 1.182 StockMixer 0.726 0.612 0.615 0.421 0.450 0.361 0.919 0.899 0.678 0.573 14710 2.503 0.006 10.627 2.663 CI-STHPAN 0.180 0.126 0.425 0.290 0.767 0.607 1.589 2.993 0.740 1.004 516868 9.001 2.475 22.096 22.541 MERA 1.075 1.055 0.677 0.472 0.769 0.554 1.117 1.131 0.910 0.828 1460017 8.932 11.153 61.719 7.909 DHMoE 0.961 0.977 1.716 2.490 0.679 0.585 0.980 0.680 1.084 1.222 10284722 4.499 1.571 55.642 6.455 TIPS 1.343 1.523 2.010 2.466 0.958 0.784 1.506 2.965 1.454 1.934 104897 7.236 0.810 30.670 0.760 MAPLE 1.851 2.062 2.161 1.961 0.991 0.783 1.758 3.896 1.690 2.175 186480 3.601 0.130 38.142 1.685 
+
+Table 2: Component ablation (averaged across four markets) across two groups: a lightweight intra-/inter-stock architec-ture (Group I) and a diverse alpha ensemble built on Group I’s final configuration (Group II). Within each group, Alter-native rows are compared against the preceding Ours row, while Ours rows accumulate progressively, each building on the one above. Bolded values improve on the preceding Ours row; underline marks the best value in each column. Component AR SR CR Group I — Lightweight intra-/inter-Stock Architecture 
+
+(a) Intra-Stock Only: Single- vs. Multi-Alpha 
+
+Baseline : Vanilla Transformer ( 𝑁 𝛼 = 1) 0.865 1.402 1.713 
+
+Ours : + multi-alpha ( 𝑁 𝛼 = 8) 0.923 1.434 1.779 
+
+(b) Inter-Stock Design 
+
+Alternative : Transformer Block 1.038 1.305 1.511 
+
+Ours : + Lightweight Attn. (remove FFN, 𝑊 𝑉 as pred.) 0.509 1.414 1.676 
+
+Ours : + Prediction-level Residual Aggregation 0.633 1.483 1.826 Group II — Diverse Alpha Ensemble through Single Model 
+
+(c) Loss Design 
+
+Alternative : Vanilla Spearman + Diversity 0.443 1.415 1.590 
+
+Ours : + Extreme-Rank Loss 1.035 1.510 1.856 Ours : + Diversity Control 0.830 1.579 1.996 
+
+(d) Per-Alpha Capacity Scaling 
+
+Ours : + Scaled Attention/MLP Capacity 1.208 1.660 2.031 
+
+(e) Alpha Count Scaling (Full Method) 
+
+Ours : 𝑁 𝛼 = 24 1.297 1.690 2.175 
+
+also across a wider range of the diversity weight 𝜆 (Section 5.4). Un-less stated otherwise, results in this section report averages across the four markets at 𝑁 𝛼 = 8.
+
+## 5.1 Better Inter-stock Attention Structure 
+
+Table 3 shows why our inter-stock attention structure already per-forms better before adding diversity-related design. Given a model leveraging both intra- and inter-stock modules, 𝑅 2 
+
+> intra
+
+and 𝑅 2
+
+> inter
+
+measure how much of the aggregated prediction is accounted for by each module’s output alone, while Gradient Ratio compares TCN    
+
+> GRU
+> LSTM
+> Mamba
+> TFM
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> +13%
+> +23%
+> +21% +10%
+> +21%
+> Sharpe Ratio (SR)
+> TCN
+> GRU
+> LSTM
+> Mamba
+> TFM
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> +34%
+> +43%
+> +40% +17%
+> +27%
+> Calmar Ratio (CR)
+> Temporal Backbone alone + MAPLE
+
+Figure 3: Average Sharpe Ratio (left) and Calmar Ratio (right) across four equity markets when replacing the intra-stock backbone in MAPLE, compared to each backbone alone (intra-stock-only, single alpha). Percentages denote the relative improvement from adding MAPLE. 
+
+the output-induced gradient norms of the two paths on the shared intra-stock backbone. Without an inter-stock module, the prediction is determined entirely by the intra-stock path. Introducing a standard inter-stock module shifts gradient flow toward the inter-stock path, as expected (row 2, Gradient Ratio: 3.81). Less expectedly, a prediction-level residual shifts it further still, leaving the prediction governed al-most entirely by the inter-stock output (row 3, 𝑅 2
+
+> inter
+
+: 0.865 vs. 𝑅 2
+
+> intra
+
+:0.271). Our configuration (row 4) instead sets the 𝑾 𝑉 output dimen-sion to directly match 𝑁 𝛼 , letting it serve as the prediction under the same residual structure. This brings the gradient norms of the two paths much closer together. Moreover, since ˆ𝒀 = ˆ𝒀 intra + ˆ𝒀 inter ,the two coefficients sum to 1 only when the paths are uncorrelated; the sums are 1.008 for ours and 1.136 for the standard residual, indi-cating a shift from overlapping to nearly orthogonal contributions. This shift in path dominance improves alpha diversity rather than individual alpha strength: relative to the intra-stock-only set-ting, our design trades a little per-alpha accuracy for a clear decrease in inter-alpha correlation (0.944 vs. 0.998), translating into a real diversification gain (0.071 vs. 0.003) and a higher ensemble SR (1.483 MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA 
+
+Table 3: Effect of the inter-stock prediction structure on gradient path dominance and alpha diversity. 𝑅 2 
+
+> intra
+
+and 𝑅 2 
+
+> inter
+
+measure how much of the aggregated prediction each module’s output alone explains; Gradient Ratio is the inter-stock-to-intra gradient norm ratio. Correlation is the average pairwise alpha correlation and Individual SR the average per-alpha Sharpe ratio, with the diversification gain (Ensemble SR - Individual SR) in parentheses. Dashes mark configurations with no two-path decomposition. Inter-Stock Design Path Dominance Alpha Performance Inter-stock 𝑾 𝑉 as Prediction Pred-level Residual 𝑹 2                                         
+
+> intra 𝑹 2
+> inter Gradient Ratio Correlation (↓)Individual SR (↑)Ensemble SR (↑)
+> ✗✗✗1.000 ––0.998 1.431 1.434 (+0.003)
+> ✔✗✗––3.81 1.000 1.304 1.305 (+0.001)
+> ✔✗✔0.271 0.865 4.38 0.998 1.347 1.352 (+0.005)
+> ✔✔✔0.586 0.422 1.20 0.944 1.412 1.483 (+0.071 )
+
+Table 4: Effects of extreme-rank and diversity losses on alpha behavior and portfolio performance. Overlap Ratio and Union Size describe pairwise/aggregate overlap among each alpha’s top-5 stock selections; Downside Corr. is their return correlation on negative-return days. Precision and Recall are computed on the union of these selections against the 50 stocks with the highest realized 5-day returns. 𝜇 𝑟 , 𝜎 𝑟 are the mean and standard deviation of the 5-day cumulative returns of the selected baskets (in %), while 𝜇 𝑟 /𝜎 𝑟 is the return-to-volatility ratio. Loss Components Cross-alpha Dependency Selection Quality Performance                                                                 
+
+> ℒspr ℒext ℒdiv Overlap Ratio Union Size Downside Corr. Precision Recall 𝝁 𝒓 (↑)𝝈 𝒓 (↓)𝝁 𝒓 /𝝈 𝒓 (↑)
+> ✗✔✗0.930 5.920 0.988 0.299 0.035 0.49 5.8 0.084
+> ✔✗✗0.824 7.532 0.970 0.223 0.034 0.32 3.2 0.100
+> ✔✗✔0.317 21.386 0.809 0.203 0.085 0.22 2.2 0.100
+> ✔✔✗0.902 6.312 0.980 0.277 0.035 0.47 4.5 0.104
+> ✔✔✔0.680 10.368 0.920 0.263 0.055 0.38 3.4 0.112
+
+vs. 1.434), which is achieved even without explicitly optimizing for diversity. This gives a favorable starting point for the diversity-focused designs introduced next. Full gradient trajectories and the detailed calculations for this table are provided in Appendix D.1. 
+
+## 5.2 How Extreme-Rank enables Alpha Diversity 
+
+Table 4 shows why extreme loss ( ℒext ) alone is insufficient, why naively combining spearman ( ℒspr ) with diversity regularization (ℒdiv ) fails, and how combining all three resolves these issues. Used alone, ℒext pushes every alpha head toward the same top-ranked stocks (row 1): precision is the highest in the table, but the ensemble retains almost no diversification, yielding the most volatile returns and the lowest return-to-volatility ratio in the table. 
+
+ℒext is thus better suited as a regularizer on an existing ranking objective than as a standalone loss. On the other hand, adding 
+
+ℒdiv to ℒspr alone does reduce cross-alpha overlap and downside correlation (rows 2–3). However, it does so by spreading selections across a much wider set of names (union size 7.53 to 21.39) rather than concentrating on the subset that actually drives returns, with precision falling accordingly (0.223 to 0.203). This is the failure mode discussed in Section 3.2, where diversity is gained at the expense of precision. 
+
+ℒext instead constrains where this diversification happens. Ap-plying ℒdiv on top of ℒspr +ℒext produces the same trends far more moderately, with precision dropping 5.1% rather than 9.0% (rows 4– 5 vs. rows 2–3). This is because each alpha’s learning signal already concentrated on the extreme-rank positions through ℒext before diversity is introduced, and ℒdiv need only to differentiate alphas within this already-profitable region rather than across the full rank-ing range. This lets diversity regularization improve rather than damage selection quality, yielding the highest return-to-volatility ratio for the full combination of all three losses. 
+
+## 5.3 Scaling with Number of Alphas 
+
+Fig. 4 examines whether the balance between ranking quality and diversity established above holds as the number of alphas 𝑁 𝛼 grows, comparing our loss design and our capacity-scaled configuration on top of it (both defined in Table 2). As a reference point, we compare against Multi-seed Ensemble, which trains one instance of the inter-stock design per seed. Since its alphas never share capacity, it upper-bounds the diversity attainable at a given 𝑁 𝛼 —at 𝑁 𝛼 × the training and inference cost—and the question is how closely a single model can approach it. Without capacity scaling, our loss design does not benefit from additional alphas. AR stays above the Multi-seed Ensemble ref-erence but trends downward, while its SR stays within a narrow band and is overtaken at 𝑁 𝛼 =4. This reflects the capacity bottleneck discussed in Section 4.3: shared capacity across alphas becomes insufficient as more diverse signals are demanded. Adding capacity scaling addresses this bottleneck: AR recovers and increases beyond 
+
+𝑁 𝛼 = 4 while the other two configurations plateau or decline, and SR matches or surpasses Multi-seed Ensemble across most settings. A single trained model therefore matches an explicit ensemble’s risk-adjusted performance while producing all 𝑁 𝛼 alphas in one forward pass, and at roughly twice the ensemble’s annual return. Full numerical results are provided in Appendix D.3. These gains, however, depend on the alphas remaining diverse; We next examine how sensitive this balance is to the choice of 𝜆 ,and whether capacity and alpha scaling make it more robust. Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 1 2 4 8 16 24         
+
+> Number of alphas N
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> 1.1
+> 1.2
+> 1.3
+> Annual Return (AR)
+> 124816 24
+> Number of alphas N
+> 1.45
+> 1.50
+> 1.55
+> 1.60
+> 1.65
+> 1.70
+> Sharpe Ratio (SR)
+> Multi-seed Ensemble (b)
+> + Loss Design (c)
+> + Capacity Scaling (d)
+> Full MAPLE ( N= 24 )
+
+Figure 4: Annual Return (left) and Sharpe Ratio (right) across different numbers of alphas 𝑁 𝛼 , comparing loss design (c) and capacity-scaled configuration (d) against Multi-seed Ensem-ble under our Inter-Stock Design (b), as defined in Table 2. 
+
+## 5.4 Diminishing Returns with Diversity Weight 
+
+Fig. 5 examines the effect of the diversity weight 𝜆 on alpha cor-relation and risk-adjusted performance. At 𝜆 = 0, increasing 𝑁 𝛼 
+
+from 8 to 24 does not improve CR, confirming that more alpha outputs alone do not guarantee a diversification benefit. As 𝜆 in-creases, alpha correlation decreases across all three configurations, confirming that the regularizer effectively reduces redundancy. CR itself first rises to a peak around 𝜆 ∈ [ 0.1, 0.15 ] and declines mono-tonically for 𝜆 > 0.2. This indicates that beyond some point, the diversity term dominates training at the expense of per-alpha rank-ing quality, rather than continuing to improve returns. This rise-then-decline shape reveals a further pattern. For our alpha-scaled configuration, CR plateaus while alpha correlation stays at or above the level Multi-seed Ensemble reaches—a level that emerges from independent training alone, with no diversity objective—and declines once a larger 𝜆 pushes correlation below it. Independent training thus arrives at a correlation level that our regularizer should approach but not overshoot: pushing beyond it only sacrifices per-alpha ranking quality without a corresponding gain. Using the CR achieved by Multi-seed Ensemble as a reference point (gray and black dotted lines), we find that capacity scaling and alpha scaling both bring CR to or above this reference at some 
+
+𝜆 ∈ [ 0.1, 0.2] and stay within about 2% of it elsewhere in that range, while the loss-only configuration never reaches it. Scaling capacity and alpha count therefore make it substantially easier to identify and maintain a 𝜆 that reaches this naturally diverse regime in practice. This lets a single model reproduce the diversification benefit that an explicit multi-model ensemble would otherwise require training separately to achieve. Full numerical results are provided in Appendix D.4. 
+
+## 6 Related Works 
+
+Portfolio Construction with Deep Learning. Deep learning methods for portfolio construction typically predict cross-sectional returns or ranking scores and form portfolios from the highest-ranked assets. Early studies primarily employed recurrent architec-tures to capture temporal market dynamics [ 12 , 13 ]. Subsequent 0.0 0.1 0.2 0.3 0.4              
+
+> Diversity weight
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0 Alpha Correlation
+> 0.0 0.1 0.2 0.3 0.4
+> Diversity weight
+> 1.8
+> 1.9
+> 2.0
+> 2.1
+> Calmar Ratio (CR)
+> + Loss Design (c), N= 8
+> + Capacity Scaling (d), N= 8
+> + Alpha Scaling (e), N= 24
+> Multi-seed Ensemble (b), ( N= 8 )
+> Multi-seed Ensemble (b), ( N= 24 )
+
+Figure 5: Alpha Correlation (left) and Calmar Ratio (right) across different values of the diversity weight 𝜆 , comparing loss design (c, 𝑁 𝛼 = 8), capacity scaling (d, 𝑁 𝛼 = 8), and alpha scaling (e, 𝑁 𝛼 = 24 ), all defined in Table 2. Dotted lines mark the corresponding values achieved by Multi-seed Ensemble under our Inter-Stock Design (b) at 𝑁 𝛼 = 8 and 𝑁 𝛼 = 24 .
+
+work extended this paradigm by explicitly modeling inter-stock dependencies through cross-stock attention [ 4 , 22 , 42 ], relational graphs [ 18 , 30 , 39 , 46 ], and MLP-based feature mixing [ 10 , 14 ]. Beyond architectural advances, prior studies have explored pair-wise ranking objectives [ 11 ], behavior-informed stock representa-tions [ 23 ], Transformer-based interaction modeling [ 37 ], volatility-aware learning [ 24 ], and irrational-factor modeling [ 41 ]. Despite their diversity, these approaches generally optimize a single predic-tive score for each stock, with performance improvements driven mainly by increasingly specialized model designs. In contrast, our framework extends portfolio construction from a single predictive signal to multiple complementary alphas learned within one model. 
+
+Ensemble Learning in Stock Prediction. Ensemble learning improves robustness by combining predictors that are both accurate and diverse [ 17 , 19 , 20 , 26 ]. This principle is particularly important in alpha mining, where combining low-correlated signals can sub-stantially improve portfolio-level risk-adjusted returns [ 1, 15 , 35 ]. Existing stock prediction ensembles typically obtain diversity by training multiple models with different random seeds or architec-tures [ 29 , 33 ]. Other approaches encourage specialization through routing or Mixture-of-Experts (MoE) mechanisms [ 5 , 25 , 44 ], or consolidate multiple predictors through multi-stage distillation [ 7]. However, these methods either require multiple training runs, in-troduce additional architectural complexity, or depend on separate training stages. More importantly, their diversity arises indirectly from initialization, model specialization, or training procedures, rather than from explicitly controlling the correlation among the resulting alpha signals. In contrast, our framework learns multiple complementary alphas within a single model and directly optimizes their inter-alpha diversity for portfolio construction. 
+
+## 7 Conclusion 
+
+We presented MAPLE, a framework for efficient and diverse multi-alpha generation built on three components: a unified prediction head that fuses an intra-stock path with a lightweight inter-stock MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA 
+
+attention path directly in prediction space, a loss design consist-ing of an extreme-rank weighted Spearman loss and a diversity regularizer, and a capacity-scaling scheme that sustains this de-sign as the number of alphas grows. Across four equity markets, MAPLE achieves the best average Sharpe and Calmar ratios among nine baselines, including recent Mixture-of-Experts and distillation-based methods, at a fraction of their parameter and training cost; it further generalizes consistently across five backbone architec-tures, confirming that these gains stem from MAPLE’s own design rather than from any specific backbone. Our behavioral analysis explains why: the unified prediction head already reduces inter-alpha correlation before any diversity loss is applied, extreme-rank weighting lets the diversity regularizer improve rather than erode per-alpha ranking quality, and scaling per-alpha capacity sustains this balance as the number of alphas grows. These results answer the question posed at the outset of this paper: efficient single-model prediction and diverse multi-alpha generation are not competing goals that require complex architectures or multi-stage training to reconcile. Our diversity regularizer currently decorrelates alphas conditioned on a single prediction target, asset class, and feature set, which bounds how much genuine diversity it can induce. Future work includes extending the model and loss design to automati-cally exploit diversity across these dimensions: treating different forecast horizons as distinct targets, extending beyond equities to asset classes such as futures, bonds, or cryptocurrencies, and incor-porating richer feature sets such as financial statements or news beyond price and volume—for potentially larger diversity and more robust gains in risk-adjusted return. 
+
+## References 
+
+[1] Viral V Acharya, Lasse H Pedersen, Thomas Philippon, and Matthew Richardson. 2017. Measuring systemic risk. Review of Financial Studies 30, 1 (2017), 2–47. [2] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. 2016. Layer normaliza-tion. arXiv preprint arXiv:1607.06450 (2016). [3] Zhe Cao, Tao Qin, Tie-Yan Liu, Ming-Feng Tsai, and Hang Li. 2007. Learning to rank: from pairwise approach to listwise approach. In International Conference on Machine Learning (ICML) (Corvalis, Oregon, USA) (ICML ’07) . Association for Computing Machinery, New York, NY, USA, 129–136. doi:10.1145/1273496. 1273513 [4] Zhiyuan Cao, Jiayu Xu, Chengqi Dong, Peiwen Yu, and Tian Bai. 2024. MATCC: A Novel Approach for Robust Stock Price Prediction Incorporating Market Trends and Cross-time Correlations. In ACM International Conference on Information and Knowledge Management (CIKM) . 187–196. [5] Weijun Chen and Yanze Wang. 2025. DHMoE: Diffusion Generated Hierarchi-cal Multi-Granular Expertise for Stock Prediction. In Conference on Artificial Intelligence (AAAI) , Vol. 39. 11490–11499. [6] Junyoung Chung, Caglar Gulcehre, KyungHyun Cho, and Yoshua Bengio. 2014. Empirical evaluation of gated recurrent neural networks on sequence modeling. 
+
+arXiv preprint arXiv:1412.3555 (2014). [7] Yu-Chen Den, Kuan-Yu Chen, Kendro Vincent, and Darby Tien-Hao Chang. 2026. Integrating Inductive Biases in Transformers via Distillation for Financial Time Series Forecasting. arXiv preprint arXiv:2603.16985 (2026). [8] Eugene F Fama and Kenneth R French. 1992. The cross-section of expected stock returns. Journal of Finance 47, 2 (1992), 427–465. [9] Eugene F Fama and Kenneth R French. 2018. Choosing factors. Journal of Financial Economics 128, 2 (2018), 234–252. [10] Jinyong Fan and Yanyan Shen. 2024. StockMixer: a simple yet strong MLP-based architecture for stock price forecasting. In Conference on Artificial Intelligence (AAAI) . AAAI Press. doi:10.1609/aaai.v38i8.28681 [11] Jie Fang, Shutao Xia, Jianwu Lin, Zhikang Xia, Xiang Liu, and Yong Jiang. 2019. Alpha discovery neural network based on prior knowledge. arXiv preprint arXiv:1912.11761 (2019). [12] Fuli Feng, Huimin Chen, Xiangnan He, Ji Ding, Maosong Sun, and Tat-Seng Chua. 2018. Enhancing stock movement prediction with adversarial training. arXiv preprint arXiv:1810.09936 (2018). [13] Fuli Feng, Xiangnan He, Xiang Wang, Cheng Luo, Yiqun Liu, and Tat-Seng Chua. 2019. Temporal relational ranking for stock prediction. ACM Transactions on Information Systems (TOIS) 37, 2 (2019), 1–30. [14] Tingsheng Feng, Zhihao Shen, Xi Zhao, Xiaoni Lu, and Yuyang Zhou. 2025. CryptoMixer: Fine-grained market information-aware MLP Networks for Indi-vidual Cryptocurrency Trading Prediction. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) . 603–614. [15] Itay Goldstein and Liyan Yang. 2015. Information diversity and complementarities in trading and information acquisition. Journal of Finance 70, 4 (2015), 1723–1765. [16] Albert Gu and Tri Dao. 2023. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 (2023). [17] Lars Kai Hansen and Peter Salamon. 2002. Neural network ensembles. IEEE Transactions on Pattern Analysis and Machine Intelligence 12, 10 (2002), 993–1001. [18] Yi-Ling Hsu, Yu-Che Tsai, and Cheng-Te Li. 2021. Fingat: Financial graph atten-tion networks for recommending top-𝑘 k profitable stocks. IEEE Transactions on Knowledge and Data Engineering (TKDE) 35, 1 (2021), 469–481. [19] Anders Krogh and Jesper Vedelsby. 1994. Neural network ensembles, cross validation, and active learning. Advances in Neural Information Processing Systems (NeurIPS) 7 (1994). [20] Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. 2017. Simple and scalable predictive uncertainty estimation using deep ensembles. Advances in Neural Information Processing Systems (NeurIPS) 30 (2017). [21] Yanyan Lan, Yadong Zhu, Jiafeng Guo, Shuzi Niu, and Xueqi Cheng. 2014. Position-Aware ListMLE: A Sequential Learning Process for Ranking.. In UAI ,Vol. 14. 449–458. [22] Tong Li, Zhaoyang Liu, Yanyan Shen, Xue Wang, Haokun Chen, and Sen Huang. 2024. Master: Market-guided stock transformer for stock price forecasting. In 
+
+Conference on Artificial Intelligence (AAAI) , Vol. 38. 162–170. [23] Zhige Li, Derek Yang, Li Zhao, Jiang Bian, Tao Qin, and Tie-Yan Liu. 2019. In-dividualized indicator for all: Stock-wise technical indicator optimization with stock embedding. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) . 894–902. [24] Sida Lin, Yankai Chen, Yiyan Qi, Chenhao Ma, Bokai Cao, Yifei Zhang, Xue Liu, and Jian Guo. 2025. CSPO: Cross-Market Synergistic Stock Price Movement Forecasting with Pseudo-volatility Optimization. arXiv preprint arXiv:2503.22740 
+
+(2025). [25] YuJun Liu, Chen-Hui Song, Peiyuan Liu, Naiqi Li, Tao Dai, Jigang Bao, Yong Jiang, and Shu-Tao Xia. 2025. MERA: Mixture of Experts with Retrieval-Augmented Representation for Modeling Diversified Stock Patterns. In Proceedings of the ACM on Web Conference (WWW) . 1148–1152. [26] Yong Liu and Xin Yao. 1999. Ensemble learning via negative correlation. Neural networks 12, 10 (1999), 1399–1404. [27] Ilya Loshchilov and Frank Hutter. 2017. Decoupled weight decay regularization. 
+
+arXiv preprint arXiv:1711.05101 (2017). [28] Fabian Pedregosa, Gaël Varoquaux, Alexandre Gramfort, Vincent Michel, Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron Weiss, Vincent Dubourg, et al . 2011. Scikit-learn: Machine learning in Python. the Journal of Machine Learning Research 12 (2011), 2825–2830. [29] Molei Qin, Xinyu Cai, Yewen Li, Haochong Xia, Chuqiao Zong, Shuo Sun, Xinrun Wang, and Bo An. 2026. FineFT: Efficient and Risk-Aware Ensemble Reinforce-ment Learning for Futures Trading. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) . 1194–1203. [30] Ramit Sawhney, Shivam Agarwal, Arnav Wadhwa, Tyler Derr, and Rajiv Ratn Shah. 2021. Stock selection via spatiotemporal hypergraph attention network: A learning to rank approach. In Conference on Artificial Intelligence (AAAI) , Vol. 35. 497–504. [31] Hao Shi, Weili Song, Xinting Zhang, Jiahe Shi, Cuicui Luo, Xiang Ao, Hamid Arian, and Luis Angel Seco. 2025. AlphaForge: A Framework to Mine and Dynamically Combine Formulaic Alpha Factors. In Conference on Artificial Intelligence (AAAI) ,Vol. 39. 12524–12532. [32] Yu Shi, Yitong Duan, and Jian Li. 2026. Navigating the Alpha Jungle: An LLM-Powered MCTS Framework for Formulaic Alpha Factor Mining. In Conference on Artificial Intelligence (AAAI) , Vol. 40. 997–1005. [33] Shuo Sun, Xinrun Wang, Wanqi Xue, Xiaoxuan Lou, and Bo An. 2023. Mastering stock markets with efficient mixture of diversified trading experts. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) . 2109– 2119. [34] Ziyi Tang, Zechuan Chen, Jiarui Yang, Jiayao Mai, Yongsen Zheng, Keze Wang, Jin-rui Chen, and Liang Lin. 2025. AlphaAgent: LLM-Driven Alpha Mining with Reg-ularized Exploration to Counteract Alpha Decay. arXiv preprint arXiv:2502.16789 
+
+(2025). [35] Igor Tulchinsky. 2019. Finding Alphas: A quantitative approach to building trading strategies . John Wiley & Sons. [36] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances in Neural Information Processing Systems (NeurIPS) 30 (2017). [37] Heyuan Wang, Tengjiao Wang, Shun Li, Jiayi Zheng, Shijie Guan, and Wei Chen. 2022. Adaptive Long-Short Pattern Transformer for Stock Investment Selection.. Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+In International Joint Conference on Artificial Intelligence (IJCAI) . 3970–3977. [38] Fen Xia, Tie-Yan Liu, Jue Wang, Wensheng Zhang, and Hang Li. 2008. Listwise approach to learning to rank: theory and algorithm. In International Conference on Machine Learning (ICML) . 1192–1199. [39] Hongjie Xia, Huijie Ao, Long Li, Yu Liu, Sen Liu, Guangnan Ye, and Hongfeng Chai. 2024. CI-STHPAN: pre-trained attention network for stock selection with channel-independent spatio-temporal hypergraph. In Conference on Artificial Intelligence (AAAI) . AAAI Press. doi:10.1609/aaai.v38i8.28770 [40] Ziyu Li Xiaoming Lin, Ye Chen and Kang He. 2019. Stock Alpha Min-ing Based On Genetic Algorithm. Technical Report. Huatai Securities Re-search Center, https://crm.htsc.com.cn/doc/2019/10750101/f75b4b6a-2bdd-4694-b6964c62528791ea.pdf. [41] Chen Yang, Jingyuan Wang, Xiaohan Jiang, and Junjie Wu. 2025. Learning Univer-sal Multi-level Market Irrationality Factors to Improve Stock Return Forecasting. 
+
+arXiv preprint arXiv:2502.04737 (2025). [42] Jaemin Yoo, Yejun Soun, Yong-chan Park, and U Kang. 2021. Accurate multivariate stock movement prediction via data-axis transformer with multi-level contexts. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) .2037–2045. [43] Shuo Yu, Hongyan Xue, Xiang Ao, Feiyang Pan, Jia He, Dandan Tu, and Qing He. 2023. Generating synergistic formulaic alpha collections via reinforcement learning. In ACM International Conference on Knowledge Discovery & Data Mining (KDD) . 5476–5486. [44] Zhaojian Yu, Yinghao Wu, Genesis Wang, and Heming Weng. 2024. MIGA: Mixture-of-Experts with Group Aggregation for Stock Market Prediction. arXiv preprint arXiv:2410.02241 (2024). [45] Tianping Zhang, Yuanqi Li, Yifei Jin, and Jian Li. 2020. Autoalpha: an efficient hierarchical evolutionary algorithm for mining alpha factors in quantitative investment. arXiv preprint arXiv:2002.08245 (2020). [46] Zetao Zheng, Jie Shao, Jia Zhu, and Heng Tao Shen. 2023. Relational Temporal Graph Convolutional Networks for Ranking-Based Stock Prediction. In Interna-tional Conference on Data Engineering (ICDE) . 123–136. doi:10.1109/ICDE55515. 2023.00017 MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA 
+
+## A Experimental Details A.1 Definition of Input Features and Label 
+
+For each stock and trading day, we construct an eight-dimensional temporal input vector consisting of five standardized OHLCV vari-ables and three price-trend indicators. The open, high, low, close, and volume series are standardized separately using statistics esti-mated over the most recent 20 trading days. The close-price trans-formation is shown below as an example. To capture short- and medium-term price trends, we additionally use the relative devia-tion between the current closing price and its 𝑘 -day moving average, where 𝑘 ∈ 5, 10 , 20 . The prediction target is defined as the forward 
+
+𝑞 -day return, with 𝑞 = 5:
+
+𝑧 𝑡  
+
+> close
+
+= 𝑥 𝑡  
+
+> close
+
+− ¯𝑥 [𝑡 −19: 𝑡 ]
+
+> close
+
+𝜎 [𝑡 −19: 𝑡 ]
+
+> 𝑥 close
+
+, 𝑧 𝑡 𝑑 𝑘 =
+
+> 1
+> 𝑘
+
+Í𝑘 −1 
+
+> 𝑖 =0
+
+𝑥 𝑡 −𝑖 
+
+> close
+
+𝑥 𝑡 
+
+> close
+
+− 1, 𝑦 𝑡 = 𝑥 𝑡 +𝑞  
+
+> close
+
+− 𝑥 𝑡 
+
+> close
+
+𝑥 𝑡 
+
+> close
+
+## A.2 Hyperparameter Settings 
+
+Baselines. For all baseline methods, we adopt the hyperparame-ter settings reported in the original papers or provided in the official implementations. Unless otherwise specified, we do not perform additional hyperparameter tuning. 
+
+Intra-Stock Encoders. Table 5 shows the detailed hyperparam-eter settings of all intra-stock encoders we use in Section 4.4. For Transformer-based encoders, causal masking is applied along the temporal axis within each stock’s independently processed se-quence, preventing the model from attending to future time steps; stocks are processed independently by 𝑡 𝜃 , with cross-sectional inter-action handled entirely by the inter-stock module 𝑔 𝜃 (Section 2.2). For all backbones, the intra-stock representation 𝑯 is taken as the hidden state at the final time step of this sequence. 
+
+Table 5: Intra-stock encoder hyperparameter configurations. Model Hidden Layers FFN Heads Dropout 
+
+GRU / LSTM 64 2 — — 0.0 TCN ∗ 64 2 — — 0.0 Transformer † 64 2 256 8 0.1 Mamba ‡ 32 1 64 — 0.1    
+
+> ∗TCN: kernel size 4.
+> †Transformer: FFN activation is ReLU.
+> ‡Mamba: state size 16, conv size 4, expand factor 2
+
+MAPLE . Table 6 summarizes the hyperparameter settings of MAPLE, organized by the temporal encoder 𝑡 𝜃 , the intra-stock MLP and inter-stock attention within the cross-sectional module 𝑔 𝜃 , and the loss function ℒ.
+
+## A.3 Training & Implementation Details 
+
+All models are trained for 100 epochs with an effective batch size of 256, obtained by accumulating gradients over 4 steps with a per-step batch size of 64. For RankLSTM, MAPLE, and intra-stock-only encoders in Section 4.4, we use the AdamW optimizer [ 27 ] with a learning rate of 10 −3, a weight decay of 10 −5, and gradient clipping with a maximum norm of 1.0. For the remaining baseline methods, 
+
+Table 6: MAPLE hyperparameter configurations Configuration Value 
+
+General Settings 
+
+Intra-stock encoder 𝑡 𝜃 Transformer Number of Alphas 𝑁 𝛼 24 
+
+Intra-Stock MLP 
+
+hidden size ⌊𝐷 · ( 𝑁 𝛼 /8)⌋ 
+
+Inter-Stock Attention 
+
+𝑾 𝑄 , 𝑾 𝐾 hidden ⌊2 · 𝐷 · ( 𝑁 𝛼 /8)⌋ 
+
+𝑾 𝑉 hidden 𝑁 𝛼 
+
+Attention Heads 𝑁 𝛼 
+
+Dropout 0.1 
+
+Loss Function 
+
+Init. value for Trainable Sharpness ( 𝜉 ) 10 Init. value for Trainable Margin ( 𝛾 ) 0.8 Diversity weight ( 𝜆 ) 0.1 we follow the optimizer and training configurations reported in their original papers or official implementations. For each model, we conduct experiments using five random seeds: {0, 1, 2, 3, 4}. For each seed, we select the checkpoint that achieves the best validation AR and report the mean performance across all seeds. All experiments are conducted on a single NVIDIA RTX 3090 GPU. 
+
+## A.4 Evaluation Protocol 
+
+We evaluate the predicted alpha scores using a staggered portfolio-construction protocol. Let 𝑷 ∈ R𝐵 ×𝑆 ×𝑁 𝛼 denote the predicted scores over 𝐵 trading days, 𝑆 stocks, and 𝑁 𝛼 alphas. Let 𝑹 ∈ R𝐵 ×𝑆 denote the realized stock returns, where 𝑹 [𝑑, 𝑠 ] is the realized return of stock 𝑠 following formation day 𝑑 .
+
+Per-alpha sub-portfolios. On each formation day 𝑑 , each alpha independently constructs a long-only sub-portfolio. For alpha 𝑎 , we select the 𝑘 stocks with the highest predicted scores: 
+
+S (𝑑,𝑎 ) = arg top -k𝑠 𝑷 [𝑑, 𝑠, 𝑎 ], (11) where 𝑘 = 5. The selected stocks are assigned softmax-normalized weights: 
+
+𝑤 (𝑑,𝑎 ) 
+
+> 𝑠
+
+= exp (𝑷 [𝑑, 𝑠, 𝑎 ]) 
+
+Í𝑗 ∈ S (𝑑,𝑎 ) exp (𝑷 [𝑑, 𝑗, 𝑎 ]) , 𝑠 ∈ S (𝑑,𝑎 ) . (12) The weights satisfy Í𝑠 ∈ S (𝑑,𝑎 ) 𝑤 (𝑑,𝑎 ) 
+
+> 𝑠
+
+= 1. Thus, stocks with larger predicted scores receive larger allocations within the corresponding sub-portfolio. For a portfolio formed on day 𝑑 , the return of alpha 
+
+𝑎 at holding offset 𝜏 is 
+
+𝑟 (𝑑,𝑎 ) 
+
+> 𝜏
+
+=∑︁   
+
+> 𝑠 ∈ S (𝑑,𝑎 )
+
+𝑤 (𝑑,𝑎 ) 
+
+> 𝑠
+
+𝑹 [𝑑 + 𝜏, 𝑠 ], 𝜏 = 0, . . . , ℎ 𝑑 − 1, (13) where ℎ𝑑 = min (𝑊 , 𝐵 − 𝑑 ) is the available holding length. Here, 
+
+𝜏 = 0 denotes the first realized return following formation day 𝑑 .For a fixed formation day 𝑑 , the sub-portfolio returns are collected into 𝒓 sub ∈ R𝑁 𝛼 ×ℎ𝑑 , where 𝒓 sub [𝑎, 𝜏 ] = 𝑟 (𝑑,𝑎 ) 
+
+> 𝜏
+
+.Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+Combination across alphas. The alphas are combined at the portfolio level rather than at the score level. Each alpha first selects and weights its own top-𝑘 basket. Their resulting sub-portfolio returns are then averaged: 
+
+𝑟 (𝑑 ) 
+
+> 𝜏
+
+= 1
+
+𝑁 𝛼 𝑁 𝛼 ∑︁ 
+
+> 𝑎 =1
+
+𝑟 (𝑑,𝑎 ) 
+
+> 𝜏
+
+. (14) This construction preserves the stock-selection behavior of each alpha. Different alphas may select different baskets, while a stock selected by multiple alphas naturally receives greater aggregate exposure. 
+
+Multiple rebalancing phases. We set the holding and rebalanc-ing interval to the prediction horizon 𝑊 . To reduce sensitivity to the initial portfolio-formation date, we evaluate 𝑊 rebalancing phases. A portfolio formed on day 𝑑 is assigned to phase 𝑤 = 𝑑 mod 𝑊 .Portfolios in the same phase are therefore formed every 𝑊 trading days. The holding-period returns generated from formation day 𝑑 
+
+are written into the corresponding segment of that phase. We store all phase-specific daily returns in a matrix 𝑸 ∈ R𝑊 ×𝐵 ,the 𝑤 -th row of 𝑸 is denoted by 𝒒 (𝑤 ) = 𝑸 [𝑤, :], and represents the daily return sequence associated with rebalancing phase 𝑤 .Performance metrics are computed separately for each valid phase sequence 𝒒 (𝑤 ) and then averaged across all 𝑊 phases. 
+
+Algorithm 2 Portfolio Construction with Multiple Alphas 
+
+Require: Predicted scores 𝑷 ∈ R𝐵 ×𝑆 ×𝑁 𝛼 , realized stock returns 
+
+𝑹 ∈ R𝐵 ×𝑆 , basket size 𝑘 , and holding horizon 𝑊 
+
+Ensure: Phase-return matrix 𝑸 ∈ R𝑊 ×𝐵  
+
+> 1:
+
+Initialize 𝑸 ← 0𝑊 ×𝐵  
+
+> 2:
+
+for 𝑑 = 0 to 𝐵 − 1 do  
+
+> 3:
+
+𝑤 ← 𝑑 mod 𝑊 ⊲ Rebalancing phase  
+
+> 4:
+
+ℎ ← min (𝑊 , 𝐵 − 𝑑 ) ⊲ Available holding length  
+
+> 5:
+
+𝒓 sub ← 0𝑁 𝛼 ×ℎ 
+
+> 6:
+
+for 𝑎 = 0 to 𝑁 𝛼 − 1 do  
+
+> 7:
+
+𝒑 ← 𝑷 [𝑑, :, 𝑎 ] ⊲ Scores produced by alpha 𝑎  
+
+> 8:
+
+S ← arg top -k(𝒑 ) ⊲ Select the top-𝑘 stocks  
+
+> 9:
+
+𝒘 ← softmax (𝒑 [S]) ⊲ Normalize the portfolio weights  
+
+> 10:
+
+𝒓 sub [𝑎, :] ← 𝑹 [𝑑 : 𝑑 + ℎ, S] 𝒘 ⊲ Holding-period returns of alpha 𝑎  
+
+> 11:
+
+end for  
+
+> 12:
+
+𝑸 [𝑤, 𝑑 : 𝑑 + ℎ] ← 1
+
+𝑁 𝛼 
+
+Í𝑁 𝛼 −1 
+
+> 𝑎 =0
+
+𝒓 sub [𝑎, :] ⊲ Average the sub-portfolios  
+
+> 13:
+
+end for  
+
+> 14:
+
+return 𝑸 
+
+Performance metrics. For phase 𝑤 , let 
+
+𝒒 (𝑤 ) =
+
+h
+
+𝑞 (𝑤 ) 
+
+> 1
+
+, 𝑞 (𝑤 ) 
+
+> 2
+
+, . . . , 𝑞 (𝑤 )
+
+> 𝑇 𝑤
+
+i
+
+(15) denote its valid daily portfolio-return sequence, where 𝑇 𝑤 is the number of valid observations. Assuming 252 trading days per year, the annualized return is AR (𝑤 ) = 252 ¯𝑞 (𝑤 ) , where ¯𝑞 (𝑤 ) =
+
+> 1
+> 𝑇 𝑤
+
+Í𝑇 𝑤  
+
+> 𝑡 =1
+
+𝑞 (𝑤 ) 
+
+> 𝑡
+
+).The annualized Sharpe ratio is 
+
+SR (𝑤 ) = √252 ¯𝑞 (𝑤 )
+
+𝜎  𝒒 (𝑤 )  ,
+
+where 𝜎 
+
+
+
+𝒒 (𝑤 )
+
+
+
+denotes the standard deviation of the daily portfo-lio returns. Following our implementation, the cumulative return sequence is computed by summing the daily returns: 
+
+𝑉 (𝑤 ) 
+
+> 𝑡
+
+=
+
+> 𝑡
+
+∑︁ 
+
+> 𝜏 =1
+
+𝑞 (𝑤 ) 
+
+> 𝜏
+
+.
+
+The maximum drawdown is defined as the largest peak-to-trough decline in this cumulative return sequence: 
+
+MDD (𝑤 ) = max  
+
+> 1≤𝑡 ≤𝑇 𝑤
+
+
+
+max   
+
+> 1≤𝜏 ≤𝑡
+
+𝑉 (𝑤 ) 
+
+> 𝜏
+
+− 𝑉 (𝑤 )
+
+> 𝑡
+
+
+
+.
+
+The Calmar ratio is 
+
+CR (𝑤 ) = AR (𝑤 )
+
+MDD (𝑤 ) .
+
+Finally, each reported performance metric is averaged across the 
+
+𝑊 rebalancing phases. For a generic metric 𝑀 = 1
+
+> 𝑊
+
+Í𝑊 −1 
+
+> 𝑤 =0
+
+𝑀 (𝑤 ) .Higher values of AR, SR, and CR indicate better portfolio perfor-mance, whereas a lower MDD is preferred. 
+
+## B Detail of Extreme Loss 
+
+As the transition margin 𝛿 𝑖 increases, the position weights 𝑣 𝑖 be-come concentrated on a narrower subset of top-ranked stocks. Un-der a hard-threshold approximation of the sigmoid weighting, the effective number of contributing stocks decreases approximately linearly with 𝛿 𝑖 . Consequently, the magnitude of the weighted cor-relation 
+
+𝜌 𝑖 =
+
+> 𝑆
+
+∑︁ 
+
+> 𝑠 =1
+
+˜𝜙 ( ˆ𝒚 𝑖 )𝑠 · ˜𝜙 (𝒚 )𝑠 · 𝑣 (𝑖 ) 
+
+> 𝑠
+
+,
+
+also tends to decrease with the effective coverage. We therefore introduce 
+
+𝐶 𝑖 = 1 + 2𝛿 𝑖 
+
+𝑆 (16) as a simple first-order coverage correction. Since 𝑆 /2 represents the approximate scale of the ranked region, the normalized margin 
+
+2𝛿 𝑖 /𝑆 measures how far the weighting has shifted from its baseline coverage. Thus, 𝐶 𝑖 increases linearly from Equation (16) as the se-lected region becomes narrower. This correction is heuristic rather than an exact normalization, and is intended to reduce differences in loss scale caused solely by different learned coverage widths. 
+
+## C Detailed Experiments C.1 Performance Degradation with Transaction Costs 
+
+We model transaction costs covering brokerage commissions, ex-change fees, and regulatory charges: CSI300 & CSI500 incurs ∼0.006% (buy) and ∼0.056% (sell), NI225 ∼0.002% on both sides, and the SP500 negligible costs ( ∼0%). With 5-day rebalancing, annualized costs amount to 3.12%, 0.20%, and 0% respectively, is the upper bound of transaction cost degrade based on 100% turnover rate. Table 7 shows the performance considering transaction costs. Compare MAPLE: Efficient and Diverse Multi-Alpha Generation for Portfolio Construction Conference’17, July 2017, Washington, DC, USA 
+
+with Table 1, MAPLE maintains the best average performance with least transaction cost degradation. 
+
+Table 7: Main result considering transaction costs Markets CSI300 CSI500 NI225 SP500 Avg. Metrics → SR CR SR CR SR CR SR CR SR CR RankLSTM 0.658 0.548 0.792 0.605 0.603 0.441 1.414 2.138 0.867 0.933 FinGAT 0.713 0.466 1.070 0.968 0.781 0.627 0.485 0.428 0.762 0.622 MASTER 0.811 0.719 1.019 0.888 0.721 0.608 1.477 2.398 1.007 1.153 AlphaMix 0.588 0.485 0.960 0.866 0.536 0.452 1.574 2.486 0.915 1.072 StockMixer 0.429 0.362 0.467 0.320 0.440 0.353 0.919 0.899 0.564 0.484 CI-STHPAN 0.036 0.025 0.352 0.240 0.763 0.604 1.589 2.993 0.685 0.966 MERA 0.967 0.949 0.614 0.428 0.761 0.548 1.117 1.131 0.865 0.764 DHMoE 0.709 0.721 1.458 2.115 0.669 0.577 0.980 0.680 0.954 1.023 TIPS 1.260 1.428 1.949 2.392 0.952 0.779 1.506 2.965 1.417 1.891 MAPLE 1.786 1.990 2.118 1.922 0.985 0.778 1.758 3.896 1.662 2.146 
+
+## C.2 Detail results of Section 4.4 
+
+Table 8: Generalizability on replacing different intra-stock backbones in MAPLE across four equity markets. Bold indi-cate that MAPLE performs better than corresponding back-bone baseline (intra-stock-only, single alpha). Underline de-notes the best among all methods. Markets CSI300 CSI500 NI225 SP500 Avg. Metrics → SR CR SR CR SR CR SR CR SR CR TCN 1.391 1.304 1.612 1.474 0.559 0.434 1.076 1.219 1.160 1.108                                                                                           
+
+> +MAPLE 1.235 1.129 1.789 1.764 0.838 0.679 1.382 2.366 1.311 1.484
+> GRU 1.126 1.051 1.611 1.474 0.787 0.581 1.594 2.516 1.280 1.406
+> +MAPLE 1.641 1.696 1.937 1.860 1.088 0.805 1.654 3.692 1.580 2.013
+> LSTM 1.139 0.934 1.362 1.117 0.789 0.602 1.608 2.276 1.225 1.232
+> +MAPLE 1.471 1.441 1.740 1.459 1.191 0.857 1.539 3.151 1.485 1.727
+> Mamba 1.071 1.017 1.389 1.251 0.940 0.762 1.687 2.669 1.272 1.425
+> +MAPLE 1.193 1.197 1.753 1.577 0.996 0.701 1.671 3.210 1.403 1.671
+> TFM 1.509 1.411 2.006 2.122 0.648 0.510 1.447 2.811 1.402 1.713
+> +MAPLE 1.851 2.062 2.161 1.961 0.991 0.783 1.758 3.896 1.690 2.175
+
+Table 8 reports the results across four equity markets and five intra-stock backbones. Overall, MAPLE improves both metrics on 15 of the 20 backbone–market pairs and at least one metric on 19 of 20, with TCN on CSI300 the sole exception; the four mixed cases trade one metric against the other rather than degrading both. Never-theless, when averaged across markets, MAPLE improves both SR and CR for every backbone, demonstrating its broad compatibility with different temporal architectures and its consistent gains in performance. 
+
+## D Detailed Analysis Calculations & Results D.1 Path-dominance 𝑅 2 & Gradient Competition Trajectory 
+
+Path-dominance 𝑅 2. We use sklearn.metrics.r2_score [28 ]to calculate 𝑅 2intra and 𝑅 2inter , which denotes the 𝑅 2 scores between 
+
+( ˆ𝒀 intra , ˆ𝒀 ) and ( ˆ𝒀 inter , ˆ𝒀 ), respectively. 
+
+Gradient Competition Trajectory . Figure 6 shows the full gra-dient trajectory of intra-stock output ˆ𝒀 intra and inter-stock output 
+
+ˆ𝒀 inter . We probe the model once per epoch measuring the RMS gra-dient each path induces on the shared backbone 𝑡 𝜃 in isolation. We report the competition ratio: 
+
+𝜌 = |∇ ˆ𝒀 inter /∇ 𝑡 𝜃 ||∇ ˆ𝒀 intra /∇ 𝑡 𝜃 | ,
+
+where 𝜌 > 1 indicates the inter-stock path exerts more pull on shared representation capacity than the intra-stock path. All three architectures dominate by intra-stock at the very be-ginning training epochs, and shift toward inter-stock dominance as training proceeds, but they separate sharply in both the timing and the magnitude of that shift. As a result, Ours architecture reaches an equilibrium in which the two paths pull on the backbone at comparable strength, while Tf_Block and Std_Attn converges to a regime where the cross-stock path dominates the shared represen-tation by 4-5 times higher. Two variants: Tf_Block and Std_Attn 
+
+are the second and third row in Table 3, respectively. 0 20 40 60 80 100      
+
+> epoch
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Gradient Ratio: inter/intra
+> Ours
+> Std_Attn
+> Tf_Block
+> 020 40 60 80 100
+> epoch
+> 0.0000
+> 0.0005
+> 0.0010
+> 0.0015
+> 0.0020
+> Gradient Value
+> Ours (intra)
+> Ours (inter)
+> Std_Attn (intra)
+> Std_Attn (inter)
+> Tf_Block (intra)
+> Tf_Block (inter)
+
+Figure 6: Gradient trajectory of different attention structure through 100 epochs. Top: competition ratio of inter-stock gradient and intra-stock gradient trajectories. Bottom: Sepa-rate inter-stock and intra-stock gradient trajectories. 
+
+## D.2 Loss Analysis 
+
+Figure 7 plots each loss variant in the risk–return plane spanned by the 5-day return standard deviation 𝜎 𝑟 (horizontal) and mean return 
+
+𝜇 𝑟 (vertical, in %), where the ratio 𝜇 𝑟 /𝜎 𝑟 acts as a risk-adjusted score and the dashed line 𝜇 𝑟 /𝜎 𝑟 = 0.1 marks a fixed-efficiency reference: points to its upper-left earn more return per unit of risk, points to its lower-right earn less. The two auxiliaries move the strategy in opposite and complementary directions. The extreme loss ℒext Conference’17, July 2017, Washington, DC, USA Den and Chen et al. 
+
+is a return amplifier that trades away efficiency: adding it shifts the strategy up-and-right along both axes: ℒspr → ℒspr + ℒext 
+
+raises mean return by +0.146% but also inflates volatility by +0.013 ,and the same displacement appears in the presence of diversity (ℒspr + ℒdiv → ℒspr + ℒext + ℒdiv , +0.162% return, +0.012 risk), consistent with its role of sharpening the tails of the score distri-bution to concentrate exposure on extreme-ranked names. Left unchecked this pushes the strategy toward the high-risk regime occupied by the extreme-only model ℒext (𝜎 𝑟 = 0.058 ), which posts the largest raw return ( 𝜇 𝑟 = 0.494% ) but the worst effi-ciency of all five variants ( 𝜇 𝑟 /𝜎 𝑟 = 0.085 , well below the reference line). The diversity loss is the countervailing risk regulator: the 
+
+ℒspr + ℒext → ℒspr + ℒext + ℒdiv arrow points down-and-left, shedding −0.011 of volatility while giving back only −0.091% of return — cutting risk proportionally harder than return and thereby lifting the point back across the efficiency frontier. Acting together, the two auxiliaries relocate the deployed model ℒspr + ℒext + ℒdiv 
+
+to the best risk-adjusted position in the plane ( 𝜇 𝑟 /𝜎 𝑟 = 0.111 , the highest of any variant and above the reference line, versus 0.101 for 
+
+ℒspr and 0.085 for ℒext ): the extreme loss supplies the return, and the diversity loss — realized through the decorrelated alpha heads — converts the resulting volatility back into a controlled-risk profile. This decomposition is the mechanistic counterpart to the headline result that neither auxiliary alone is sufficient; the risk-control ben-efit that matters operationally (lower volatility and downstream MDD) is specifically what the diversity term buys back from the return-seeking extreme term. 0.02 0.03 0.04 0.05 0.06 
+
+5-day return std r
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+0.45 
+
+0.50 
+
+> 5-day mean return  r (%)
+
+y/x<0.1 y/x>0.1  
+
+> spr
+> ext
+> spr
+
++ div  
+
+> spr
+
++ ext  
+
+> spr
+
++ ext + div         
+
+> Loss variant
+> spr
+> ext
+> spr +div
+> spr +ext
+> spr +ext +div
+> Standard: y/x=0.1
+> +Extreme
+> +Extreme
+> +Diversity
+
+Figure 7: Ablation of the extreme loss ℒext and the diver-sity regularizer ℒdiv . Each term isolates one side of the risk– return trade-off: ℒext improves mean return but inflates volatility, while ℒdiv reverses both. Their combination at-tains the highest risk-adjusted score, indicating the two ob-jectives are complementary rather than redundant. 
+
+## D.3 Full Numerical Results of Section 5.3 
+
+Table 9: Cross-market average performance across different numbers of 𝑁 𝛼 under our inter-stock design (b), loss design (c), and capacity scaling (d), as defined in Table 2. Multi-seed Ensemble trains 𝑁 𝛼 independent instances of configuration (b) separately and averages predictions. Bold indicates con-figuration (c) or (d) outperforms Multi-seed Ensemble on the corresponding cell. Underline denotes the best among all methods. Multi-seed Ensemble Single-model, 𝑁 𝛼 -preds Config Inter-Stock Design (b) + Loss Design (c) + Capacity Scaling (d) 
+
+𝑁 𝛼 AR SR CR AR SR CR AR SR CR 
+
+1 0.684 1.430 1.749 1.067 1.526 1.791 1.196 1.566 1.929 
+
+2 0.679 1.528 1.886 0.916 1.531 1.832 1.099 1.593 2.020 
+
+4 0.656 1.562 1.989 0.834 1.532 1.925 1.083 1.653 2.107 
+
+8 0.631 1.615 2.076 0.830 1.579 1.996 1.208 1.660 2.031 16 0.636 1.659 2.134 0.847 1.530 1.799 1.225 1.653 2.095 24 0.637 1.665 2.117 0.886 1.532 1.793 1.297 1.690 2.175 
+
+## D.4 Full Numerical Results of Section 5.4 
+
+Table 10: Cross-market average alpha correlation and perfor-mance across different values of the diversity weight 𝜆 under our loss design (c), capacity scaling (d, 𝑁 𝛼 = 8), and alpha scaling (e, 𝑁 𝛼 = 24 ), as defined in Table 2. Bold and underline indicate the peak and second-highest value in each column. Config Loss Design (c) + Capacity Scaling (d) + Alpha Scaling (e)

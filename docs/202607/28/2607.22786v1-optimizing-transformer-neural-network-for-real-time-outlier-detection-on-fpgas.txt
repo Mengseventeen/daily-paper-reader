@@ -1,0 +1,710 @@
+Title: Optimizing Transformer Neural Network for Real-Time Outlier Detection on FPGAs
+
+URL Source: https://arxiv.org/pdf/2607.22786v1
+
+Published Time: Tue, 28 Jul 2026 00:09:01 GMT
+
+Number of Pages: 48
+
+Markdown Content:
+# Optimizing Transformer Neural Network for Real-Time Outlier Detection on FPGAs 
+
+## Ilia Sobakinskikh and Paul Alexander Bilokon July 28, 2026 
+
+Abstract 
+
+In this work, we explore how the inference time of a Transformer Neu-ral Network can be efficiently optimized with applications to real-time anomaly detection in financial time series. The financial time series are price series such as asset prices. Unfortunately, the data is often with errors or outliers that make the downstream data processing tasks use-less, unstable or even harmful [1] [2]. Moreover, the amount of financial time-series data has been significantly increasing [3]. Hence, there is a need for better data-cleaning methods in terms of accuracy and in terms of processing speed. Transformers as a neural network architecture have achieved superior performances in many tasks such as Natural Language Processing and Computer Vision [4]. Time series modelling and especially anomaly de-tection tasks can benefit from the features of transformers architecture in multiple ways, including the capacity to capture long-range dependencies and interactions [5]. Increasingly powerful hardware, such as field-programmable gate ar-rays (FPGAs), have seen increasing usage in recent years due to their reconfigurability and high performance [6]. They can be efficiently uti-lized to speed up the computations of the Transformer architecture. We explore different Transformer architectures for time series mod-elling and how they can be efficiently implemented on an FPGA board (PYNQ-Z2). In particular, we examine the application of Transformers to detect anomalies in time series and we show how they can be efficiently implemented on an FPGA board to minimize latency. The code is available at https://github.com/thxi/icl_thesis 
+
+# 1 Introduction 
+
+The rapid growth of financial time series data has given rise to significant chal-lenges in maintaining data quality and processing speed. In this study, we address these challenges by proposing an implementation of Transformer-based Neural Networks which achieve good performance in anomaly detection tasks while having a low inference time. 1arXiv:2607.22786v1 [cs.LG] 24 Jul 2026 Financial time series data often suffer from data inaccuracies, errors, and outliers, rendering downstream data processing tasks ineffective or even detri-mental to decision-making processes. The urgency of this issue is underscored by the ever-increasing volume of financial time-series data available. Conse-quently, there is a pressing demand for more accurate and faster data-cleaning methods. Transformers, as a powerful neural network architecture, have consistently demonstrated exceptional performance across various domains, including Nat-ural Language Processing (NLP) and Computer Vision. Leveraging the capa-bilities of Transformer architectures for time series modeling, especially in the realm of anomaly detection, offers numerous advantages, including the ability to capture long-range dependencies and intricate interactions within the data. The evolution of hardware, for example, the growing utilization of field-programmable gate arrays (FPGAs), has brought about increased computa-tional capabilities due to their reconfigurability, high performance and determin-istic latency. These FPGAs can be effectively used to accelerate computations associated with Transformer architectures. 
+
+## 1.1 Outline 
+
+In Section 2, we will describe the problem statement of anomaly detection task. In Section 3, we will describe the main concepts and ideas used in the Trans-former architecture. In Section 4, we will describe the main concepts of pro-gramming an FPGA and the specific optimizations that can be applied to speed up the computations. In Section 5, we will describe the experiments that we conducted to evaluate the performance of the proposed architectures. Section 6 will conclude this work and will provide some ideas for future work. 
+
+## 1.2 Contributions 
+
+The main contributions of this paper are as follows: 1. Implementation of vanilla Transformer architecture on an FPGA board. 2. Implementation of a Linear Attention Transformer on an FPGA board. 3. Analysis of the latency/resource utilization tradeoff for the proposed ar-chitectures. 4. Comparative analysis of the performance, related to accuracy, of the pro-posed architectures on the anomaly detection task. 
+
+# 2 Problem statement 
+
+In this section, we will describe the problem statement of anomaly detection task. 22.1 Definitions and examples 
+
+Definition 2.1. We consider a time-series T which is simply a timestamped sequence of observations xi ∈ Rn, potentially with some metadata yi.Most of the times we will consider univariate case, i.e. n = 1. An example of this is a price time-series of a single stock. However, the multivariate case is also important and we will consider it in the experiments. For example, one can consider a time-series of prices of multiple stocks to get a multivariate time series or one can also create features (for example, by calculating the differenced time series ) on the original time-series to get a multivariate time-series. 
+
+Definition 2.2. The differenced time series is a time-series T where each observation xi is simply the difference between the current and the previous observation. That is, xi = xi−1 − xi.2020-01 2020-03 2020-05 2020-07 2020-09 2020-11 2021-01 
+
+> 60
+> 70
+> 80
+> 90
+> 100
+> 110
+> 120
+> 130
+> Close Price
+> Close price and close price difference
+> 10.0
+> 7.5
+> 5.0
+> 2.5
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> Close Price difference
+
+Figure 1: Sample mutli-variate time-series of Apple stock price. The blue line are the close prices and the red line is the differenced close prices. 
+
+Definition 2.3. The Anomaly Detection task: for any time-series ˆT of length n, we need to predict Y = {y1, ..., y n}, y i ∈ { 0, 1}, whether the datapoint at the i-th timestamp anomalous (where by convention we will use 1 as anomaly and 0 as not an anomaly). In this work, we will restrict ourselves to the supervised case where the labels yi are known for the seen (or training) part of the dataset. 3Remark 2.4. One can also consider an unsupervised task. However, one issue with the unsupervised task is that it is hard to evaluate the performance (i.e., accuracy) of the model’s predictions [7]. 
+
+## 2.2 Different Anomalies Types 
+
+Although there is no universally accepted definition of an anomaly, there exists a common classification of synthetic anomalies into different types. For a broad comprehensive review, reader is referred to [8], [9]. In this work, we will only consider Point anomalies types since the main focus of this work is not to show the superior performance of the Transformer architecture on different types of anomalies but to show that it can be efficiently implemented on an FPGA board. 
+
+Definition 2.5. Point anomalies are individual data points that are con-sidered anomalous with respect to the rest of the data. For example, a point anomaly can be a sudden spike in the price of a stock. See Figure 1. Mathematically, we could define a point anomaly as follows: 
+
+xi =
+
+(
+
+xoriginal  
+
+> i
+
++ S yi = 1 
+
+xoriginal otherwise (2.1) where xoriginal is the original time-series (as if there was no outliers) and S is the spike. 
+
+# 3 Transformers 
+
+In this section, we will describe the main concepts and ideas used in the Trans-former architecture. and how to use them for anomaly detection time series task. We will describe the main building blocks of the Transformer architecture and will give a special treatment to the attention mechanism firstly introduced in [10]. 
+
+## 3.1 General architecture 
+
+In [11], authors introduced the vanilla Transformer architecture which a neu-ral network architecture which is the architecture that is dominantly used in Natural Language Processing tasks. The architecture’s main feature was re-liance on the attention mechanism and the complete elimination of recurrent and convolutional layers. Figure 3 presents the main architecture of the transformer. The architecture consists of an encoder and a decoder blocks. For the purpose of this work we will only consider the encoder part of the architecture (and in that regard the idea is similar to BERT model for language processing [12] which only uses a transformer encoder and this work which uses BERT for anomaly detection 42020-01 2020-03 2020-05 2020-07 2020-09 2020-11 2021-01                      
+
+> 60
+> 80
+> 100
+> 120
+> 140
+> Original time series
+> Time series with outliers
+> outlier
+> 60 70 80 90 100 110 120 130
+> 10 1
+> 2020-01 2020-03 2020-05 2020-07 2020-09 2020-11 2021-01
+> 40
+> 30
+> 20
+> 10
+> 0
+> 10
+> 20
+> 30
+> 40
+> 10.0 7.5 5.0 2.5 0.0 2.5 5.0 7.5 10.0
+> 10 0
+> 10 1
+
+Figure 2: Apple stock modified time series with injected Point anomalies .Top panel: price time series and its distribution. Bottom panel: differenced price time series and its distribution. [13]). The encoder is preceded by a positional encoding layer which is used to inject the positional information to the input vectors xi because the attention mechanism is permutation invariant, this will be explained in Section 3.2. 
+
+3.1.1 Positional encoding 
+
+Since the attention mechanism is permutation invariant (i.e., it does not take into account the order of the input, refer to Section 3.2), we need to inject the positional information into the input vectors xi. In short, a positional encoding is usually a vector of the same dimension as the input vectors xi which can either be fixed (for example, we have the same vector for different positions) or 5Figure 3: Model architecture of the Transformer [11] learned. For the comprehensive overview of different positional encoding techniques, reader is referred to [14] and [15]. The vanilla Transformer architecture uses a sinusoidal positional encoding technique which is a fixed positional encoding scheme. Suppose we have a time-series of length T . Then the positional encoding for the i-th input vector xi of dimension d is defined as follows: 
+
+P E i, 2j = sin( i 
+
+> 10000 2j/d
+
+)
+
+P E i, 2j+1 = cos( i 
+
+> 10000 2j/d
+
+) (3.1) Refer to Figure 4 for an example of the embedding vectors that are obtained using this method. 6This combination of sine and cosine functions allows the positional encoding to generate the embedding of a position in a unique way. The embedding is then added to the input vector xi, however, it can also be simply stacked with the input vector xi to get a vector of dimension 2 d. In this work, we will use the former approach. 1 10 20 30 40 50 60 70 80 90  
+
+> Position in sequence, i
+> 1
+> 10
+> 20
+> 30
+> 40
+> Hidden dimension,  d
+> 0.75
+> 0.50
+> 0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Figure 4: Positional encoding example embeddings for a sequence of max length of 100 and embedding dimension of 48. The embeddings are generated using the sinusoidal positional encoding technique. The columns represent the em-beddings that we would add to the input vector xi.
+
+3.1.2 Encoder Block 
+
+The encoder consists of N identical layers. Each layer has two sub-layers which are a multi-head self-attention layer (described in detail in Section 3.2.1) and a feed-forward (FF) layer. The feed-forward (FF) layer FFN( ·) is a simple neural network which comprises of 2 fully-connected (FC) linear layers and an activation function in between them. Specifically, authors of [11] used an FC layer with the ReLU activation function ReLU( x) = max(0 , x )followed by another FC layer without activation function, i.e. FFN( x) = W2 · ReLU (W1 · x + b1) + b2
+
+7where W1, W 2, b 1, b 2 are the weight matrices and bias vectors respectively for the FC layers. The Add & Norm layer is a residual connection [16] followed by a layer normalization layers [17]. That is, Add & Norm( x) = LayerNorm( x + Sublayer( x)) where Sublayer( x) is either the multi-head self-attention layer or the feed-forward layer (refer to Figure 3). Residual connections (i.e., adding the input to the output of the layer), also known as skip connections, are commonly used to avoid the vanishing gradient problem [16]. In this case, the residual connection is used to avoid the degrada-tion of the model performance when the model is deep (i.e., when the number of sequential layers N is large). While we do not use very deep models in this work, we still use residual connections as in the original architecture for more stable training (refer to Section 5.1.1). Moreover, the residual connection is used to propagate the positional information to the next layers as the attention mechanism is permutation invariant (refer to Section 3.2). The layer normalization layer [17], LayerNorm is used to normalize the out-put of the residual connection. The normalization is used to stabilize the train-ing process (however, it is not strictly necessary, refer to Section 5.1.1 for our empirical findings). This constitutes the main building block of the Transformer encoder archi-tecture. The next section will describe the attention mechanism in detail. 
+
+## 3.2 Attention mechanism 
+
+This section will describe the attention mechanism, its variations and the in-tuition behind it. Moreover, we will compare different attention mechanism implementations in terms of their computational complexity which is important for fast calculations. Most importantly, we will describe the multi-head at-tention mechanism which is used in the vanilla Transformer architecture as a continuation of Section 3.1. 
+
+3.2.1 Dot-Product Attention and Multi-Head Attention 
+
+The attention mechanism introduced in the Transformer architecture [11] used a scaled dot-product attention .The main idea of the dot-product attention mechanism is to compute the mapping of a query qi for each input vector xi to a set of key-value pairs ( kj , v j ). The query qi, key ki and value vi vectors are simply linear transformations of the input vectors xi, i.e., qi = WQ ·xi, ki = WK ·xi, vi = WV ·xi where WQ, WK
+
+and WV are the weight matrices. The attention mechanism is a weighted sum of the values vj where the weights are computed as a function of the query qi and the key kj . That is, Attention (xi) = P 
+
+> j
+
+αij vj where αij = softmax( qi ·vi) is the weight of the j-th value vj . In practice, the attention mechanism is computed 8for all the queries qi at the same time by utilizing the following expression in matrix form: Q = WQ · X, K = WK · X, V = WV · X
+
+(3.2) Attention( Q, K, V ) = softmax( QK T · 1
+
+√dk
+
+)V (3.3) Figure 3 visualizes the attention mechanism introduced in [11]. 
+
+Remark 3.1. In [11], authors additionally scaled the weights αi by the square root of the dimension of the key vectors dk. This is, however, not strictly necessary and is done for numerical stability reasons. The multi-head attention mechanism is simply a concatenation of mul-tiple attention mechanisms. That is, we can compute h different attention mechanisms in parallel and then concatenate the results. The main idea behind this is that different attention mechanisms can learn different features of the input vectors. After the concatenation, we apply a linear transformation (i.e., a fully-connected layer) to the concatenated vectors to get the final output with a desired dimensionality which is usually the same as the input vectors xi.However, in the main paper [11], authors implemented the multi-head at-tention mechanism in a more efficient way compared to the naive concatenation of multiple attention heads of size dk. They, instead, linearly transformed the input vectors to the dimension of dkh where h is the number of attention heads and applied the attention mechanism to the transformed vectors. This is more efficient because we require less parameters and can benefit from the increased accuracy of having multiple attention heads. 
+
+Figure 5: Scaled Dot-Product Attention and Multi-Head Attention [11] 93.2.2 Linear attention 
+
+In [18], authors propose an extension to the dot-product attention mechanism called linear attention . This significantly reduces the computational complex-ity of the attention mechanism by eliminating the need to compute the softmax function. Notice that in 3.3, the softmax function is applied rowwise to the matrix 
+
+QK T . The softmax function can be substituted with a general similarity func-tion sim( ·, ·) between a query qi and a key kj . The equation 3.3 for output value 
+
+v′ 
+
+> i
+
+can then be rewritten as follows: 
+
+v′ 
+
+> i
+
+= Attention( Q, K, V )i =
+
+P 
+
+> j
+
+sim( qi, k j )vj
+
+P 
+
+> j
+
+sim( qi, k j ) (3.4) The only constrained imposed on the similarity function sim( ·, ·) is that it should be non-negative for it to define an attention function. This conveniently includes all kernels. That is sim( qi, k j ) = ϕ(qi)T ϕ(kj ) where ϕ(·) is a feature map. So that given a kernel with a feature map ϕ(·), the attention mechanism can be computed as follows: 
+
+v′ 
+
+> i
+
+= Attention( Q, K, V )i =
+
+P 
+
+> j
+
+ϕ(qi)T ϕ(kj )vj
+
+P 
+
+> j
+
+ϕ(qi)T ϕ(kj ) (3.5) And we can rewrite the attention mechanism in matrix form as follows: Attention( Q, K, V ) = ϕ(Q)T ϕ(K)Vϕ(Q)T ϕ(K) (3.6) Regrouping the terms, we get the following expression for the attention mech-anism: Attention( Q, K, V ) = ϕ(Q)T ϕ(K)Vϕ(Q)T ϕ(K) (3.7) which makes it evident that we can compute P 
+
+> j
+
+ϕ(kj )vj once and reuse them for all the queries qi which reduces the computational complexity from 
+
+O(N 2) to O(N ) where N is the number of input vectors in the attention layer. 
+
+Remark 3.2. In [18], authors used the ϕ(x) = elu (x) + 1 feature map where 
+
+elu (x) = max(0 , x ) + min(0 , α (exp( x) − 1)) is the exponential linear unit activa-tion function. This feature map is used to ensure that the attention mechanism is non-negative and hence defines a valid attention function. Moreover, elu (·) is used instead of ReLU (·) to ensure the differentiability when x is negative. 
+
+## 3.3 Transformers for time series modelling 
+
+Originally, the Transformer architecture was introduced for Natural Language Processing tasks [11] but has since found applications in other domains and 10 time-sereis modelling specifically [5]. The motivation behind using the Trans-former architecture for time series modelling is that they show good performance in many sequence modelling tasks. While many specialized Transformer archi-tectures were proposed for time series modelling (e.g., [19], [20]) and specifically deployed in asset management setting [21], in the current work, we will use the least tuned architecture, i.e., the vanilla Transformer architecture and the ar-chitecture with linear attention [18]. The reason for using the not so specialized architectures is that we want to show that the Transformer can achieve good out of the box performance on the anomaly detection task with minimal tuning and that it can be efficiently implemented on an FPGA board. 
+
+# 4 FPGA design 
+
+In this section, the main concepts of programming an FPGA will be introduced and the specific optimizations that can be applied to speed up the computations. Readers will be introduced to the common optimization techniques and how they are achieved. An matrix multiplication example will be provided to illus-trate the concepts and how the optimizations affect the latency and resource utilization. Lastly, the analysis of the specific optimizations that can be applied to the Transformer architecture will be provided. 
+
+## 4.1 Introduction to FPGA programming and development 
+
+In this section, we will introduce the main concepts of FPGA programming and development tools. 
+
+4.1.1 Common Terms 
+
+In this section, common terms will be introduced. The terms will be used throughout Section 4. It is not required to read all of them at once, but it is recommended to refer to this section when a term is not clear (i.e., only when necessary). 
+
+Definition 4.1. LUT (Look-Up Table) is a small, fast memory that stores the output of a Boolean function of its inputs. The LUT is the basic building block of an FPGA and is capable of implementing any logic function of N Boolean variables. 
+
+Definition 4.2. BRAM (Block RAM) is a dedicated two-port memory that can be used to store data. 
+
+Definition 4.3. DSP (Digital Signal Processing) is a specialized hardware unit that is optimized for performing mathematical operations. 
+
+Definition 4.4. Clock cycle is the time between two consecutive rising edges of the clock signal. It is the amount of time between two pulses of an oscillator, 11 a single increment of the central processing unit (CPU) clock during which the smallest unit of processor activity is carried out. 
+
+Definition 4.5. Latency is the time between the start of an operation and the moment its results become available or the number of clock cycles required to complete an operation. Latency of a loop is the number of clock cycles required to complete one iteration of the loop. 
+
+Definition 4.6. Throughput is the number of operations that can be com-pleted in a given amount of time. 
+
+Definition 4.7. Initiation Interval (II) is the number of clock cycles between the start of two consecutive iterations of a loop. That is, it is the maximum rate (in clock cycles) at which loop iterations can be initiated. In the ideal case, the II is equal to 1 so that we can start a new iteration of the loop every clock cycle. Initiation interval is different from latency. The reason for this is pipelining which will be described in Section 4.1.2. For a visual explanation, see Figure 6. 
+
+Definition 4.8. Trip count is simply the number of iterations of a loop. 
+
+Figure 6: Latency vs Initiation Interval illustration. Source: [22] 
+
+HLS synthesis In this section, HLS synthesis will be described [23]. It is now the common workflow in the FPGA development because it significantly improves the productivity when working with design. 12 HLS synthesis is a methodology that bridges the gap between high-level pro-gramming languages, such as C, C++, or OpenCL, and the low-level hardware description languages typically used in FPGA design, like Verilog or VHDL. This approach enables developers to describe their algorithms and functionality at a higher level of abstraction, allowing them to focus on the problem-solving aspect rather than the intricacies of hardware implementation. The HLS process starts with a high-level description of the desired func-tionality. This description can be written in familiar programming languages (in this case, C++ HLS), taking advantage of their abstractions and concise syntax. The HLS tool then performs a series of transformations on this high-level description to generate an optimized hardware implementation that can be deployed on an FPGA. The high-level description is transformed by the HLS tool into a RTL (Register Transfer Level) representation, which is the low-level hardware description that defines the behavior of the FPGA. 
+
+Simulation, Cosimulation In this section, the processes of simulation 
+
+and cosimulation will be described. In the context of developing for Field-Programmable Gate Arrays (FPGAs), simulation and cosimulation are two cru-cial techniques for verifying and testing the functionality of your design before actually programming it onto the FPGA hardware. 
+
+Definition 4.9. Simulation is the process of running a software-based model of your FPGA design on a computer to simulate its behavior. The process is very similar to running a software program on a computer for the purpose of unit testing certain parts of functionality of your code [24]. That is, the simulation does not involve any RTL code and is simply a software simulation of the high-level description. 
+
+Remark 4.10. Simulation might not always capture all aspects of hardware behavior, such as timing delays, which can be critical on FPGAs. 
+
+Definition 4.11. Cosimulation is a technique that combines simulation of the high-level description with simulation of the generated RTL description. This means that the simulations of both the original high-level code and the RTL representation in parallel, comparing their behavior. The purpose of cosimula-tion is to ensure that the high-level synthesis tool accurately transformed the high-level description into the desired RTL behavior. [24]. 
+
+4.1.2 Common optimizations 
+
+In this section, common optimization techniques and how they are achieved will be introduced. It is quite common to process data blocks (for example, a sequence of sam-ples in anomaly detection) using for loops. For loops are usually the main bottleneck in the performance of the design and it is the area where most of the optimizations are applied first [23]. 13 Loop Pipelining Loop pipelining is a technique used in FPGAs programming to optimize the performance of sequential operations within a loop. It improves the throughput of loops by breaking them down into multiple stages that can execute concurrently. That is, it allows to start the next iteration of a loop before the current iteration has finished [25]. Refer to Figure 7 and Figure 6 for a visual illustration. 
+
+Figure 7: Loop pipelining illustration. Source: [25] Consider example of pipelining a simple for loop which adds 2 vectors ([25]):                         
+
+> void toplevel ( int * a , int * b , int * c , int len ) {vadd : for ( int i=0; i<len ; i ++) {# pragma HLS PIPELINE c [ i ] =a [ i ] +b [ i ]; }}
+
+Taking the reference numbers from [25], assume that len is 20 and that one loop iteration takes 3 clock cycles, then the total latency of the loop is 60 clock cycles without pipelining. The pipelining pragma #pragma HLS PIPELINE 
+
+allows to start the next iteration of the loop before the current iteration has finished. By default, the pipelining pragma will try to achieve an II of 1 but this can be specified manually by using the II parameter. So, the pipelining pragma reduces the latency of the loop to 22 clock cycles. In general, the latency of a loop with pipelining is given by the following formula [26]: Latency = II · (Trip Count − 1) + Loop Body Latency (4.1) 
+
+Remark 4.12. It is not always possible to achieve an II of 1. This is because of the dependencies between the iterations of the loop. For example, if the loop body depends on the result of the previous iteration, then the II cannot be 1 and we have to wait until the previous iteration has finished before starting the next one. 14 Loop Unrolling Loop unrolling is an optimization technique that involves expanding or unwinding loops in code to potentially enable better utilization of hardware resources and/or to minimize control flow (branching) in loop itera-tions. This technique is not limited to FPGA development but can be particu-larly useful in optimizing code for FPGA implementations. Loop unrolling works by duplicating loop iterations (read as copy-pasting ). This allows utilizing more hardware as the loop body is duplicated multiple times and loop iterations will utilize different hardware resources. This increase in performance (i.e., throughput) comes at the cost of increased resource uti-lization [25]. Consider a simple example of a function which multiplies the input vector of length 4 by a constant, 2:                    
+
+> void toplevel ( int * a , int * b ) {smult : for ( int i=0; i<4; i ++) {# pragma UNROLL b [ i ] =2*a [ i ]; }}
+
+The unroll pragma #pragma UNROLL allows to unroll the loop and execute the loop iterations in parallel. The unrolled version of the loop will be equivalent to the following code:                      
+
+> void toplevel ( int * a , int * b ) {b [0] =2*a [0]; b [1] =2*a [1]; b [2] =2*a [2]; b [3] =2*a [3]; }
+
+Remark 4.13. It might not be possible to unroll a loop. For example, if the trip count is not known at compile time then the loop cannot be unrolled. Sometimes it is possible to unroll a loop partially. The unroll pragma allows to specify the factor of unrolling, i.e., how many iterations to unroll. For example, 
+
+#pragma UNROLL factor=2 will only duplicate the loop body so that there are 2 of them. 
+
+Loop Reordering Loop reordering optimization is an optimization used to improve the performance by changing the order in which loops are executed. This optimization is not strictly related to FPGA development and it involves altering the nesting order of loops in a way that improves data locality, cache utilization (for example, on modern CPU) and enables usage of SIMD resources. In the context of FPGA, loop reordering can be used achieve better II 
+
+when we are dealing with pipelining and nested loops (see Section 4.1.2 and Section 4.1.3 for an example). 
+
+Function Inlining Function inlining optimization technique is not specific to FPGA development only. The technique is used to improve the performance 15 of a program by reducing the overhead associated with function calls. Calling a function incurs some overhead in terms of memory and execution time due to the need to set up the function call stack, pass arguments, and jump to the function’s code. Function inlining aims to eliminate this overhead by replacing a function call with the actual body of the function at the call site. In other words, the compiler takes the contents of the called function and inserts it directly into the location where the function is called. This, however, increases the size of the code and, specifically in the case of FPGAs, the resource utilization (LUTs and FF). 
+
+Array Partitioning and Reshaping Partitioning arrays in an FPGA (Field-Programmable Gate Array) refers to the process of dividing a large memory block (e.g., one array) into smaller sections, often referred to as memory banks or partitions. Partitioning allows accessing different parts of the array in parallel so that bottlenecks caused by a single memory interface being overwhelmed with re-quests can be avoided. There are 3 different types of partitioning that can be applied to an array (Refer to Figure 8): 1. Cyclic . In a cyclic partition, the array is divided blocks of interleaved elements of the original array. 2. Block . In a block partition, the array is divided into non-overlapping blocks of sequential elements in the original array. Each block is assigned to a separate memory bank. 3. Complete . The array is split intio intividual elements The disadvantage of partitioning is that it increases the number of memory interfaces which leads to the increased resource utilization (i.e., more FFs, LUTs are used because each memory block requires separate control logic). This can be partly mitigated by using the array reshaping . The difference between partitioning and reshaping is that partitioning creates multiple memory inter-faces while reshaping still uses a single memory interface (i.e., all partitions are merged to a single physical memory). 
+
+4.1.3 Example of optimizing matrix multiplication 
+
+In this section, we will describe the process of optimizing a matrix multiplication using the techniques described in Section 4.1.2. This section can be treated as a tutorial on how to optimize a simple matrix multiplication. Full source code for with all the files can be located in vitis hls/matmul naive .
+
+Naive implementation The naive implementation of matrix multiplication is simply a triple for loop which directly implements the definition of C = A · B
+
+where A, B and C are the matrices and Ci,j are defined as in Equation 4.2. 16 Figure 8: Array partitioning illustration. 
+
+Ci,j =
+
+> N
+
+X
+
+> k=0
+
+Ai,k · Bk,j (4.2) 
+
+# include " matrixmul . h " void matmul ( mat_a_t a [ MAT_A_ROWS ][ MAT_A_COLS ] , mat_b_t b [ MAT_B_ROWS ][ MAT_B_COLS ] , result_t res [ MAT_A_ROWS ][ MAT_B_COLS ]) {loop_i : for ( int i = 0; i < MAT_A_ROWS ; i ++) {loop_j : for ( int j = 0; j < MAT_B_COLS ; j ++) {res [ i ][ j ] = 0; loop_k : for ( int k = 0; k < MAT_B_ROWS ; k ++) {# pragma HLS PIPELINE off res [ i ][ j ] += a [ i ][ k ] * b [ k ][ j ]; }}}}
+
+The Vitis HLS Synthesis Report for the naive implementation is presented in Figure 9. The data types for matrices used are int32 t. Matrix A is of size 3x4 and matrix B has size 4x3. For this baseline implementation, we are reaching a latency of 205 clock cycles, using 327 FF and 282 LUTs. 17 Figure 9: Naive matrix multiplication synthesis report 
+
+Loop pipelining and unrolling The baseline code can be optimized by pipelining. There are three loops that can be pipelined ( loop i , loop j and 
+
+loop k ). 
+
+Case 1: Pipelining loop k . A simple pipelining of the innermost loop leads to the pipelining of Multiply and Accumulate operation (MAC) which is the main operation in the loop. There is no need to partition arrays a and b as memory in arrays a and b only need to supply 1 element per cycle. The pipelining leads to decrease in latency to 42 clock cycles at the cost of using 526 FF and 501 LUT which is almost twice as many resources as in the naive implementation. 
+
+Figure 10: Matrix multiplication with pipelined loop loop k 
+
+Case 2: Pipelining loop j . The pipelining of the middle loop requires par-titioning of arrays a by MAT A COLS and b by MAT B ROWS . There are MAT A COLS 
+
+(or MAT B ROWS ) MAC operations per cycle so that memory of a and b needs to be sufficiently divided to supply MAT B ROWS elements per cycle. Array a is partitioned along the second dimension and array b is partitioned along the first dimension because of the access patterns. In this example, we use the complete 
+
+partitioning which divides the memory into individual registers.                                                                    
+
+> # include " matrixmul . h " void matmul ( mat_a_t a [ MAT_A_ROWS ][ MAT_A_COLS ] , mat_b_t b [ MAT_B_ROWS ][ MAT_B_COLS ] , result_t res [ MAT_A_ROWS ][ MAT_B_COLS ]) {# pragma HLS ARRAY_PARTITION variable =acomplete dim =2# pragma HLS ARRAY_PARTITION variable =bcomplete dim =1loop_i : for ( int i=0; i<MAT_A_ROWS ; i ++) {# pragma HLS PIPELINE off loop_j : for ( int j=0; j<MAT_B_COLS ; j ++) {int tmp =0; # pragma HLS PIPELINE loop_k : for ( int k=0; k<MAT_B_ROWS ; k ++) {# pragma HLS UNROLL tmp += a [ i ][ k ] *b [ k ][ j ]; }res [ i ][ j ] =tmp ;
+
+18 }}}
+
+With this addition, the latency is down to 15 clock cycles and the resource usage has increased to 1221 FF and 511 LUTs (Figure 11). 
+
+Figure 11: Matrix multiplication with pipelined loop loop j 
+
+Case 3: Pipelining loop i . Pipelining the outermost loop requires addi-tional partitioning of array res by MAT B COLS and full partitioning of array b as loop k and loop j are getting unrolled.                                                                            
+
+> # include " matrixmul . h " void matmul ( mat_a_t a [ MAT_A_ROWS ][ MAT_A_COLS ] , mat_b_t b [ MAT_B_ROWS ][ MAT_B_COLS ] , result_t res [ MAT_A_ROWS ][ MAT_B_COLS ]) {# pragma HLS ARRAY_PARTITION variable =acomplete dim =2# pragma HLS ARRAY_PARTITION variable =bcomplete dim =0# pragma HLS ARRAY_PARTITION variable =res complete dim =2loop_i : for ( int i=0; i<MAT_A_ROWS ; i ++) {# pragma HLS PIPELINE loop_j : for ( int j=0; j<MAT_B_COLS ; j ++) {# pragma HLS UNROLL int tmp =0; loop_k : for ( int k=0; k<MAT_B_ROWS ; k ++) {# pragma HLS UNROLL tmp += a [ i ][ k ] *b [ k ][ j ]; }res [ i ][ j ] =tmp ; }}}
+
+The latency is down to 9 clock cycles and the resource usage is up to 3819 FF and 1383 LUTs (Figure 12). 
+
+Figure 12: Matrix multiplication with pipelined loop loop i 
+
+Loop reordering We can also compare how the loop reordering affects the performance of the matrix multiplication and specifically how it compares to the pipelining of the loop j in terms of latency and resource usage. 19 The loop reordering technique allows us to avoid partitioning matrix a com-pared to the loop j pipelining solution. However, we now have to partition the output matrix by MAT B COLS .                                                                                        
+
+> # include " matrixmul . h " void matmul ( mat_a_t a [ MAT_A_ROWS ][ MAT_A_COLS ] , mat_b_t b [ MAT_B_ROWS ][ MAT_B_COLS ] , result_t res [ MAT_A_ROWS ][ MAT_B_COLS ]) {int temp_sum [ MAT_B_COLS ]; # pragma HLS ARRAY_PARTITION variable =bdim =2complete # pragma HLS ARRAY_PARTITION variable =res dim =2complete # pragma HLS ARRAY_PARTITION variable =temp_sum dim =1complete loop_i : for ( int i=0; i<MAT_A_ROWS ; i ++) {loop_k : for ( int k=0; k<MAT_B_ROWS ; k ++) {# pragma HLS PIPELINE loop_j : for ( int j=0; j<MAT_B_COLS ; j ++) {# pragma HLS UNROLL int result =( k == 0) ?0:temp_sum [ j ]; result += a [ i ][ k ] *b [ k ][ j ]; temp_sum [ j ] =result ; if ( k == MAT_B_ROWS -1) {res [ i ][ j ] =result ; }}}}}
+
+From Figure 13, the latency is 17 clock cycles and the resource usage is 1031 FF and 611 LUTs. The performance is worse than the pipelined loop loop j 
+
+but the resource usage is lower for FF and higher for LUTs. 
+
+Figure 13: Matrix multiplication with loop reordering 
+
+Summary The pipelining of the outermost loop leads to the best perfor-mance with the lowest latency. However, this comes at the big cost of using the most resources as array b needs to be fully partitioned. In this work, we will use the pipelined loop loop j as it provides a good trade-off between latency and resource usage. 
+
+## 4.2 Transformer architecture optimizations 
+
+In this section, we present the specific optimizations that were applied to the Transformer architecture. For HLS code (i.e., implementation), see vitis hls 
+
+directory. The comparison of the performance and resource utilization of the 20 FPGA optimized architecture and the CPU implementation is presented in Sec-tion 5.4. 
+
+4.2.1 Vanilla Transformer 
+
+In this section, we will describe the specific optimizations that can be applied to the Transformer architectures and present the HLS synthesis reports for the optimized architecture. For the purpose of the analysis, we will use the architectures with the hy-perparameters as described in Section 5.1. The models achieve reasonable per-formance while still being small enough to fit the board. For all matrix multiplications performed in the architecture, we will use the pipelined loop loop j as described in Section 4.1.3 because it provides a reasonable performance-resource utilization tradeoff. We utilize float data type for all the matrices in the architecture. We found that using double data type does not affect the accuracy performance of the model, while it significantly increases the resource utilization (DSP) and makes the model not fit into the board. We also use the following numerical optimization technique applied to soft-max to make it numerically stable. Notice that softmax( xi) = exi
+
+PNj=1 exj
+
+= exi−max( x)
+
+PNj=1 exj −max( x)
+
+= softmax( xi − max( x)) Since exi term can be very large, subtracting the maximum value from all the elements bounds the values of exi (the largest element will be 0) so that the sum of exponents will never become large. For the ReLU activation function, we which needs to be applied to a 2 dimensional matrix (see Feed Forward layer of the encoder block in Section 3.1.2) fully unroll the loops and use the complete partitioning of the matrix. All the loops in the architecture are automatically pipelined unless it is impossible to do so (e.g., because of the dependencies between the iterations). The optimized architecture reaches latency of 3714 cycles (37.14 microsec-onds) utilizes 5% BRAM, 30% FFs and 90% LUTs. See full report in vitis hls/transformer/csynth.rpt .For comparison, the architecture with all optimization turned off reaches latency of 34745 cycles (347.45 microseconds, 10 times as many) and utilizes only 2% BRAM, 2% FFs and 10% LUTs. See full report in vitis hls/transformer slow/csynth.rpt .21 4.2.2 Linear transformer 
+
+We also implement the linear transformer architecture (i.e., linear attention) as described in Section 3.2.2 on the board. Similarly to the vanilla transformer implementation (described in Section 4.2.1), we also utilize float data type for all the matrices in the architecture, use 
+
+loop j pipelining for matrices, fully unroll the loops for ReLU activation func-tion. 
+
+Remark 4.14. As an implementation detail, the matrices had to be manually partitioned with the usage of pragma HLS ARRAY PARTITION directive because Vitis HLS could not infer the partitioning automatically. The optimized version achieves 2986 cycles (29.86 microseconds) latency and utilizes 18% BRAM, 43% FFs and 99% LUTs The full report is in vitis hls/linear transformer/csynth.rpt .For comparison, the architecture with all optimization turned off reaches latency of 68894 cycles (688.94 microseconds) and utilizes 17% BRAM, 6% FFs and 24% LUTs. The full report is in vitis hls/linear transformer slow/csynth.rpt .
+
+# 5 Experiments 
+
+In this section, we will describe the experiments that were performed to evaluate the performance of the proposed architecture. While the main focus of this work is the inference performance of the models (refer to Section 5.4), we will also describe the training procedure and the accuracy performance of the models. 
+
+## 5.1 Architecture and hyperparameters 
+
+Here we will describe the model architecture and the hyperparameters used for the experiments. In the experiments 3 models were used for comparison: 
+
+• Linear Regression - a simple linear regression model on handcrafted features 
+
+• Transformer Encoder - a transformer encoder model on raw time series data 
+
+• Linear Transformer Encoder - a linear transformer model on raw time series data The reason for using the linear regression model is to provide a baseline for the performance of the transformer models to show that even simple untuned models can outperform the linear regression model. For both transformer models, we used the encoder architectures as described in Section 3.2 with a linear layer on top of the output of the transformer encoder to get the final prediction (i.e., if a sample is an anomaly). 22 Remark 5.1. The encoder part has positional encoding and layer normalization disabled. We found that the positional encoding does not improve the perfor-mance of the model and leads to more unstable training (see Section 5.1.1). The transformer hyperparameters used for the experiments are presented in Table 1. Parameter, Model Transformer Encoder Linear Transformer Encoder Window Size 8 8Number of heads 8 -Dim. of FeedForward network 16 16 Number of blocks 2 1Table 1: Hyperparameters The learning rate was chosen using the learning rate finder [27] (see Sec-tion 5.1.1) and the batch size was chosen to be the maximum value that fitted the dataset in memory (2 13 samples), we also used Adam optimizer [28] (see Section 5.1.1). 
+
+5.1.1 Model Fitting 
+
+In this section, we will describe the training procedure, the main tools used and issues that we encountered and how they were addressed. 
+
+General procedure The General process of training a neural network in-volves iteratively adjusting its parameters to minimize a specified loss function. This is typically achieved through an optimization algorithm, such as gradient descent. That is, at each iteration, the parameters of the model θ are updated as follows: 
+
+θt+1 = θt − α∇θ L(θt) (5.1) where α is the learning rate and L(θt) is the loss function at the t-th iteration. While the general procedure is simple there are multiple methods to improve the convergence of the optimization algorithm, which will be described in the following sections. 
+
+Optimizer The optimizer is the algorithm that is used to update the pa-rameters of the model. The general procedure of updating the parameters as described in Equation 5.1, can be improved by using more sophisticated opti-mization algorithms. The Adam optimizer is a popular optimization algorithm used in training artificial neural networks and is a reasonable baseline choice for many problems. It stands for ”Adaptive Moment Estimation” and combines ideas from two other optimization techniques: RMSprop (Root Mean Square Propagation) and Mo-mentum. The Adam optimizer is known for its efficiency and fast convergence, 23 and robustness to various types of neural network architectures and problem domains. The optimization procedure performed by Adam is as follows: 1. Initialize 2 moving average accumulators, m and v with 0. They will store the exponentially decaying average of past gradients and squared gradients respectively for each parameter θ
+
+2. At each iteration, compute the gradient of the loss function with respect to the parameters, ∇θ L(θt)3. Update the moving averages m and v as follows: 
+
+m = β1m + (1 − β1)∇θ L(θt)
+
+v = β2v + (1 − β2)∇θ L(θt)2
+
+where β1 and β2 are the hyperparameters that control the decay rate of the moving averages. The usual values for β1 and β2 are 0.9 and 0.999 respectively. 4. Compute the bias-corrected moving averages ˆ m and ˆ v as follows: ˆm = m
+
+1 − βt
+
+> 1
+
+ˆv = v
+
+1 − βt
+
+> 2
+
+The bias correction is necessary because the moving averages are initialized with 0 (see original paper for derivations [28]). 5. Update the network parameters as follows: 
+
+θt+1 = θt − α ˆm
+
+√ˆv + ϵ
+
+where ϵ is a small constant used for numerical stability (i.e., to avoid division by zero). The update is similar to the gradient descent update rule (Equation 5.1) except that the gradient is divided by the square root of the moving av-erage of squared gradients. We found that the optimizer with default parameters ( β1 and β2) works well for our task, and we did not experiment with other optimizers. 
+
+Learning rate finder The learning rate α is one of the most important hy-perparameters that determines the step size in parameter space during gradient descent optimization. An appropriate learning rate is essential for model con-vergence. The problem of choosing the learning rate is a well-known problem 24 in machine learning and badly chosen learning rate can lead to either underfit-ting where the model learns too slowly or it can lead to divergence where the parameters are updated too abruptly. In [27], authors proposed a simple method to find an appropriate learning rate automatically by plotting the loss function against the learning rate. The procedure is performed as follows: 1. Start with a very small learning rate α and increase it at each iteration 2. At each iteration, train the model for a few epochs and compute the loss function 3. Plot the loss function against the learning rate This plot is crucial in identifying the ”sweet spot” in the learning rate range where the loss is decreasing effectively. 4. Choose the point on the learning rate vs. loss curve where the loss starts to decrease most steeply. This point indicates that the model is making the most significant progress towards convergence. 
+
+Remark 5.2. While there are no guarantees that the learning rate finder will find the optimal learning rate, it provides a good empirical estimate of the optimal learning rate. Instead of manually plotting the loss function against the learning rate, we used the implementation provided in Pytorch Lightning [29]. 
+
+Gradient explosion and Gradient clipping A different challenge of train-ing neural networks is the phenomenon known as the ”gradient explosion prob-lem.” We have found that the gradient explosion problem is especially prevalent in the proposed architectures. The gradient explosion problem occurs when the gradient of the loss func-tion with respect to the parameters becomes too large and the parameters are updated too abruptly (e.g., as in Equation 5.1). This can lead to the model diverging and the loss function increasing instead of decreasing. An example of the loss function diverging is presented in Figure 14. To solve the problem of gradient explosion, we used the gradient clipping technique introduced in [30]. The idea behind gradient clipping is to clip the gradient to a maximum value gmax . This remediates the problem of gradient explosion because the gradient is bounded and the parameters are updated more smoothly. 
+
+Class imbalance and loss functions In anomaly detection task the dataset is often imbalanced, i.e., the number of normal samples is much larger than the number of anomalous samples (see Section 5.2). This poses a problem for the training of the model because the model can simply learn to predict the majority class (i.e., normal samples) and achieve a 25 0 20 40 60 80 100                
+
+> Epoch
+> 0
+> 200
+> 400
+> 600
+> 800
+> Loss
+> Train
+> Validation
+> 020 40 60 80 100
+> Epoch
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> F1
+> 020 40 60 80 100
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> 020 40 60 80 100
+> Epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Recall
+
+Figure 14: Example of gradient explosion at around epoch 40 which leads to the loss function diverging for a few following epochs. high accuracy without having good recall (refer to Section 5.3.2 for the descrip-tion to the metrics). The loss functions that we use for training is the binary cross-entropy loss function [31] which is computed as follows: 
+
+L(θ) = − 1
+
+N
+
+NX
+
+i=1 
+
+yi log(ˆ yi) + (1 − yi) log(1 − ˆyi) (5.2) where yi is the true label and ˆ yi is the predicted label. While the binary cross-entropy loss function is a good choice for the anomaly detection task, it does not take into account the class imbalance problem. A way to solve the class imbalance problem is to use a weigh positive samples (i.e., anomalous samples) more than negative samples in the loss function. 26 So we can modify the loss function as follows: 
+
+L(θ) = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+wi(yi log(ˆ yi) + (1 − yi) log(1 − ˆyi)) (5.3) where wi is the weight of the i-th sample. In the experiments, we found that weighting the positive samples 5 times more than the negative samples yielded good results for most of the datasets which we used throughout the experiments. 
+
+Training stability: Layer normalization and positional encoding While the base transformer encoder architecture uses layer normalization and posi-tional encoding layers, we found that they lead to unstable training and worse performance of the model on most of the datasets. Hence, we disabled them for the experiments and replaced them with identity layers. 
+
+Data Preprocessing Although, this is not a part of the training procedure, before fitting a neural network, it is usually a good idea to preprocess the data by scaling it. For the experiments, we used the MinMaxScaler from the scikit-learn 
+
+library [32], to scale the input features to the range of [0 , 1] for a more stable training. 
+
+## 5.2 Datasets 
+
+In this section, the datasets used for model training and performance evaluation will be described. 
+
+5.2.1 Numenta Anomaly Benchmark (NAB) 
+
+To assess the accuracy of predictions, we use the Numenta Anomaly Benchmark [33] dataset, which contains various real-world labeled time series of tempera-ture sensor readings, CPU utilization of cloud machines, service request laten-cies, and taxi demands in New York City. It is commonly used to assess the performance of anomaly detection models on time-series data. The reason why we use this dataset is that it is a standard benchmark dataset for anomaly detection in time series and because it has a large number of labeled time series. A sample time series of NYC taxi demand is presented in Figure 15. In this work, we only used the NYC taxi demand dataset as in the [19]. The dataset consists of 10320 samples with 10% of anomalous samples. 
+
+5.2.2 KPI Anomaly Detection Dataset 
+
+The other labeled dataset that we use is the KPI Anomaly Detection Dataset (KPI AIOps) [34]. This dataset alongside the NAB dataset will be used to evaluate the predictive performance of the anomaly detection models. 27 Figure 15: NYC Taxi demand - anomalies highlighted in red. Left: Time series of observations, Right: Distribution of observations. The dataset consists of KPI (key performace index) time series data from many real scenarios of Internet companies with ground truth label. KPIs fall into two broad categories: service KPIs and machine KPIs. Service KPIs are performance metrics that reflect the size and quality of a Web service, such as page response time, page views, and number of connection errors. Machine KPIs are performance indicators that reflect the health of the machine (server, router, switch), such as CPU utilization, memory utilization, disk IO and network card throughput. A sample time series of a sensor readings is presented in Figure 16. We can clearly see the outliers for some of the observations (colored in red). 
+
+5.2.3 FI2010 
+
+In [35], authors described the first publicly available benchmark dataset of high-frequency limit order markets for mid-price prediction. The dataset contains 10-day limit order book data from June 2010 for five stocks that are listed on the Helsinki exchange. Each entry in the time series provides price details and aggregate order sizes for the top ten levels on both the bid and offer sides of the market, totaling forty data points. The time series consists of approximately four million messages, representing incoming buy/sell orders or cancellations. The dataset features order book snapshots taken after every 10 messages, re-sulting in approximately 400,000 records for the five stocks. A number of versions of the dataset are available using different normaliza-tion schemes. We used the not normalized version of the dataset. For the purpose of this work, we only extract only the mid price from the dataset which will be used for anomaly detection task. 28 Figure 16: Sensor data from a machine in a data center. The red dots indicate the anomalies. Left: Time series of observations, Right: Distribution of obser-vations. 
+
+Synthetic outliers Since the dataset is not labeled, we have to inject syn-thetic anomalies into the dataset. We employ the approach similar to [36] with a slight modification. The algorithm can be summarized as follows: 1. Select n samples from the time series which will be contaminated (i.e., anomalous) 2. Replace the sample Si with ˆSi = Si(1 + δ) where δ is the injected outlier in the return space. Authors model δ as a uniformly distributed random variable U[0 , ρ ]. We instead use the uniform distribution U[−ρ, ρ ] (i.e., just increase the range) to allow for positive and negative outliers. An example of the injected outliers is presented in Figure 17 
+
+## 5.3 Accuracy 
+
+In this section, we will describe the main metrics used to evaluate the perfor-mance of the anomaly detection models. The Transformer encoder model will be compared with the simple linear regression model on handcrafted features and with the Linear Transformer model [18]. The inference procedure will be described and the results will be presented. 
+
+5.3.1 Inference 
+
+After training the model on the training set as described in Section 5.1.1, we can use the model to make predictions on the test set. 29 Figure 17: Example of the injected outliers in the FI2010 dataset. 
+
+5.3.2 Metrics 
+
+In this section the metrics used to evaluate the performance of the anomaly detection models will be described. Before we describe the metrics, we need to introduce the confusion matrix and the following notation: 
+
+• TP - True Positive calculated as the number of correctly predicted anoma-lies 
+
+• TN - True Negative calculated as the number of correctly predicted non-anomalies 
+
+• FP - False Positive which is the number of incorrectly predicted anomalies 30 • FN - False Negative which is the number of incorrectly predicted non-anomalies 
+
+• P - Number of positive samples, i.e., P = TP + FN 
+
+• N - Number of negative samples, i.e., N = TN + FP 
+
+The confusion matrix is a table with two rows and two columns that reports the number of false positives, false negatives, true positives, and true negatives. True positive 
+
+TP 
+
+P′
+
+P
+
+False negative 
+
+FN 
+
+n total 
+
+P′
+
+False positive 
+
+FP 
+
+N′
+
+total PTrue negative 
+
+TN 
+
+N′
+
+N
+
+actual value 
+
+prediction outcome 
+
+Figure 18: Confusion matrix description The matrix summarizes the predictions from a classification model, i.e., how well the model performed when predicting the class labels for positive and neg-ative samples. While the matrix presents the most informative view of the performance of the model, we still need to summarize the information in the matrix into a single number(s) that can be used to compare different models. In this paper, we will use the following metrics to compare the performance of the anomaly detection models: 
+
+• Accuracy is the fraction of predictions that the model got right. It is defined as follows: Accuracy = TP + TN TP + TN + FP + FN 
+
+While this metric is easy to understand, it is not very informative when the dataset is imbalanced which is the case for the anomaly detection task where the proportion of positive samples is low. 
+
+• Precision is the fraction of positive predictions that were correct. Precision = TP TP + FP 
+
+31 This metric is useful when the cost of false positives is high. For example, in the case of anomaly detection, we want to have a high precision so that we do not have to manually check many false positives or trigger any downstream filtering task too often. 
+
+• Recall is the fraction of positive samples that were correctly predicted. Recall = TP TP + FN 
+
+This metric is useful when the cost of false negatives is high. For example, in the case of anomaly detection, we want to minimize the number of false negatives because we do not want to miss any anomalies. 
+
+• F1 is the harmonic mean of precision and recall which ranges from 0 to 1. F1 = 2 · Precision · Recall Precision + Recall This metric is useful when we want to balance the precision and recall. For example, in the case of anomaly detection, we want to have a high precision so that we do not have to manually check many false positives or trigger any downstream filtering task too often. At the same time, we want to minimize the number of false negatives because we do not want to miss any anomalies. The advantage of using this metric instead of the accuracy is that it can be used even when the dataset is highly imbalanced and it would detect if the model performs poorly in terms of precision and/or recall. 
+
+5.3.3 Comparison 
+
+Dataset Model Accuracy Precision Recall F1 KPI Linear Regression 0.61/0.66 0.07/0.15 0.73/0.69 0.12/0.25 Transformer 0.98/0.97 0.89/0.95 0.59/0.63 0.71/0.76 Linear Transformer 0.97/0.95 0.58/0.73 0.62/0.69 0.60/0.71 NAB Linear Regression 0.09/0.20 0.09/0.20 1.00/1.00 0.16/0.33 Transformer 0.76/0.75 0.16/0.41 0.39/0.55 0.23/0.47 Linear Transformer 0.53/0.56 0.13/0.27 0.76/0.71 0.22/0.40 FI2010 Linear Regression 0.14/0.16 0.14/0.16 1.00/1.00 0.24/0.27 Transformer 0.84/0.80 0.17/0.21 0.03/0.11 0.06/0.14 Linear Transformer 0.82/0.77 0.15/0.14 0.06/0.09 0.09/0.11 Table 2: Final metrics. The reported value are for the train and validation set. The final metrics for the models are presented in Table 2. Refer to the Appendix A for the training plots for the models. The Transformer model outperforms the other models on all datasets. And that is expected because the Transformer model is more complex (i.e., has more 32 parameters) than the other models. However, the Linear Transformer model performs almost as well and it provides better performance-resource utilization tradeoff (see Section 5.4). In terms of training robustness (i.e., how stable the training is, refer to Section 5.1.1), a simple Linear Regression model is the most stable model, as expected. Both Transformer models suffer from the gradient explosion prob-lem which leads to unstable training which can be partially remediated (see Section 5.1.1). However, the performance of a simple Linear regression depends on the dataset. For example, the Linear regression is not able to learn the patterns in the NAB dataset and is stuck at predicting only the positive samples (i.e., anomalies). As for the KPI dataset, the performance on the KPI can be tweaked by training the model for a different number of epochs to achieve the required balance between precision and recall (refer to Figure 23). Both Transformer models, on the other hand, perform equally well on both datasets as long as there is no gradient explosion problem. 
+
+In short , Transformer models outperform the simple linear regression but can have unstable training. Linear Transformer model is slightly behind the vanilla model. This which shows that untuned Transformer models provide a better baseline for anomaly detection than the simple linear regression model. 
+
+## 5.4 Performance/Speed 
+
+The performance of FPGA implementation of the models will be compared with the pytorch CPU and GPU implementation of the models. The CPU used for the experiments is Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz clocked to 4.20GHz and the GPU is NVIDIA GeForce GTX 1050 Ti. The latency on CPU and GPU was measured empirically by running the inference multiple times (10,000 runs). Refer to the Appendix B for the histograms of inference times. Model Device Inference time (microseconds) Transformer CPU 353.35(113.50) GPU 626.34(323.18) FPGA 37.14 LinearTransformer CPU 365(114.21) GPU 472.44(110.83) FPGA 29.86 Table 3: Inference time for the models on different devices. For CPU and GPU we report the mean and standard deviation. For FPGA, the deterministic latency is reported (see Section 4.2). According to the results (Table 3), the FPGA implementation of the models outperforms the CPU implementation by a large margin (achieving a speedup of 10x). The reason for this is that the FPGA implementation is highly parallelized compared to the CPU implementation. Moreover, the benefit of using the FPGA 33 implementation is that it has deterministic latency (i.e., the inference time is constant) which is not the case for the CPU and GPU implementation where the inference time varies depending on the load of the CPU/GPU (see the standard deviation for the inference times of CPU and GPU). 
+
+Remark 5.3. The GPU implementation of the models is slower than the CPU implementation. This is because the models are small and the overhead of transferring the data to the GPU is larger than the time it takes to perform the inference on the CPU for a single sample. Regarding the resource utilization, the Linear Transformer model uses more resources than the Transformer model (see Table 4) and achieves a slightly better runtime performance (see Table 3). Model BRAM FF LUT Transformer 5% 30% 90% LinearTransformer 18% 43% 99% Table 4: Relative resource utilization for the PYNQ-Z2 board. 
+
+# 6 Conclusion 
+
+## 6.1 Summary 
+
+In this work, we have examined the performance of the Transformer model for the anomaly detection task and how it can be effectively implemented on FPGA. We have shown how different Transformer Architectures (and especially the attention module) affect the performance of the model both in terms of accuracy and inference speed. It was shown that the Transformer model outperforms the simple linear regression model without too much hyperparameter tuning. The only downside of the Transformer model that was observed was the unstable training which can be partially remediated by using gradient clipping. We have also demonstrated how different optimizations affect the perfor-mance and resource utilization of the model on FPGA. We also provided an optimized implementation of the Transformer model on FPGA which can be used as a reference. This work can be used as a starting point for further research on the topic of anomaly detection using Transformer models and for further research on the topic of efficient implementation of Transformer models on FPGA in different domains (e.g., natural language processing). 
+
+## 6.2 Future work 
+
+For future work, we propose the following: 1. To try bigger FPGA boards to push the limit of maximum performance. The current implementations hit the limit of the PYNQ-Z2 board. 34 2. To evaluate the performance on more recent labeled financial market data. Currently, there is no publicly available labeled financial market dataset with anomalies. The FI2010 dataset is not labeled and we had to inject synthetic anomalies. 3. To evaluate the performance Transformer on FPGA board for other tasks (e.g., natural language processing). The current implementation is only for the anomaly detection task. The other domains might involve a slightly different architecture (e.g., different number of layers, different number of heads, etc.), it can be valuable to have those models on edge devices because of their recent surge in popularity and increased use. Currently, the language models are too big to fit on the FPGA board (especially, PYNQ-Z2), however, the smaller models can still be implemented and evaluated on bigger boards. 
+
+# References 
+
+[1] Thomas Neil Falkenberry CFA. High frequency data filtering. https://www.tickdata.com/whitepaper/high-frequency-data-filtering, Sep 2008. [2] Owen Vallis, Jordan Hochenbaum, and Twitter. Introduc-ing practical and robust anomaly detection in a time se-ries. https://blog.twitter.com/engineering/en_us/a/2015/ introducing-practical-and-robust-anomaly-detection-in-a-time-series .[3] Mohiuddin Ahmed, Nazim Choudhury, and Shahadat Uddin. Anomaly detection on big data in financial markets. In 2017 IEEE/ACM Interna-tional Conference on Advances in Social Networks Analysis and Mining (ASONAM) , pages 998–1001, 2017. [4] Anthony Gillioz, Jacky Casas, Elena Mugellini, and Omar Abou Khaled. Overview of the transformer-based models for nlp tasks. In 2020 15th Con-ference on Computer Science and Information Systems (FedCSIS) , pages 179–183, 2020. [5] Qingsong Wen, Tian Zhou, Chaoli Zhang, Weiqi Chen, Ziqing Ma, Junchi Yan, and Liang Sun. Transformers in time series: A survey. 2022. [6] Andreea-Ingrid Funie, Liucheng Guo, Xinyu Niu, Wayne Luk, and Mark Salmon. Custom framework for run-time trading strategies. In Stephan Wong, Antonio Carlos Beck, Koen Bertels, and Luigi Carro, editors, Ap-plied Reconfigurable Computing , pages 154–167, Cham, 2017. Springer In-ternational Publishing. [7] Julio-Omar Palacio-Ni˜ no and Fernando Berzal. Evaluation metrics for un-supervised learning algorithms, 2019. 35 [8] Georg Steinbuss and Klemens B¨ ohm. Generating artificial outliers in the absence of genuine ones — a survey. ACM Transactions on Knowledge Discovery from Data (TKDD) , 15:1 – 37, 2020. [9] Sebastian Schmidl, Phillip Wenig, and Thorsten Papenbrock. Anomaly detection in time series: A comprehensive evaluation. Proc. VLDB Endow. ,15:1779–1797, 2022. [10] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. Neural machine translation by jointly learning to align and translate, 2014. [11] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need, 2017. [12] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. 
+
+ArXiv , abs/1810.04805, 2019. [13] Yungi Jeong, Eu-Hui Yang, Jung Hyun Ryu, Imseong Park, and Myung joo Kang. Anomalybert: Self-supervised transformer for time series anomaly detection using data degradation scheme. ArXiv , abs/2305.04468, 2023. [14] Philipp Dufter, Martin Schmitt, and Hinrich Sch¨ utze. Position informa-tion in transformers: An overview. Computational Linguistics , 48:733–763, 2021. [15] Lilian Weng. The transformer family version 2.0. https://lilianweng. github.io/posts/2023-01-27-the-transformer-family-v2 , Jan 2023. [16] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition, 2015. [17] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E. Hinton. Layer normal-ization, 2016. [18] Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and Fran¸ cois Fleuret. Transformers are rnns: Fast autoregressive transformers with lin-ear attention, 2020. [19] Shreshth Tuli, Giuliano Casale, and Nicholas R Jennings. TranAD: Deep Transformer Networks for Anomaly Detection in Multivariate Time Series Data. Proceedings of VLDB , 15(6):1201–1214, 2022. [20] Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu. Are transformers effective for time series forecasting?, 2022. [21] Edmond Lezmi and Jiali Xu. Time series forecasting with transformer models and application to asset management. SSRN Electronic Journal ,2023. 36 [22] University of York. Vitis HLS Knowledge Base - Real-Time Systems -York Wiki Service. https://wiki.york.ac.uk/display/RTS/Vitis+HLS+ Knowledge+Base , July 2020. [23] Xilinx Inc. Vitis High-Level Synthesis User Guide. https://docs.xilinx. com/r/en-US/ug1399-vitis-hls/Design-Principles , May 2023. [24] Xilinx Inc. C/RTL Co-Simulation in Vitis HLS. 
+
+https://docs.xilinx.com/r/en-US/ug1399-vitis-hls/C/ RTL-Co-Simulation-in-Vitis-HLS , July 2023. [25] Xilinx Inc. Vitis hls: Pipelining loops. https://docs.xilinx.com/r/ en-US/ug1399-vitis-hls/Design-Principles , May 2023. [26] Intel. Intel high level synthesis: Best practices guide. https: //www.intel.com/content/www/us/en/docs/programmable/683152/ 21-3/pipeline-loops.html .[27] Leslie N. Smith. Cyclical learning rates for training neural networks, 2015. [28] Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic opti-mization. CoRR , abs/1412.6980, 2014. [29] lightning.ai. Learningratefinder — pytorch lightning 2.0.7 documen-tation. https://lightning.ai/docs/pytorch/stable/api/lightning. pytorch.callbacks.LearningRateFinder.html , Aug 2023. [30] Razvan Pascanu, Tomas Mikolov, and Yoshua Bengio. On the difficulty of training recurrent neural networks, 2012. [31] I. J. Good. Rational decisions. Journal of the Royal Statistical Society: Series B (Methodological) , 14(1):107–114, Jan 1952. [32] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. Thirion, O. Grisel, M. Blondel, P. Prettenhofer, R. Weiss, V. Dubourg, J. Vanderplas, A. Pas-sos, D. Cournapeau, M. Brucher, M. Perrot, and E. Duchesnay. Scikit-learn: Machine learning in Python. Journal of Machine Learning Research ,12:2825–2830, 2011. [33] Subutai Ahmad, Alexander Lavin, Scott Purdy, and Zuha Agha. Unsu-pervised real-time anomaly detection for streaming data. Neurocomputing ,262:134–147, 11 2017. [Online; accessed 2023-07-19]. [34] Zeyan Li, Nengwen Zhao, Shenglin Zhang, Yongqian Sun, Pengfei Chen, Xidao Wen, Minghua Ma, and Dan Pei. Constructing large-scale real-world benchmark datasets for aiops, 2022. [35] Adamantios Ntakaris, Martin Magris, Juho Kanniainen, Moncef Gabbouj, and Alexandros Iosifidis. Benchmark dataset for mid-price forecasting of limit order book data with machine learning methods. 2017. 37 [36] St´ ephane Cr´ epey, Noureddine Lehdili, Nisrine Madhar, and Maud Thomas. Anomaly Detection in Financial Time Series by Principal Component Anal-ysis and Neural Networks. Algorithms , 15(10):385, oct 19 2022. [Online; accessed 2023-07-19]. 38 A Training plots 
+
+The training plots are presented in Figures 19, 20, 21, 22, 23, 24. Figure 19: Training metrics for different epochs for Transformer model on KPI dataset 
+
+# B Empirical latency 
+
+The empirical latency plots are presented in Figures 25, 26, 27, 28. 39 Figure 20: Training metrics for different epochs for Transformer model on NAB dataset 
+
+40 Figure 21: Training metrics for different epochs for Linear Transformer model on KPI dataset 
+
+41 Figure 22: Training metrics for different epochs for Linear Transformer model on NAB dataset 
+
+42 Figure 23: Training metrics for different epochs for Linear Regression model on KPI dataset 
+
+43 Figure 24: Training metrics for different epochs for Linear Regression model on NAB dataset 
+
+44 Figure 25: Empirical latency for Transformer model on CPU. 0 1000 2000 3000 4000 5000 6000 7000 8000 
+
+Time (microsecond) 
+
+10 0
+
+10 1
+
+10 2
+
+10 3
+
+Latency distribution 
+
+45 Figure 26: Empirical latency for Transformer model on GPU. 500 1000 1500 2000 2500 
+
+> Time (microsecond)
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+
+Latency distribution 
+
+46 Figure 27: Empirical latency for Linear Transformer model on CPU. 400 600 800 1000 1200 
+
+> Time (microsecond)
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+
+Latency distribution 
+
+47 Figure 28: Empirical latency for Linear Transformer model on GPU. 400 600 800 1000 1200 1400 1600 1800 2000 
+
+Time (microsecond) 
+
+10 0
+
+10 1
+
+10 2
+
+10 3
+
+Latency distribution 
+
+48
