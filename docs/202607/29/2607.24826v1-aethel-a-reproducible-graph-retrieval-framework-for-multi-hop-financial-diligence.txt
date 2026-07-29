@@ -1,0 +1,260 @@
+Title: Aethel: A Reproducible Graph-Retrieval Framework for Multi-Hop Financial Diligence
+
+URL Source: https://arxiv.org/pdf/2607.24826v1
+
+Published Time: Wed, 29 Jul 2026 00:02:48 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Aethel: A Reproducible Graph-Retrieval Framework for Multi-Hop Financial Diligence 
+
+Krish Sapru 
+
+krish.sapru.th@dartmouth.edu 
+
+Abstract 
+
+Secondary private equity (PE) transac-tions require rapid synthesis of fragmented, unstructured financial disclosures, where critical metrics and their entity anchors are distributed across disjoint documents with negligible lexical overlap. We present 
+
+Aethel , a framework that pairs a bipar-tite Personalized PageRank (PPR) graph-retrieval engine inspired by HippoRAG v2 (Guti´ errez et al., 2025) with an orches-trated agent swarm, modelling corpora as bipartite entity-passage graphs and using PPR walks (Page et al., 1999) to resolve relational multi-hop queries. We evaluate Aethel in two complemen-tary settings. First, on 200-question ran-dom samples from the official MuSiQue and 2WikiMultiHopQA validation splits under a closed-set candidate pool ( ∼10–20 paragraphs per question), our coreference-aware Bipartite Coreference Teleporta-tion (BCT) layer improves hit-rate cov-erage over vanilla graph retrieval (HR@5 88.5% vs. 87.5% on MuSiQue; 100.0% vs. 99.5% on 2WikiMultiHopQA) at the cost of precision@1—a tradeoff appropriate for multi-passage diligence, where downstream agents require all supporting evidence, not merely the top-ranked passage. Second, and in contrast, we report an open-corpus 
+
+evaluation on a 4,123-chunk corpus of real financial disclosures (SEC filings, earnings materials, and secondary-market reports) with 40 manually annotated queries. Here the picture is different: a strong lexical baseline (BM25) outperforms all learned and graph-based methods, while the graph retriever, once supplied with a clean entity index, recovers multi-hop associative recall that a dense bi-encoder misses (multi-hop HR@5 0.600 vs. 0.450) but does not over-take BM25 (0.700). Reciprocal Rank Fu-sion of BM25 and Aethel-NER3 ( k=60, un-tuned) yields MRR 0.479 vs. BM25’s 0.468; a paired bootstrap shows this +0.011 dif-ference does not clear zero ( N =20, 95% CI [−0.163 , +0 .192]) and is reported as suggestive rather than significant. We take the gap between the closed-pool and open-corpus results as the paper’s central empirical finding: graph-RAG’s multi-hop advantage, clearly visible in small candi-date pools, is substantially attenuated at open-corpus scale on keyword-dense finan-cial text. Closed-pool results are com-puted by public benchmark.py and open-corpus results by evaluate aethel.py ,both against real data; code is released for reproduction. 
+
+1 Introduction 
+
+The underwriting of secondary PE transac-tions demands factual precision under com-pressed timelines: analysts cross-reference pri-vate LP letters, financial workbooks, capi-talization structures, and public SEC filings to evaluate asset values, unfunded liabilities, and fund rules. This requires resolving cross-document, multi-hop dependencies. Standard Dense RAG (Lewis et al., 2020; Karpukhin et al., 2020) maps chunks into an embedding space and ranks by cosine similarity; effective for single-hop queries, dense bi-encoders falter when a metric and its anchoring entity are to-pographically isolated. For example, when a portfolio company is named on one page of an asset ledger and the fund’s aggregate liabilities appear a dozen pages later, the two segments share little lexical or contextual overlap, so a dense index displaces the bridging context and the downstream LLM hallucinates. To handle these relational gaps, recent lit-erature has shifted toward Graph-Augmented RAG (GraphRAG) systems (Edge et al., 2024; Peng et al., 2024). Neurobiologically in-spired frameworks like HippoRAG (Guti´ errez arXiv:2607.24826v1 [cs.IR] 20 Jul 2026 Docs 
+
+> PDFs, CSVs, Excel
+> Ingest
+> text extraction
+> Graph
+> entities + passages
+> Orchestrator
+> routes evidence
+> Agents
+> valuation, leverage
+> IC Memo
+> risks + metrics
+
+Figure 1: Aethel converts financial documents into graph-indexed evidence, routes it through special-ist diligence agents, and synthesizes an investment committee memo. 
+
+et al., 2024, 2025) deploy Personalized PageR-ank (PPR) (Page et al., 1999) over bipar-tite entity-passage configurations to resolve complex multi-hop queries without relying on expensive global graph clustering. However, existing multi-agent and graph frameworks remain brittle when deployed in document-intensive corporate diligence domains, where critical financial metrics are topographically isolated across disjoint documents and entity names appear in multiple surface forms. We address these limitations by introduc-ing Aethel , a graph-retrieval framework for multi-hop financial diligence. Aethel routes multi-hop queries via sparse power iteration (SpMV) over a bipartite entity-passage graph and forwards the retrieved evidence to a down-stream specialist swarm. It prioritizes hit rate—the probability that all necessary sup-porting passages appear in the top-K—over top-1 precision, since a specialist can filter ir-relevant context but is blocked when a bridge passage is missing, and its graph topology yields interpretable, auditable entity-passage traversal paths. To summarize our core contributions: 
+
+• Bipartite Coreference Teleportation (BCT) : We formalize a coreference cor-rection layer that expands entity men-tions in the PPR personalization vec-tor via alias matching and substring overlap, improving HR@5 (and HR@3 on 2WikiMultiHopQA) at the cost of precision@1—a tradeoff that benefits multi-passage diligence workflows where all supporting evidence must be surfaced. 
+
+• Graph-Filtered Specialist Swarm (system description) : We describe a system architecture coupling bipar-tite PPR retrieval with a parallel agent swarm, in which the graph-walk step acts as a topological filter, constraining the context window forwarded to each spe-cialist to only the highest-relevance pas-sages and preserving cross-document au-dit trails. We present this as an architec-ture rather than a validated result: agent-level performance is not separately bench-marked in this work, and specialist swarm evaluation is left as future work. 
+
+• An open-corpus financial evaluation and a scale-dependence finding : We construct a 4,123-chunk corpus of real fi-nancial disclosures with 40 manually an-notated queries and show that graph-RAG’s multi-hop advantage over dense retrieval, visible in closed candidate pools, does not extend to beating a strong lexi-cal baseline (BM25) at open-corpus scale on keyword-dense financial text. An ex-plicit Reciprocal Rank Fusion of the two leaves BM25’s recall lead intact and yields only a small MRR difference that is not statistically distinguishable from zero at this sample size. We report this gap hon-estly and diagnose its cause. All evalu-ation code is released; results are deter-ministically reproducible. 
+
+2 Related Work 
+
+2.1 Graph-Augmented Retrieval 
+
+Dense RAG frameworks rely on isolated se-mantic embeddings, which break down on queries spanning disjoint documents or re-quiring topological reasoning (Lewis et al., 2020); a common remedy injects structured knowledge graphs into the retrieval loop (Karpukhin et al., 2020). GraphRAG synthe-sizes global community summaries across hier-archical clusters (Edge et al., 2024) but incurs heavy token overhead, whereas HippoRAG runs personalized PageRank over sparse bi-partite entity-passage graphs, avoiding costly global summaries (Guti´ errez et al., 2025). HybridRAG (Sarmah et al., 2024) combines knowledge graphs and vector retrieval for fi-nancial and enterprise QA. Our open-corpus finding stands in partial tension with Hy-bridRAG’s reported gains: where they report a graph–vector combination helping on finan-cial QA, we find the graph component does not beat BM25 alone at open-corpus scale, which we attribute to corpus size and query keyword density. Aethel adapts this graph-walk paradigm to noisy, high-density financial documents with complex tabular ledgers. 
+
+2.2 Multi-Agent Collaboration and Swarms 
+
+Parallel work substitutes monolithic mod-els with specialized multi-agent orchestrations (Wu et al., 2023) that divide a problem across independently-prompted components. These topologies perform well on software-engineering and math-reasoning tasks, but ex-tending them to long-form financial diligence remains open: agents operating over standard vector indexes stall when cross-document ref-erences are split or corrupted during extrac-tion. Aethel instead maps its specialists over a bipartite entity-graph layer, so they collab-orate under hard structural constraints that resist contextual fragmentation. 
+
+3 System Architecture & The Specialist Swarm 
+
+Unlike flat, linear pipelines, Aethel decouples macro-document retrieval, deep external vali-dation, and narrative synthesis into an orches-trated multi-agent layout (Wu et al., 2023). We describe this architecture for complete-ness; its agent-level behavior is not separately benchmarked, and the quantitative claims in this paper concern only the retrieval layer. A central Orchestrator decomposes multi-faceted financial queries into atomic sub-tasks, so that each specialist receives a narrow, well-defined context rather than a monolithic prompt. The swarm comprises specialist nodes over the graph-retrieved evidence: a Liquidity Specialist (capital-call liabilities, unfunded obligations, distribution pacing), a Valuation Auditor (NAV methodologies and Level III inputs), a Diligence Auditor (compliance friction and line-item contradictions between public and private reports), and a Market Research Specialist (live public comps via an external web-search API, not part of the quantitative evaluation). A Synthesizer re-solves discrepancies via an internal consensus protocol and compiles the final memo. 
+
+4 Mathematical Multi-Hop Framework 
+
+To formalize how Aethel bypasses the lexical boundaries of conventional vector search, we define our graph retrieval architecture using standard bipartite graph notation. 
+
+4.1 Bipartite Entity-Passage Graph Representation 
+
+Let an ingested document corpus be repre-sented as an undirected bipartite graph: 
+
+G = ( VP ∪ V E , E) (1) Where VP = {p1, p 2, . . . , p N } represents dis-crete text passages (document chunks), VE =
+
+{e1, e 2, . . . , e M } represents unique extracted entity nodes, and E is the set of edges mapping undirected co-occurrence. An edge ( pi, e j ) ∈ E 
+
+exists if and only if entity ej was extracted from passage pi during indexing. 
+
+4.2 Transition Probability Matrix 
+
+Let A ∈ { 0, 1}(N +M )×(N +M ) be the adjacency matrix of G. The transition probability matrix 
+
+W ∈ R(N +M )×(N +M ) dictates a random walk sequence across the bipartite topology, defined by column-normalizing A:
+
+Wij = Aij 
+
+P 
+
+> k
+
+Akj 
+
+(2) For sink nodes with no outgoing edges, their columns in W are set to zero. 
+
+4.3 Personalized PageRank (PPR) Retrieval 
+
+During user query execution, a query q is parsed to extract query entities Eq ⊆ VE .These entities serve as seed nodes in the bi-partite entity–passage graph. Rather than re-lying only on direct dense similarity, PPR al-lows relevance to propagate through shared entities, linked passages, and intermediate re-lational bridges. We construct a personalization vector s ∈
+
+RN +M concentrated on the active seed nodes: 
+
+si =
+
+( 1  
+
+> |E q|
+
+, if node i ∈ E q
+
+0, otherwise . (3) Let W ∈ R(N +M )×(N +M ) denote the nor-malized graph transition matrix, where N is the number of entity nodes and M is the num-ber of passage nodes. The steady-state proba-bility vector p ∈ RN +M is solved using power iteration: 
+
+p(t+1) = αs + (1 − α)Wp (t). (4) Here, α = 0.15 is the damping factor. Intuitively, the teleportation term keeps the walk anchored to the query entities, while the transition term allows evidence to diffuse across neighboring passages and related enti-ties. This is important for financial diligence, where relevant evidence is often distributed across separate documents, tables, covenants, disclosures, and management notes. Power iteration continues until the rank-ing stabilizes or a fixed iteration cap is reached. Theoretically, convergence is guar-anteed when: 
+
+p(t+1) − p(t) 
+
+> 1
+
+< ϵ. (5) In our implementation, we cap iterations at 
+
+I = 20, which is sufficient for convergence given α = 0 .15 and the sparse graph structure. Upon convergence, all passage nodes pi ∈VP are ranked according to their steady-state probability masses in p. The retrieved context is therefore given by: TopK( q) = arg topK 
+
+> pi∈V P
+
+ppi . (6) The top-K passages are then passed to the downstream agentic swarm along with their source metadata, linked entities, and PPR scores. This provides both retrieval evidence and a lightweight explanation of why each pas-sage was selected. In practice, this improves retrieval for multi-hop queries because pas-sages can be recovered through graph prox-imity even when paraphrasing or surface-form variation weakens direct lexical matching.            
+
+> Multi-hop Query
+> PPR / SpMV Iteration
+> e1
+> e2
+> e3
+> Passage p1
+> cap table
+> Passage p2
+> NAV note
+> Passage p3
+> audit memo
+> seed
+> s
+> Top-KPassages
+> rank by p
+> red = example 2-hop retrieval path:
+> e1→p1→e3→p3
+
+Figure 2: Bipartite entity–passage retrieval in Aethel. Query entities seed the PPR personaliza-tion vector s; power iteration diffuses probability mass through entity–passage edges (no passage– passage edges exist). The red path illustrates a two-hop chain: seed entity e1 activates passage p1,which shares entity e3, propagating mass onward to passage p3. All passages are ranked by their steady-state probability p and the top-K are for-warded to downstream agents. 
+
+4.4 Scalability Analysis & PPR Complexity 
+
+Entity extraction is O(N ) and the SpMV power iteration scales as O(I · |E| ); with α =0.15 and I = 20 over a sparse graph, iteration converges quickly and avoids the super-linear cost of global graph re-clustering. We note, however, that favorable convergence complex-ity does not translate into retrieval quality at open-corpus scale; Section 6.3 shows the graph retriever’s precision degrades as the passage pool grows. 5 Experimental Setup & Compliance 
+
+5.1 Closed-Pool Evaluation Protocol 
+
+We evaluate Aethel on 200-question ran-dom samples (seed=42) from the official MuSiQue and 2WikiMultiHopQA validation splits. For each question, the provided con-text paragraphs (approximately 10 paragraphs for 2WikiMultiHopQA and 20 paragraphs for MuSiQue, representing gold supporting para-graphs mixed with distractors) are indexed into fresh per-question retrieval indices. We compare sparse lexical (TF-IDF), dense bi-encoder (all-MiniLM-L6-v2), exact bipartite PPR graph, and coreference-aware BCT re-trieval. Importantly, retrieval is conducted only over this closed context pool for each question, rather than a full open corpus. We evaluate passage selection via Hit Rate@ k
+
+(HR@ k) and Mean Reciprocal Rank (MRR) against gold answers. No query template, hyperparameter, or system component was tuned on these datasets. 
+
+5.2 Open-Corpus Evaluation Protocol 
+
+To test retrieval under production-realistic conditions, we additionally construct an open-corpus benchmark of 4,123 chunks drawn from real financial disclosures: SEC 10-K filings (NVIDIA, Salesforce), asset-manager earnings materials (Blackstone, Apollo), and secondary-market advisory reports (Jefferies), together with three synthetic fund documents authored to mirror LP quarterly-reporting conventions. We manually annotate 40 queries (20 single-hop, 20 multi-hop), freezing gold passage labels before any retriever is exe-cuted. All systems retrieve over the identi-cal 4,123-chunk index. We compare BM25, a dense bi-encoder (all-MiniLM-L6-v2), the regex-graph retriever (Aethel-Reg), a filtered-NER graph retriever with substring adjacency (Aethel-NER3), and a Reciprocal Rank Fusion of BM25 and Aethel-NER3 (Hybrid-RRF). This evaluation is preliminary: gold labels are single-annotator, and we report effect sizes together with bootstrap confidence intervals rather than relying on significance thresholds. 
+
+5.3 Reproducibility and Benchmark Protocol 
+
+All closed-pool benchmark evaluations use the datasets library to stream the official HuggingFace validation splits of MuSiQue and 2WikiMultiHopQA. For benchmark re-producibility and to avoid external API dependencies, public benchmark.py imple-ments the PPR retrieval and BCT layers as a self-contained evaluator using numpy sparse matrix-vector multiplication (SpMV). This standalone evaluator implements the same bipartite PPR algorithm described in Section 4 with regex-based entity ex-traction, operating on each question’s pro-vided context paragraphs. The open-corpus financial evaluation is implemented in 
+
+evaluate aethel.py . The production dili-gence pipeline ( rag service.py ) delegates to the HippoRAG v2 library for LLM-based en-tity extraction and graph construction; BCT integration into the production pipeline is left as future work. For each closed-pool question we build a fresh per-question bipartite entity–passage graph, a sparse TF-IDF index, and adense bi-encoder index (using a locally run 
+
+all-MiniLM-L6-v2 model) over the provided context paragraphs. Results are cached lo-cally to eval cache.json for deterministic re-production on re-runs. Because PPR here is a deterministic power iteration over afixed graph and seed vector, re-runs are bit-identical. The complete evaluation code is re-leased at backend/public benchmark.py and 
+
+backend/evaluate aethel.py . The bench-mark script additionally emits a Retrieval To-ken Overlap (RTO) score—token-level F1 be-tween the concatenation of retrieved passages and the gold answer string. We omit RTO from Table 1 because, computed over full pas-sages, it conflates retrieval relevance with pas-sage length and is not comparable across sys-tems with different top-K budgets; HR@ k and MRR characterize retrieval quality without this confound. 
+
+6 Empirical Results & Discussion 
+
+We report (i) closed-pool benchmark perfor-mance on established multi-hop QA datasets, (ii) an open-corpus evaluation on real finan-cial documents, and (iii) a precision–coverage tradeoff analysis. 
+
+6.1 Domain Bridge: Mapping General QA to Financial Diligence 
+
+We evaluate on two established multi-hop QA benchmarks as a proxy for cross-document retrieval capability, and complement them with the direct open-corpus financial evalua-tion in Section 6.3, which is the more faith-ful test. MuSiQue (Trivedi et al., 2022) stresses compositional retrieval—each ques-tion requires a connected chain of evidence, so a single missing bridge passage breaks the answer—mirroring PE diligence, where a miss-ing link in a Portfolio Company → Ledger 
+
+→ Fund → Unfunded-Liability chain invali-dates the analysis. 2WikiMultiHopQA (Ho et al., 2020) stresses multi-document corefer-ence across dispersed files, analogous to track-ing capital accounts across LP letters, GP dis-closures, and public filings. We treat multi-hop capability on these sets as necessary but not sufficient for diligence retrieval. 
+
+6.2 Closed-Pool Benchmark Evaluation (MuSiQue, 2WikiMultiHopQA) 
+
+Table 1 reports the retrieval metric suite on 200-question random samples from both benchmarks. We report HR@1, HR@3, HR@5, and MRR. Importantly, because the evaluation is performed over each question’s closed context pool ( ∼10–20 paragraphs), the dense bi-encoder baseline (MiniLM) achieves very high absolute performance (e.g., 96.0% HR@5 on MuSiQue). This is expected since dense embeddings are highly effective at short-list ranking where the distraction pool is small and open-domain false positives are absent. Comparing the graph-based retrievers, we observe a clear precision–coverage tradeoff 
+
+introduced by Aethel’s BCT layer: BCT im-proves graph retrieval coverage (HR@5 from 87.5% to 88.5% on MuSiQue, and from 99.5% to 100.0% on 2WikiMultiHopQA) at the cost of precision@1 (HR@1: 57.0% vs. 63.0% on MuSiQue). This is a favorable tradeoff for multi-passage diligence workflows, where downstream specialist agents require all gold supporting passages in the context window to perform multi-hop synthesis and numeri-cal auditing—not merely the single top-ranked passage. We stress that these are closed-pool 
+
+results; Section 6.3 shows they do not carry over to open-corpus retrieval. 
+
+6.3 Open-Corpus Financial Retrieval 
+
+The benchmarks in Section 6.2 evaluate re-trieval over each question’s provided pool of 
+
+∼10–20 paragraphs. Production diligence, however, is an open-corpus problem: the rel-evant passages must be located among thou-sands of chunks with no per-question candi-date set. Table 2 reports retrieval over our 4,123-chunk financial corpus. Four findings stand out. First, BM25 is the strongest method overall on HR@5 , reflecting the proper-noun density of financial queries (“Fee-Related Earnings,” “Strategic Partners,” “NVIDIA Corporation”), where exact lexical matching is difficult to beat. Second, the graph retriever’s advantage over dense re-trieval does not extend to BM25 : Aethel-NER3 overtakes the dense bi-encoder on multi-hop (HR@5 0.600 vs. 0.450) but not BM25 (HR@5 0.700). Third, Reciprocal Rank Fusion (BM25 ⊕ Aethel-NER3) matches BM25’s HR@1 on multi-hop and produces a higher MRR (0.479 vs. 0.468) , but this +0.011 difference does not clear zero under a paired bootstrap (95% CI [−0.163 , +0 .192], N =20; see Table 2). The fu-sion does not lift HR@5 above BM25 (0.650 vs. 0.700), so the overall picture remains that BM25 dominates at recall, and any graph con-tribution at the top of the ranking is small and, at this sample size, not statistically distinguishable from zero. Fourth, entity-index quality is decisive : the original regex graph (Aethel-Reg) trails substantially (multi-hop HR@5 0.400), and an intermediate naive-spaCy variant failed almost entirely due to a context-dependent adjacency defect—edges were created only where the NER model re-extracted an entity’s exact surface form, so “NorthRiver” and “NorthRiver IV LP . . . ” be-came disconnected nodes and propagation col-lapsed. Resolving this with substring adja-cency over a filtered entity set (dropping ∼20k OCR fragments and bare numerals from ∼27k raw extractions, leaving ∼6k clean entities) re-covered the reported results. Method 2WikiMultiHopQA MuSiQue HR@1 HR@3 HR@5 MRR HR@1 HR@3 HR@5 MRR                                 
+
+> Sparse (TF-IDF) 79.0 96.5 99.0 0.873 58.0 78.0 84.5 0.681 Dense (MiniLM) 90.0 99.0 99.5 0.940 76.5 93.5 96.0 0.849
+> Graph (PPR) 83.0 97.0 99.5 0.900 63.0 80.0 87.5 0.721
+> Aethel (PPR+BCT) 78.5 98.0 100.0 0.877 57.0 78.5 88.5 0.687
+
+Table 1: Closed-pool retrieval metrics on 200-question random samples (seed=42) from the official MuSiQue and 2WikiMultiHopQA validation splits. Retrieval is conducted over each question’s provided context pool ( ∼10–20 paragraphs), not open-corpus. HR@ k = Hit Rate (%). MRR = Mean Reciprocal Rank. Bold = best per column. BCT improves hit rate coverage of the graph-based retriever at the cost of precision@1. All numbers computed by public benchmark.py against real HuggingFace data. 
+
+We read the contrast with Section 6.2 di-rectly, and take it as the paper’s central empir-ical finding: the graph retriever’s clean multi-hop wins under a 10–20 paragraph closed pool do not survive the transition to a 4,123-chunk open corpus, where BM25 leads on HR@5 and fusion yields at most a small MRR dif-ference that we cannot distinguish from zero. PPR’s teleport-and-diffuse dynamics, which isolate the bridge passage cleanly in a small pool, spread mass across a large heterogeneous graph, while a well-tuned lexical baseline re-covers the keyword-anchored answers more re-liably. The RRF result indicates the graph’s residual contribution is, at most, narrow; at 
+
+N =20 it is not statistically distinguishable from no effect. 
+
+Qualitative example. For the query “How do Blackstone and Apollo each characterize secondaries activity in their most recent re-sults?” , BM25 and the dense baseline an-chor on Blackstone chunks and miss the Apollo side, whereas Aethel-NER3 reaches the Apollo earnings passage by propagating from the shared secondaries entity—the kind of cross-document recall a graph provides but flat retrievers miss. The aggregate table shows this mechanism does not translate into a statisti-cally distinguishable gain on this corpus. 
+
+6.4 Scale Sensitivity 
+
+To characterise how each retriever degrades as the corpus grows, we subsample the 4,123-chunk financial corpus to five sizes (100, 500, 1k, 2k, 4.1k) and measure multi-hop HR@5 across the 20 multi-hop queries. Gold passages are always retained in each subsample so that HR@5 degrades only as distractors accumu-                                                  
+
+> System Group HR@1 HR@5 MRR R@5
+> BM25 Multi 0.350 0.700 0.468 0.525
+> Dense Multi 0.200 0.450 0.318 0.275 Aethel-Reg Multi 0.050 0.400 0.175 0.200 Aethel-NER3 Multi 0.150 0.600 0.351 0.350
+> Hybrid-RRF Multi 0.350 0.650 0.479 0.475 BM25 All 0.225 0.650 0.367 0.562
+> Dense All 0.200 0.450 0.311 0.362 Aethel-Reg All 0.025 0.275 0.121 0.175 Aethel-NER3 All 0.075 0.425 0.226 0.300
+> Hybrid-RRF All 0.250 0.475 0.348 0.388
+
+Table 2: Open-corpus retrieval on 40 annotated queries (20 single-hop, 20 multi-hop) over a 4,123-chunk financial corpus. All systems retrieve over the identical index; gold passages frozen pre-retrieval; single annotator; preliminary. Hybrid-RRF fuses BM25 and Aethel-NER3 ranked lists (top-100 each) via Reciprocal Rank Fusion ( k=60, the canonical untuned value from (Cormack et al., 2009)); k was fixed before inspecting output. Hybrid-RRF matches BM25 HR@1 on multi-hop and produces an MRR of 0.479 vs. BM25’s 0.468 (+0.011); a paired bootstrap 95% CI on the MRR difference is [ −0.163 , +0 .192] ( N =20), so this gain does not clear zero and is reported as suggestive, not significant. Bold = best per row-group. 
+
+late, not because the answer is absent; this isolates retrievability from presence. We use five random resamples per non-full size (seed 42) to estimate variance, and a single deter-ministic trial at full scale. Figure 3 shows the results. Three findings emerge. First, BM25 leads at every corpus size from 500 chunks up-ward (0.760 at 500 to 0.700 at full scale), a mild degradation that reflects its robust-ness to distractor growth; at the smallest pool it is edged by Dense (0.800 vs. 0.840). The graph retriever never overtakes BM25 at any tested scale, so no graph/lexical crossover is 100 500 1K 2K 4.1K            
+
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Corpus size (chunks, log scale)
+> Multi-hop HR@5
+> BM25
+> Aethel-NER3
+> Dense (MiniLM)
+> Figure 3: Multi-hop HR@5 as corpus size grows from 100 to 4,123 chunks, over the 20 multi-hop queries. Gold passages are retained in every sub-sample (see text). Bands show ±1σover 5 re-samples (seed 42); the full-corpus point is a sin-gle deterministic trial. Dense retrieval leads at the smallest pool (0.840 at 100 chunks) but collapses to 0.450 at full scale, while BM25 (0.800 →0.700) is robust to distractor growth. The graph re-triever overtakes Dense from 500 chunks onward and the Aethel-NER3–Dense gap widens to 0.150 at full corpus (0.600 vs. 0.450), though Aethel-NER3 never overtakes BM25. The full-corpus Aethel-NER3 point (0.600) matches its multi-hop HR@5 in Table 2.
+
+supported by the data. Second, Dense re-trieval leads at the smallest pool but col-lapses at scale : at 100 chunks Dense achieves HR@5 0.840, the highest of any system, but by 4,123 chunks it falls to 0.450—a drop of 0.390. As passages accumulate the embedding space becomes underdiscriminative, and co-sine similarity loses the ability to separate the target passage from semantically similar dis-tractors. Third, the graph retriever over-takes Dense as the corpus grows : the two are level at 100 chunks (Dense 0.840, NER3 0.800), NER3 passes Dense at 500 (0.670 vs. 0.660), and the margin then widens monoton-ically to 0.150 at full scale (0.600 vs. 0.450). This widening NER3-over-Dense gap is the one scale-dependent advantage the graph ex-hibits: against a dense bi-encoder—though not against BM25—topological structure de-grades more gracefully than embedding simi-larity as the pool grows. We read Figure 3 as sharpening, not contra-dicting, the claim in Section 6.3: BM25 dom-inates from 500 chunks upward on this cor-pus, so the graph never overtakes the lexical baseline; the graph’s genuine scale advantage is over dense retrieval, which it passes at 500 chunks and outperforms by a widening margin thereafter. The more striking scale effect, how-ever, is the collapse of dense retrieval itself— strongest at small scale, weakest at production scale. 
+
+6.5 Trade-Off Analysis 
+
+BCT’s closed-pool coverage gains come at a precision@1 cost ( −4.5 points on 2WikiMul-tiHopQA, −6.0 on MuSiQue): over-seeding the personalization vector with aliases diffuses probability mass across more candidate bridge passages, trading top-1 precision for hit rate. This is desirable in closed pools, but as Table 2 shows it becomes a liability at open-corpus scale, where the same diffusion spreads mass too thinly and precision falls below a lexical baseline. 
+
+7 Conclusion and Future Work 
+
+We presented Aethel and evaluated it across two regimes. In closed candidate pools, the coreference-aware BCT layer improves hit-rate coverage (HR@5 100.0% on 2WikiMulti-HopQA, 88.5% on MuSiQue) at a precision@1 cost. At open-corpus scale over 4,123 real fi-nancial chunks, BM25 leads on HR@5; Recip-rocal Rank Fusion with Aethel-NER3 ( k=60, untuned) matches BM25’s HR@1 and edges its MRR (0.479 vs. 0.468), but a paired bootstrap (95% CI [ −0.163 , +0 .192], N =20) shows the gap does not clear zero. A scaling experiment (Figure 3) shows no graph/lexical crossover at any tested size and surfaces a sharper ef-fect: dense retrieval collapses by 0.390 HR@5 as the corpus grows while BM25 degrades by only 0.100. The central finding is that graph-RAG’s advantage is pool-size dependent and, at this scale, does not displace a strong lexi-cal baseline; the most robust scale effect is the distractor-sensitivity of dense retrieval. Two directions follow. First, scale-aware seeding : adaptive damping or seed-restriction to keep PPR mass from over-diffusing as the pool grows, potentially recov-ering the top-of-ranking signal fusion hints at. Second, a domain-annotated PE diligence benchmark at larger N with multiple anno-tators, to move the open-corpus results from preliminary to conclusive. Limitations 
+
+While Aethel demonstrates a favorable cov-erage tradeoff in closed candidate pools, sev-eral limitations must be noted. First, the en-tity extraction and graph indexing phase relies on the disciplined taxonomy of institutional financial documents; less structured conver-sational inputs may introduce link noise into the entity-node mapping layer. Second, BCT’s alias-expansion strategy improves hit-rate cov-erage but reduces precision@1, since over-seeding the PPR personalization vector can shift top-ranked results away from the single most relevant passage. Third, our closed-pool benchmarks use 200-question random samples from the official validation splits rather than the full test sets, which limits absolute com-parability with full-scale system evaluations. Fourth, the BCT alias-expansion layer is cur-rently implemented only in the standalone evaluator; integrating it into the production HippoRAG-backed pipeline is left as future work. Fifth, closed-pool retrieval metrics are computed over each question’s provided con-text pool ( ∼10–20 paragraphs) rather than an open corpus; these HR values reflect closed-set performance and, as Section 6.3 demonstrates, are substantially lower in an open-retrieval set-ting. Sixth, the open-corpus financial evalua-tion uses 40 queries annotated by a single an-notator; we therefore report effect sizes with bootstrap confidence intervals and treat these results as preliminary, and the fusion MRR difference in particular is not statistically dis-tinguishable from zero at N =20. Seventh, an intermediate NER-graph variant contained a context-dependent adjacency defect that col-lapsed retrieval; the reported Aethel-NER3 re-sults use a corrected substring-adjacency con-struction, and we disclose this to make the entity-index dependency explicit. 
+
+References 
+
+Darren Edge, Ha Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody, Steven Truitt, Dasha Metropolitansky, Robert Os-azuwa Ness, and Jonathan Larson. 2024. From local to global: A graph rag approach to query-focused summarization. arXiv preprint arXiv:2404.16130 .Bernal Jim´ enez Guti´ errez, Yiheng Shu, Yu Gu, Michihiro Yasunaga, and Yu Su. 2024. Hip-poRAG: Neurobiologically inspired long-term memory for large language models. Ad-vances in Neural Information Processing Sys-tems (NeurIPS 2024) .Bernal Jim´ enez Guti´ errez, Yiheng Shu, Weijian Qi, Sizhe Zhou, and Yu Su. 2025. From RAG to memory: Non-parametric continual learning for large language models. Proceedings of the 42nd International Conference on Machine Learning (ICML 2025) .Xanh Ho, Anh-Khoa Duong Nguyen, Saku Sug-awara, and Akiko Aizawa. 2020. Construct-ing a multi-hop QA dataset for comprehensive evaluation of reasoning steps. Proceedings of the 28th International Conference on Computa-tional Linguistics (COLING 2020) , pages 6609– 6625. Vladimir Karpukhin, Barlas O˘ guz, Sewon Min, Patrick Lewis, Ledell Wu, Sergey Edunov, Danqi Chen, and Wen-tau Yih. 2020. Dense pas-sage retrieval for open-domain question answer-ing. Proceedings of the 2020 Conference on Em-pirical Methods in Natural Language Processing (EMNLP 2020) , pages 6769–6781. Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich K¨ uttler, Mike Lewis, Wen-tau Yih, Tim Rockt¨ aschel, Sebastian Riedel, and Douwe Kiela. 2020. Retrieval-augmented gen-eration for knowledge-intensive nlp tasks. Ad-vances in Neural Information Processing Sys-tems (NeurIPS 2020) .Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd. 1999. The PageRank citation ranking: Bringing order to the web. Stanford InfoLab Technical Report .Boci Peng, Yun Zhu, Yongchao Liu, Xiaohe Bo, Haizhou Shi, Chuntao Hong, Yan Zhang, and Siliang Tang. 2024. Graph retrieval-augmented generation: A survey. arXiv preprint arXiv:2408.08921 .Bhaskarjit Sarmah, Benika Hall, Rohan Rao, Sunil Patel, Stefano Pasquali, and Dhagash Mehta. 2024. HybridRAG: Integrating knowl-edge graphs and vector retrieval augmented gen-eration for efficient information extraction. Pro-ceedings of the 5th ACM International Confer-ence on AI in Finance (ICAIF 2024) , pages 608–616. Harsh Trivedi, Niranjan Balasubramanian, Tushar Khot, and Ashish Sabharwal. 2022. MuSiQue: Multihop Questions via Single Hop Question Composition. Transactions of the Association for Computational Linguistics (TACL) , 10:539– 554. Gordon V. Cormack, Charles L. A. Clarke, and Stefan Buettcher. 2009. Reciprocal rank fu-sion outperforms condorcet and individual rank learning methods. Proceedings of the 32nd International ACM SIGIR Conference on Re-search and Development in Information Re-trieval (SIGIR 2009) , pages 758–759. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yi-ran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, Ahmed Hassan Awadallah, Ryen W. White, Doug Burger, and Chi Wang. 2023. Autogen: Enabling next-gen LLM applications via multi-agent conversation framework. arXiv preprint arXiv:2308.08155 .A Prompt Templates and Swarm Agent System Directives 
+
+This section documents the formal execu-tion prompts, schema constraints, and sys-temic context bounds assigned to each edge agent operating within the parallel multi-agent swarm architecture. 
+
+A.1 Orchestrator Routing Node Micro-Logic 
+
+The Orchestrator functions as a centralized task decomposition engine over the extracted sub-graphs. It coordinates agent state changes via the following target directive: 
+
+SYSTEM CONTEXT: You are the Aethel System Routing Orchestrator operating inside an enterprise-grade financial compliance engine. Your task is to process highly fragmented, non-linear multi-hop financial queries over an input graph text collection. INSTRUCTIONS: 1. Parse the localized entity-passage sub-graph returned by the power iteration algorithm. 2. Decompose the main query into separate, logically dependent analytical phases. 3. Assign each individual sub-task payload to a single domain expert node (Liquidity Specialist, Valuation Auditor, or Market Research Specialist). 4. Enforce structural boundaries: Agents must not cross-contaminate their memory contexts. You are solely responsible for gathering raw token extractions, initiating consensus validation loops, and formatting the verifiable cross-document audit trail. Respond strictly in structured JSON following the validation schema macro. 
+
+A.2 Valuation Auditor Compliance Directive 
+
+The Valuation Auditor isolates ledger ac-counts and recalculates asset statements to uncover internal or cross-document data con-flicts: 
+
+SYSTEM CONTEXT: You are the Aethel Valuation Auditor. You receive context vectors mapping out historical capital accounts, Net Asset Value (NAV) declarations, and distributed-to-paid-in (DPI) multiples isolated via Personalized PageRank iterations. INSTRUCTIONS: 1. Extract numerical values associated with capital call balances and valuation ledger positions. 2. Re-compute mathematical aggregates across disjoint financial years to identify structural bookkeeping inconsistencies. 3. If a cross-document data discrepancy is detected where the variance exceeds a floating delta threshold of 0.01%, flag the transaction as ’NON-COMPLIANT’ and produce an explicit citation pointing to the conflicting text files. Do not guess or extrapolate.
