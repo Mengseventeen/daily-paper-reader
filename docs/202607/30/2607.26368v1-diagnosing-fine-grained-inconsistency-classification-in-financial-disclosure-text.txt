@@ -1,0 +1,407 @@
+Title: Diagnosing Fine-Grained Inconsistency Classification in Financial Disclosure Text
+
+URL Source: https://arxiv.org/pdf/2607.26368v1
+
+Published Time: Thu, 30 Jul 2026 00:18:49 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Diagnosing Fine-Grained Inconsistency Classification in Financial Disclosure Text 
+
+Aman Kumar, Lasitha Vidyaratne, Dipanjan D Ghosh, Arnab Chakrabarti, Ahmed K Farahat 
+
+Hitachi America, Ltd. 
+
+Abstract 
+
+Financial disclosures contain numerical claims, temporal statements, entity references, policy commitments, and risk descriptions that may conflict in qualitatively different ways. De-tecting a conflict is only the first step: re-view workflows may also need to determine its type, since numerical, temporal, referential, factual, and normative inconsistencies require different evidence and downstream checks. We study this problem as fine-grained incon-sistency classification. Using a fixed 5,940-instance snapshot of SBID-FD, a synthetic financial-disclosure benchmark with 11 incon-sistency labels and paired reference evidence spans, we compare frozen embedding classi-fiers, fine-tuned encoders, evidence-augmented classifiers, prompted large language models, and LoRA-adapted generative models under a shared evaluation protocol. A fine-tuned 300M encoder reaches 61.9% accuracy, compared with 61.5% for a LoRA-adapted Qwen3.5-9B model and 61.3% for GPT-5.4. Because these systems differ in architecture, supervi-sion, training objective, and input format, we interpret this as a practical efficiency result for compact supervised encoders rather than a controlled conclusion about model scale. Sup-plying gold evidence spans improves the fine-tuned encoder to 65.3%, whereas automatically predicted spans recover a meaningful but in-complete share of that gain, indicating that lo-calization quality remains a bottleneck. Class-level analyses show that Referential inconsis-tencies are especially sensitive to localization quality, while Factual and Logical inconsisten-cies remain difficult even when the relevant evi-dence is provided. Together, the oracle, distrac-tor, and per-class analyses separate localization errors from residual type-discrimination errors, indicating that progress requires both stronger evidence extraction and better reasoning over closely related inconsistency categories. 
+
+1 Introduction 
+
+Financial disclosures combine quantitative state-ments, temporal claims, entity references, policy commitments, legal qualifications, risk descrip-tions, and forward-looking projections. These state-ments are often produced and revised across dif-ferent teams, data sources, and reporting cycles, creating opportunities for conflicts that differ sub-stantially in form and in the reasoning required to diagnose them. A numerical inconsistency may require checking arithmetic or tabular aggregation; a temporal inconsistency may require comparing reporting periods or event sequences; a referential inconsistency may require tracking entities across clauses; and a normative inconsistency may require determining whether stated obligations or policies are mutually compatible. Inconsistency in this set-ting is not a single homogeneous phenomenon: dif-ferent types depend on different evidence, reason-ing patterns, and downstream remediation steps. Financial text presents domain-specific chal-lenges that generic models struggle to handle. Its lexical and semantic behavior diverges from ev-eryday usage: general-purpose sentiment dictio-naries can misclassify common financial terms in 10-K filings (Loughran and McDonald, 2011), and domain-specific pretrained models have been pro-posed for financial text mining (Liu et al., 2020). Financial question-answering benchmarks further show that understanding financial reports often re-quires reasoning over heterogeneous textual and tabular evidence, including numerical operations and multi-step derivations (Chen et al., 2021; Zhu et al., 2021). These studies motivate financial dis-closures as a domain in which generic language understanding is insufficient, but they target senti-ment analysis, representation learning, or question answering rather than fine-grained inconsistency typing. Prior work has studied inconsistency and con-arXiv:2607.26368v1 [cs.CL] 29 Jul 2026 tradiction primarily through natural language in-ference (NLI), fact verification, and evidence-grounded prediction. Large-scale NLI benchmarks such as SNLI, MultiNLI, and ANLI frame con-tradiction as a relation between a premise and a hypothesis, assigning one of entailment, contradic-tion, or neutral (Bowman et al., 2015; Williams et al., 2018; Nie et al., 2020). Fact-verification benchmarks such as FEVER instead ask whether a claim is supported, refuted, or unverifiable with respect to evidence (Thorne et al., 2018), while rationale-based evaluation work such as ERASER studies whether model predictions can be grounded in supporting text spans (DeYoung et al., 2020). More recent resources extend inference beyond sen-tence pairs: ContractNLI applies document-level inference and evidence identification to contracts (Koreeda and Manning, 2021), and ContraDoc stud-ies self-contradictions within long documents (Li et al., 2024). These lines of work establish contra-diction detection, claim verification, and evidence grounding as central problems, but they do not di-rectly address the complementary question studied here: once a passage is known to contain an incon-sistency, can a model identify which specific type 
+
+it contains? We refer to this task as fine-grained inconsis-tency classification . The task is useful diagnosti-cally because it reveals which inconsistency types current models handle reliably and which remain difficult. It may also support future review work-flows by routing numerical, temporal, referential, normative, and other conflicts toward different downstream checks. The present study does not evaluate such a deployed workflow; instead, it uses a controlled synthetic testbed to analyze classifica-tion behavior and the role of localized evidence. This paper makes four contributions. 1. Cross-model evaluation. We provide a sys-tematic comparison of frozen encoders, fully adapted encoders, evidence-augmented classi-fiers, prompted LLMs, and LoRA-adapted mod-els on fine-grained inconsistency typing in finan-cial text, under one 11-class protocol. 2. Compact supervised adaptation. We show that a fine-tuned 300M encoder is competitive with substantially larger prompted and LoRA-adapted systems while requiring markedly less compute. 3. Localization diagnostic. Matched predicted-span, gold-span, and distractor-span conditions separate localization errors from errors that re-main after the relevant evidence is supplied. 4. Class-level error analysis. Per-class and confu-sion analyses identify categories limited primar-ily by localization and those that remain difficult under gold evidence. 
+
+2 Task and Data 
+
+Task definition. Given an inconsistent input text 
+
+Tj , the task is to predict an inconsistency label ˆcj
+
+from 11 predefined categories. The prediction is correct if ˆcj = cj , the ground-truth label. The task conditions on an inconsistency already being detected and therefore evaluates typing , not upstream detection. False positives, false negatives, and end-to-end detection-to-typing error propaga-tion are outside the scope of this study. 
+
+Data. We use a fixed early snapshot of SBID-FD, a synthetic financial-disclosure benchmark intro-duced in a companion paper currently under review. The snapshot contains 5,940 instances derived from 970 distinct base passages and predates the bench-mark’s expanded public release; all experiments in this paper were conducted on this snapshot, which we include with the supplementary material for exact reproducibility. Each instance contains the inconsistent passage, its inconsistency label from the 11-category taxonomy in table 1, an automat-ically generated reference explanation, and two verbatim reference spans identifying the anchoring and conflicting claims. The data were produced through a multi-stage LLM pipeline. A pool of language models, drawn from several open-weight families, first generated internally consistent SEC-style disclosure passages across varied business contexts, with each base pas-sage screened by an LM judge for internal coher-ence. A separate generation step then introduced one inconsistency of a specified target type, which serves as the gold label, while preserving the sur-rounding context, discourse structure, and most of the original wording. Candidate variants passed a lexical pre-filter and multiple LM-judge quality gates that reject shallow, label-misaligned, or im-plausible edits, after which an automatic evidence-generation step produced the reference explanation and paired evidence spans; evidence generation doubles as a consistency check, since spans cannot be produced when the explanation does not match the passage. No human annotation was used at any stage. The generator pool includes Qwen3.5 mod-els that we also evaluate as prompted classifiers, and GPT-5-mini, which shares a model family with the evaluated GPT-5.4; we return to this overlap in the Limitations. The taxonomy and generation pipeline are described in the companion bench-mark paper and are used here as a fixed evaluation testbed. The primary experiments use a stratified 70–30 train-test split containing 4,158 training and 1,782 test examples. We additionally evaluate a stricter base-passage-disjoint split in which all variants de-rived from the same base passage are assigned to only one partition (Appendix B). 1 The primary test-set distribution ranges from 109 Referential exam-ples to 241 Logical examples; full per-class counts are reported in Table 6. The inconsistent passages are short excerpts rather than full documents, with a median length of approximately 87 words; their corresponding base passages have a median length of approximately 78 words. The median character-level Levenshtein dis-tance between a base passage and its inconsistent variant is 72, and the median longest common con-tiguous substring covers approximately 73% of the shorter passage. These statistics show that the vari-ants generally preserve most of the base-passage surface form while introducing a localized edit or insertion, enabling the evidence-localization analy-ses studied here. A worked example and complete length and overlap statistics appear in Appendix A. 
+
+3 Methods 
+
+We compare two families of approaches. The first is discriminative embedding-based classifi-cation: we embed the passage (and, optionally, predicted conflicting spans) and predict the incon-sistency type with a small multilayer perceptron (MLP) head (Figure 1); this family covers the pas-sage classifiers and the evidence-augmented classi-fiers below. The second is generative: we prompt instruction-tuned LLMs to emit the label directly, and also fine-tune two such models with LoRA. All approaches use the same task, split, and label set. 
+
+3.1 Passage Classifiers 
+
+We consider both frozen and fine-tuned passage encoders, evaluated under the same downstream classifier to keep the comparison fair. 
+
+> 1We will release the exact split identifiers used in both evaluations together with the experiment code.
+
+Table 1: Definitions of the 11 inconsistency categories.          
+
+> Type Definition
+> Numerical Incompatible quantities, totals, percentages, or calculations. Unit & Measurement Conflicting units, scales, currencies, or measurement bases. Temporal Incompatible dates, periods, durations, or event orderings. Factual Contradictory claims about an entity, event, or state of affairs. Logical Claims whose implications cannot jointly hold. Theoretical A claim conflicts with an applicable conceptual or domain principle. Referential References or identifiers resolve to incompatible entities. Terminological A term is used with incompatible meanings or definitions. Specificity & Scope Claims differ incompatibly in population, condition, or scope. Pragmatic A stated action or implication conflicts with the surrounding intent. Normative & Policy Obligations, permissions, policies, or rules are incompatible.
+
+Frozen setting. We embed the inconsistent pas-sage with a frozen sentence encoder and train a two-layer MLP on top (hidden sizes [512, 256], dropout 0.2, lr = 10 −3). We compare five back-bones: MiniLM-L6-v2 (Wang et al., 2020; Reimers and Gurevych, 2019), Qwen3-Embedding 0.6B and 8B (Zhang et al., 2025), EmbeddingGemma-300M (Vera et al., 2025), and DeBERTa-v3-base (He et al., 2023) (mean-pooled). 
+
+Fine-tuned setting. Among the frozen back-bones, EmbeddingGemma-300M achieves the highest accuracy (27.1%), making it the natural can-didate for full fine-tuning. For EmbeddingGemma-300M, fine-tuning proceeds in two steps. First, we fine-tune the full encoder end-to-end for 11-way classification using a linear head, adapting the encoder weights to the task. Second, we dis-card the linear head, freeze the adapted encoder, precompute passage embeddings, and train a new two-layer MLP classifier on those embeddings, us-ing the identical MLP architecture as the frozen baseline. The reported fine-tuned numbers come from this second step, so the only difference from the frozen baseline is the quality of the underlying embeddings. To test whether the frozen result is merely an ar-tifact of a weak frozen backbone, we also fine-tune DeBERTa-v3-base as a passage classifier following the same two-step protocol, so the same backbone appears in both frozen and fine-tuned form. For each encoder we report both conditions: (i) the linear classifier from end-to-end fine-tuning, and (ii) the MLP classifier after freezing the fine-tuned encoder. Hyperparameters are in Appendix E. 
+
+3.2 Evidence-Augmented Classifiers     
+
+> EmbeddingGemma QA
+> extracts spans at test time
+> Evidence Spans
+> claim_a, claim_b
+> Span Embeddings
+> EmbGemma-300M
+> Mean Pooling
+> Evidence branch
+> Inconsistent Text
+> Text Embedding
+> EmbGemma-300M
+> Concatenate text ⊕evidence
+> MLP
+> 1536 →512 →256 →11 ReLU, Dropout 0.2
+> Predicted Label 11 classes
+
+Figure 1: Evidence-augmented classifier. An Embed-dingGemma QA model predicts the two conflicting spans, which are pooled and concatenated with the pas-sage embedding before the MLP head. The passage-only classifier omits the evidence branch; the gold-span oracle replaces the predicted spans with gold spans at test time. 
+
+Each instance contains two reference evidence spans: claim_a , which serves as the anchoring claim, and claim_b , which introduces or com-pletes the conflict. We use this paired-span rep-resentation as a controlled way to study whether localized conflict evidence improves inconsistency typing. The representation assumes that the in-consistency can be expressed through two verba-tim spans within the passage, an assumption sup-ported by the construction of this dataset but not guaranteed for naturally occurring financial disclo-sures. At test time, we replace the reference spans with outputs from an extractive question-answering model and pass the predicted spans to the classifier (Figure 1). 
+
+Span prediction. We frame localization as ex-tractive QA over the passage. The model is run twice per passage, once with a fixed role question for claim A and once for claim B, and decodes one contiguous span per role from the start and end to-ken logits (the highest start +end logit sum over the top-25 start and end candidates per window, with a maximum span length of 80 tokens). Roles are as-signed by which question is posed; the model does not predict the role itself. Each training row yields up to two QA examples, one per gold span. We compare several encoder backbones (Appendix C); our strongest extractor attaches an extractive-QA head to the EmbeddingGemma-300M backbone (Vera et al., 2025), which we use in the primary predicted-span configuration. EmbeddingGemma is released as an embedding model that outputs a single pooled representation rather than token-level start/end logits; we therefore discard the re-lease pooling head and fine-tune the underlying transformer with a standard span head under the same QA protocol as the other backbones. This extractor attains the highest span quality among the evaluated backbones (Token-F1 0.679, compared with 0.611 for DeBERTa-v3-base), and we select it for the primary predicted-span experiments. The full backbone comparison, decoding details, and span-quality results are reported in Appendix C; additional analyses supporting this selection are provided in Appendix D. 
+
+Feature construction. Let e(·) denote the L2-normalized EmbeddingGemma-300M encoder. Given spans sa, s b (predicted at test time, gold dur-ing training), the classifier input is 
+
+f =
+
+
+
+e(T ) ; 12 (e(sa) + e(sb)) 
+
+
+
+∈ R1536 ,
+
+the concatenation of the passage embedding with the mean-pooled span embeddings, fed to the same [512, 256] MLP head. We evaluate this branch in three encoder regimes: the original frozen encoder; the fine-tuned EmbeddingGemma encoder used as a frozen feature extractor after passage-level adaptation, which serves as our primary evidence-augmented configuration; and a fully end-to-end variant in which the encoder receives the passage and both spans and is trained with gradients flowing through it. 
+
+Matched training and the gold-span oracle. 
+
+All evidence-augmented classifiers are trained us-ing reference spans from the training partition. The test conditions differ only in the source of the evi-dence: the automatic condition uses QA-predicted spans, while the oracle condition supplies refer-ence spans. Because the encoder, classifier head, and training examples are otherwise identical, the predicted-to-gold difference isolates the effect of test-time localization quality. This protocol should be interpreted as a diagnos-tic experiment rather than a span-supervision-free deployment setting. It assumes access to paired claim-level evidence during classifier and extractor training. Such supervision may be costly or unavail-able for naturally occurring financial disclosures, and evaluating weaker or indirect supervision is outside the scope of the present study. 
+
+3.3 Generative Models 
+
+We prompt three instruction-tuned LLM families to output one of the 11 labels given the passage, label definitions, and one illustrative example per label (deterministic decoding: temperature = 0 
+
+for GPT-5.4, do_sample=False for local models; 
+
+max_new_tokens set per model family: 8,192 for Qwen3.5, 96 for Gemma-4, 32 for GPT-5.4; full prompt in Appendix L): Qwen3.5 (4B, 9B, 27B, 35B-A3B) (Qwen Team, 2026), Gemma-4 (E4B-it, 26B-A4B-it, 31B-it) (Google DeepMind, 2026), and GPT-5.4 (OpenAI, 2026). All models pro-duced a single label string in the evaluated runs, so the larger generation limits were not consumed in practice. We additionally fine-tune Qwen3.5-9B and Qwen3.5-27B with QLoRA (quantized Low-Rank Adaptation; Hu et al., 2022; Dettmers et al., 2023) using supervised fine-tuning. Each exam-ple pairs an instruction-style prompt containing the excerpt and label list with the gold inconsistency-type string as the completion, optimizing the stan-dard causal language-modeling objective over the prompt-label sequence. Full hyperparameters are reported in Appendix H. 
+
+Metrics and protocol. We report Accuracy, Macro-F1, and Weighted-F1 on the fixed test set (1,782 examples). For the fine-tuned encoder mod-els we report mean and standard deviation over three seeds (re-running encoder fine-tuning and classifier training per seed); the data split is held fixed. The Qwen3.5-9B LoRA model is evaluated over three seeds, while the Qwen3.5-27B LoRA result is single-seed. Frozen-encoder results are single-seed, and prompted results are near deter-ministic under greedy decoding. We report multi-seed variance for the trained conditions most cen-tral to the headline comparison; split and extractor variance are not included. Per-class F1 scores for all methods are reported in Appendices I, K, and J. 
+
+4 Results 
+
+4.1 Main Comparison 
+
+Tables 2 and 3 report the encoder-based and generative-model comparisons, respectively; ran-
+
+Table 2: Encoder-based results on the 11-class inconsistency classification task. EmbGemma = EmbeddingGemma-300M; QwenEmb = Qwen3-Embedding; pred. = predicted evidence spans. Val-ues with ± report mean and standard deviation over three seeds; all other rows are single-seed. †Single-seed EmbeddingGemma-extractor or end-to-end result.                                                             
+
+> Method Acc. Mac. F1 Wei. F1
+> Frozen Passage Encoder + MLP
+> MiniLM 0.189 0.157 0.173 QwenEmb-0.6B 0.204 0.163 0.187 QwenEmb-8B 0.233 0.202 0.227 DeBERTa-v3-base 0.234 0.151 0.178 EmbGemma 0.271 0.220 0.248
+> Fine-Tuned Passage Encoder
+> DeBERTa-v3-base (linear) 0.468 0.363 0.406 DeBERTa-v3-base (+ MLP) 0.496 0.434 0.471 EmbGemma (linear) 0.611 ±0.010 0.600 ±0.013 0.607 ±0.013
+> EmbGemma (+ MLP) 0.619 ±0.006 0.614 ±0.005 0.620 ±0.007
+> Evidence-Augmented Encoder
+> frozen, pred. (DeBERTa) 0.510 0.497 0.511 frozen, pred. (Gemma) 0.532 0.517 0.531 frozen, gold (oracle) 0.609 0.602 0.611 fine-tuned, pred. (DeBERTa) 0.621 0.614 0.621 fine-tuned, pred. (Gemma) †0.633 0.627 0.634 fine-tuned, gold (oracle) 0.653 0.645 0.653 end-to-end, pred. (DeBERTa) †0.623 0.611 0.620 end-to-end, pred. (Gemma) †0.635 0.623 0.631 end-to-end, gold (oracle) †0.674 0.665 0.670
+
+dom chance on the 11-class task is 9.1%. 
+
+Fine-tuning substantially improves both en-coder backbones. As shown in Table 2, afrozen EmbeddingGemma encoder with an MLP head reaches 27.1% accuracy, while increasing the frozen backbone size within the Qwen3-Embedding family yields only a modest change (0.6B: 20.4%; 8B: 23.3%). Frozen DeBERTa-v3-base is similarly weak at 23.4%. Fine-tuning the same 300M EmbeddingGemma encoder for the classification task raises accuracy to 61 .9 ± 0.6% 
+
+and Macro-F1 to 61 .4 ± 0.5% , an improvement of more than 34 absolute accuracy points. The same pattern appears across both encoder families tested: fine-tuning DeBERTa-v3-base and applying the same MLP classifier raises its accuracy from 23.4% to 49.6%, a gain of 26.2 points. These con-trolled within-backbone comparisons show that the frozen representations are poorly aligned with the fine-grained label space and that task-specific super-vision substantially improves their discriminative utility. They do not, by themselves, establish a gen-eral relationship between adaptation and parameter scale across different model families. 
+
+A compact supervised encoder is competitive with much larger models. Comparing Tables 2 and 3, the fine-tuned 300M encoder reaches 61 .9 ±
+
+0.6% accuracy, compared with 61 .5 ± 0.2% for Table 3: Prompted and LoRA-adapted generative-model results on the same 11-class task. Prompted models use label definitions and one illustrative example per label. The Qwen3.5-9B LoRA result reports mean and standard deviation over three seeds; all other rows are single-seed. †Single-seed LoRA result.                                  
+
+> Method Acc. Mac. F1 Wei. F1
+> Prompted Generative
+> Qwen3.5-4B 0.274 0.244 0.256 Qwen3.5-9B 0.330 0.275 0.289 Qwen3.5-35B-A3B 0.389 0.324 0.349 Gemma-4-31B-it 0.404 0.366 0.385 Gemma-4-E4B-it 0.409 0.397 0.414 Gemma-4-26B-A4B-it 0.439 0.411 0.434 Qwen3.5-27B 0.487 0.472 0.482 GPT-5.4 0.613 0.589 0.600
+> LoRA-Adapted Generative
+> Qwen3.5-9B + LoRA SFT 0.615 ±0.002 0.596 ±0.002 0.604 ±0.003
+> Qwen3.5-27B + LoRA SFT †0.629 0.610 0.622
+
+Qwen3.5-9B with LoRA and 61.3% for prompted GPT-5.4. Increasing the LoRA-adapted model from 9B to 27B parameters raises accuracy to 62.9% in a single run, while the prompted open-weight models remain below the fine-tuned encoder. These results do not constitute a controlled scaling study: the encoder, prompted LLMs, and LoRA-adapted models differ in architecture, training ob-jective, supervision format, prompting, and decod-ing. Nevertheless, they provide a practically rele-vant comparison under the same dataset and label space: the compact supervised encoder achieves accuracy comparable to the strongest substantially larger systems tested while requiring markedly less training time and compute. 
+
+Predicted conflict spans provide additional clas-sification signal. As shown in Table 2, on the primary split, adding predicted spans raises the fine-tuned encoder from 61.9% to 63.3% accuracy and from 61.4% to 62.7% Macro-F1. Relative to the generative results in Table 3, the resulting model exceeds Qwen3.5-9B with LoRA (61.5%) and prompted GPT-5.4 (61.3%), and is compara-ble to the single-run Qwen3.5-27B LoRA result (62.9%). End-to-end passage-and-span training reaches 63.5% with predicted evidence and 67.4% with gold evidence. Thus, localized evidence can complement the passage representation, but the larger gold-span gain indicates unrealized benefit from more accurate extraction. 
+
+Base-passage-disjoint robustness. To test whether the main findings depend on shared base-passage scaffolds across train and test, we retrain the same fine-tuned EmbeddingGemma passage classifier (+ MLP) and matched evidence-augmented variants on a stricter split that assigns all variants of each base passage to a single partition (test n=1 ,813 ). The fine-tuned passage-only model reaches 63.0% accuracy (Macro-F1 0.633), compared with 61.9% on the primary split. The modest passage-only increase (+1.1 pp) should not be read as evidence that the disjoint split is globally easier: the test set differs in size (n=1 ,813 vs. 1,782 ) and class mix, and all models are retrained on the disjoint training partition rather than evaluated with the primary checkpoint. The gap is within the ∼1 pp multi-seed variance of the primary passage-only runs and is inconsistent with base-passage scaffold memorization, which would predict lower performance when variants of the same base passage cannot appear in both partitions. Under gold evidence at test time, accuracy rises to 65.0% (Macro-F1 0.653). With automatically predicted spans, accuracy is also 63.0% (Macro-F1 0.631): the two models each classify 1,142 test instances correctly, but their predicted labels differ on 119 instances (30 former passage-only errors become correct and 30 former correct predictions become incorrect, for no net accuracy change). Full numbers appear in Appendix B. 
+
+4.2 The Gold-Span Oracle and Predicted Spans 
+
+We isolate localization quality by holding the en-coder, classifier, and training data fixed while vary-ing only the test-time span source (Table 2). Gold spans reach 65.3% accuracy and 64.5% Macro-F1, compared with 63.3% and 62.7% for predicted spans and 61.9% and 61.4% for passage-only classi-fication. The predicted-to-gold gap quantifies error associated with imperfect localization, while the residual error under gold evidence shows that cor-rect localization alone does not solve fine-grained type classification. 
+
+Per-class oracle decomposition. Table 4 decom-poses performance by category under the fixed frozen-encoder pipeline, revealing that aggregate errors arise from different sources. Referential shows the clearest sensitivity to localization: its text-only F1 is 0.016 but rises to 0.540 when the correct spans are supplied. Unit & Measurement and Temporal also exhibit large predicted-to-gold gains. By contrast, Factual and Logical remain dif-ficult under gold evidence, reaching F1 scores of only 0.454 and 0.493. These differences show that improving span prediction is likely to benefit some categories substantially, whereas others continue to require better semantic discrimination, background knowledge, or reasoning even after localization is resolved.                                                              
+
+> Table 4: Per-class F1 under the fixed frozen Embed-dingGemma + MLP pipeline, isolating representation from span prediction. Text = no evidence; Pred. = pre-dicted spans (DeBERTa-v3-base); Gold = gold-span oracle. ∆= Gold −Pred. Rows ordered by ∆.
+> Category Text Pred. Gold ∆
+> Unit & Measurement 0.142 0.418 0.603 0.185 Referential 0.016 0.360 0.540 0.180 Temporal 0.207 0.472 0.611 0.139 Factual 0.106 0.339 0.454 0.115 Logical 0.244 0.378 0.493 0.115 Numerical 0.263 0.624 0.715 0.091 Specificity & Scope 0.038 0.515 0.601 0.086 Pragmatic 0.082 0.459 0.540 0.081 Theoretical 0.545 0.736 0.793 0.057 Terminological 0.261 0.486 0.539 0.053 Normative & Policy 0.521 0.683 0.735 0.052
+> Accuracy 0.271 0.510 0.609
+> Macro F1 0.220 0.497 0.602
+
+The oracle gain requires the right span, not any span. A potential concern is that the oracle gain is an artifact of the synthetic construction: if the classifier benefits from being handed any span rather than specifically the correct one, the gain would not reflect genuine localization. We test this directly by replacing the gold test spans with con-trols of the same form (Table 12, Appendix F). Ran-dom same-length spans reduce accuracy to 0.515, while high-TF–IDF distractor spans reduce it to 0.502, both substantially below the 0.653 gold-span result. They also fall below the separately trained passage-only classifier at 0.619, reflecting the fact that an evidence-augmented classifier trained with relevant spans is actively misled when unrelated spans are supplied at test time. The control there-fore shows that the oracle improvement depends on the content of the correct conflicting evidence rather than merely on adding an auxiliary text seg-ment. 
+
+Downstream performance generally tracks span quality. We examine the relationship between localization quality and classification through a controlled mixing sweep (Appendix G). For each test instance, each gold span is independently re-placed by the model-predicted span with proba-bility p ∈ { 0, 0.2, 0.4, 0.6, 0.8, 1.0}. This interpo-lates between full gold evidence at p = 0 (Token-F1 1.000; Macro-F1 0.645) and fully predicted evidence at p = 1 (Token-F1 0.679; Macro-F1 0.627). Evidence Token-F1 decreases steadily as predicted spans replace gold spans, while down-stream Macro-F1 follows the same overall decline despite small non-monotonic variations at interme-diate points. This relationship supports localization quality as a meaningful contributor to downstream performance, rather than implying that it is the sole source of classification error. 
+
+The predicted-to-gold gap persists under end-to-end span-aware training. Training the en-coder jointly over the passage and evidence could, in principle, make the classifier more robust to imperfect extracted spans. In practice, the end-to-end model reaches 67.4% accuracy with gold spans and 63.5% with predicted spans in the single-seed EmbeddingGemma-extractor condition. Pre-dicted evidence therefore improves over the 61.9% passage-only baseline, but remains approximately four points below the corresponding gold condi-tion. The same qualitative pattern appears across the evaluated encoder regimes: correct evidence yields the largest gain, predicted evidence realizes only part of it, and the size of the gain depends on extractor quality. These results show that span-prediction quality remains an important bottleneck even when the classifier is trained jointly with evi-dence: the classifier can exploit correctly localized claims, but the automatic extractor does not yet recover the full benefit at test time. The remaining error under gold spans further shows that improved localization must be paired with stronger type-level reasoning and discrimination. 
+
+Span quality and role asymmetry. The selected extractor reaches 0.679 Token-F1 but only 0.371 ex-act match. Localization is stronger for the conflict-ing claim ( claim_b : 0.755 Token-F1) than for the anchoring claim ( claim_a : 0.604), indicating that recovering the earlier statement against which the conflict must be interpreted is the harder extraction step. Full role-level results and fusion ablations appear in Appendices C and G. 
+
+4.3 Confusion Analysis 
+
+Per-class F1 identifies which categories are diffi-cult but not how they fail. We inspect the row-normalized confusion matrix of the fine-tuned evidence-augmented pipeline (Table 5). Errors are structured rather than uniform. Two patterns stand out. First, Logical acts as a broad attrac-tor, absorbing errors from Pragmatic (20.1% of its rows), Specificity & Scope (14.1%), Referential (15.6%), Theoretical (11.6%), and Normative & Policy (7.9%). Second, Factual and Temporal are mutually confused: Factual is most often mistaken for Temporal (20.4%) and Temporal for Factual (13.8%), suggesting that some factual conflicts sur-face through reporting-period or event-sequence cues. Referential is unstable, splitting its errors be-tween Logical (15.6%) and Factual (14.7%). These patterns extend the oracle analysis: residual errors reflect both local overlap between neighboring la-bels and a broader collapse of difficult cases into reasoning-oriented categories, consistent with Fac-tual and Logical being among the hardest classes even under the oracle.                                  
+
+> Table 5: Largest off-diagonal confusions of the fine-tuned evidence-augmented pipeline, by row-normalized percentage of the gold class. Rows sorted by Row %.
+> Gold Predicted Count Row %
+> Factual Temporal 29 20.4 Pragmatic Logical 29 20.1 Referential Logical 17 15.6 Referential Factual 16 14.7 Specificity & Scope Logical 21 14.1 Temporal Factual 23 13.8 Pragmatic Temporal 19 13.2 Theoretical Logical 21 11.6 Logical Normative & Policy 19 7.9 Normative & Policy Logical 18 7.9
+
+5 Conclusion 
+
+We studied fine-grained inconsistency classifica-tion in financial disclosures under a shared 11-class evaluation protocol. Supervised fine-tuning produced large gains over frozen representations for both encoder families tested, and a fine-tuned 300M encoder performed competitively with sub-stantially larger prompted and LoRA-adapted mod-els at much lower computational cost. Because the systems differ in architecture, supervision, and op-timization, this should be interpreted as a practical efficiency result rather than a controlled conclusion about model scale. The evidence experiments separate localization error from residual type-discrimination error. Gold spans consistently improve classification, while predicted spans recover only part of this benefit. Referential, Unit & Measurement, and Temporal inconsistencies are especially sensitive to localiza-tion quality, whereas Factual and Logical inconsis-tencies remain difficult even with correct evidence. These findings indicate that progress requires both stronger span extraction and better discrimination among related inconsistency types. Evaluation on longer and naturally occurring financial documents remains an important next step. 
+
+Reproducibility. We will release all code for the experiments in this paper, including the clas-sifier and extractor training scripts, the evidence-augmented and oracle pipelines, and the evaluation and analysis scripts, together with the exact train-test split used here, upon publication. All hyperpa-rameters, data splits, and seeds are specified in the appendices. 
+
+Limitations 
+
+The study uses short synthetic passages with one lo-calized inconsistency. Naturally occurring financial errors may be sparse, span distant sections, involve tables or external filings, or arise through draft-ing processes not represented by the generation pipeline, so the results characterize a controlled diagnostic setting rather than complete filings. The task conditions on an inconsistency already being detected and does not measure false positives, false negatives, or upstream error propagation. The evidence analysis assumes two localized verbatim spans and paired span supervision dur-ing training. The gold condition is diagnostic, and the automatic extractor (0.679 Token-F1, 0.371 ex-act match) is not a deployment-ready localization system. The base-passage-disjoint evaluation reduces concern about scaffold overlap but not broader gen-eration artifacts. In particular, Qwen3.5 models appear in both the generator pool and the eval-uated systems, and GPT-5-mini shares a family with GPT-5.4, so familiarity with generator outputs could favor related models. Extractor, end-to-end, artifact-control, and several large-model results are single-seed, so variance estimates remain incom-plete. 
+
+Societal impact. The evaluated systems should be treated only as human-reviewed triage aids. Missed, misclassified, or incorrectly localized in-consistencies could create false confidence in con-sequential financial disclosures. Predictions should therefore be accompanied by supporting evidence and verified by qualified human reviewers. 
+
+References 
+
+bitsandbytes Foundation. 2026. bitsandbytes. Official GitHub repository. Samuel R. Bowman, Gabor Angeli, Christopher Potts, and Christopher D. Manning. 2015. A large anno-tated corpus for learning natural language inference. In Proceedings of the 2015 Conference on Empiri-cal Methods in Natural Language Processing , pages 632–642, Lisbon, Portugal. Association for Compu-tational Linguistics. Zhiyu Chen, Wenhu Chen, Charese Smiley, Sameena Shah, Iana Borova, Dylan Langdon, Reema Moussa, Matt Beane, Ting-Hao Kenneth Huang, Bryan R. Routledge, and William Yang Wang. 2021. FinQA: A dataset of numerical reasoning over financial data. In Proceedings of the 2021 Conference on Empiri-cal Methods in Natural Language Processing , pages 3697–3711. Association for Computational Linguis-tics. Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. 2023. QLoRA: Efficient finetun-ing of quantized LLMs. In Advances in Neural Infor-mation Processing Systems .Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT: Pre-training of deep bidirectional transformers for language under-standing. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies, Volume 1 , pages 4171–4186, Minneapolis, Minnesota. Association for Computational Linguis-tics. Jay DeYoung, Sarthak Jain, Nazneen Fatema Rajani, Eric Lehman, Caiming Xiong, Richard Socher, and Byron C. Wallace. 2020. ERASER: A benchmark to evaluate rationalized NLP models. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 4443–4458, Online. Association for Computational Linguistics. Google DeepMind. 2026. Gemma 4: Byte for byte, the most capable open models. Official release page. Pengcheng He, Jianfeng Gao, and Weizhu Chen. 2023. DeBERTaV3: Improving DeBERTa us-ing ELECTRA-style pre-training with gradient-disentangled embedding sharing. In International Conference on Learning Representations .Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations .Yuta Koreeda and Christopher Manning. 2021. Con-tractNLI: A dataset for document-level natural lan-guage inference for contracts. In Findings of the Association for Computational Linguistics: EMNLP 2021 , pages 1907–1919, Punta Cana, Dominican Re-public. Association for Computational Linguistics. Jierui Li, Vipul Raheja, and Dhruv Kumar. 2024. Con-traDoc: Understanding self-contradictions in docu-ments with large language models. In Proceedings of the 2024 Conference of the North American Chap-ter of the Association for Computational Linguistics: Human Language Technologies , pages 6509–6523, Mexico City, Mexico. Association for Computational Linguistics. Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man-dar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. 2019. RoBERTa: A robustly optimized BERT pretraining approach. arXiv preprint arXiv:1907.11692 .Zhuang Liu, Degen Huang, Kaiyu Huang, Zhuang Li, and Jun Zhao. 2020. FinBERT: A pre-trained finan-cial language representation model for financial text mining. In Proceedings of the Twenty-Ninth Inter-national Joint Conference on Artificial Intelligence ,pages 4513–4519. International Joint Conferences on Artificial Intelligence Organization. Tim Loughran and Bill McDonald. 2011. When is a liability not a liability? textual analysis, dictionaries, and 10-Ks. The Journal of Finance , 66(1):35–65. Yixin Nie, Adina Williams, Emily Dinan, Mohit Bansal, Jason Weston, and Douwe Kiela. 2020. Adversarial NLI: A new benchmark for natural language under-standing. In Proceedings of the 58th Annual Meet-ing of the Association for Computational Linguistics ,pages 4885–4901, Online. Association for Computa-tional Linguistics. OpenAI. 2026. Introducing GPT-5.4. Official release page. Qwen Team. 2026. Qwen3.5: Towards native multi-modal agents. Official release page. Nils Reimers and Iryna Gurevych. 2019. Sentence-BERT: Sentence embeddings using siamese BERT-networks. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natu-ral Language Processing , pages 3982–3992, Hong Kong, China. Association for Computational Linguis-tics. Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf. 2019. DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv preprint arXiv:1910.01108 .James Thorne, Andreas Vlachos, Christos Christodoulopoulos, and Arpit Mittal. 2018. FEVER: a large-scale dataset for fact extraction and VERification. In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 , pages 809–819, New Orleans, Louisiana. Association for Computational Linguistics. Henrique Schechter Vera, Sahil Dua, Biao Zhang, Daniel Salz, Ryan Mullins, and 1 others. 2025. Em-beddingGemma: Powerful and lightweight text rep-resentations. arXiv preprint arXiv:2509.20354 .Wenhui Wang, Furu Wei, Li Dong, Hangbo Bao, Nan Yang, and Ming Zhou. 2020. MiniLM: Deep self-attention distillation for task-agnostic compres-sion of pre-trained transformers. arXiv preprint arXiv:2002.10957 .Adina Williams, Nikita Nangia, and Samuel R. Bow-man. 2018. A broad-coverage challenge corpus for sentence understanding through inference. In Pro-ceedings of the 2018 Conference of the North Amer-ican Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1, pages 1112–1122, New Orleans, Louisiana. Asso-ciation for Computational Linguistics. Yanzhao Zhang, Mingxin Li, Dingkun Long, Xin Zhang, Huan Lin, Baosong Yang, Pengjun Xie, An Yang, Dayiheng Liu, Junyang Lin, Fei Huang, and Jingren Zhou. 2025. Qwen3 embedding: Advancing text embedding and reranking through foundation models.  
+
+> arXiv preprint arXiv:2506.05176 .Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. TAT-QA: A question answering benchmark on a hybrid of tabular and textual con-tent in finance. In Proceedings of the 59th Annual Meeting of the Association for Computational Lin-guistics and the 11th International Joint Conference on Natural Language Processing , pages 3277–3287. Association for Computational Linguistics.
+
+A Dataset Examples 
+
+To make the task concrete, we show one dataset instance illustrating the paired evidence-span struc-ture used in the localization analysis: two conflict-ing clauses placed inside a longer passage, each marked by a gold span, with the passage typed into one of 11 inconsistency categories. Table 6 gives the per-class counts for both splits. 
+
+Example of 11-way typing with paired evidence spans. Label: Logical inconsistency. Passage: 
+
+“Projected earnings per share of $2.40 assumes sta-ble diesel fuel pricing across our regional distribu-tion network. Freight rate increases exceeding 8% year-over-year would compress operating margins below our conservative targets. Operating margins are structurally insulated from freight cost volatil-ity. Fleet utilization rates are forecast to reach 85% 
+
+> Table 6: Per-class instance counts in the train and test splits (stratified 70–30).
+
+Inconsistency type Train Test 
+
+Logical 564 241 Normative & Policy 531 228 Theoretical 423 181 Numerical 419 180 Temporal 390 167 Specificity & Scope 347 149 Pragmatic 337 144 Factual 330 142 Terminological 289 124 Unit & Measurement 273 117 Referential 255 109 
+
+Total 4,158 1,782 by Q4, contingent on hiring 500 new drivers. . . ” 
+
+Gold spans: CLAIM _A = “Freight rate increases exceeding 8% year-over-year would compress op-erating margins below our conservative targets”; 
+
+> CLAIM
+
+_B = “Operating margins are structurally insulated from freight cost volatility”. Why incon-sistent: the passage first states that higher freight rates would compress margins, then asserts mar-gins are insulated from freight volatility; the two claims cannot both hold. The task is to predict the type (here Logical) given the passage; the evidence-augmented pipeline additionally supplies the two spans. 
+
+Length statistics. Table 7 reports length statis-tics for the base passages and their inconsistent variants over the 5,940 instances. Token counts use the Qwen3.5 tokenizer. The train and test splits are nearly identical on these statistics (the split is stratified), so we report the pooled figures. 
+
+Surface-form overlap. To quantify how local-ized the perturbations are, we measure character-level edit (Levenshtein) distance and longest com-mon contiguous substring (LCS) between each base passage and its inconsistent variant (Table 8). The median edit distance is 72 characters and the median LCS covers about 73% of the shorter passage, confirming that inconsistencies are intro-duced through localized edits or insertions rather than wholesale rewrites. Table 7: Length statistics for base passages and incon-sistent variants over the 5,940 instances. Token counts use the Qwen3.5 tokenizer. Variants are slightly longer, reflecting the information added to introduce a conflict. 
+
+Metric Mean S.D. Min Max 
+
+Base passages 
+
+Characters 574.9 125.4 73 1,099 Tokens (Qwen3.5) 100.9 23.3 12 200 Sentences 5.2 1.5 1 12 
+
+Inconsistent variants 
+
+Characters 625.8 142.2 97 1,176 Tokens (Qwen3.5) 110.5 26.5 19 236 Sentences 5.6 1.7 1 14                     
+
+> Table 8: Surface-form overlap between base passages and their inconsistent variants over the 5,940 instances. Levenshtein distance is character-level; LCS is the longest common contiguous substring. Normalized LCS divides the LCS length by the shorter (min) or longer (max) passage length.
+> Metric Mean Median P5 P95
+> Levenshtein distance 81.8 72 9198 LCS length (chars) 420.1 404 213 682 LCS / min length 0.742 0.734 –1.000 LCS / max length 0.661 0.655 ––
+
+B Base-Passage-Disjoint Evaluation 
+
+The primary split is stratified at the instance level and may place variants derived from the same base passage in both training and test. For the base-passage-disjoint evaluation, we group examples by their underlying base passage and assign each group entirely to one partition. The resulting test set contains 1,813 examples. Table 9 compares the primary and base-disjoint splits across the three evidence conditions.                  
+
+> Table 9: Comparison between the primary instance-stratified split and the base-passage-disjoint split.
+> Primary Base-disjoint Method Acc. Mac. F1 Acc. Mac. F1
+> Passage only 0.619 0.614 0.630 0.633 Predicted spans 0.633 0.627 0.630 0.631 Gold spans 0.653 0.645 0.650 0.653
+
+All three conditions use the fine-tuned Embed-dingGemma encoder (trained on the respective split) frozen as a feature extractor for the evidence-augmented runs; the passage-only row uses the same encoder without an evidence branch. On the base-disjoint test set, the fine-tuned passage-only and predicted-span models achieve the same ac-curacy (1,142/1,813 correct) but produce different labels on 119 instances. Among these 119 dis-agreements, predicted spans correct 30 passage-only errors and overturn 30 passage-only correct predictions. Gold evidence yields 1,179 correct predictions, a net gain of 37 over passage-only classification. Fine-tuned passage-only accuracy is slightly higher on the base-disjoint split than on the primary split (63.0% vs. 61.9%), arguing against scaffold memorization. The gold-oracle benefit persists under both splits, whereas the automatic predicted-span gain observed on the primary split (+1.4 pp) does not translate into a net accuracy improvement here. 
+
+C Evidence-Span QA: Implementation Details 
+
+Task Formulation 
+
+We model evidence-span prediction as an extrac-tive QA problem over each sample’s inconsistent passage. Each instance contains a gold evidence list with items of the form {"quote": "...", "role": "claim_a"|"claim_b"} , converted into up to two QA training examples: • Question: “Extract the evidence span for claim A (verbatim substring).” Answer: gold quote with role="claim_a" 
+
+• Question: “Extract the evidence span for claim B (verbatim substring).” Answer: gold quote with role="claim_b" 
+
+The training split expands from 4,158 rows to 8,076 QA examples; the test split expands from 1,782 rows to 3,481 examples. In both splits, each row yields up to two QA examples (one per role); examples whose gold quote cannot be aligned to inconsistent_text (exact match, then whitespace-normalized match) are skipped. This excludes 240 training QA examples (104 
+
+claim_a , 136 claim_b ) and 83 test QA examples (34 claim_a , 49 claim_b ). The remaining rows may contribute one or both roles depending on which quotes align. 
+
+Model and Training 
+
+We fine-tune five encoder backbones with an extractive QA head (max_length=384 ,doc_stride=128 ): distilbert-base-uncased 
+
+(Sanh et al., 2019), roberta-base (Liu et al., 2019), bert-base-uncased (Devlin et al., 2019), 
+
+deberta-v3-base (He et al., 2023), and the EmbeddingGemma-300M backbone. For the last, EmbeddingGemma is released as an embedding model with a mean-pooling head; we discard that head and attach a token-level start/end span head to the underlying Gemma3TextModel transformer, training it with the identical QA protocol. Each backbone is trained on the training split with a 10% passage-level validation slice held out for checkpoint selection; the test split is not used during training. We select the EmbeddingGemma QA extractor for the primary predicted-span experiments because it achieves the highest span quality (Table 10); training was stable in fp32 with no divergence. 
+
+Inference and Decoding 
+
+At test time, the model is run twice per instance, once per role. Candidate spans are scored by: score (s, e ) = start_logit [s] + end_logit [e] (1) searching over the top-25 start and end positions across all overflow windows, keeping the highest-scoring span of at most 80 tokens. Table 11 reports exact-match and Token-F1 by role for the selected extractor; localization is stronger for claim_b than for claim_a , consistent with the role asymmetry discussed in the main text. 
+
+> Table 10: QA backbone sweep results (seed 42; 10% train validation, test held out until inference). Embed-dingGemma is selected for the primary predicted-span experiments.
+
+Backbone EM Token-F1 
+
+EmbeddingGemma-QA 0.3710 0.6790 
+
+deberta-v3-base 0.3030 0.6110 
+
+distilbert-base-unc. 0.2784 0.5740 
+
+bert-base-uncased 0.2611 0.5464 
+
+roberta-base 0.1864 0.4529 
+
+D EmbeddingGemma as a Span Extractor 
+
+Our selected extractor attaches a QA head to the EmbeddingGemma backbone. We summarize the experiments supporting this choice. 
+
+> Table 11: Evidence-span QA results by role for the selected extractor (EmbeddingGemma QA, seed 42; trained with 10% train-only validation, test held out until inference).
+
+Role EM Token-F1 n
+
+claim_a 0.344 0.6040 1,748 
+
+claim_b 0.399 0.7550 1,733 Overall 0.3710 0.6790 3,481 
+
+Span quality. Under the identical QA protocol (seed 42, 10% passage validation, max_length 384, 
+
+doc_stride 128), the EmbeddingGemma QA ex-tractor attains overall Token-F1 0.679 (EM 0.371), versus 0.611 (EM 0.303) for DeBERTa-v3-base (Table 10). Training was stable in fp32 with no di-vergence. The released EmbeddingGemma check-point is an embedding model with a pooling head; we discard that head and train the underlying trans-former with a token-level span head, confirming that the backbone supports extractive span predic-tion and, here, does so better than a standard QA encoder. 
+
+Downstream effect. Swapping only the test-time predicted spans in the primary evidence-augmented pipeline (fine-tuned EmbeddingGemma classifier, pooled MLP, seed 42) changes accuracy from 0.621 with DeBERTa spans to 0.633 with Embed-dingGemma spans, and Macro-F1 from 0.614 to 0.627. The corresponding gold-span result for this feature-extraction pipeline is 0.653 accuracy and 0.645 Macro-F1. Higher span quality therefore im-proves downstream classification, although a gap to the matched gold-span condition remains. 
+
+Joint multitask training underperforms the two-model pipeline. We also train a single Gemma backbone jointly with a span head and an 11-way classification head, using its own predicted spans for classification. Its span quality remains high at 0.675 Token-F1, but classification reaches only 0.604 accuracy and 0.586 Macro-F1, compared with 0.633 and 0.627 for the separate extractor and classifier. We therefore retain the two-model pipeline in the primary experiments. 
+
+E Classifier Training Details 
+
+All MLP heads use hidden layers [512, 256], dropout 0.2, lr = 10 −3, weight decay = 10 −4,batch size 256, 25 epochs. Frozen-encoder fea-tures are precomputed. The fine-tuned Embed-dingGemma encoder is trained end-to-end on passage-only 11-way classification (5 epochs, lr 
+
+= 2 × 10 −5, batch size 8); for the evidence-augmented and oracle conditions, this fine-tuned encoder is then used as a frozen feature extrac-tor for both passage and span embeddings, and only the MLP head is trained. This is not full end-to-end span-aware fine-tuning; the encoder is adapted on passages and reused as an embedder. Fine-tuned DeBERTa-v3-base passage classifica-tion uses 5 epochs, lr = 6 ×10 −6, warmup 0.1. The end-to-end span-aware variant trains the Embed-dingGemma encoder jointly with the MLP head over the passage-plus-spans input (5 epochs, lr 
+
+= 2 × 10 −5, seed 42). 
+
+Interpreting the frozen evidence results. In the frozen-encoder setting, adding predicted spans raises accuracy from 27.1% for passage-only clas-sification to 51.0%. This large difference should not be interpreted as the isolated effect of accurate localization, because the frozen passage represen-tation is poorly aligned with the 11-class task and the additional span representation supplies substan-tial task-relevant information. The corresponding gold-span result reaches 60.9%, compared with 65.3% when the passage-adapted encoder is used as a frozen feature extractor. These values are or-acle results for their respective feature-extraction pipelines, not upper bounds for alternative fusion methods or end-to-end architectures. 
+
+Compute. Experiments were run on a node with four NVIDIA RTX 6000 Ada Generation GPUs, though most use only a single GPU; multiple GPUs were used only for the largest model (the 27B LoRA run). Approximate wall-clock training times (recovered from run logs) illustrate the cost profile. Frozen-encoder runs are dominated by a single embedding pass and take seconds to a few min-utes. Fine-tuning the EmbeddingGemma passage classifier takes about four minutes per seed on a single GPU; the evidence-augmented head trains in well under a minute on top of cached features, and the end-to-end span-aware variant takes about twenty minutes. The selected EmbeddingGemma QA extractor trains in about two and a half minutes. By contrast, the LoRA generative baselines are substantially more expensive: Qwen3.5-9B takes approximately fifty minutes per seed and Qwen3.5-27B about two and a half hours, while achieving accuracy close to that of the approximately four-minute encoder fine-tuning run. Prompted infer-ence over the test set ranges from a few minutes for the smaller models to approximately one hour for the largest. These figures are approximate and recovered post hoc; a few runs were not logged with reliable timing. 
+
+F Distractor-Span Controls 
+
+We test whether the gold-span gain arises from the correct conflicting evidence or merely from supplying additional text. The evidence-augmented classifier is trained with gold spans, while the test spans are replaced by either random same-length spans or high-TF–IDF distractor spans from the same passage. 
+
+> Table 12: Distractor-span controls using the fine-tuned encoder at seed 42. Training is unchanged; only the test-time evidence source is varied.
+
+Test evidence Acc. Mac. F1 
+
+Gold spans (oracle) 0.653 0.645 Random same-length spans 0.515 0.502 TF–IDF distractor spans 0.502 0.481 Both distractor conditions perform substantially below the gold-span condition and below the sep-arately trained passage-only model at 0.619 accu-racy. Because the classifier was trained with rele-vant spans, unrelated spans create a test-time dis-tribution shift and actively mislead the evidence branch. The control therefore shows that the or-acle gain depends on the content of the correct conflicting evidence rather than on adding arbitrary auxiliary text. 
+
+G Feature-Fusion Ablation and Span-Quality Sweep 
+
+We ablate how passage and span representations are combined in the fine-tuned-encoder feature pipeline (seed 42), reporting both predicted-span and gold-span conditions (Table 14). Mean pool-ing, two-slot concatenation, and max pooling pro-duce similar results and preserve a predicted-to-gold gap of approximately three points. A single-sequence cross-encoder raises the gold-span accu-racy to 0.671 but does not improve the predicted-span condition, which reaches 0.607. These results indicate that more expressive fusion can better ex-ploit accurate evidence, but does not compensate for errors in the extracted spans. Localization qual-Table 13: Per-class F1 scores for frozen-encoder MLP classifiers (1,782 test examples, seed 42). EmbGemma = EmbeddingGemma-300M; MiniLM = all-MiniLM-L6-v2; QwenEmb = Qwen3-Embedding; pred. = predicted evidence spans (DeBERTa-v3-base); gold = gold-span oracle.                                                                                                                      
+
+> Category nMiniLM QwenEmb-0.6B QwenEmb-8B DeBERTa EmbGemma EmbGemma (pred.) EmbGemma (gold)
+> Factual 142 0.095 0.084 0.133 0.124 0.106 0.339 0.454 Logical 241 0.131 0.180 0.184 0.244 0.244 0.378 0.493 Normative & Policy 228 0.335 0.428 0.507 0.306 0.521 0.683 0.735 Numerical 180 0.151 0.239 0.224 0.473 0.263 0.624 0.715 Pragmatic 144 0.127 0.120 0.194 0.000 0.082 0.459 0.540 Referential 109 0.031 0.047 0.043 0.000 0.016 0.360 0.540 Specificity & Scope 149 0.082 0.022 0.071 0.000 0.038 0.515 0.601 Temporal 167 0.178 0.109 0.226 0.241 0.207 0.472 0.611 Terminological 124 0.135 0.110 0.094 0.000 0.261 0.486 0.539 Theoretical 181 0.391 0.396 0.467 0.235 0.545 0.736 0.793 Unit & Measurement 117 0.069 0.062 0.078 0.033 0.142 0.418 0.603 Accuracy 0.189 0.204 0.233 0.234 0.271 0.510 0.609 Macro F1 0.157 0.163 0.202 0.151 0.220 0.497 0.602 Weighted F1 0.173 0.187 0.227 0.178 0.248 0.511 0.611
+
+ity therefore remains an important constraint on the evidence branch, alongside the residual type-discrimination errors visible under gold evidence. 
+
+Table 14: Feature-fusion ablation using the fine-tuned EmbeddingGemma encoder as a frozen feature extractor and DeBERTa-predicted spans (seed 42). Accuracy is reported for predicted and gold evidence. These runs use the fusion-ablation implementation and are reported separately from the primary extractor comparison in Table 2. 
+
+Fusion Pred. Gold 
+
+Mean-pool 0.621 0.653 Two-slot concat 0.619 0.654 Max-pool 0.619 0.652 Cross-encoder 0.607 0.671 
+
+Span-quality mixing sweep. To verify that downstream accuracy tracks span quality, we vary the fraction of gold test spans via per-role Bernoulli substitution with probability p (probability of re-placing a gold span with the EmbeddingGemma-QA-predicted span). Table 15 reports the results on the fine-tuned EmbeddingGemma pipeline. Span Token-F1 falls steadily as p increases; downstream Macro-F1 tracks the endpoints and the overall trend, though it is not strictly monotone at interme-diate values. 
+
+H LoRA Fine-Tuning Details 
+
+We fine-tune Qwen/Qwen3.5-9B under 4-bit NF4 (Normal Float 4) quantization ( bitsandbytes , bit-sandbytes Foundation, 2026) with double quantiza-tion and bf16 compute dtype. LoRA adapters are applied to attention projections ( q_proj , k_proj ,
+
+Table 15: Span-quality mixing sweep on the fine-tuned EmbeddingGemma pipeline (seed 42). p = probability of substituting the EmbeddingGemma QA-predicted span for the gold span per role. p = 0 : full gold spans; 
+
+p = 1 : full predicted spans. Downstream Macro-F1 at 
+
+p = 1 matches the single-seed result in Table 2 (Macro-F1 0.627). 
+
+p Avg. Token-F1 Macro-F1 
+
+0.0 1.000 0.645 0.2 0.936 0.644 0.4 0.872 0.635 0.6 0.807 0.637 0.8 0.744 0.634 1.0 0.679 0.627 
+
+v_proj , o_proj ), with rank r = 16 , scaling 
+
+α = 32 , and dropout 0.05 . Training uses 1 epoch, paged_adamw_8bit , learning rate 2 × 10 −4
+
+with warmup ratio 0.03 , effective batch size 16, and maximum sequence length 1,024 tokens. At inference, we use deterministic decoding with 
+
+max_new_tokens=32 and parse predictions via exact-line matching with a substring fallback. The 
+
+Qwen/Qwen3.5-27B LoRA model uses the identi-cal configuration (same rank, schedule, prompt, and decoding), changing only the base checkpoint and providing a more controlled within-family com-parison of model size; it is run for a single seed (42). 
+
+I Per-Class F1 Scores: Frozen-Encoder Methods 
+
+Table 13 reports per-class F1 for the frozen text-only backbones and for the frozen Embed-Table 16: Per-class F1 scores for generative models (1,782 test examples). All prompted models use label definitions and illustrative examples. Models ordered by overall accuracy. LoRA = Qwen3.5-9B QLoRA SFT with the same definitions+examples prompt as Table 3. All columns are single-seed (seed 42) for per-class detail; the LoRA column is seed 42 of the three seeds (1, 2, 42) averaged in Table 3 (0.617 acc, 0.597 macro for this seed; three-seed means 0.615 ± 0.002 and 0.596 ± 0.002 ).                                                                                                                                                    
+
+> Category nQwen3.5-4B Qwen3.5-9B Qwen3.5-35B-A3B Gemma-4-31B Gemma-4-E4B Gemma-4-26B Qwen3.5-27B GPT-5.4 Qwen3.5-9B + LoRA
+> Factual 142 0.000 0.138 0.207 0.153 0.152 0.165 0.171 0.258 0.241 Logical 241 0.222 0.343 0.342 0.346 0.414 0.384 0.447 0.566 0.517 Normative & Policy 228 0.547 0.537 0.651 0.622 0.655 0.621 0.687 0.745 0.739 Numerical 180 0.369 0.269 0.580 0.683 0.552 0.683 0.629 0.796 0.729 Pragmatic 144 0.098 0.123 0.221 0.133 0.106 0.093 0.321 0.305 0.578 Referential 109 0.227 0.229 0.372 0.412 0.380 0.331 0.478 0.556 0.436 Specificity & Scope 149 0.283 0.157 0.244 0.274 0.536 0.449 0.502 0.703 0.569 Temporal 167 0.249 0.470 0.531 0.529 0.523 0.539 0.584 0.661 0.625 Terminological 124 0.447 0.410 0.158 0.400 0.386 0.398 0.519 0.607 0.608 Theoretical 181 0.064 0.085 0.162 0.290 0.276 0.593 0.339 0.594 0.778 Unit & Measurement 117 0.180 0.267 0.097 0.185 0.390 0.265 0.514 0.694 0.746 Accuracy 0.274 0.330 0.389 0.404 0.409 0.439 0.487 0.613 0.617 Macro F1 0.244 0.275 0.324 0.366 0.397 0.411 0.472 0.589 0.597 Weighted F1 0.256 0.289 0.349 0.385 0.414 0.434 0.482 0.600 0.607
+
+dingGemma pipeline with predicted and gold spans, the configuration used for the localization decom-position in Table 4. 
+
+J Per-Class F1 Scores: All Generative Models 
+
+Table 16 reports per-class F1 scores for all gener-ative configurations, ordered by overall accuracy. Prompted Qwen3.5-9B remains weak and unevenly distributed across classes, with its lowest F1 on 
+
+Theoretical (0.085) and over-prediction of Logical 
+
+(recall 0.67 against precision 0.23), indicating a la-bel bias without task-specific adaptation. GPT-5.4 performs strongly on structured categories such as 
+
+Numerical (F1 = 0.796) and Normative & Policy 
+
+(F1 = 0.745) but struggles on Factual (F1 = 0.258) and Pragmatic (F1 = 0.305). The LoRA-fine-tuned Qwen3.5-9B is the most balanced among gener-ative models, with strong results on Theoretical 
+
+(0.778) and Unit & Measurement (0.746), though 
+
+Factual remains weak (0.241). 
+
+K Per-Class F1 Scores: Fine-Tuned Encoder 
+
+Table 17 reports per-class F1 for the fine-tuned Em-beddingGemma encoder (seed 42) under passage-only classification, predicted spans from the De-BERTa and selected EmbeddingGemma extractors, and the gold-span oracle. Per class, the Gemma ex-tractor improves on DeBERTa for most categories (notably Referential 0.442 to 0.478 and Factual 0.404 to 0.431), yet every category still trails its gold-oracle value. This is the per-class form of the paper’s central finding: better spans help, but a gap to perfect localization persists across the board. 
+
+Table 17: Per-class F1 for the fine-tuned Embed-dingGemma encoder (seed 42), used as a frozen feature extractor with the [512, 256] MLP head. Passage = no evidence; DeBERTa and Gemma = predicted spans from the respective extractors; Gold = gold-span oracle. EmbeddingGemma is the selected extractor for the pri-mary predicted-span experiments. 
+
+Category Passage DeBERTa Gemma Gold 
+
+Factual 0.403 0.404 0.431 0.449 Logical 0.460 0.473 0.489 0.527 Normative & Policy 0.788 0.792 0.802 0.804 Numerical 0.731 0.760 0.751 0.767 Pragmatic 0.551 0.534 0.555 0.563 Referential 0.434 0.442 0.478 0.500 Specificity & Scope 0.609 0.625 0.641 0.672 Temporal 0.541 0.559 0.571 0.607 Terminological 0.648 0.657 0.654 0.652 Theoretical 0.781 0.773 0.786 0.798 Unit & Measurement 0.700 0.730 0.737 0.760 
+
+Accuracy 0.612 0.621 0.633 0.653 
+
+Macro F1 0.604 0.614 0.627 0.645 
+
+L Classification Prompt 
+
+Classification Prompt 
+
+You are a careful annotator. Task: classify the given excerpt into exactly one inconsistency type. Valid labels (choose exactly one), with a definition and one example each: Factual, Logical, Normative & Policy, Numerical, Pragmatic, Referential, Specificity & Scope, Temporal, Terminological, Theoretical, Unit &Measurement. Return JSON with exactly this schema: {"label": "<one of the valid labels verbatim>"} Excerpt: {inconsistent_text}
