@@ -6,49 +6,66 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-30
-- 运行时间：2026-07-30 20:46:15 UTC
+- 最新运行日期：2026-07-31
+- 运行时间：2026-07-31 21:45:16 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：4
-- 速读区：5
+- 本次总论文数：14
+- 精读区：6
+- 速读区：8
 
 ### 今日简报（AI）
-1) 今日精选9篇论文，重点精读基于交易语义的Alpha挖掘框架与智能体系统风险传播的图论治理模型。  
-2) 最值得关注AlphaSchema（9.0）的语义空间探索方法论，以及递归治理框架对AI系统漂移检测的创新。  
-3) 建议普通读者同步关注情感驱动随机波动与期权隐含密度论文，辅助市场情绪研判。
-- 详情：[/202607/30/README](/202607/30/README)
+今日精读6篇、速读8篇，共14篇金融AI论文，聚焦AI在金融披露审计与算法交易中的突破。
+
+最值得关注两篇满分精读：AWARE-FX用知识引导AI量化外汇对冲披露，FinSMART则用市场对齐强化学习提升交易情感分析。
+
+建议普通读者优先关注可审计AI系统与情感交易模型的落地场景，后续可结合量化模型评测基准加深理解。
+- 详情：[/202607/31/README](/202607/31/README)
 
 ### 精读区论文标签
-1. [AlphaSchema: Exploring the Space of Trading Semantics for LLM-Based Alpha Mining](/202607/30/2607.26642v1-alphaschema-exploring-the-space-of-trading-semantics-for-llm-based-alpha-mining)  
+1. [AWARE-FX: An Auditable Knowledge-Guided AI System for Measuring Corporate Foreign-Exchange Hedging Disclosure](/202607/31/2607.27611v1-aware-fx-an-auditable-knowledge-guided-ai-system-for-measuring-corporate-foreign-exchange-hedging-disclosure)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于LLM的Alpha挖掘与结构化交易语义
-2. [Recursive Governance: A Graph-Theoretic Framework for Risk Propagation and Drift Detection in Agentic AI Systems](/202607/30/2607.23916v1-recursive-governance-a-graph-theoretic-framework-for-risk-propagation-and-drift-detection-in-agentic-ai-systems)  
+   evidence：AI/NLP系统将企业年报文本转化为可追溯的外汇套期保值披露指标，结合金融编码器与精确证据门
+2. [FinSMART: Financial Sentiment Analysis for Algorithmic Trading through Market-Aligned Reinforcement Learning](/202607/31/2607.28127v1-finsmart-financial-sentiment-analysis-for-algorithmic-trading-through-market-aligned-reinforcement-learning)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：用于算法交易的市场对齐强化学习金融情绪分析
+3. [CoLAS: Multimodal Corroboration of Latent Asset Signals for Financial Trading](/202607/31/2607.28446v1-colas-multimodal-corroboration-of-latent-asset-signals-for-financial-trading)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：多模态深度学习用于金融交易信号提取
+4. [Beyond Sentiment: Structured Information Extraction from Financial News](/202607/31/2607.28496v1-beyond-sentiment-structured-information-extraction-from-financial-news)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：从金融新闻中提取超越情绪的结构化信息；面向金融分析与股票预测的自然语言处理
+5. [Hierarchical Reranking for Scalable Financial RAG System](/202607/31/2607.27523v1-hierarchical-reranking-for-scalable-financial-rag-system)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：面向金融机构中自主AI系统的风险传播图论框架
-3. [Diagnosing Fine-Grained Inconsistency Classification in Financial Disclosure Text](/202607/30/2607.26368v1-diagnosing-fine-grained-inconsistency-classification-in-financial-disclosure-text)  
+   evidence：面向金融文档的层级重排序RAG系统
+6. [FinanceHarness: Autonomous Financial Deep Research Framework](/202607/31/2607.27853v1-financeharness-autonomous-financial-deep-research-framework)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：使用NLP对财务披露文本进行细粒度不一致性分类
-4. [Credit Cards, Confusion, Computation, and Consequences: What Can We Uncover About Language Model Reasoning?](/202607/30/2607.26952v1-credit-cards-confusion-computation-and-consequences-what-can-we-uncover-about-language-model-reasoning)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：提出CreditCardQA基准测试大语言模型的金融推理能力，直接与金融NLP相关
+   evidence：面向LLM智能体的自主金融深度研究框架
 
 ### 速读区论文标签
-1. [Sentiment-Driven Stochastic Volatility: An Observable Second Factor from Market Attention](/202607/30/2607.22254v1-sentiment-driven-stochastic-volatility-an-observable-second-factor-from-market-attention)  
+1. [CACHE-UK: A Stability-Aware Memory Editor for Sequentially Updated Quantized LLMs in Finance](/202607/31/2607.28292v1-cache-uk-a-stability-aware-memory-editor-for-sequentially-updated-quantized-llms-in-finance)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：面向金融量化大语言模型的稳定性感知记忆编辑；AI在动态金融环境中的应用
+2. [Can Large Language Models Execute Parent Orders?](/202607/31/2607.28410v1-can-large-language-models-execute-parent-orders)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：大语言模型用于算法交易父订单执行
+3. [INS-ActBench: A Comprehensive Benchmark for Assessing Professional Actuarial Capability of Large Language Models](/202607/31/2607.24273v1-ins-actbench-a-comprehensive-benchmark-for-assessing-professional-actuarial-capability-of-large-language-models)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：使用市场注意力的情感驱动波动率模型
-2. [Inverse Learning of Latent Risk-Neutral Densities from Irregular Option Quotes](/202607/30/2607.27188v1-inverse-learning-of-latent-risk-neutral-densities-from-irregular-option-quotes)  
+   evidence：构建了评估大语言模型专业精算能力的综合基准，包含16个精算协会的12050道题，覆盖知识、长上下文和工具调用
+4. [RIDGE: An Autonomous Framework for Validation and Method Discovery in LLM-Generated Option Pricing](/202607/31/2607.25199v2-ridge-an-autonomous-framework-for-validation-and-method-discovery-in-llm-generated-option-pricing)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：神经算子用于期权定价
-3. [Emergent Behaviour in Financial Markets](/202607/30/2607.23311v1-emergent-behaviour-in-financial-markets)  
+   evidence：提出针对LLM生成期权定价代码的自主验证框架
+5. [Everyone is unique: Towards Behaviorally Heterogeneous Negotiation Dialogue Systems for Debt Collection](/202607/31/2607.25218v1-everyone-is-unique-towards-behaviorally-heterogeneous-negotiation-dialogue-systems-for-debt-collection)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：催收谈判作为金融领域的大语言模型对话系统测试床；AI在金融中的应用
+6. [Runtime Uncertainty Monitoring for LLM-Based Multi-Agent Systems Using Bayesian Networks](/202607/31/2607.25877v1-runtime-uncertainty-monitoring-for-llm-based-multi-agent-systems-using-bayesian-networks)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：基于大语言模型的多智能体系统用于精算风险建模
+7. [OpenMarket: A Synchronized Polymarket-Binance Dataset for High-Frequency Prediction-Market Research](/202607/31/2607.26245v1-openmarket-a-synchronized-polymarket-binance-dataset-for-high-frequency-prediction-market-research)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：机器学习用于预测市场交易与数据发布
+8. [LLM as Forecasting Planner: Training-Free Text Conditioning for Time-Series Foundation Models](/202607/31/2607.24892v1-llm-as-forecasting-planner-training-free-text-conditioning-for-time-series-foundation-models)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：研究金融市场中的涌现行为，使用计算方法，与金融人工智能相关
-4. [An Artificial Market for Brazilian Real Estate Investment Funds: An Agent-Based Proposal](/202607/30/2607.25098v1-an-artificial-market-for-brazilian-real-estate-investment-funds-an-agent-based-proposal)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：基于主体的巴西房地产投资信托基金人工市场，与智能投顾组合管理相关
-5. [Herding, Momentum, and Reversal in China's A-Share Market: An Agent-Based Network Model with Information Diffusion](/202607/30/2607.27063v1-herding-momentum-and-reversal-in-chinas-a-share-market-an-agent-based-network-model-with-information-diffusion)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：基于主体的股票市场模型，与金融市场的深度学习分析相关
+   evidence：基于大语言模型与时间序列基础模型的文本条件预测，可用于金融预测
 
 
 <div class="dpr-home-promo-card">

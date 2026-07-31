@@ -1,0 +1,439 @@
+Title: OpenMarket: A Synchronized Polymarket-Binance Dataset for High-Frequency Prediction-Market Research
+
+URL Source: https://arxiv.org/pdf/2607.26245v1
+
+Published Time: Thu, 30 Jul 2026 00:10:12 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# OpenMarket: A Synchronized Polymarket–Binance Dataset for High-Frequency Prediction-Market Research 
+
+Gregory Young Department of Computer Science University of Colorado Boulder Boulder, CO 80309 
+
+gryo8540@colorado.edu 
+
+July 30, 2026 
+
+Abstract 
+
+OpenMarket began as an attempt to trade Polymarket’s BTC 15-minute binary markets against Binance BTC/USDT order flow. The attempt did not produce a tradable edge: out-of-sample, a walk-forward logistic model over 43 microstructure features does not beat, and slightly underperforms, the probability already implied by Polymarket’s own or-der book, and simulated trading nets −0.116 normalized payoff units per attempted trade under stated fee and slippage assumptions. We release the synchronized corpus and infrastructure that attempt produced— to our knowledge, the first public millisecond-level Polymarket BTC / Binance BTC-USDT paired corpus with explicit pairing metadata. The frozen archive (tag v0.5.2) contains 727,098,247 deduplicated rows across 202 archival snapshots, with event data on 54 observed Poly-market days (57 Binance days) between 2026-02-12 and 2026-05-15, including 2,936,031 explicit lead–lag pairs, alongside a reproducible Rust pipeline for collection, millisecond pairing, Parquet export, and walk-forward calibration. Initial analyses establish Polymarket stylized facts (one-tick top-of-book spreads) and characterize cross-venue timing: an apparent 16 ms median lag on venue source clocks, with relative clock drift bounded to ≤6 ms over the archive but a remaining single-vantage constant-offset ambiguity of roughly ±99 ms. A synchronization-free event study, measured only on the collector clock, independently shows that Polymarket quotes respond to large Binance moves after a median 347 ms. We position this work as a data-and-methods release whose central empirical result is a null out-of-sample forecasting result. 
+
+1arXiv:2607.26245v1 [q-fin.TR] 28 Jul 2026 1 Introduction 
+
+OpenMarket began as a trading system, not a dataset. We built a Rust pipeline to trade Polymarket’s BTC 15-minute binary markets against Bi-nance BTC/USDT spot flow: WebSocket collectors for both venues, a millisecond recorder, a walk-forward calibrated logistic scorer, and simulated and paper execution. The result was negative. No strategy iteration survived fees and spread; out-of-sample, the strongest published model does not beat, and slightly underperforms the probability already implied by Polymarket’s own order book (Section 10.4); and simulated positive-EV trading nets 
+
+−0.116 normalized payoff units per attempted trade under stated fee and slippage assumptions. We do not claim trading profitability—the central empirical finding is the opposite, and that negative result is published with the data that produced it. This paper releases the resulting infrastructure and corpus, which outlived the trading strategy. Empirical work now documents tick-level Polymarket dynamics, decentralized prediction-market (DePM) design trade-offs, and combinatorial arbitrage [ 6, 22 , 23 ]. What remains missing is a public, cross-venue, millisecond-resolution corpus paired with Binance BTC/USDT and tooling that makes synchronization quality, lead–lag, and calibration analysis reproducible at archival scale. OpenMarket closes that gap. The contribution is threefold: 1. Corpus. To our knowledge, the first public millisecond-level Polymar-ket BTC / Binance BTC-USDT paired corpus with explicit pairing metadata: 727,098,247 deduplicated rows across 202 archival snap-shots, with event data on 54 observed days (2026-02-12–2026-05-15; Section 9.1), including 2,936,031 explicit lead–lag pairs. 2. Methods. Documented source-vs.-ingest synchronization with em-pirical clock-offset validation (Section 5.2), Parquet-native export, walk-forward calibration training, and validation harnesses that treat clock drift and pairing-window sensitivity as measurable objects rather than implementation details. 3. Empirical baselines. Stylized facts and forecast benchmarks on the released corpus—top-of-book spreads, lead–lag distributions, and ablations testing whether multivariate models outperform naive order-book mid priors (out-of-sample, they do not). The initial empirical claims are intentionally narrow: 1. BTC 15-minute top-of-book spreads are usually one tick wide. 2. Source-clock lead–lag has a compact median but heavy tails. 23. Polymarket quotes respond to large Binance moves after hundreds of milliseconds on the collector clock. 4. Lead–lag timing changes little across cross-venue disagreement regimes. 5. Multivariate features slightly underperform the Polymarket mid prior out-of-sample. The released artifacts deliberately include the full research trail: the collectors and recorder, the synchronization layer, the feature and training pipelines, the backtesting framework, the strategy-evolution archive, the Hug-ging Face dataset and model releases, and a sanitized operational appendix for audit context. OpenMarket is frozen as a public research archive (source tag v0.5.2); active collection has ended. The remainder of the paper describes the system, the released artifacts, and initial microstructure findings that prior single-venue or closed pipelines cannot support. 
+
+# 2 Background 
+
+Prediction markets aggregate information through prices of contracts tied to future outcomes [ 10 , 24 ]. Polymarket lists binary outcome markets where contracts settle to 1 if an event occurs and 0 otherwise. BTC 15-minute markets ask whether Bitcoin will be above or below a reference price at the end of a short window. These markets combine elements of options, sports-style binary markets, and crypto exchange microstructure. Recent Polymarket microstructure and DePM surveys are summarized in Section 3. Reproducible public infrastructure for high-frequency cross-venue work remains scarce. Binance BTC/USDT serves as the reference stream because it is liquid, high frequency, and tied to the Polymarket BTC settlement window. Fol-lowing multi-venue price-discovery practice [ 11 ], we align Binance trades with Polymarket book updates, derive features, generate labels, and evaluate models without leaking future information. Millisecond-resolution storage and pairing follow standard high-frequency microstructure practice [ 5 , 19 ]. 
+
+# 3 Related Work 
+
+Prediction markets aggregate dispersed information into tradable prices [1 , 10 , 24 ]. The broader prediction-market literature studies forecast ac-curacy, incentive compatibility, and event-study use cases, while market-microstructure research studies how order flow, liquidity, latency, and price impact determine short-horizon prices [ 5 , 15 , 19 ]. OpenMarket sits at the in-tersection: it treats a prediction market as a high-frequency limit-order-book venue whose prices are probabilities. 3Public high-frequency order-book datasets. LOBSTER [ 12 ] re-constructs NASDAQ limit-order books for academic use, and FI-2010 [ 18 ]is a widely used mid-price forecasting benchmark. The limit-order-book survey literature [ 8] and neural LOB forecasting work such as DeepLOB [ 25 ]show why public, timestamped order-book benchmarks matter: they enable method comparison under fixed reconstruction and evaluation rules. These datasets and models cover traditional equity venues. OpenMarket follows this lineage but targets a decentralized prediction-market CLOB paired with a crypto spot reference stream, settlement labels, and explicit cross-venue pairing metadata. 
+
+Polymarket and decentralized prediction-market data. Dubach [ 6 ]analyzes tick-level Polymarket order-book evidence and releases analysis code, but does not ship a synchronized Binance reference stream or a Hugging Face archival corpus. Saguillo et al. [ 23 ] document combinatorial arbitrage and market replications using proprietary-scale scrapes; reproduction requires re-implementing data collection. Rahman et al. [ 22 ] survey DePM design trade-offs without a cross-venue BTC 15-minute benchmark. Recent Polymarket dataset releases are complementary rather than substitutes. PolyBench [ 4 ]provides timestamp-locked Polymarket order book and news snapshots for LLM forecasting and trading evaluation. Jia et al. [ 14 ] construct a full-lifecycle Polymarket dataset suite spanning market metadata, fill-level trading records, and oracle resolution events. Qin and Yang [ 21 ] release a complete on-chain first-generation Polymarket archive with ground-truth aggressor direction. OpenMarket differs by focusing narrowly on millisecond-level BTC 15-minute CLOB dynamics paired with Binance BTC/USDT and by publishing explicit lag_pairs_ms construction metadata. 
+
+Crypto price discovery and cross-venue timing. Multi-venue studies measure which market contributes to price discovery [ 11 ]. In crypto, Brandvold et al. [ 2 ] estimate information shares across Bitcoin exchanges, and Makarov and Schoar [ 16 ] document cross-exchange crypto arbitrage and segmentation at scale. Public Binance kline and trade products support many such studies, but they do not include Polymarket CLOB state, settlement labels, or prediction-market-specific pairing metadata. OpenMarket therefore does not claim to improve crypto price-discovery estimation in general; it supplies a reproducible cross-venue corpus for a specific prediction-market mechanism. 
+
+Clock synchronization and timestamp validity. High-frequency cross-venue inference depends on timestamp semantics. NTPv4 specifies Internet clock synchronization against UTC [ 17 ]; precision-time deployments use IEEE 1588/PTP for tighter synchronization [ 13 ]. Financial regulation also treats clock accuracy as a surveillance requirement: MiFID II RTS 25 specifies maximum UTC divergence and timestamp granularity for trading venues and participants [ 7 ]. OpenMarket is not a regulated trading venue and uses a single public collector, so it cannot identify absolute venue-clock 4Binance WS 
+
+> Tick Stream Collector
+> Timestamp Synchronizer
+> Feature Generator
+> ML / Signal Engine
+> Backtester
+> Evaluation
+> Polymarket WS
+> Order Book Collector
+
+Figure 1: OpenMarket pipeline. Binance and Polymarket WebSocket streams feed collectors; the recorder synchronizes events and exports aligned tables for feature generation, signals, and backtesting. offsets without additional vantage points. Its contribution is to publish both source and ingest timestamps and to quantify which timing claims survive that limitation. 
+
+Open infrastructure. Most open-source trading repositories mix notebooks, private snapshots, and undocumented assumptions. OpenMar-ket differs by publishing (i) raw and deduped Parquet splits, (ii) explicit 
+
+lag_pairs_ms with quality flags, (iii) Rust exporters/trainers with pinned commands, and (iv) empirical baselines on the released corpus. We claim infrastructure and reproducible characterization, not superior live trading performance. Dubach provides a deeper single-venue microstruc-ture analysis, while Saguillo et al. study broader proprietary-scale arbitrage data than this public BTC 15-minute release. 
+
+# 4 System Architecture and Data Collection 
+
+The codebase is a Rust workspace spanning exchange collectors, a multi-market recorder with lag-pairing export, signal and execution engines, backtesting, and Parquet-native ML crates (step3-parquet-export ,
+
+binary-outcome-trainer ); Figure 1 shows how the two WebSocket streams converge on the synchronizer and downstream stages. Crate-level detail is maintained in the repository; the paper’s benchmark claims are regenerated 5from the frozen dataset and model artifacts, not from live operational services. 
+
+4.1 Binance 
+
+The Binance collector records BTC/USDT trades and derives candle tables at multiple time resolutions. The source schema includes trade ID, trade timestamp, price, quantity, quote volume, maker/taker direction, and local receive time. Millisecond-level tick snapshots preserve both source and ingest timestamps. 
+
+4.2 Polymarket 
+
+The Polymarket collector subscribes to BTC binary market order book updates, trades, and last-trade-price events. The recorder maps token IDs to market slugs and side labels using market metadata so that UP and DOWN books can be analyzed consistently across rolling 15-minute markets. 
+
+4.3 Storage 
+
+The initial recorder stores data in SQLite for operational simplicity. The public dataset release exports raw and processed tables to partitioned Parquet. Key recorded tables include: 
+
+• binance_trades , binance_ticks_ms 
+
+• polymarket_ticks_ms , market_meta 
+
+• lag_pairs_ms 
+
+• binance_candles_1s , binance_candles_5s , binance_candles_1m ,
+
+binance_candles_5m , binance_candles_15m , binance_candles_1h 
+
+# 5 Synchronization 
+
+Synchronization is the central technical component of OpenMarket. For each event the recorder stores both a source timestamp (exchange-emitted) and an ingest timestamp (collector-observed): 
+
+source_ts_ms = timestamp from the exchange or event source , (1) 
+
+ingest_ts_ms = timestamp when the collector received the event . (2) Following multi-venue price-discovery practice [ 11 ], we pair Binance and Polymarket observations inside a bounded millisecond window and compute lead–lag as 
+
+lead_lag_ms = polymarket_source_ts_ms −binance_source_ts_ms . (3) 6Positive values indicate that the Polymarket event timestamp follows the Binance event timestamp; negative values indicate the opposite. Note that 
+
+lead_lag_ms is an event-timing difference between paired observations inside the window, not an econometric price-discovery measure such as Hasbrouck’s information share [ 11 ]; the released pairs are the raw material from which such measures can be computed. Each pair is stored with a quality flag (tight /medium /wide pairing-window band), Binance price, Polymarket bid, market slug, side label, and price delta in basis points. 
+
+5.1 Pairing and Quality Metrics 
+
+The canonical release constructs lag_pairs_ms with a nearest-neighbor rule and alignment window W = 750 ms. Polymarket ticks are processed in recorder order in bounded batches. For each unpaired Polymarket tick, the recorder queries Binance ticks whose source timestamps fall in [tP −W, t P +W ],orders candidates by |tB − tP |, and stores the closest candidate. Ties are broken by deterministic secondary ordering on binance_source_ts_ms , then the Binance tick row id; no random tie breaking is used. The emitted lag is then tP − tB as in Equation (3). The pairing is one-to-one on the Polymarket side and many-to-one on the Binance side: each Polymarket tick is marked paired after a match and is not reused, but a high-rate Binance tick can be the nearest neighbor for multiple Polymarket updates. This is deliberate because lag_pairs_ms is an event-alignment table, not an order-book state reconstruction. The pairing code assigns quality_flag after matching from the realized absolute lag: tight 
+
+for |lead_lag_ms | ≤ 100 ms, medium for ≤ 300 ms, and wide otherwise (within the 750 ms search window). The public v0.4.3-unified split is produced later by merging overlapping snapshot exports and deduplicating table partitions with table-specific keys; for lag_pairs_ms , the dedupe key is ( paired_at_ms , market_slug , side_label , binance_source_ts_ms ,
+
+polymarket_source_ts_ms , polymarket_bid ). Quality flags are therefore computed before unified deduplication and preserved as row attributes. OpenMarket treats the following as first-class dataset quality metrics, consistent with microstructure guidance for decentralized prediction mar-kets [ 6, 22 ]: clock drift, dropped WebSocket messages, duplicate payloads, reconnect gaps, stale order-book state, out-of-order events, and sensitivity to W .
+
+5.2 Clock-Offset Validation 
+
+Equation (3) compares timestamps from two independent venue clocks, so the lead–lag distribution is meaningful only up to their relative offset and drift. With a single collection vantage point the constant component of the venue-clock offset cannot be separated from asymmetric network latency; rather 7than assume it away, we measure what is identifiable (Figure 2; regenerate with analyze_research.py –refresh-clock ). 
+
+Drift bound. Every tick carries both venue and collector timestamps, so per-venue transport delay ingest_ts_ms − source_ts_ms is observable. Its per-day minimum envelope is 99 ms for Binance and 7 ms for Polymarket, and each envelope varies by at most 4 ms and 2 ms respectively across all observed days (Figure 2a). Any relative drift between the venue clocks would move these envelopes; their stability bounds cumulative relative clock drift to ≤6 ms over the entire archive. The lead–lag distribution is therefore not smeared by time-varying clock error; a constant offset can only shift it uniformly. The same diagnostic does not identify the constant offset from a single collector host. The observed minimum-delay envelopes imply a conservative single-vantage ambiguity of roughly ±99 ms for source-clock lead– lag values, so the 16 ms median should be read as an apparent source-clock median rather than an absolute cross-venue latency. 
+
+Synchronization-free causal ordering. To validate cross-venue or-dering without any venue-clock assumption, we detect 15,148 large Binance moves ( ≥5 bps within 1 s) and match 4,272 of them to the first direc-tionally consistent Polymarket UP-token best-bid change ( ≥1 tick) within 2 s. Measured entirely on the collector’s single ingest clock—no cross-venue timestamp comparison involved—the median quote response lag is 347 ms (Figure 2b). This estimate uses only event ordering on the collector clock, so the conclusion that Polymarket quotes follow large Binance moves does not depend on venue-clock offset. We therefore report unconditional lead–lag medians as source-clock quanti-ties with drift bounded to ≤6 ms and an unresolved constant-offset ambiguity of roughly ±99 ms; the causal response result is independent of both. 
+
+5.3 Lead–Lag Timeline (Figure 3) 
+
+Figure 3 illustrates a single matched pair. A Binance trade arrives at source time tB ; a Polymarket book update follows at tP . Ingest times ( ting  
+
+> B
+
+, ting  
+
+> P
+
+)are shown above the axis to separate network delay from exchange-reported ordering. The shaded interval is the alignment window W .Empirical lead–lag distributions on the unified split ( n = 2 , 936 , 031 ;median 16 ms) are reported in Section 9.2 and Figure 5. 80 10 20 30 40 50       
+
+> observed day index
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> per-day min(ingest  − source) [ms]  (a) Min-delay envelopes
+> Binance (med 99 ms)
+> Polymarket (med 7 ms)
+> 0500 1000 1500 2000
+> response lag on collector clock [ms]
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> count
+> (b) Quote response to ≥5 bps moves
+> median = 347 ms
+> Clock-o ff set validation
+
+Figure 2: Clock-offset validation. (a) Per-day minimum transport-delay en-velopes for both venues are flat across the archive, bounding relative clock drift to ≤6 ms. (b) Distribution of Polymarket quote response lags after ≥5 bps Binance moves, measured on the collector’s single clock (synchronization-free). 
+
+alignment window W
+
+time (ms) 
+
+tB
+
+Binance trade 
+
+ting 
+
+> B
+
+tP
+
+Polymarket book 
+
+ting 
+
+> P
+
+∆t = tP − tB
+
+Figure 3: Lead–lag pairing timeline. Source timestamps determine Equa-tion (3) ; ingest timestamps diagnose collector delay separately from cross-venue ordering. 
+
+5.4 Validation Checklist 
+
+Researchers reproducing synchronization results should: 1. verify monotonicity of source_ts_ms within each stream; 2. count duplicate payloads and reconnect gaps; 3. plot lead–lag histograms stratified by day and market; 4. rebuild lag_pairs_ms from raw partitions and compare checksums. 
+
+# 6 Features and Machine Learning 
+
+Feature families include order-book metrics (spread, best bid/ask, microprice, imbalance, depth, book update velocity), price metrics (returns, realized 9volatility, momentum, VWAP deviation, candle shape), technical indicators, and custom short-horizon signals derived from aligned ticks. Features are paired with settlement labels downstream. The repository also preserves exploratory strategy and model prototypes, but the published binary-outcome model uses a Rust pipeline on unified Parquet: 1. export_step3_from_parquet reads v0.4.3-unified tables and emits step3 calibration CSVs (43 features). 2. train_binary_outcome_model performs walk-forward logistic regres-sion by market, applies Platt scaling [20], and writes JSON artifacts. The Polymarket mid prior used as the naive baseline is sampled at the same feature-cutoff timestamp as the model inputs, so the comparison uses identical information timing. Within each walk-forward window, both the logistic model and Platt calibrator are fit only on pre-cutoff training/calibration rows; scored OOS rows are not used for fitting or calibration. On the publication workstation (Apple M5 Max), step3 export of 357,390 rows across 2,251 markets completes in ∼63 s; training (559 walk-forward windows) completes in ∼67 s. Step3 export writes 51% of market_meta 
+
+markets. The coverage audit over 4,450 markets reports 2,251 written, 1,241 with no Polymarket ticks in the export window, 922 with insufficient Binance trades for signal construction, 21 with missing Binance partitions, 14 with no valid order-book snapshots after feature filters, and one tied BTC close that is dropped because the binary label is undefined. For public releases, model binaries are uploaded to Hugging Face Models rather than committed to Git. The canonical v0.2.1/ benchmark is the pooled walk-forward OOS result across 559 windows: AUC 0.8377, Brier 0.165, and ECE 0.026. The same rows give the naive mid prior AUC 0.8405, Brier 0.163, and ECE 0.014, so the model slightly underperforms the market prior. The frozen exported scorer evaluated on the full 357,390-row step3 timeline is retained only as a diagnostic reproducibility number because it includes each window’s training rows (Section 10.4). Simulated positive-EV trading under 1% fees and 0.5% slippage yields −0.116 normalized payoff units per attempted trade. In the simulator, a losing trade loses one staked unit plus fee, while a winning trade earns the contract payoff net of entry price, fee, and slippage. An earlier v0.1/ pilot artifact remains for comparison. Reliability and per-window metrics are regenerated by 
+
+generate_ml_figures.py ; forecast ablations against naive baselines are in Section 10.4. 10 7 Strategy, Backtesting, and Evaluation Frame-work 
+
+7.1 Strategy Archive 
+
+The repository preserves the trading-strategy lineage that motivated the data release, but those iterations are archival context rather than paper claims. They provide reproducibility hooks for simulated execution assumptions and negative-result auditing. The paper uses them only to define the re-leased backtesting interface, fee/slippage assumptions, and model-evaluation metrics; detailed strategy variants remain in the repository archive. Position sizing and simulated execution assumptions are intentionally separated from directional accuracy. Backtests report slippage, fees, assumed fill prices, and market impact assumptions explicitly. 
+
+7.2 Backtesting 
+
+Backtesting processes market windows independently and evaluates entry signals against settled outcomes under documented simulation assumptions (signal gate, simulated fill, settlement, metric aggregation). Preferred vali-dation methods include walk-forward validation, rolling-window evaluation, strict out-of-sample splits, sensitivity analysis over entry windows and thresh-olds, and Monte Carlo resampling of fill and slippage assumptions. Random row splits are discouraged because adjacent high-frequency observations are highly autocorrelated. 
+
+7.3 Evaluation Metrics 
+
+Evaluation includes both predictive and simulated-economic metrics. Eco-nomic metrics are counterfactual diagnostics under explicit fill, fee, and slippage assumptions. 
+
+Predictive metrics. Accuracy, precision, recall, F1, ROC AUC, Brier score, and calibration curves [3]. 
+
+Simulated-economic metrics. Simulated win rate, expectancy, PnL, Sharpe and Sortino ratios (under stated assumptions), maximum draw-down, turnover, average entry price, and documented fill, fee, and slippage assumptions. Calibration is especially important because binary market strategies are sensitive to the difference between predicted probability and market-implied price. 11 Table 1: Version map for citing and reproducing OpenMarket artifacts.               
+
+> Artifact Version Pins Source code v0.5.2 public launch commit, paper scripts, Rust pipeline Dataset unified split v0.4.3-unified deduplicated analytic Parquet timeline Dataset full split v0.2-full per-snapshot archival exports Dataset sample split v0.1-sample quickstart/demo subset Model release v0.2.1/ walk-forward logistic + Platt artifact Model pilot v0.1/ legacy comparison artifact
+
+# 8 Dataset 
+
+The public dataset is hosted on Hugging Face: https://huggingface.co/d atasets/gregyoung14/openmarket-btc-polymarket .
+
+8.1 Release Status 
+
+The frozen release has three dataset splits and two model artifacts: uni-fied v0.4.3-unified (the deduplicated analytic split), full v0.2-full (per-snapshot archive), sample v0.1-sample (quickstart), model v0.2.1/ (canon-ical walk-forward logistic + Platt), and model v0.1/ (pilot comparison). The feature demo split is not a full feature archive; full step3 features are reproducible from unified Parquet. Hugging Face’s indexed/default dataset view may surface a larger ag-gregate row count because it includes non-unified demo and full-archive artifacts; the 727,098,247 headline in this paper refers only to the dedupli-cated unified/ split. The operator archive inventories 202 CDN SQLite snapshots published 2026-03-14–2026-07-01. The event data inside those snapshots covers 54 ob-served Polymarket days between 2026-02-12 and 2026-05-15; later snapshots are archival checkpoints of the same recorder state and add no new event days (Section 9.1). Five formerly-partial exports were recovered with sqlite3 .recover and re-exported before the final unified rebuild; queue metadata reports 202 published-clean , 0 published-partial , and 0 corrupt .The unified split merges overlapping full/ exports with scripts/da tasets/merge_partitions.py , removing ∼21% duplicate rows. This duplicate rate is expected: each full/ snapshot is a point-in-time export of recorder state, so adjacent snapshots intentionally overlap in historical rows. New snapshots were published as archival checkpoints of the current recorder database for reproducibility and recovery, rather than as append-only deltas; this preserves independently valid per-snapshot exports at the cost of duplicate historical rows in the raw union. The unified split deduplicates those overlapping exports by table-specific keys and timestamps rather than treating them as new events. All splits are validated with scripts/hf/val 
+
+12 idate_sample_split.py . Empirical statistics are regenerated from on-disk Parquet via analyze_unified.py (Section 11). Core table schemas are documented in the repository. Processed step3 features for ML are exported from unified Parquet ( step3-parquet-export )rather than shipped as a full Hugging Face split. 
+
+# 9 Experimental Characterization 
+
+We characterize the published v0.4.3-unified Hugging Face split with the paper analysis scripts on local Parquet and model artifacts. Statis-tics below are computed from on-disk Parquet metadata and a full scan of lag_pairs_ms (release tag v0.5.2). These results describe what the archival corpus contains ; microstructure findings and forecast bench-marks are in Section 10. 
+
+9.1 Dataset Scale 
+
+The unified split contains 727,098,247 rows across all exported tables (Fig-ure 4), occupying 8.69 GiB on disk. The operator archive comprises 202 SQLite snapshots published from 2026-03-14 to 2026-07-01 (a 109-day pub-lication window). The event data inside those snapshots spans 2026-02-12 to 2026-05-15 (93 calendar days), with event data on 54 observed days for Polymarket and 57 for Binance; coverage is uneven, with multi-day gaps, and no new event data was recorded after 2026-05-15 even though snapshot checkpoints continued to be published until 2026-07-01. After deduplication across overlapping snapshot exports, the unified timeline removes ∼21% du-plicate rows relative to the raw full/ union (916M input rows → 727,098,247 output rows). Most rows are Polymarket ticks (605.6M), Binance trades (62.3M), Binance millisecond ticks (55.8M), and explicit lag pairs (2.9M); candle tables add 498,525 rows and have narrower coverage because only completed intervals are written. The first five bars are the core event and metadata tables; derived candle tables account for the remaining 498,525 rows in the headline total. Counts and part numbers are tied to the frozen v0.4.3-unified manifest after recovery and final deduplication; earlier draft tables generated from pre-recovery subsets are not directly comparable. Export quality: all 202 snapshots are published-clean after sqlite3 recovery of formerly-partial exports; per-snapshot export reports document any table-level gaps. 
+
+9.2 Synchronization Empirics 
+
+Lead–lag pairing produces 2,936,031 matched event pairs in the unified split. Figure 5 shows the full distribution; summary statistics are: 13 polymarket  
+
+> ticks
+> ms
+> binance
+> trades
+> binance
+> ticks
+> ms
+> lag
+> pairs
+> ms
+> market
+> meta
+> 10 4
+> 10 5
+> 10 6
+> 10 7
+> 10 8
+> 10 9
+> rows (log scale)
+> 605.61M
+> 62.26M 55.79M
+> 2.94M
+> 4K
+> Uni fi ed Split: Core Table Row Counts
+
+Figure 4: Unified split table row counts (log scale). 
+
+• median lead–lag: 16 ms 
+
+• 5th / 95th percentiles: -186 / 316 ms Positive values indicate Polymarket source timestamps following Binance source timestamps (Equation 3). On a 500k-pair sample, the recorder’s pairing-window quality flags split into 67.6% tight (|lag | ≤ 100 ms), 27.0% 
+
+medium (≤ 300 ms), and 5.5% wide (> 300 ms) pairs, so filtering to tight 
+
+pairs retains roughly two-thirds of the table. The long tails motivate treating alignment-window sensitivity and clock drift as first-class quality metrics; Section 5.2 bounds relative clock drift empirically. 
+
+9.3 Reproducibility Benchmarks 
+
+Environment-specific measurements on the publication workstation (Apple M5 Max, 64 GB RAM; rustc 1.94.0 (4a4ef493e 2026-03-02) (Homebrew)) are recorded in assets/stats/benchmarks.json . They include HF sample validation (1.55 s / 9,352 rows), unified Parquet metadata scan (8.69 GiB in 0.060 s), lag_pairs_ms load (2,936,031 rows in 0.013 s), and the released staging backtest (0.09 s across 89 markets). These are local I/O measurements, not cold-download benchmarks. 
+
+# 10 Microstructure Findings 
+
+This section reports what we learn from the corpus , not only what we built. Regenerate via analyze_research.py and analyze_unified.py 
+
+(Section 11). 14 −800 −600 −400 −200 0 200 400 600 800 
+
+> lead_lag_ms
+> 0
+> 50000
+> 100000
+> 150000
+> 200000
+> 250000
+> 300000
+> count
+> Lead--Lag Distribution (uni fi ed, n=2,936,031)
+> median = 16 ms
+> p5/p95 = -186/316 ms
+
+Figure 5: Empirical lead_lag_ms distribution from the unified 
+
+lag_pairs_ms table ( n = 2 , 936 , 031 ): the median is compact, but the distribution has heavy tails. 
+
+10.1 Scale and Coverage 
+
+The unified archive contains 727,098,247 rows with event data on 54 observed Polymarket days between 2026-02-12 and 2026-05-15 (Section 9.1). Polymar-ket ticks dominate volume (605.6M rows), enabling event studies at scales impractical with sample-only public drops. After deduplicating overlapping snapshot exports, ∼21% of raw full/ rows collapse—a methodological point for anyone merging recorder archives without explicit keys. 
+
+10.2 Lead–Lag and Cross-Venue Disagreement 
+
+Lead–lag pairs exhibit a compact apparent median (16 ms on venue source clocks) but heavy tails (5th/95th: -186 / 316 ms; Figure 5). Section 5.2 bounds relative clock drift to ≤6 ms, but leaves an unresolved single-vantage constant-offset ambiguity of roughly ±99 ms. The contemporaneous pairing median measures continuous cross-venue flow; reactions to large moves are slower—Polymarket quotes take a median ∼347 ms to move one tick after a ≥5 bps Binance move (Section 5.2). Stratifying by |price_delta_bps |
+
+quintiles shows stable median lead–lag (16–19 ms) across disagreement levels (Figure 6a): cross-venue timing does not materially shift with contempora-neous basis-point divergence. Disagreement-regime terciles show the same pattern (Figure 6b). Daily event volumes generated by analyze_unified.py show uneven archive coverage without a simple “high volume ⇒ faster cross-venue adjust-ment” rule. Lead–lag magnitude is uncorrelated with |price_delta_bps |
+
+15 Table 2: Forecast benchmarks on step3 rows. Pooled OOS rows are the primary comparison against the market prior. Diagnostic full-timeline rows include training rows from each walk-forward window and are reported only for reproducibility. Lower is better for Brier, ECE, and log loss.                                             
+
+> Model Split AUC Brier ECE Log loss μs/row Naive mid prior pooled OOS 0.8405 0.163 0.014 0.485 –Logistic + Platt pooled OOS 0.8377 0.165 0.026 0.495 –Naive mid prior diagnostic full 0.8401 0.163 0.014 0.486 –Logistic + Platt diagnostic full 0.8415 0.163 0.027 0.489 0.091
+> drift_prob_up only diagnostic full 0.7725 0.218 0.145 0.792 –
+> imbalance_60s (sigmoid) diagnostic full 0.5863 0.246 0.031 0.685 –
+
+(Spearman ρ ≈ 0.00 on 500k pairs), so lag delay alone does not predict contemporaneous mispricing magnitude. 
+
+10.3 Polymarket Spread Stylized Facts 
+
+Top-of-book spreads on UP/DOWN tokens concentrate at one tick wide (median 0.01 probability points; 95th percentile 0.02; Table 3). Tight spreads imply that naive backtests using mid prices can overstate executable edge— consistent with negative simulated PnL under fees and slippage (Section 6). 
+
+10.4 Forecast Benchmarks and Ablations 
+
+On 357,390 step3 rows exported from unified Parquet, we score the frozen 
+
+v0.2.1 artifact and simple forecast baselines (Table 2, Figure 7). The naive mid prior is sampled at the same feature-cutoff timestamp as the model inputs and evaluated on exactly the same scored rows. All metrics are computed by analyze_research.py ; expected calibration error (ECE) uses 10 equal-width probability bins [9]. 
+
+Effect size. On the 355,814 rows the trainer scored strictly out-of-sample, the naive prior attains AUC 0.8405 versus the model’s pooled OOS AUC of 0.8377 (Brier 0.163 vs. 0.165; ECE 0.014 vs. 0.026): the logistic model does not beat, and slightly underperforms, market-implied probability. For diagnostic context only, the full timeline shows logistic v0.2.1 above the naive mid prior by ∆AUC = 0 .0014 (paired market-block bootstrap over 2,251 market blocks, 1,000 resamples, 95% CI [0 .0005 , 0.0023] ; one-sided p = 0 .001 ,
+
+n = 357 ,390 ), but that comparison includes rows each walk-forward window was trained on while the naive prior involves no training. The in-sample ranking lift therefore does not survive walk-forward evaluation. 
+
+Spread and reliability. At one-tick spreads ( ≤ 0.011 ), Brier is ≈ 0.162 ;at wider quotes ( ≥ 0.015 ), Brier rises to ≈ 0.185 . Realized-volatility terciles show a parallel gradient (0.159 high-vol vs. 0.164 low-vol): forecasts are more reliable when underlying BTC activity is elevated and degrade when 16 Q1 Q2 Q3 Q4 Q5       
+
+> |price_delta_bps| quintile
+> 0
+> 5
+> 10
+> 15
+> median lead_lag_ms  16 17
+> 19 19
+> 16
+> (a) By disagreement quintile
+> low mid high
+> disagreement regime (terciles)
+> 17 18 17
+> (b) By disagreement regime
+> Lead--Lag vs Cross-Venue Disagreement
+
+Figure 6: Median lead–lag by cross-venue disagreement. Across both 
+
+|price_delta_bps | quintiles and disagreement-regime terciles, median tim-ing remains in a narrow 16–19 ms band ( lag_pairs_ms , 500k subsample). Table 3: Polymarket top-of-book spread summary (200k tick subsample): most observations are one tick wide. 
+
+Statistic Value Median 0.01 p90 0.01 p95 0.02 p99 0.03 Share at one tick ( ≤ 0.011 ) 91.9% Share in two-tick band ( (0 .011 , 0.021] ) 6.0% 
+
+Polymarket quotes widen. Trade-direction features should also be treated as noisy public-feed measurements: Dubach [ 6 ] reports only about 59% reliability for public-feed trade-direction inference, and our side labels and 
+
+imbalance_60s inherit that limitation. 
+
+Takeaway. Multivariate features add at most a small diagnostic full-timeline ranking lift over the Polymarket mid that does not survive walk-forward evaluation; drift alone is weaker; raw order-flow imbalance fails without context; and the strongest published baseline remains economically dominated by fees, spread, and calibration error. These are diagnostic baselines the infrastructure enables at 357k-row scale in minutes on a laptop. 17 Naive mid prior      
+
+> Logistic v0.2.1
+> 0.82
+> 0.83
+> 0.84
+> 0.85
+> ROC AUC  0.8405
+> 0.8377
+> (a) Pooled out-of-sample
+> 0.5 0.6 0.7 0.8 0.9 1.0
+> ROC AUC
+> Naive mid prior
+> Logistic v0.2.1
+> Drift only
+> OFI (sigmoid)
+> 0.840
+> 0.841
+> 0.773
+> 0.586
+> (b) Diagnostic full timeline
+> Forecast Benchmarks
+
+Figure 7: Forecast benchmark ROC AUC on step3 rows. Pooled out-of-sample evaluation is primary and shows the logistic model below the naive mid prior; full-timeline results are diagnostic only. 
+
+# 11 Reproducibility 
+
+OpenMarket treats reproducibility as a first-class systems requirement. Any benchmark, backtest, or paper result should report source commit, dataset version, model version, config file, command, random seed, CPU, RAM, storage type, OS, Rust version, and Python version. The reposi-tory ships three reproduction paths: cargo check –workspace for build verification, scripts/hf/validate_sample_split.py for the fast Hugging Face sample split, and datasets/download.py –split unified plus the 
+
+step3-parquet-export and binary-outcome-trainer crates for full model reproduction. Paper statistics and figures are regenerated by paper/scri pts/compile.sh ; the clock-offset scan is cached in paper/assets/sta ts/clock_validation.json and refreshed with analyze_research.py –refresh-clock . Legacy operator SQLite snapshots remain available for migration only. 
+
+# 12 Discussion 
+
+12.1 What This Enables That Prior Work Does Not 
+
+Dubach [ 6] establishes Polymarket microstructure stylized facts on tick data; Saguillo et al. [ 23 ] quantify arbitrage gaps. Neither provides a reproducible 
+
+Binance–Polymarket timeline with published pairing metadata and walk-forward calibration baselines. OpenMarket lowers the cost of questions such as: 
+
+• How stable is lead–lag across volatility/disagreement regimes? 
+
+• Does Polymarket mid probability subsume external drift signals? 18 • How sensitive are calibration metrics to fees, spreads, and pairing window W ?Section 10 gives initial answers; the tooling is the enduring contribution. 
+
+12.2 Artifact Scope 
+
+This work is best read as a data-and-methods release with empirical base-lines. Its primary claim is reproducible public infrastructure: a synchronized corpus, pairing metadata, validation commands, and baseline diagnostics that make future microstructure and forecasting comparisons easier to audit. Its primary empirical result is negative: on this corpus, a walk-forward multivariate model does not beat the market’s own mid out-of-sample, and simulated trading is cost-dominated. 
+
+12.3 Domain Generalizability 
+
+BTC 15-minute markets are a high-activity microcosm of Polymarket CLOB trading: useful for synchronization methodology and short-horizon forecast-ing baselines, but not representative of slower political or macro markets. Extensions to other assets should preserve source/ingest timestamps and publish pairing metadata the way this release does. 
+
+12.4 Operational and Regulatory Context 
+
+Polygon settlement latency, oracle definition risk, and U.S. regulatory un-certainty affect economic interpretation but are outside our artifact. We document clock-offset diagnostics and WebSocket gaps; users should not treat top-of-book backtests as executable PnL without explicit queue and fee models. 
+
+12.5 Data Availability and Ethics 
+
+The public release comprises the GitHub repository ( https://github.c om/gregyoung14/openmarket , tag v0.5.2, Apache 2.0), the Hugging Face dataset gregyoung14/openmarket-btc-polymarket (v0.4.3-unified ,
+
+v0.2-full , v0.1-sample ) and models gregyoung14/openmarket-models 
+
+(v0.2.1/ , v0.1/ ), mdBook and Rust API documentation, a Jupyter quick-start ( notebooks/quickstart.ipynb ), Docker reproducibility scaffolding, a citation guide ( CITATION.md ), and the sanitized operational archive (research/operational/ ). The frozen source tag v0.5.2 is the immutable public-launch source anchor; the GitHub release and tag page record the exact commit object. The archive inventory contains 202 snapshots (46.21 GB compressed), and the generated characterization manifest is shipped as paper/assets/stats/characterization.json . Until a 19 DOI/Zenodo record is assigned, derivative work should cite the Hugging Face dataset/model revision hashes and the frozen source tag; a formal archival submission should add that DOI alongside these version pins. The corpus contains only public market data (order books, trades, metadata) collected from open APIs—no user identities or private positions. Dataset and model cards document licenses and version pins. Cite the dataset version and source tag (v0.5.2) in derivative work. 
+
+12.6 Archive Status and Extensions 
+
+OpenMarket completed archival closeout on 2026-07-01. Active data collec-tion and model maintenance have ended; source tag v0.5.2 freezes the public research record. Community extensions that the frozen artifacts support include additional exchanges and assets, Polymarket non-crypto markets, multi-vantage collection to resolve the constant clock-offset component (Sec-tion 5.2), richer order-book reconstruction, stronger model baselines (tree ensembles, neural sequence models), improved execution simulation, and a public benchmark leaderboard—none of which imply ongoing maintenance. 
+
+# 13 Limitations 
+
+Domain scope. BTC 15-minute Polymarket binaries are a niche but liquid regime: high tick rate, tight spreads, and volatile underlying spot. Stylized facts and benchmarks here may not transfer to election markets, long-dated events, or illiquid books without re-collection and re-calibration. In par-ticular, political and macro markets often have lower tick rates, wider and more intermittent books, discrete news shocks, ambiguous or delayed settle-ment mechanics, and no single liquid external reference stream analogous to BTC/USDT. Those differences can break both the synchronization assump-tions (dense cross-venue observations inside millisecond windows) and the forecasting features calibrated for short-horizon crypto price discovery. 
+
+Data and methods. WebSocket outages can create gaps; relative venue clock drift is bounded empirically ( ≤6 ms, Section 5.2) but source-clock lead–lag retains a roughly ±99 ms constant-offset ambiguity from a single collection vantage point; resolving that component would require multi-vantage collection; top-of-book backtests may overstate execution quality; mishandled settlement labels can leak information; and step3 export covers 2,251 of 4,450 market_meta markets for the reasons audited in Section 6. Full-archive features/ Parquet is not on Hugging Face (run export_step3 _from_parquet locally). 
+
+Model comparisons. The repository contains legacy XGBoost, Light-GBM, stacking, and SHAP prototypes, but these were exploratory strategy artifacts, not frozen benchmarks on the unified v0.4.3 step3 export. The 20 main paper therefore reports only baselines regenerated from the archived re-lease. Direct tree-model, neural sequence, and market-by-market benchmark suites remain future work. 
+
+Live trading. Simulated outcomes are sensitive to regime and fee assumptions; live execution adds latency, queue position, partial fills, and regulatory uncertainty not modeled in this artifact. The operational archive is included only as sanitized audit context; it is not a recommendation to run live trading infrastructure and should not be interpreted as a profitability claim. 
+
+# 14 Conclusion 
+
+We presented OpenMarket, an open-source pipeline and, to our knowledge, the first public millisecond-level Polymarket BTC / Binance BTC-USDT paired corpus with explicit pairing metadata. The release includes 727,098,247 deduplicated rows, 2,936,031 lead–lag pairs, reproducible Rust exporters and trainers, and Hugging Face artifacts ( v0.4.3-unified , v0.2.1/ model). Initial analyses support five narrow claims: BTC 15-minute books are usually one tick wide at the top of book; source-clock lead–lag has a compact median and heavy tails; large Binance moves precede Polymarket quote responses by hundreds of milliseconds on the collector clock; lead–lag timing changes little across disagreement regimes; and multivariate features slightly underperform the naive mid prior out-of-sample. These are null and descrip-tive results rather than trading-alpha claims. We invite researchers to use the corpus for microstructure and forecasting studies, extend the tooling to new venues, and cite the dataset version used in each experiment. 
+
+# Funding and Competing Interests 
+
+This project was produced as an independent open-source release. The author declares no external funding and no competing interests. 
+
+# References 
+
+[1] Joyce E Berg, Forrest D Nelson, and Thomas A Rietz. Prediction markets as a research tool. The Economists’ Voice , 5(1):1–4, 2008. doi: 10.2202/1553-3832.1277. [2] Morten Brandvold, Peter Molnár, Kristian Vagstad, and Ole Chris-tian Andreas Valstad. Price discovery on Bitcoin exchanges. Journal of International Financial Markets, Institutions and Money , 36:18–35, 2015. doi: 10.1016/j.intfin.2015.02.010. 21 [3] Glenn W Brier. Verification of forecasts expressed in terms of probability. 
+
+Monthly Weather Review , 78(1):1–3, 1950. doi: 10.1175/1520-0493(1950 )078<0001:VOFEIT>2.0.CO;2. [4] Pu Cheng, Juncheng Liu, and Yunshen Long. PolyBench: Benchmarking LLM forecasting and trading capabilities on live prediction market data. 
+
+arXiv preprint arXiv:2604.14199 , 2026. doi: 10.48550/arXiv.2604.14199. [5] Rama Cont, Arseniy Kukanov, and Sasha Stoikov. The price impact of order book events. Journal of Financial Econometrics , 12(1):47–88, 2014. doi: 10.1093/jjfinec/nbt003. [6] Philipp D Dubach. The anatomy of a decentralized prediction market: Microstructure evidence from the Polymarket order book. arXiv preprint arXiv:2604.24366 , 2026. doi: 10.48550/arXiv.2604.24366. [7] Commission Delegated Regulation Supplementing Directive 2014/65/EU with Regard to Regulatory Technical Standards for the Level of Accuracy of Business Clocks . European Commission, 2016. RTS 25 annex. [8] Martin D Gould, Mason A Porter, Stacy Williams, Mark McDonald, Daniel J Fenn, and Sam D Howison. Limit order books. Quantitative Finance , 13(11):1709–1742, 2013. doi: 10.1080/14697688.2013.803148. [9] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q Weinberger. On calibration of modern neural networks. In Proceedings of the 34th International Conference on Machine Learning , volume 70 of Proceedings of Machine Learning Research , pages 1321–1330, 2017. [10] Robin Hanson. Combinatorial information market design. Information Systems Frontiers , 5(1):107–119, 2003. doi: 10.1023/A:1022055808304. [11] Joel Hasbrouck. One security, many markets: Determining the contri-butions to price discovery. Journal of Finance , 50(4):1175–1199, 1995. doi: 10.1111/j.1540-6261.1995.tb04052.x. [12] Ruihong Huang and Tomas Polak. Lobster: Limit order book recon-struction system. Technical report, Humboldt University of Berlin, 2011. [13] IEEE Standard for a Precision Clock Synchronization Protocol for Net-worked Measurement and Control Systems . IEEE, 2019. [14] Huaiyu Jia, Luofeng Zhou, Wentao Zhang, Lin William Cong, Siguang Li, and Shuo Sun. Unlocking the forecasting economy: A suite of datasets for the full lifecycle of prediction market: Experiments & analysis. arXiv preprint arXiv:2604.20421 , 2026. doi: 10.48550/arXiv.2604.20421. 22 [15] Ananth Madhavan. Market microstructure: A survey. Journal of Financial Markets , 3(3):205–258, 2000. doi: 10.1016/S1386-4181(00)000 07-0. [16] Igor Makarov and Antoinette Schoar. Trading and arbitrage in cryp-tocurrency markets. Journal of Financial Economics , 135(2):293–319, 2020. doi: 10.1016/j.jfineco.2019.07.001. [17] David L Mills, Jim Martin, Jack Burbank, and William Kasch. Network time protocol version 4: Protocol and algorithms specification. RFC 5905, Internet Engineering Task Force, 2010. [18] Adamantios Ntakaris, Martin Magris, Juho Kanniainen, Moncef Gab-bouj, and Alexandros Iosifidis. Benchmark dataset for mid-price fore-casting of limit order book data with machine learning methods. Journal of Forecasting , 37(8):852–866, 2018. doi: 10.1002/for.2543. [19] Maureen O’Hara. High frequency market microstructure. Journal of Financial Economics , 116(2):257–270, 2015. doi: 10.1016/j.jfineco.2014 .10.006. [20] John C Platt. Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods. In Advances in Large Margin Classifiers , volume 10, pages 61–74. MIT Press, 1999. [21] Boka Qin and Rui Yang. Polymarket-v1 database. arXiv preprint arXiv:2606.04217 , 2026. doi: 10.48550/arXiv.2606.04217. [22] Nahid Rahman, Joseph Al-Chami, and Jeremy Clark. SoK: Market microstructure for decentralized prediction markets (DePMs). arXiv preprint arXiv:2510.15612 , 2025. doi: 10.48550/arXiv.2510.15612. [23] Oriol Saguillo, Vahid Ghafouri, Lucianna Kiffer, and Guillermo Suarez-Tangil. Unravelling the probabilistic forest: Arbitrage in prediction markets. arXiv preprint arXiv:2508.03474 , 2025. doi: 10.48550/arXiv.2 508.03474. [24] Justin Wolfers and Eric Zitzewitz. Prediction markets. Journal of Economic Perspectives , 18(2):107–126, 2004. doi: 10.1257/0895330041 371321. [25] Zihao Zhang, Stefan Zohren, and Stephen Roberts. DeepLOB: Deep convolutional neural networks for limit order books. IEEE Transactions on Signal Processing , 67(11):3001–3012, 2019. doi: 10.1109/TSP.2019.2 907260. 23
