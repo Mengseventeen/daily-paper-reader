@@ -1,0 +1,1839 @@
+Title: Low-Rank Dependence Decomposition via Accelerated Symmetric Non-negative Matrix Factorization
+
+URL Source: https://arxiv.org/pdf/2607.24518v1
+
+Published Time: Tue, 28 Jul 2026 02:22:52 GMT
+
+Number of Pages: 40
+
+Markdown Content:
+# Low-Rank Dependence Decomposition via Accelerated Symmetric Non-negative Matrix Factorization 
+
+Lavinia Ghita ∗
+
+, Dhruv Desai, Jake Goldberg, Roman Yokunda Enzmann 
+
+# NVIDIA 
+
+Abstract 
+
+Symmetric non-negative matrix factorization (SymNMF) recovers latent group structure from a dependence matrix, but its dense, quadratic-memory objective has confined prior work to moderate sizes. We present a large-scale GPU study of seven algorithm families (over 30 configurations) on absolute Pearson correlation and tail pairwise dependence matrices from Extreme Value Theory, two proxies for empirical risk-factor estimation on large portfolios. A trace-identity reformu-lation eliminates all n × n intermediates, so a single GPU reaches n ≈ 10 5 and multi-node distribution scales to n = 10 6 and beyond. Under a two-phase pro-tocol, eleven methods converge at moderate scale; six remain efficient enough at 
+
+n = 10 5 (five AdaGrad-family plus ADMM), and five AdaGrad-family methods still converge at n = 10 6: AdaGrad, RMSprop, and three we introduce (Piece-wise AdaGrad, Row-Stochastic SVRG, Block-SVRG AdaptGrow). At n = 10 6
+
+the fastest solver tracks the matrix spectrum: Block-SVRG AdaptGrow wins on the flat, ill-conditioned tail-dependence spectrum, where its lower per-iteration cost decides a long factorization, and full-batch AdaGrad wins on the dominant-low-rank correlation spectrum, where the run is short. We also benchmark spher-ical K-means as a hard-label baseline: cheaper when angular cluster structure is present, yet provably degenerate once the matrix collapses toward a single common factor, where the soft factorization remains necessary. 
+
+# 1 Introduction 
+
+Given a symmetric matrix S ∈ Rn×n 
+
+> +
+
+, symmetric non-negative matrix factorization (SymNMF) seeks H ∈ Rn×k 
+
+> +
+
+with k ≪ n such that S ≈ HH ⊤, revealing latent groups whose members share common dependence structure; H serves as both a soft clustering and a learned embedding. We study two input types: absolute Pearson correlation matrices, capturing dependence across the full distribution, and tail pairwise dependence matrices (TPDM) [1], grounded in Extreme Value Theory [2, 3], capturing dependence conditional on extreme events. In financial risk, such factor models are a core tool: correlation-based factors summarize broad market dynamics, while TPDM-based factors isolate the co-dependencies that drive systemic losses. The same pair also spans 
+
+> ∗
+
+Correspondence to lghita@nvidia.com 
+
+1arXiv:2607.24518v1 [cs.LG] 27 Jul 2026 complementary spectra for the solver study, from correlation matrices with a clean signal–noise eigenvalue gap to tail matrices whose mass concentrates in a near-dominant common factor, so comparisons are not tied to a single landscape (Section 4.2). Realistic portfolios span thousands to millions of instruments, so both need a factorization that scales. Although SymNMF is well-established as a factorization and clustering problem [4, 5], practical deployment at scale faces three gaps. First, there is no systematic comparison of SymNMF solver families on realistic inputs with controlled ground truth, and the O(n2) memory of the dense objective has kept prior work at moderate sizes. Second, the interaction between constraint handling (projection vs. softplus) and adaptive optimizers is unexplored. Third, methods that work at moderate scale still struggle on the long runs that large-n SymNMF requires: adaptive steps either forget useful history or saturate as accumulators grow. The paper addresses each gap and yields a recommendation: which solver to use for a given input type and scale. First, we present a systematic GPU evaluation of seven algorithm families (over 30 configurations) on correlation and TPDM inputs from n = 10 2 to 10 6. A trace-identity reformulation eliminates all n × n intermediates, so a single GPU handles n up to ∼10 5 and multi-node distribution scales to n = 10 6 and beyond. At large scale a small set of adaptive first-order methods dominates the reliability–efficiency frontier, with the fastest depending on the matrix type (Section 5.3). Second, we introduce softplus reparameterization of the non-negativity constraint and characterize when it helps: it aids quasi-Newton at small scale but corrupts long-memory adaptive accumulators as n grows, so the large-scale campaign runs in projected space. Third, motivated by that tension, we use diagonal AdaGrad [6], whose full-history accumulator suits SymNMF’s stationary objective but saturates on long runs, and propose three empirical extensions. Piecewise AdaGrad resets the accumulator on objective stagnation and recalibrates per entry to the current gradient scale; Row-Stochastic SVRG and Block-SVRG AdaptGrow adapt variance reduction and adaptive batching to SymNMF to cut per-iteration cost while retaining universal convergence (Sec-tion 5.1). Additionally, we connect orthogonality-constrained SymNMF to spherical K-means [7, 5] and apply it on the rows of S as the practical discrete baseline when only cluster assignments are needed. At scale it is markedly cheaper when angular structure is present, but provably degenerate under a dominant common factor, where soft factorization remains necessary. The remainder is organized as follows: Section 2 formulates the SymNMF problem and surveys solver families; Section 3 constructs the two input types (correlation and TPDM) and their shared low-rank structure; Section 4 details the methodology; Section 5 presents Phase 1 ( n ≤ 10 4) and Phase 2 ( n ≥ 10 5) results; Section 6 covers hard clustering alternatives; Section 7 reviews related work; Section 8 concludes. Proofs and supplementary material are in the Appendix. 
+
+# 2 Symmetric Non-negative Matrix Factorization 
+
+This section formulates the factorization and the solvers we benchmark: the objective and identi-fiability below, a memory-efficient loss in Section 2.1, seven algorithm families in Section 2.2, and projection versus softplus in Section 2.3. Symmetric non-negative matrix factorization (SymNMF) [4, 5] specializes NMF [8, 9] to the symmetric case. Given an n×n symmetric, entrywise non-negative dependence matrix S (Section 3), we seek min  
+
+> H≥0
+
+f (H), f (H) = S − HH ⊤ 2 
+
+> F
+
+, (1) where H ∈ Rn×k 
+
+> +
+
+with k ≪ n. Figure 1 illustrates the decomposition for a small example. 2100 × 100 
+
+> S
+> 100 × 10
+> H
+> 10 × 100
+> H
+> 100 × 100
+> HH
+
+× =
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Entry value
+
+Figure 1: SymNMF on a 100 × 100 benchmark dependence matrix ( k = 10). Left: input S; right: reconstruction HH ⊤ via H ∈ R100 ×10 + . The block structure of S is recovered in the columns of H
+
+(relative Frobenius residual in this example ∥S − HH ⊤∥F /∥S∥F = 1 .6%). 
+
+Identifiability. The SymNMF factorization is not unique: if H∗ is a solution, then so is H∗Π for any k × k permutation matrix Π, since ( H∗Π)( H∗Π) ⊤ = H∗ΠΠ ⊤H∗⊤ = H∗H∗⊤ . In the uncon-strained case S = BB ⊤, B is determined only up to right-multiplication by an orthogonal matrix 
+
+Q; non-negativity H ≥ 0 removes this continuous rotational ambiguity and leaves only discrete col-umn permutation [5, 10]. Under mild separability conditions on S (a “sufficiently scattered” factor structure), the non-negative rank-k factorization is essentially unique up to that permutation [10]. Unlike asymmetric NMF, there is no diagonal-scaling freedom: H 7 → H diag( c) alters HH ⊤.
+
+# 2.1 Memory-Efficient Loss Reformulation 
+
+A naive implementation forms the n × n residual S − HH ⊤ explicitly; including intermediate buffers, this requires ∼ 5 dense n × n matrices ( S, the product HH ⊤, the residual, and backward-pass temporaries; 20 n2 bytes in fp32), whereas the problem intrinsically stores only S itself and the n × k factor ( n2 + nk entries). We reformulate f by expanding the squared Frobenius norm via the trace identity: 
+
+∥S − HH ⊤∥2 
+
+> F
+
+= ∥S∥2 
+
+> F
+
+− 2 tr( H⊤SH ) + ∥H⊤H∥2 
+
+> F
+
+. (2) All intermediates in (2) and ∇H f are at most n × k or k × k. The gradient is 
+
+∇H f = 4  H(H⊤H) − SH ,
+
+evaluated without n × n temporaries: H(H⊤H) is formed right-to-left via a k × k then an n × k
+
+product. Gradient-based methods use ∇H f directly; multiplicative updates reuse SH and H(H⊤H)as a ratio. The alternating direction method of multipliers (ADMM) solves a k × k linear system and never forms ∇H f (Appendix C). Table 1: Peak memory and single-GPU capacity of the naive versus trace-reformulated objective (fp32). Removing all n × n intermediates roughly doubles the largest feasible n.
+
+Implementation Peak memory Max n (80 GB) Max n (192 GB) 
+
+Naive ( n×n residual) ∼20 n2 B ∼60 ,000 ∼95 ,000 Reformulated (trace) ∼4 n2 B ∼130 ,000 ∼210 ,000 
+
+3This purely algebraic change approximately doubles the maximum n on a single GPU (Table 1). The reformulation is applied uniformly across all solvers. 
+
+Numerical consideration. When the normalized squared error Et = ∥S − HH ⊤∥2 
+
+> F
+
+/∥S∥2 
+
+> F
+
+is small, the three terms in (2) are each of size ≈ ∥ S∥2 
+
+> F
+
+and nearly cancel, amplifying rounding error. The relative error in the computed loss scales as ∼ 2ε/E t, where ε ≈ 1.2 × 10 −7 is fp32 machine epsilon. At our target Et ∼ 10 −4 this is only ∼ 0.2%, negligible for algorithm comparison (fp64 accumulation would matter only at tighter targets). The effect is worst in the near-exact regime (TPDM at n = 10 6, where Et → 0), and the loss itself becomes precision-limited. We therefore certify convergence with the projected-gradient gate of Section 4.1, not the loss value. Half-precision formats (fp16, bf16, ε ∼ 10 −3) would make the cancellation comparable to Et itself at 10 −4, rendering the loss uninformative; whether fp32 accumulation of the three trace terms could rescue an fp16/bf16 O(n2k) GEMM is left open. The reported experiments run in fp32; as a check we also ran the same solves with TF32 Tensor-Core multiplies (10-bit mantissa, fp32 accumulate) and obtained unchanged converged Et (Section 4.3). 
+
+# 2.2 Algorithm Families 
+
+We evaluate seven algorithm families under three paradigms for min H≥0 ∥S − HH ⊤∥2 
+
+> F
+
+:
+
+(I) Gradient projection. Compute ∇H f and enforce H ≥ 0 by clamp projection or softplus reparameterization (Section 2.3). Families 2, 3, and 5 span first-order, adaptive, and second-order gradient information. 
+
+(II) Mirror descent. Replace Euclidean geometry with a negative-entropy Bregman divergence so non-negativity is intrinsic to the mirror map. Family 1 comprises multiplicative updates (MU), exponentiated gradient, and trace-norm regularized MU. 
+
+(III) Lagrangian relaxation / splitting. Decouple bilinearity by variable splitting or block-coordinate subproblems. Families 4 and 6 cover block coordinate descent (BCD), the alternat-ing direction method of multipliers (ADMM), and a randomized surrogate. Family 7 deep-unfolds an MU-like iteration end-to-end. In total we obtain over 30 solver config-urations and over 100 hyperparameter runs; update rules and costs are in Appendix C. Table 2 summarizes the families, detailed next. 1
+
+The objective f is quartic in the entries of H and globally non-convex. The two-factor surrogate 
+
+∥S − HW ⊤∥2 
+
+> F
+
+is biconvex in ( H, W ): with either factor fixed, the other subproblem is convex least squares, and SymNMF is recovered by the coupling W = H. Block-coordinate methods (Family 4) and ADMM (Family 6) exploit this lifting, ADMM enforcing W = H by an augmented Lagrangian at the cost of slow, coupling-limited convergence [11]. Adaptive methods (Family 3) stay with the single-factor objective. All first-order methods are built from the products SH and H(H⊤H) of Section 2.1, at cost O(n2k + nk 2) per iteration with no n × n intermediate. 
+
+2.2.1 Family 1: Multiplicative / Mirror Descent. The dampened MU rule of [12] updates 
+
+H via element-wise scaling: 
+
+H ← 12 H ⊙  1 + SH ⊘  H(H⊤H) + ϵ , (3)  
+
+> 1As of 2026, no mainstream GPU library provides GPU-accelerated SymNMF; we implement all solvers in Py-Torch, calling cuBLAS via torch.linalg , and the hard-clustering baseline (Section 6) in the same framework.
+
+4Table 2: Solver families. Update rules and costs: Appendix C.                                   
+
+> #Family Methods Role §
+> 1Multiplicative / mirror descent MU, exp. gradient, trace-norm MU Intrinsic H≥0; slow first-order 2.2.1 2Projected first-order PGD+momentum, APG/FISTA Euclidean projection onto H≥02.2.2 3Adaptive first-order AdaGrad, RMSprop, Adam/NAdam/Adan, extensions Per-element adaptive rates 2.2.3 4Block coordinate HALS, ANLS Column / two-block least squares 2.2.4 5Second-order Diag. Newton, L-BFGS, PGNCG Curvature-based local steps 2.2.5 6Splitting ADMM, rand. LAI-SymNMF Split bilinear constraint 2.2.6 7Deep unfolding SymNMF-Net Unroll MU; learn block parameters 2.2.7
+
+guaranteeing monotonic decrease and preserving non-negativity by construction. We additionally test a trace-norm regularized variant that adds a penalty λ(tr( S) − ∥ H∥2 
+
+> F
+
+)2, approximating the scale-stabilizing effect of the unnormalized KL divergence at O(nk ) cost (no n × n intermediates). 
+
+Mirror descent with the negative-entropy mirror map yields the exponentiated gradient update 
+
+H ← H ⊙ exp( −η ∇H f ), which preserves strict positivity without projection [13]. All three are slow first-order methods and sensitive to initialization. 
+
+2.2.2 Family 2: First-Order Gradient Methods. Projected Gradient Descent (PGD) with Armijo backtracking [14] and heavy-ball momentum [15], and Accelerated Proximal Gradient (APG/FISTA) with adaptive restart [16, 17]. 
+
+2.2.3 Family 3: Adaptive First-Order Methods. Per-element adaptive learning rates. Through-out this paper, AdaGrad means diagonal AdaGrad [6]: projected SGD with accumulator G ←
+
+G + g ⊙ g and step H ← [H − η g/ √G]+ (equivalently Gt = P 
+
+> s≤t
+
+g2 
+
+> s
+
+entrywise). The origi-nal full-matrix preconditioner is ( nk ) × (nk ) and intractable here; we never use it. The same diagonal projected template underlies RMSprop [18] (EMA of squared gradients), Adam [19] (first- and second-moment EMAs), NAdam [20] (Nesterov-accelerated Adam), and Adan [21] (three-term Nesterov momentum with adaptive rates). We also test AdaGrad variants aimed at accumulator staleness and cheaper steps (Section 5.1): Piecewise AdaGrad (stagnation-triggered accumulator resets); Row-Stochastic AdaGrad (row subsampling, O(|I| n k ) per step); Row-Stochastic SVRG (periodic full-gradient snapshots [22]); Adaptive Growing-Batch AdaGrad 
+
+(AdaptGrow ; entry sampling at O(mk ) with adaptive batch growth [23, 24]); and Block-SVRG AdaptGrow (dense |I| × | J| blocks for cuBLAS throughput, with an SVRG hybrid snapshot against per-row accumulator heterogeneity). These are empirical engineering methods: we report wall-clock and KKT reliability under Section 4, not regret or rate guarantees. Kronecker-factored preconditioners were tested but excluded (Appendix C). 
+
+2.2.4 Family 4: Block Coordinate Descent. Hierarchical alternating least squares (HALS) [25] updates columns of H individually via closed-form least-squares subproblems. Alter-nating nonnegative least squares (ANLS) [26] uses a coupled two-factor formulation, solving 
+
+k × k Cholesky systems per iteration. 
+
+2.2.5 Family 5: Second-Order Methods. A diagonal-Newton baseline with Levenberg– Marquardt damping [27, 28] and Armijo backtracking [14] on the Hessian diagonal; projected L-BFGS [29]; and projected Gauss–Newton with truncated conjugate gradient (PGNCG) 
+
+5[30], the local solver underlying the distributed PLANC library [31]. 
+
+2.2.6 Family 6: Splitting Methods. ADMM [11] decouples the problem via variable splitting (W = H, penalty ρ), alternating between a least-squares H-update, a clamped W -update, and dual ascent. Randomized LAI-SymNMF [32] solves a low-rank eigendecomposition surrogate via cheap HALS-style updates. 
+
+2.2.7 Family 7: Deep Unfolding. SymNMF-Net [33] unfolds T iterations of a multiplicative-update rule into a feedforward network whose per-block parameters (step sizes, damping) are learned end-to-end via backpropagation through the unrolled computation graph. The method requires per-instance training: the network weights are optimized for each input matrix S individually, since a single set of weights does not generalize across matrices of different spectral structure. 
+
+# 2.3 Constraint Handling Strategies 
+
+Every factorization must satisfy H ≥ 0. Family 1 enforces this intrinsically; Families 4 and 6 build it into their subproblems; Family 7 uses a ReLU. Gradient-projection families (2, 3, and 5) are compared under clamp projection and softplus. 
+
+Projected space. The optimizer updates H directly and clamps after each step, including adaptive and second-order updates: 
+
+H(t+1) = max  H(t) − η ∇H f, 0.
+
+There is no reparameterization overhead, but once an entry reaches Hij = 0 it may remain there: under non-convexity the landscape can admit boundary local minima that are stable to single-coordinate moves yet escapable by a coordinated interior step. Softplus avoids this trap. 
+
+Softplus reparameterization (LogSpace). We introduce an unconstrained parameter Θ ∈
+
+Rn×k and set H = softplus(Θ) = log(1 + eΘ) entrywise [34], distinct from the ADMM factor 
+
+W . Softplus is strictly positive, so H > 0 without projection. The optimizer runs on Θ; gradients chain-rule as 
+
+∇Θf = ∇H f ⊙ σ(Θ) , σ(Θ) = 11 + e−Θ . (4) Because σ(Θ t) depends on the iterate, the Θ-space gradient is non-stationary even when the H-space landscape is not. 
+
+Interaction with optimizer memory. Whether adaptive second-moment statistics track σ(Θ t)depends on memory length, which predicts (Section 5.2): 
+
+• Short-memory (RMSprop, α = 0 .99, effective window ∼100 iterations): the EMA vt =
+
+α v t−1 + (1 − α) g2 
+
+> t
+
+forgets stale magnitudes fast enough to track σ(Θ t). 
+
+• Long-memory (Adam, β2 = 0 .999, window ∼1,000; AdaGrad, unbounded cumulative sum): statistics mix regimes where σ(Θ) differed, so adaptive rates become mis-scaled. 
+
+• No second-moment accumulator (diagonal Newton, L-BFGS): local curvature is not cor-rupted by σ-drift; the smoother, projection-free surface can even help at small scale. Softplus is therefore expected to help only at small scale, and to hurt long-memory adaptive methods as runs lengthen. 63 Dependence Matrices 
+
+Section 2 defined the SymNMF machinery that factorizes a symmetric, entrywise non-negative matrix S; this section specifies the two concrete dependence matrices that serve as that input, together with the low-rank structure they share: Section 3.1 recalls the (absolute) correlation matrix, capturing dependence across the full distribution; Sections 3.2–3.3 build the tail pairwise dependence matrix (TPDM) from multivariate regular variation, capturing dependence conditional on extreme events; Section 3.4 gives its empirical estimator; and Section 3.5 states the low-rank decomposition both types admit. 
+
+# 3.1 Correlation Matrices 
+
+Under a linear factor model X = AZ + ε with Z ∼ N (0 , I k+1 ) and ε ∼ N (0 , σ 2 
+
+> ε
+
+In), one has Cov( X) = AA ⊤ + σ2 
+
+> ε
+
+I and population correlation 
+
+Cij = (AA ⊤)ij 
+
+p(AA ⊤)ii + σ2
+
+> ε
+
+p(AA ⊤)jj + σ2
+
+> ε
+
+,
+
+with unit diagonal. The matrix C is symmetric positive semidefinite with entries in [ −1, 1]. Our benchmarks use the absolute matrix |C|, which lies in [0 , 1] but need not remain PSD at large n
+
+(Section 4.2); it summarizes pairwise linear dependence over the full distribution of X.In applications where dependence during normal conditions differs from dependence during extreme events [1], the correlation matrix may fail to capture the co-movement structure that drives systemic risk. This motivates the construction of a matrix that isolates tail dependence, which we develop next using the theory of multivariate regular variation. 
+
+# 3.2 Regular Variation and Max-Stable Distributions 
+
+The TPDM of Section 3.3 is defined for multivariate regularly varying vectors, which sit in the heavy-tailed (Fr´ echet, ξ > 0) domain of attraction; the Weibull ( ξ < 0, finite upper endpoint) and Gumbel ( ξ = 0) domains fall outside that regularly varying setup, so the construction does not apply there ([2], Theorem 3.1; [35]). A survival function with tail index α > 0 satisfies F (tx )/F (t) → x−α
+
+as t → ∞ (i.e. F ∈ RV −α). Larger α is a lighter power-law tail. More generally: 
+
+Definition 3.1. ([3]) A measurable function U : R+ → R+ is regularly varying at ∞ with index 
+
+α ∈ R (written U ∈ RV α) if for all x > 0,
+
+lim 
+
+> t→∞
+
+U (tx )
+
+U (t) = xα.
+
+The multivariate extension proceeds as follows. For n-dimensional i.i.d. random vectors, the componentwise maxima MN = (max i≤N Xi, 1, . . . , max i≤N Xi,n ) may converge after renormaliza-tion to a multivariate extreme value (MEV) distribution G. Using a standard transformation ([36], [37]), the marginals can be standardized to unit Fr´ echet, separating the dependence problem from marginal behavior. Under this standardization, 
+
+G (x) = exp( −V (x)) with V (x) = 
+
+Z
+
+> Sn−1+
+
+max 
+
+> i=1 ,...,n
+
+wi
+
+xi
+
+dH(w), (5) 7where H = HX is the spectral (angular) measure on the positive orthant of the unit sphere Sn−1+ ,normalized so that R
+
+> Sn−1+
+
+wi dH(w) = 1 for each i.2
+
+Definition 3.2. ([3]) A random vector X ∈ Rn 
+
+> +
+
+is regularly varying if there exists {bN }N ≥1 ⊂ R
+
+and a limit measure νX on [0 , ∞]n\{ 0} such that 
+
+N P
+
+ X
+
+bN
+
+∈ · 
+
+ v
+
+−→ νX (·), as N → ∞ ,where v
+
+−→ denotes vague convergence. It can be shown that bN = L(N )N 1/α for a slowly varying L
+
+and tail index α > 0. Denote RV n 
+
+> +
+
+(α) the set of n-dimensional regularly varying vectors with tail index α.
+
+Polar decomposition. The limiting measure νX has the scaling property νX (aC ) = a−ανX (C)([3]). In polar coordinates ( R, W ) = ( ∥X∥2, X/∥X∥2) this factorizes as 
+
+νX (dr × dw) = αr −α−1dr d HX (w), separating the radial component (determined by α) from the angular component (the spectral measure H). Since α is fixed by the marginal standardization, only H remains to be estimated. 
+
+# 3.3 Tail Pairwise Dependence Matrix 
+
+We adopt the TPDM construction of [1], which constructs a symmetric pairwise matrix describing the tail dependence of multivariate regularly varying random vectors. Using tail dependence rather than the full distribution is motivated by regulatory frameworks [38] and active portfolio construc-tion [39, 40]. We consider one-sided (lower-tail) extremes, motivated by the asymmetry of financial risk management applications. The regular-variation lemmas for the linear factor model used below are stated and proved in Appendix A. Under a linear factor model, regular variation propagates by two elementary rules (Proposi-tions A.1–A.2): independent regularly varying summands with a common normalizing sequence have limit measure equal to the sum of their limit measures, and scaling a regularly varying vector by a > 0 multiplies its limit measure by aα. Applied to AZ = Pkj=1 aj Zj with i.i.d. regularly varying factors, the angular measure collapses to point masses at the normalized loading directions (Corollaries A.1–A.2): 
+
+HAZ (·) = 
+
+> k
+
+X
+
+> j=1
+
+∥aj ∥α δaj /∥aj ∥(·).
+
+Its total mass is P 
+
+> j
+
+∥aj ∥α; after unit-Fr´ echet marginal standardization this matches the moment constraint of (5), so the TPDM below is well-defined. 
+
+Definition 3.3. ([1]) The TPDM corresponding to X ∈ RV n 
+
+> +
+
+(α) is defined as the n × n matrix 
+
+ΣX =  (Σ X )iq 
+
+
+
+> i,q =1 ,...,n
+
+, where (Σ X )iq =
+
+Z
+
+> Sn−1+
+
+wiwq dHX (w).        
+
+> 2Classical EVT notation writes Hfor the angular measure and Θ n−1for this sphere [3, 1]; we write Hand Sn−1+
+> to reserve Hfor the SymNMF factor and Θ for the softplus reparameterization of Section 2.3.
+
+8By construction, Σ X is symmetric ((Σ X )iq = (Σ X )qi ) and entry-wise non-negative, since wi ≥ 0on Sn−1+ and HX is a positive measure. It is therefore a valid input for symmetric non-negative matrix factorization. The extremal dependence between components Xi and Xq is summarized by (Σ X )iq . Asymptotic independence of Xi and Xq is equivalent to HX
+
+ {w ∈ Sn−1+ : wi > 0, w q > 0} =0, which corresponds to (Σ X )iq = 0 ([41], [42]). Under the conditions of Corollary A.2, the TPDM of AZ has entries (Σ AZ )iq =
+
+Z
+
+> Sn−1+
+
+wiwq dHAZ (w) = 
+
+> k
+
+X
+
+> j=1
+
+∥aj ∥α
+
+> 2
+
+ aij 
+
+∥aj ∥2
+
+  aqj 
+
+∥aj ∥2
+
+
+
+.In financial applications, regularly varying distributions are commonly modeled with Pareto( α)marginals ( P(X > x ) = x−α for x ≥ 1), where α = 2 is a standard choice motivated by empirical evidence from stock prices and insurance claims ([43, 44]) and by regulatory frameworks ([38]). Under α = 2 the TPDM simplifies to a Gram matrix: (Σ AZ )iq =
+
+> k
+
+X
+
+> j=1
+
+aij aqj , i.e. Σ AZ = AA ⊤.The SymNMF population target we use throughout is the unit-diagonal normalization of this structural Gram matrix, Σ = D−1/2AA ⊤D−1/2 with Dii = ( AA ⊤)ii (Appendix B): H therefore recovers the loadings of A only up to that per-row scaling. The empirical estimator (Section 3.4) applies the same unit-diagonal normalization to the exceedance Gram ˜ΣX = ( n/n exc )Ω ⊤Ω, which estimates Σ. Under the noiseless factor model of Corollary A.2 the population equality is exact; with same-index regularly varying noise as in our simulator, it is the leading factor contribution. We restrict to α = 2 for the remainder of the paper. For general α, the (unnormalized) TPDM entry becomes (Σ AZ )iq = P 
+
+> j
+
+∥aj ∥α−2aij aqj , a column-weighted Gram matrix that is still symmetric and non-negative but no longer equals AA ⊤. SymNMF remains applicable, but the recovered factor H
+
+no longer directly estimates the loading matrix A; interpreting H then requires knowledge of α.The algorithmic findings of this paper are properties of the SymNMF optimization problem itself and transfer to any α; only the statistical interpretation of the factor changes. With unit diagonal, σii = 1 for every i and the trace equals n:tr(Σ X ) = 
+
+> n
+
+X
+
+> i=1
+
+σii = n.Since the correlation matrix also has unit diagonal and trace n, both input types therefore present SymNMF with matrices of comparable Frobenius norm ( ∥S∥2 
+
+> F
+
+≥ tr( S) = n), so the normalized squared reconstruction error Et = ∥S − HH ⊤∥2 
+
+> F
+
+/∥S∥2 
+
+> F
+
+is on a common scale across types. 
+
+# 3.4 Empirical Estimation 
+
+Let xt, t = 1 , . . . , n sample , be i.i.d. observations from a regularly varying random vector with Pareto(2) marginals. In practice, marginals are transformed to this form. Denote rt = ∥xt∥2 and wt = xt/∥xt∥2, for all t = 1 , . . . , n sample , using the polar coordinate transform of Section 3.2. By construction, the TPDM depends only on the angular measure on the positive orthant of the unit sphere, Sn−1+ = {w ∈ Rn 
+
+> +
+
+: ∥w∥2 = 1 }.9In practice, the theoretical angular measure is not known. Denote its empirical estimate as ˆHX (·). Consider the probability measure ˆNX (·) = 1
+
+nexc 
+
+> nsample
+
+X
+
+> t=1
+
+δwt (·) 1{rt > r 0},where r0 is a high threshold for radial coordinates and 
+
+nexc =
+
+> nsample
+
+X
+
+> t=1
+
+1{rt > r 0}.
+
+Then, ˆHX (·) = n ˆNX (·). By construction, the mass appears precisely at the angular compo-nents of the observations corresponding to the exceedances above the radial threshold r0. The unnormalized empirical Gram matrix is ˜ΣX = nnexc 
+
+Ω⊤Ω,
+
+where the rows of the nexc × n matrix Ω are the angular vectors wt for all t such that rt > r 0.The SymNMF input is the unit-diagonal normalization ˆΣX = D−1/2 ˜ΣX D−1/2 with Dii = ( ˜ΣX )ii ,matching the population target of Section 3.3 and Appendix B. Since ˆΣX is a (normalized) Gram matrix of nexc vectors, rank( ˆΣX ) ≤ nexc ; when nexc < n the empirical TPDM is rank-deficient, which affects the SymNMF landscape (Section 4.2). The choice of threshold r0 (equivalently, the exceedance fraction q) controls a bias–variance trade-off: too low includes non-tail observations; too high leaves nexc small and the estimate noisy. In our benchmarks we use the top 1% of radial norms ( q = 0 .01); details are in Appendix B. 
+
+# 3.5 Low-Rank Decomposition 
+
+For X ∈ RV n 
+
+> +
+
+(2), [1] prove the existence of k∗ < ∞ such that Σ X = Ak∗ A⊤ 
+
+> k∗
+
+with Ak∗ ∈ Rn×k∗ 
+
+> +
+
+,and propose two exact decompositions. We instead pursue an approximate low-rank decomposition ΣX ≈ AA ⊤ with A ∈ Rn×k 
+
+> +
+
+and k ≪ n. The same framework applies to both matrix types: for the TPDM, non-negativity of A is structurally guaranteed; for correlation matrices, it holds when using absolute correlations. 
+
+# 4 Experimental Methodology 
+
+This section develops the experimental infrastructure: a unified convergence criterion (Section 4.1), the spectral properties that govern optimization difficulty (Section 4.2), the GPU computational pipeline (Section 4.3), and the benchmark matrix construction (Section 4.4). 
+
+# 4.1 Convergence Criterion 
+
+A fair comparison of optimization algorithms requires a single, theoretically grounded stopping rule applied uniformly across all solvers. In the NMF literature, three classes of stopping criteria are common: (i) relative decrease in the objective, |Et − Et−1|/E t−1 < τ 1; (ii) relative change in the iterates, ∥H(t) − H(t−1) ∥F /∥H(t−1) ∥F < τ 2; (iii) first-order optimality residuals (with their own 10 tolerance τ3). The first two are widely used [9, 12] but have well-known shortcomings: (i) can trigger far from stationarity when iterates traverse a nearly flat valley, and the denominator Et−1
+
+becomes numerically unstable in single precision as Et → 0; (ii) can trigger from small step sizes alone even with a large gradient, and provides no quality guarantee. Neither alone ensures proximity to a first-order stationary point. For min H≥0 f (H), the first-order necessary conditions are the Karush–Kuhn–Tucker (KKT) conditions [45]. At a stationary point H∗ they require [∇H f (H∗)] ij ≥ 0 for all i, j, H∗ 
+
+> ij
+
+[∇H f (H∗)] ij = 0 for all i, j, H∗ 
+
+> ij
+
+≥ 0 for all i, j. (6) Following [46], these are summarized by the projected gradient :[∇proj f (H)] ij =
+
+(
+
+[∇H f (H)] ij if Hij > 0 (interior) ,
+
+min  0, [∇H f (H)] ij 
+
+ if Hij = 0 (boundary) . (7) On the boundary this keeps only components that point into the feasible region (negative entries of 
+
+∇H f ); non-negative boundary entries already satisfy stationarity and contribute zero. The norm 
+
+∥∇ proj f (H)∥F vanishes if and only if (6) holds. Our stopping rule requires three criteria simultaneously. 
+
+Criterion 1: Loss gate. 
+
+Et < τ E , τE = 0 .1. (8) The normalized squared reconstruction error Et = ∥S − H(t)H(t)⊤∥2 
+
+> F
+
+/∥S∥2 
+
+> F
+
+must be below τE , i.e. the residual carries at most 10% of the squared Frobenius energy of S (a relative Frobenius residual of ∼32%). This is a deliberately loose anti-degeneracy guard against KKT points with meaningless reconstruction (notably H = 0, which satisfies ∇H f = 0 yet Et = 1); the projected-gradient gate below is the binding stationarity criterion. 
+
+Criterion 2: Per-element KKT. 
+
+∥∇ proj f (H(t))∥F
+
+n · k < τ g , τg = 10 −4. (9) Dividing by nk , the number of entries in H, gives an entry-normalized stationarity measure, so a single threshold τg stays meaningful across problem sizes rather than tracking the growing raw norm; this follows the element-normalized convention of Kim & Park [26]. The alternative normalization by the initial projected gradient [46, 10] itself scales with n and k, and in our experiments caused false convergence at n = 10 4 after ∼10 iterations. When k is below the number of significant eigenvalues of S, the rank-k factorization incurs irreducible approximation error whose gradient cannot be eliminated. At n = 10 2 (k = 10, true model rank 11), no solver achieves ∥∇ proj ∥F /(nk ) < 10 −4 even after 10 5 iterations; increasing to 
+
+k = 25 in the fixed-rank stress test (Section 5.1) restores convergence. To keep the benchmark informative at small scales, we use a scaled threshold: 
+
+τg (n) = τ ∞ 
+
+> g
+
+· max 
+
+
+
+1, nref 
+
+n
+
+
+
+, τ ∞ 
+
+> g
+
+= 10 −4, n ref = 10 4, (10) relaxing to 10 −3 at n = 10 3 and 10 −2 at n = 10 2. For n ≥ 10 4 we use τg = 10 −4, except TPDM at 
+
+n = 10 6: there k = nexc = 400 (Section 4.2) makes Et → 0 and the projected gradient precision-limited near 10 −3, so we certify at τg = 10 −3 (Section 5.3). This is a numerical floor, not a weaker standard. 11 Criterion 3: Objective stagnation. 
+
+Et−δ − Et
+
+E0
+
+< τ, τ = 10 −5, (11) where E0 = ∥S − H(0) H(0) ⊤∥2 
+
+> F
+
+/∥S∥2 
+
+> F
+
+is the error at initialization and δ is the check interval (default 10 iterations). Normalizing by E0 rather than Et−δ stays stable when Et is near zero in single precision and avoids the pathological denominator of criterion (i) above. To avoid false positives in warm-up, this criterion is suppressed for the first 50 iterations. converged ⇐⇒ Et < τ E
+
+| {z }
+
+> loss gate
+
+∧ ∥∇ proj ∥F
+
+nk < τ g
+
+| {z }
+
+> KKT
+
+∧ Et−δ − Et
+
+E0
+
+< τ 
+
+| {z }
+
+> stagnation
+
+. (12) Each alone is insufficient; together they require meaningful reconstruction, approximate stationarity, and exhausted progress. 
+
+LogSpace adaptation. For solvers using H = softplus(Θ) > 0 (Section 2.3), Hij > 0 everywhere, so the projected gradient (7) equals ∇H f and no boundary masking is needed. We always evaluate the gradient in H-space (not Θ-space): the factor σ(Θ) in (4) would otherwise distort the norm and spoil cross-solver comparison. At each check interval, every solver records iteration count, wall-clock time, Et, ∥∇ proj ∥F /(nk ), and ( Et−δ − Et)/E 0.
+
+# 4.2 Spectral Properties of Input Matrices 
+
+With the convergence criterion in place, we now characterize the input matrices themselves: the spectral structure of S governs the optimization landscape and largely determines which algorithms succeed. Table 3 reports key spectral properties of the two matrix types (TPDM and sample correlation), averaged over three seeds per configuration. 
+
+TPDM. The empirical TPDM (Section 3.4; unit-diagonal normalized Gram matrix of exceedance angles) is positive semidefinite with rank( ˆΣ) ≤ nexc : it is formed from nexc = 400 tail vectors (top 
+
+q = 1% of nsample = 40 ,000), so at most 400 directions, whereas correlation uses the full sample and is full-rank. With nexc fixed and k = ⌊√n⌋ growing, the two cross near n ≈ 1.6 × 10 5; by 
+
+n = 10 6 one has k = 1000 > n exc , so the factorization is over-parameterized and the top-k subspace captures all signal (Table 3: λk = λk+1 = 0, %var k = 100). Population TPDM rank is ≤ k∗ under a k∗-factor model, but this empirical ceiling dominates and is an artifact of the fixed-exceedance generator, not of empirical TPDMs whose rank grows with the sample. Spectrally, top-k eigenvalues hold > 96% of trace at all sizes, yet gaps collapse: by n = 10 4,
+
+γk falls 5 .0 → 1.1 and γk+1 → 1.0, bunching the leading spectrum and creating near-degenerate optima. Fixed nexc against growing n thus makes TPDM a harder SymNMF target at scale. Full-matrix κ+ is inflated by the near-zero tail ( > 10 10 for n ≥ 10 3); the signal-subspace conditioning is 
+
+∼10 7 (Table 3). At n = 10 5, γk ≈ 1 and reff ∼ 1.3 as the common factor dominates ( λ1 ∼ O(n)). 
+
+Correlation. Built from the full sample, correlation stays full-rank after Ledoit–Wolf shrinkage when n/n sample > 0.1 (Appendix B). The noise ridge σ2 
+
+> ε
+
+I keeps κ+ moderate ( ∼33 ,000 at n = 10 4)but lifts reff to ∼4, so top-k captures only ∼68% of trace. Spectral separation strengthens with n
+
+(γk+1 : 1 .4 → 17 .3 → 46 .7 → ≈ 39; Table 3), consistent with bulk-edge sharpening [47]. For n ≥ 10 5,
+
+γk ≈ 1 because λk and λk+1 are both signal (model rank k+1); the relevant gap is γk+1 . Effective 12 Table 3: Spectral properties of TPDM and correlation benchmark matrices at k = ⌊√n⌋ (mean over seeds 7, 42, 99). κ+ = λmax /λ +min is the condition number over strictly positive eigenvalues (the signal-subspace conditioning for TPDM, the full-spectrum λmax /λ min for correlation); reff =tr( S)/λ max the effective rank; γk = λk/λ k+1 and γk+1 = λk+1 /λ k+2 the spectral-gap ratios at the factorization rank and one position below (the true model rank k+1); %var k the trace fraction in the top k eigenvalues. †: full-spectrum κ+ not meaningful (correlation is mildly indefinite at 
+
+n ≥ 10 5; see text). ‡: k = 1000 exceeds the fixed rank nexc = 400, so λk = λk+1 = 0 and γk, γ k+1 
+
+are undefined (see text). Type n λ1 λk λk+1 κ+ reff γk γk+1 %var k
+
+TPDM 100 54.0 2.82 0.57 ∼ 6 × 10 5 1.9 5.0 1.8 96.5 1 000 528 5.18 2.91 ∼ 5 × 10 7 1.9 1.8 3.1 98.7 10 000 5 833 1.07 0.98 ∼ 2 × 10 7 1.7 1.1 1.0 99.8 100 000 74 935 0.33 0.33 ∼ 10 7 1.3 1.0 1.0 99.98 1 000 000 8.7 × 10 5 0‡ 0‡ ∼ 3 × 10 6 1.1 n/a ‡ n/a ‡ 100.0 CORR 100 27.7 3.09 0.74 137 3.6 4.2 1.4 69.3 1 000 244 9.00 2.43 1 480 4.1 3.7 3.7 67.8 10 000 2 362 27.2 14.7 33 411 4.2 1.9 17.3 68.2 100 000 23 902 95.1 94.1 n/a † 4.2 1.0 46.7 70.9 1 000 000 2.5 × 10 5 333 330 n/a † 4.0 1.0 39.3 77.3 rank stays ≈4 while %var k rises only slowly (68% → 77% by n = 10 6), since growing k = ⌊√n⌋
+
+retains progressively more of the noise bulk. Correlation is positive definite through n = 10 4 (λmin = 0 .07). At n = 10 5 a small negative eigenvalue appears ( λmin ≈ − 0.018): absolute correlation need not stay positive definite, and the noise ridge no longer masks it. Relative indefiniteness is tiny ( |λmin |/λ max ∼ 7 × 10 −7), so κ+ is undefined but γk+1 = 46 .7 remains sharp. At n = 10 6, λmin ≈ − 0.17 with the same relative scale, confirmed by distributed matrix-free Lanczos on the 4 TB matrix. The two types are complementary: TPDM concentrates variance but loses gaps at scale; corre-lation spreads variance but keeps a clean signal–noise boundary. Neither is uniformly easier. 
+
+# 4.3 Computational Methodology 
+
+Every solver reduces, at each iteration, to a small number of GPU primitives, dominated by two dense cuBLAS products: S × H (O(n2k), sgemm ) and H⊤H (O(nk 2), syrk ). 3 The remaining work, the element-wise projection max( H, 0) and the optimizer state updates, is O(nk ) and negligible by comparison. For k ≪ n, the S × H product dominates even H⊤H: at n = 10 5 a single dense 
+
+sgemm runs at near-peak throughput ( ∼3 ms), and non-GEMM overhead (projections, state updates, convergence checks) accounts for < 10% of wall-clock at n ≥ 10 4. Cross-solver wall-clock therefore largely tracks iteration count.      
+
+> 3When Sis pre-sparsified (e.g. by thresholding), PyTorch dispatches S×Hto cuSPARSE automatically. However, factor models with a common factor produce dense matrices, so all benchmarks here use dense cuBLAS.
+
+13 All solvers are implemented in PyTorch, with gradients computed analytically (Section 2.1) via cuBLAS and multi-GPU communication via torch.distributed (NCCL). Phase 1 ( n ≤ 10 4)runs on a single NVIDIA GB200 (Grace–Blackwell) GPU. The trace-identity reformulation keeps the n = 10 5 matrix within single-GPU memory (Table 1), but Phase 2 shards for throughput and capacity: n = 10 5 across the four GPUs of one node, and n = 10 6 row-sharded across 16 nodes (64 GPUs) once the matrix exceeds single-GPU memory (Section 5.3). Reported timings and residuals are in fp32. As a precision check we also ran the same solves with TF32 Tensor-Core multiplies (10-bit mantissa, fp32 accumulation); for SymNMF the dominant rounding error arises from cancellation in the trace-identity loss (Section 2.1), not from individual matrix products, and TF32 leaves converged Et unchanged at the levels reported here ( Et between 10 −3 and 10 −2). We benchmark at n ∈ { 10 2, 10 3, 10 4, 10 5, 10 6}; first-order gradient, adaptive first-order, and second-order methods are run in both projected and LogSpace variants to test the memory-length prediction of Section 2.3. 
+
+# 4.4 Benchmark Matrix Construction 
+
+Both matrix types are generated from a shared factor model X = AZ + ε, where A ∈ Rn×(k+1) + is a block-structured mixing matrix with one common factor and k = ⌊√n⌋ group factors of variable size ( ± 40% of n/k ). Distributional assumptions match each matrix’s foundation; sample size is fixed at nsample = 40 ,000 (Appendix B): 
+
+TPDM Correlation 
+
+Factor distribution Z Pareto(2) Gaussian Idiosyncratic noise ε Pareto(2) Gaussian Estimator Angular measure (top 1% exceedances) Absolute Pearson ( |Cij |)Both matrices are symmetric, non-negative, with unit diagonal and values in [0 , 1]. Sharing 
+
+A gives the same latent factor structure: correlation captures full-sample dependence; the TPDM captures dependence conditional on extremes. Our primary factorization rank is k = ⌊√n⌋, used throughout unless stated otherwise (e.g. 
+
+k = 10 at n = 10 2, up to k = 1000 at n = 10 6). The true generative rank is one higher ( ⌊√n⌋ + 1: common factor plus k group factors); setting the factorization rank one below forces solvers to absorb the common factor into the group columns of H, a mild misspecification that practitioners face by default. The √n scaling balances expressiveness and parsimony ( √n groups of ∼√n members) and arises in random matrix theory [48] and community detection [49]. At Phase 1 scales ( n ≤ 10 4) we additionally stress-test a fixed rank kfix = 25, calibrated to the ∼15–70 factors in commercial equity models such as Barra USE4 [50]. That under-ranked setting checks robustness when k is far below the generative rank (Section 5.1); we do not repeat the fixed-k stress test in Phase 2. Rows of A
+
+are randomly permuted before computing S so solvers cannot exploit block-diagonal structure. Full details are in Appendix B. 
+
+Initialization and seeds. All solvers share the same scaled random non-negative initialization per seed (entry-wise ∼ U [0 , p ¯S/k ], with ¯S the mean entry of S); one MU variant additionally uses NNDSVD [51]. We run three seeds per configuration and report best and mean Et. Solution quality is highly reproducible (coefficient of variation of Et below 2% on correlation and below 15% on TPDM at n = 10 4); the elevated TPDM variance reflects near-singular spectra (Table 3), 14 not solver instability. Large-scale runs ( n ≥ 10 5) report each solver’s best configuration confirmed across three seeds. 
+
+# 5 Results 
+
+Adaptive first-order methods (AdaGrad and its stochastic variants) alone combine universal con-vergence with scaling to n = 10 6; classical baselines (multiplicative updates, projected gradient, second-order, and deep unfolding) stall on hard TPDM spectra or trail on wall-clock. We estab-lish this with a two-phase funnel. Phase 1 (Section 5.1) screens all seven families at n ≤ 10 4 by the strict convergence criterion and then cost. Phase 2 (Section 5.3) tests those that meet both thresholds on n ∈ { 10 5, 10 6}, where a failed run can cost tens of GPU-hours. Between the two, Section 5.2 isolates projection versus softplus and shows that the effect is mediated by optimizer memory length. 
+
+# 5.1 Cross-Family Comparison 
+
+Phase 1 spans n ∈ { 10 2, 10 3, 10 4}, with n = 10 4 decisive for selection. We report Et, wall-clock, and the projected-gradient norm under (12) (Section 4.1). Ranking by Et alone would promote line-search and mirror-descent variants that miss the KKT gate. 
+
+Phase 1: Algorithm Selection ( n ≤ 10 4)
+
+We evaluate over 100 hyperparameter runs across the 30+ configurations of Section 2.2, covering all seven families at n ∈ { 10 2, 10 3, 10 4} on both TPDM and correlation matrices at k = ⌊√n⌋. Each configuration uses 3 seeds (6 runs per size, 18 total). A fixed-rank k = 25 stress test is reported separately (Section 5.1). Table 4 reports the best configuration per method, ranked by convergence rate then wall time at n = 10 4.At n = 10 2 and n = 10 3, most families converge reliably (even MU and PGD reach low Et
+
+within budget), and n = 10 3 already exceeds typical prior SymNMF sizes [5, 12]. Differentiation starts at n = 10 4, where spectra sharpen (Section 4.2) and weaker methods fail. Eleven methods converge on all 18 runs: ADMM, RMSprop, AdaGrad, Piecewise AdaGrad, Row-Stochastic SVRG, Block-SVRG AdaptGrow , Adan, NAdam, Adam, HALS, and randomized LAI-SymNMF [32]. Convergence alone no longer separates them; cost does. Six finish under 4 s at 
+
+n = 10 4 (dashed rule in Table 4); the other five (Adan, HALS, LAI-SymNMF, Adam, NAdam) are 1.4–5 × slower. The gap is iteration count, not per-step cost: dense solvers share a ∼ 1.3–1 .7 ms floor (Section 4.3), so Adam’s 6 ,900–8 ,300 iterations cost far more wall time than AdaGrad’s 450–1 ,080. We discuss each family next, focusing on n = 10 4.
+
+Family 1: Multiplicative / Mirror Descent. At n = 10 4 MU fails on all three TPDM runs: the projected gradient stalls ∼ 10 × above threshold through the full iteration budget, matching the sublinear rate of (3). Trace-norm MU is highly λ-sensitive (fails once λ ≥ 1), and mirror descent (exponentiated gradient) fails on every n = 10 4 run. 
+
+Family 2: Projected Gradient Methods. APG with Armijo backtracking and adaptive restart fails only on n = 10 4 TPDM, where FISTA momentum [16] overshoots on the near-unit gap ( γk ≈ 1; Table 3), restarts, and loses acceleration. Plain PGD and heavy-ball fail on every n = 10 4 run. LogSpace variants do not improve (Section 2.3). 15 Table 4: Phase 1: best configuration per tabulated method on 18 runs ( n ∈ { 10 2, 10 3, 10 4}, both types, k = ⌊√n⌋, 3 seeds; GB200). Within-family variants that converge on no n = 10 4 run (PGD, heavy-ball, exponentiated gradient, trace-norm MU, ANLS, L-BFGS, PGNCG) are omitted here and discussed in Section 5.1. Conv. = runs satisfying (12); wall columns = mean seconds among converged runs (6 per size); “—” = none converged; Params = tunable hyperparameters excluding the shared iteration budget. Ordered by convergence then wall at n = 10 4. Dashed rule: 100% and 
+
+< 4 s at n = 10 4 (used in Phase 2); solid rule: remaining 100% methods (above 4 s).                                                                                                   
+
+> Method Family Conv. Wall (s) at nParams 100 1,000 10,000
+> ADMM F6 Splitting 18/18 0.35 0.22 0.48 1RMSprop F3 Adaptive 18/18 0.35 0.44 0.99 3Block-SVRG AdaptGrow F3 Adaptive 18/18 0.56 0.72 1.67 3AdaGrad F3 Adaptive 18/18 1.06 0.98 1.68 1Row-Stoch. SVRG F3 Adaptive 18/18 0.68 1.65 2.65 3Piecewise AdaGrad F3 Adaptive 18/18 2.19 0.66 3.22 2Adan F3 Adaptive 18/18 1.33 1.34 4.64 2HALS F4 BCD 18/18 0.78 1.42 8.66 1LAI-SymNMF F6 Splitting 18/18 2.15 4.11 15.22 2Adam F3 Adaptive 18/18 0.70 1.95 17.03 2NAdam F3 Adaptive 18/18 0.70 2.17 17.64 2MU F1 Baseline 15/18 0.17 0.62 7.89 0APG / FISTA F2 PGD 15/18 0.12 0.38 16.49 1Newton (diag.) F5 Second-order 15/18 0.37 3.45 24.61 2SymNMF-Net F7 Deep Unfold. 12/18 36.08 44.82 —3+
+
+Family 3: Adaptive First-Order Methods. RMSprop with ( η, μ, α ) = (0 .05 , 0.5, 0.99) uses a short EMA window ( α = 0 .99, ∼100 iterations, vs. Adam’s ∼1,000) for per-coordinate scaling, moderate momentum ( μ = 0 .5) for acceleration without projection conflicts, and an aggressive learning rate ( η = 0 .05). It needs 3 hyperparameters and is sensitive to each: α = 0 .9 drops convergence by 30–40%, μ = 0 .9 causes oscillation, and η must be tuned per scale. AdaGrad with η = 2 .0 matches that reliability with a single hyperparameter. Adam ( β1 = 0 .9, 
+
+β2 = 0 .999) converges too, but needs far more iterations at the shared dense-step floor (Ta-ble 4). That gap matches the stationary SymNMF landscape: AdaGrad’s infinite accumulator 
+
+Gt = Pti=1 g2 
+
+> i
+
+keeps early gradient statistics informative (no distribution shift), whereas Adam’s forgetting ( β2 = 0 .999) discards them and its first-moment EMA interacts poorly with clamp pro-jection (Section 2.3). NAdam and Adan behave like Adam across 80+ Family-3 configurations, and all three degrade under k = 25 (Section 5.1). This creates a tension. AdaGrad’s infinite accumulator is the right memory policy for the stationary landscape, aggregating curvature across iterations, but the wrong policy for long runs: growing Gt exhausts the effective learning-rate budget, and the high optimal η = 2 .0 only delays saturation to ∼ 600 iterations. RMSprop escapes saturation by exponential forgetting, but then 16 discards the stationarity advantage that makes AdaGrad strong. To keep full-history scaling while escaping saturation, we propose Piecewise AdaGrad (likewise the stochastic AdaGrad variants below; no regret or KKT-rate claims): run pure AdaGrad until objective stagnation (criterion 3 of Section 4.1), recalibrate the accumulator per entry to the current gradient scale, and resume. Reset mechanics are adaptive, with one exposed scale c (memory iters ) and a large-scale gradient-margin multiplier cr : when to reset follows the existing stagnation criterion; whether to reset again depends on whether the previous reset reduced the loss (self-terminating); how long to wait after a reset follows accumulator doubling; how much uses a median-gradient baseline Gi ← max( c · g2
+
+> t,i
+
+, c ·
+
+median( g2 
+
+> t
+
+)), with c the only new parameter. Between resets the method keeps AdaGrad’s full history; the reset is a phase-boundary detector, not RMSprop-style continuous EMA forgetting. With ( η, c ) = (1 .0, 10), the reset should fire only when the iterate is stale, not merely far from the optimum. An absolute cap ( Et < 0.5) works at small scale but fails at n = 10 6, where random initialization keeps Et above any fixed cap through a long saturated crawl (reset suppressed for ∼1,900 iterations after the objective has stalled by ∼150); removing the cap over-resets near convergence at n = 10 5. We therefore gate on a scale-free stationarity margin ( ∥∇ proj ∥F /(nk ) >cr τg , cr ∈ { 3, 10 , 30 }), which escapes the large-scale plateau early and self-terminates near the KKT gate; a median-squared-gradient floor additionally blocks premature early-phase resets. Where diagonal AdaGrad converges quickly, no reset fires and the two methods agree. The reset cost appears only at n = 10 2, where AdaGrad never saturates: the detector sometimes trips on a shallow early plateau and wastes iterations, even though per-iteration cost is lower than diagonal AdaGrad (1 .22 vs. 1 .48 ms). Aggressive c = 1 diverges on large-k correlation, so the reset scale matters. Versus RMSprop, Piecewise has fewer hyperparameters but is slower at Phase 1 (Table 4). 
+
+Row-Stochastic AdaGrad samples a fraction of rows per iteration, cutting per-step cost from O(n2k) to O(|I| n k ). Full-batch ( |I| = n, η = 2 .0) matches diagonal AdaGrad, validating the implementation. Naive sub-sampling ( |I|/n ≤ 0.5) fails the KKT gate on several n = 10 4 runs. Two mechanisms drive this: (a) row-sampling gradient noise, and (b) uneven accumulator growth on infrequently sampled rows. We address (b) with Row-Stochastic SVRG : periodic full-gradient snapshots μ, fresh gradi-ents on sampled rows and snapshot gradients elsewhere, so every row of H updates each iteration and the accumulator grows uniformly while retaining O(|I| n k ) cost between snapshots. With (η, |I|/n ) = (2 .0, 0.5) that closes the gap naive sub-sampling could not. A stochastic reset hybrid (row sampling + Piecewise resets) fails: noise plus resets is destabilizing, and the reset detector, tuned to smooth full-batch loss, misreads stochastic stagnation. At Phase 1 the dense step already sits on the ∼ 1.3–1 .7 ms floor, so row sub-sampling buys no wall-clock here. 
+
+Entry-stochastic sampling for AdaGrad. The row-level stochastic variants above sample a subset I ⊂ [n] of rows and compute the exact partial gradient for those rows. A natural alternative, suggested by the structure of the problem, is to sample individual entries of S [6]: pick m pairs (i, j ) uniformly from [ n] × [n], compute the per-entry gradient contributions 
+
+gi += 2  h⊤ 
+
+> i
+
+hj − Sij 
+
+ hj , gj += 2  h⊤ 
+
+> i
+
+hj − Sij 
+
+ hi, (13) and update only the affected rows of H. Each sampled entry costs O(k), so the per-iteration cost is O(mk ), fully sub-quadratic when m ≪ n2, versus O(|I| nk ) for row sampling, which remains 
+
+O(n2k) unless |I| ≪ n.Entry sampling is the natural stochastic gradient for the bilinear SymNMF loss: since f (H) = P 
+
+> i,j
+
+(Sij − h⊤ 
+
+> i
+
+hj )2, each ( i, j ) pair provides an unbiased gradient estimator (up to a global factor 17 absorbed into η). We implement entry-stochastic variants of all three row-sampled methods: base stochastic AdaGrad, stochastic SVRG, and stochastic reset. However, entry sampling with a fixed small fraction ( m/n 2 ≤ 0.2) fails to converge at n = 10 3
+
+and above, across all three variants and twelve hyperparameter settings per size. The objective value Et decreases to roughly the correct magnitude (10 −2–10 −3), but the projected-gradient KKT norm ∥∇ proj f (H)∥F /(nk ) remains 100–200 × above the convergence threshold. The failure is a criterion mismatch , not an information-theoretic impossibility of SGD: up-dates use sparse entry gradients, while certification requires the exact full gradient ∇H f (H) = 4 H(H⊤H) − SH  below τg = 10 −4. With entry fraction m/n 2 = 0 .01 at n = 10 4, each iter-ation sees only 10 6 of 10 8 entries, so the certified full-gradient residual remains large long after the stochastic objective has plateaued. Closing that residual at fixed fraction would require an impractically large iteration budget under our strict gate. 
+
+Variance reduction at fixed entry fraction does not close the KKT gap. We tested three orthogonal variance-reduction strategies (SVRG [22], Polyak–Ruppert iterate averaging [52, 53], and dual averaging via the ADAGRAD-RDA framework of [54]), each closing only ∼ 6% of the KKT gap at fixed entry fraction. All three modify how stochastic gradient information is aggregated 
+
+rather than how much per-iteration entry budget is available, so the certification mismatch above is unaffected. Detailed treatment, including the dual-averaging proximal step and its primal warm-up, is in Appendix D. 
+
+Sketching is not a natural alternative. Replacing S with a low-rank sketch [55, 56] introduces a bias ∥S − ˆS∥F that, for the dependence matrices in this work (slowly decaying spectra; Table 3), exceeds the KKT threshold unless the sketch rank is r = O(√n) or larger, at which point the sub-quadratic advantage erodes. Practitioners also typically need the factorization of the true S
+
+rather than a surrogate. Detailed argument in Appendix D. 
+
+Adaptive growing-batch stochastic AdaGrad. The analysis above identifies a fundamental tension: fixed small entry fractions provide cheap per-step cost but cannot satisfy strict KKT, while full-batch iterations are expensive but guarantee convergence. The resolution is to start with a small entry fraction for fast initial progress and grow it adaptively until the gradient is exact enough for KKT certification. This strategy is theoretically grounded in the “norm test” of [23]: increase the sample size when the stochastic gradient norm exceeds a fraction of the true gradient norm, i.e., when gradient noise dominates algorithmic progress. [24] provide complementary sample complexity bounds, showing that the optimal sample size grows as convergence is approached. The key insight is that stagnation is precisely the signal that gradient noise is the bottleneck, not optimization dynamics. We implement an Adaptive Growing-Batch (AdaptGrow ) variant that uses stagnation detection from the existing convergence criterion (Section 4.1) as the growth trigger: 1. Initialise with entry fraction ϕ0 (e.g., ϕ0 = 0 .1), so each iteration samples m = ϕ0n2 entries at cost O(ϕ0n2k). 2. After each convergence check (every 10 iterations), if the objective stagnation criterion fires (|∆Et| < tol ) for 3 consecutive checks, double the entry fraction: ϕ ← min(2 ϕ, 1). 3. Once ϕ = 1, every iteration computes the exact full gradient; subsequent steps are diagonal AdaGrad, and the KKT norm converges to zero at the standard rate. Crucially, no schedule hyperparameters are introduced: the doubling rate and timing are entirely determined by the solver’s own stagnation diagnostics, following the norm-test principle of [23]. The only exposed parameters are the learning rate η and the initial entry fraction ϕ0.18 The growth is geometrically self-regulating: cheap noisy steps drive early progress and growth fires only as the iterate nears stationarity, so the batch reaches full size after at most ⌈log 2(1 /ϕ 0)⌉
+
+doublings and the few expensive full-batch iterations occur when the iterate is already near-converged ( Tfinal ≪ Tmax ). We implement AdaptGrow for all three entry-stochastic variants (base, SVRG, reset). At 
+
+n = 10 3 with ( η, ϕ 0) = (1 .0, 0.25), the uniform-entry variants are competitive with the Phase 1 baselines; the entry-sampled SVRG snapshot fires only a handful of times before the batch saturates. The picture changes at n = 10 4, but in cost , not convergence. Uniform-entry variants still meet the Phase 1 gates, yet each iteration is dominated by sparse scatter–gather: cuSPARSE is an order of magnitude slower than a dense step of the same FLOP count, so wall time lags full-batch AdaGrad despite far fewer iterations. The bottleneck is the sampling implementation, not the optimizer: this motivates the block-structured estimator below, which restores dense cuBLAS matmuls but introduces an accumulator pathology that an SVRG hybrid then repairs. 
+
+Block-structured sampling and the AdaGrad accumulator. To restore dense matmuls, we implement a block-structured entry-stochastic estimator: at each iteration sample row and column index sets I, J ⊂ [n] with |I| = |J| = ⌈√ϕ n ⌉ and compute the gradient from the I × J residual sub-block via three dense (cuBLAS) matmuls. The total entry coverage |I| · | J| = ϕn 2 matches naive uniform entry sampling; without explicit reweighting of missing pairs the block residual is not an unbiased estimator of the full gradient, but AdaGrad’s per-element scaling absorbs a global constant. The more serious issue is per-row imbalance in the accumulator, as follows. Each block step updates only rows of H indexed by I ∪J. A touched row aggregates |I| or |J| pair residuals at once, so its squared gradient is roughly |J|2 times a single-pair term (since |I| = |J|), while untouched rows get g = 0 and leave Gi frozen. Over the stochastic phase, frequently sampled rows therefore build a much larger Gi = P 
+
+> s
+
+g2 
+
+> s,i
+
+than rarely sampled ones. When AdaptGrow 
+
+saturates ( ϕ = 1) and the gradient becomes dense and exact, steps still use 1 /√Gi from that uneven history: large Gi yields vanishing steps that cannot clear the KKT residual; small Gi yields oversized steps that oscillate. On a well-specified rank this stays latent through Phase 1, but under 
+
+k = 25 (Section 5.1) every n = 10 4 run fails to converge ( Et ∼ 10 −2, projected gradient ∼6× above threshold). The imbalance grows with the length of the stochastic phase, so the same failure is expected at larger n even when k = ⌊√n⌋.The fix is an SVRG hybrid snapshot in the stochastic phase. At a frequency of ∼ 1/ϕ iterations we compute μ = ∇f (H) and use μi as a placeholder gradient on rows outside I ∪ J (replaced by the fresh block estimate on touched rows), so untouched rows still contribute μ2 
+
+> i
+
+to G and the per-row update density is smoothed preemptively , before heterogeneity accumulates. With 
+
+ϕ0 = 0 .5 (each block already covers ≈ 70% of rows per iteration), the SVRG hybrid runs at dense 
+
+∼ 1.35 ms/iteration, an order of magnitude faster than uniform entry sampling, and passes the 
+
+k = 25 stress test where plain block sampling fails (Section 5.1). A Piecewise-style reset once the batch is full does not repair heterogeneity and hurts when stacked on the snapshot (Appendix D). 
+
+Why this construction is specific to entry-stochastic AdaGrad. Adaptive batch growth adds nothing to row-sampled stochastic AdaGrad (already reliable via SVRG, and its value at scale is precisely in not growing back to full batch), and it cannot be combined with RMSprop under the natural dense masking of unsampled coordinates: the EMA decays on zeros while AdaGrad’s 
+
+G freezes ( gt = 0 leaves Gt unchanged). All four stochastic variants in this work (row-sampled, entry-sampled, SVRG, AdaptGrow ) are therefore built on AdaGrad; the structural argument, including why SVRG does not transfer to RMSprop, is in Appendix D. 19 Family 4: Block Coordinate Descent. HALS ( α = 10 2) converges reliably but is far slower at 
+
+n = 10 4 (Table 4): column-by-column sweeps inflate both iteration count and per-step cost. ANLS fails on every n = 10 4 run. 
+
+Family 5: Second-Order Methods. Diagonal Newton fails on all n = 10 4 TPDM runs (diagonal curvature misses HH ⊤ coupling) and, even on correlation, stays far slower than RMSprop at the same O(n2k) per-step cost. L-BFGS converges on no projected run (LogSpace works only at small scale; Section 5.2). PGNCG fails every n = 10 4 run under our criterion. 
+
+Family 6: Splitting Methods. ADMM ( ρ = 500) is competitive on wall-clock among non-gradient methods: variable splitting decouples the k × k H -update from the clamp W -update. Randomized LAI-SymNMF [32] converges but is slow and degrades under k = 25. 
+
+Family 7: Deep Unfolding. SymNMF-Net (5 blocks) fails on every n = 10 4 run: per-matrix training removes the amortization benefit, and training is two orders of magnitude slower than a direct solve even at small n.
+
+Robustness check: fixed-rank ( k = 25 ) stress test 
+
+We re-run Phase 1 at fixed k = 25 for n ∈ { 10 2, 10 3, 10 4} (Section 4.4): deliberately under-ranked at n = 10 4 (true rank ≈ 101). All six Phase 2 methods retain convergence and stay fast. Several methods that succeed at k = ⌊√n⌋ degrade: plain (non-SVRG) block and row stochastic AdaGrad fail every n = 10 4 run, and Adan, NAdam, LAI-SymNMF, and MU each lose multiple runs. The SVRG hybrids stay robust where their plain counterparts fail; we do not repeat this check in Phase 2. 
+
+Phase 2 selection 
+
+Phase 2 uses the six methods under 4 s at n = 10 4 (dashed rule in Table 4): ADMM, RMSprop, Block-SVRG AdaptGrow , AdaGrad, Row-Stochastic SVRG, and Piecewise AdaGrad. Three of them (Row-Stochastic SVRG, Block-SVRG AdaptGrow , and Piecewise AdaGrad) target effects that the Phase 1 per-iteration overhead floor hides (cheaper per-step gradients; accumulator resets on long runs). We test whether those pay off once the dense step dominates at n ≥ 10 5.
+
+# 5.2 Softplus Reparameterization Analysis 
+
+Section 2.3 introduced softplus as an alternative to projection for H ≥ 0. We quantify the effect on representative adaptive and second-order solvers. 
+
+Head-to-head comparison. Table 5 reports strict convergence under projected vs. LogSpace parameterizations. The effect is scale-dependent and ordered by optimizer memory length. At small scale softplus does not hurt, and L-BFGS converges in LogSpace through n ≤ 10 3 while it fails in projected space. By n = 10 4, LogSpace fails for long-memory adaptive methods (AdaGrad from n = 10 3; Adam at n = 10 4), while short-memory RMSprop converges at every scale. Where RMSprop converges in LogSpace it also reaches lower Et (28–130 × on correlation): short-memory methods gain from the smooth surface; long-memory accumulators do not at this scale. The softplus chain rule injects a non-stationary factor σ(Θ t) = sigmoid(Θ t) into every gradient. Longer second-moment memory averages over a wider range of σ, so adaptive rates go stale; the table pattern tracks memory length and worsens with scale. Second-order methods have no such accumulator, and L-BFGS converges more readily on the smoother surface at small scale. Softplus 20 Table 5: Projected (P) vs. softplus/LogSpace (L) convergence (runs out of 6 per scale; 3 seeds × 2types, k = ⌊√n⌋; GB200). LogSpace enables L-BFGS; long-memory AdaGrad/Adam fail at scale; RMSprop is unchanged.                                          
+
+> n= 10 2n= 10 3n= 10 4
+> Solver PLPLPL
+> RMSprop 666666Adam 666660AdaGrad 666060Newton 666530L-BFGS 060600
+
+still costs at scale: as Θ spreads, σ(Θ) and σ′(Θ) → 0 poorly scale Hessian estimates, so Newton and L-BFGS also fail in LogSpace by n = 10 4 (Newton from partial projected success). The ordering matches memory length, though we have not run a controlled β2/α sweep. Four of the six Phase 2 methods are long-memory AdaGrad-family solvers, so Phase 2 uses projected space. LogSpace RMSprop converges with lower reconstruction error; we leave that configuration for n ≥ 10 5 untested. 
+
+# 5.3 Phase 2: Large-Scale Feasibility ( n ≥ 10 5)
+
+Phase 1 measured reliability and cost at n ≤ 10 4. Phase 2 runs the six selected methods on 
+
+n ∈ { 10 5, 10 6}: all six at n = 10 5 and the five AdaGrad-family methods at n = 10 6 (ADMM is omitted at that scale; it is the slowest on TPDM at n = 10 5). Each solver uses its best local sweep around the Phase 1 anchor (Table 7). At n = 10 5 both matrix types use k = ⌊√n⌋ = 316; at n = 10 6 correlation uses k = 1000, while TPDM uses k = 400 (its rank ceiling nexc = 400; Section 4.2), so the two become distinct problems. Row-Stochastic SVRG evaluates gradients on a row fraction between full-gradient snapshots. Block-SVRG AdaptGrow uses dense cuBLAS sub-blocks of relative size ϕt, grown from ϕ0 to-ward 1 (Table 7). At n = 10 5, S is 40 GB in fp32 and fits on one GB200 GPU, but the O(n2k) product SH 
+
+is sharded across four GPUs of one node ( ∼3.6× per-iteration speedup, applied uniformly). At 
+
+n = 10 6, S is 4 TB and is row-sharded across 16 nodes (64 GPUs; NCCL): each node holds a row block of S and a full replica of H; communication is an all gather of SH and an all reduce of its gradient ( O(nk ) each), so replicas stay in sync. 
+
+Results at n = 10 5. All six solvers in Table 6 converge on both types at k = 316, all three seeds, at the nominal gate ∥∇ proj ∥F /(nk ) < 10 −4. The five first-order methods share a common residual of Et ≈ 1.27 × 10 −2 on correlation and 7 .2 × 10 −4 on TPDM: once the gradient gate is met, the residual is set by the problem, not the optimizer. ADMM reaches a lower floor of 8 .1 × 10 −4 on correlation and 1 .6 × 10 −6 on TPDM by splitting variables and avoiding the projected step-size ceiling near the boundary. Wall time tracks the dense product SH . Piecewise AdaGrad is fastest on both types, then AdaGrad; both finish in under 100 iterations, so full-batch steps beat the stochastic variants. 21 Table 6: Phase 2 wall-clock and iterations to convergence on GB200 (fp32; means over seeds 
+
+{7, 42 , 99 }, all 3 /3). Entries are wall (iters); seconds at n = 10 5 (k = 316, four GPUs), minutes at 
+
+n = 10 6 (CORR k = 1000, TPDM k = 400, 16 nodes (64 GPUs); τg = 10 −3 for TPDM at n = 10 6,else 10 −4; Section 4.1). ADMM only at n = 10 5. Bold: fastest per scale and type. Et in text.                                   
+
+> Correlation TPDM Solver n=10 5n=10 6n=10 5n=10 6
+> AdaGrad 7.9 (82) 2.0 (72) 9.3 (99) 4.8 (395) Piecewise AdaGrad 6.3 (72) 37.1 (1335) 8.4 (99) 5.7 (475) Row-Stoch. SVRG 11.3 (182) 3.1 (152) 12.9 (209) 6.7 (749) Block-SVRG AdaptGrow 13.0 (122) 2.9 (122) 12.4 (112) 4.0 (409) RMSprop 28.2 (332) 2.9 (102) 15.3 (172) 8.7 (715) ADMM 6.7 (102) —19.6 (315) —
+
+ADMM is second on correlation and slowest on TPDM. Correlation uses larger steps than TPDM throughout, as in Table 7, matching the different conditioning in Table 3. 
+
+Results at n = 10 6. On correlation at k = 1000, all five AdaGrad-family methods converge on all three seeds to Et ≈ 4.6 × 10 −3, lower than at n = 10 5 because larger k retains more of the noise bulk. AdaGrad is fastest, with bit-identical iteration counts across seeds; the stochastic variants and RMSprop cluster next; Piecewise AdaGrad is far slower, its reset cadence poorly matched to a long smooth descent. The large η in Table 7 rescales η g/ √G globally and offsets the shared 
+
+O(1 /√t) factor in 1 /√G, while leaving relative per-coordinate weights 1 /√Gi intact. On TPDM at k = 400, the factorization is essentially exact in fp32, so Et → 0 and the projected gradient is precision-limited near 10 −3. We certify at τg = 10 −3 as in Sections 2.1 and 4.1. All five methods converge on all three seeds. Block-SVRG AdaptGrow is fastest, then AdaGrad; Piecewise AdaGrad and RMSprop show the widest seed spreads, and RMSprop needs α = 0 .999. 
+
+Why the ordering splits by matrix type. AdaptGrow’s sub-block step is cheaper than full-batch AdaGrad’s, so the faster method is whichever keeps a comparable iteration count (Table 3). On correlation, γk+1 ≈ 39 separates a rank-1000 subspace that AdaGrad captures in a short run, similar in length to n = 10 5. Cheap stochastic steps do not amortize, and with energy in only 
+
+∼4 factors ( reff ≈ 4) a random sub-block is high-variance, so AdaptGrow needs substantially more iterations and full-batch AdaGrad remains faster. On TPDM, γk ≈ 1 and large κ+ force a long descent that lengthens with n. Energy concentrates in one common factor ( reff → 1), so rows are near-collinear and a random sub-block is low-variance: AdaptGrow matches AdaGrad’s iteration count at lower per-step cost, and is correspondingly slower on the short n = 10 5 runs. At n = 10 6, AdaGrad suits correlation-type spectra and Block-SVRG AdaptGrow suits TPDM-type spectra. At n = 10 5 every run is short, so full-batch Piecewise or AdaGrad is fastest on both. Phase 2 shows SymNMF remains practical when S exceeds single-GPU memory. 22 Table 7: Phase 2 configurations (local sweep around the Phase 1 anchor; three seeds). Bold: fastest run in Table 6. Correlation uses larger steps than TPDM. 
+
+Solver Type n = 10 5 n = 10 6
+
+AdaGrad CORR η=96 η=384 
+
+TPDM η=32 η=32 Piecewise AdaGrad CORR η=128 , c =10 η=0 .75 , c =200 TPDM η=32 , c =10 η=0 .5, c =20 Row-Stoch. SVRG CORR η=128 , |I|/n =0 .75 , s =10 η=256 , |I|/n =0 .75 , s =5 TPDM η=64 , |I|/n =0 .75 , s =10 η=16 , |I|/n =0 .75 , s =5 Block-SVRG AdaptGrow CORR η=64 , ϕ 0=0 .75 , s =10 η=256 , ϕ 0=0 .5, s =10 TPDM η=24 , ϕ 0=0 .75 , s =10 η=20 , ϕ 0=0 .75 , s =5 
+
+RMSprop CORR η=0 .4, μ =0 .5, α =0 .999 η=32 , μ =0 .25 , α =0 .99 TPDM η=0 .4, μ =0 .25 , α =0 .999 η=1 .6, μ =0 .75 , α =0 .999 ADMM CORR ρ=500 —TPDM ρ=500 —
+
+# 6 Clustering Alternatives 
+
+SymNMF’s factorization S ≈ HH ⊤ is already a soft clustering: the rows of H give each point’s membership across the k groups, and arg max j Hij recovers a hard label. When only hard labels are needed, a direct clustering algorithm can bypass the factorization. Both inputs are unit-diagonal (Section 3.4): a matrix of unit vectors for the TPDM, and likewise for absolute correlation up to the elementwise | · | , which can mildly break PSD at scale (Sec-tion 4.2). Theorems 6.1–6.2 link orthogonality-constrained SymNMF on that matrix to classical and, approximately, spherical K-means on the latent unit vectors that produce it. Given only S,we run spherical K-means on the rows of S as the practical kernel-style baseline; the unconstrained Frobenius SymNMF we optimize further drops orthogonality. We develop both equivalences below, then compare efficiency in Section 6.2. 
+
+# 6.1 Theoretical Equivalences 
+
+Here K denotes the number of clusters and k the summation index. 
+
+6.1.1 K-means as constrained SymNMF 
+
+Given n observations x1, . . . , xn ∈ Rm, K-means [57] partitions them into K clusters C1, . . . , C K
+
+by minimizing the within-cluster variance: 
+
+JK =
+
+> K
+
+X
+
+> k=1
+
+X
+
+> i∈Ck
+
+∥xi − mk∥2,
+
+where mk = 1
+
+> nk
+
+P 
+
+> i∈Ck
+
+xi is the centroid with cardinality nk. The connection to SymNMF was formalized by [7] and [5]: 23 Theorem 6.1. Let X = [ x1 · · · xn] ∈ Rm×n be the data matrix, M = [ m1 · · · mK ] ∈ Rm×K the centroid matrix, and B ∈ { 0, 1}n×K the binary assignment matrix with exactly one non-zero entry per row. Define D := B⊤B = diag( n1, . . . , n K ). Then: 
+
+B = arg min 
+
+> B,M
+
+JK where M = XBD −1
+
+L = arg min 
+
+> L⊤L=IK
+> L≥0
+
+∥X⊤X − LL ⊤∥2
+
+> F
+
+on the set of assignment-induced matrices L = BD −1/2 (L has exactly one nonzero entry per row). 
+
+The equivalence follows from the substitution L = BD −1/2, which satisfies both non-negativity and orthogonality L⊤L = IK ; the proof is in the appendix. The continuous relaxation, allowing arbitrary L ≥ 0 with L⊤L = IK , is a superset of this discrete family and links to SymNMF [7, 5]. Constrained SymNMF thus recovers the K-means solution through the structure of L: K-means is SymNMF with an added orthogonality constraint. 
+
+6.1.2 Spherical K-means as constrained SymNMF 
+
+Spherical K-means [58, 59] optimizes cosine similarity rather than Euclidean distance, the natural objective for data on the unit sphere such as our standardized inputs (Section 3.4). It partitions the data into K clusters by minimizing angular dissimilarity: 
+
+SK =
+
+> K
+
+X
+
+> k=1
+
+X
+
+> i∈Ck
+
+(1 − ⟨ ˜xi, ˜ck⟩) ,
+
+where ˜ xi = xi/∥xi∥ and ˜ ck = ck/∥ck∥ are the ℓ2-normalized observations and centroids [59]. 
+
+Theorem 6.2. Let ˜X = [ ˜ x1 · · · ˜xn] ∈ Rm×n be the normalized data matrix with ∥ ˜xi∥ = 1 , and 
+
+˜B ∈ { 0, 1}n×K the binary assignment matrix with ˜D := ˜B⊤ ˜B = diag( n1, . . . , n K ). Define ˜L =˜B ˜D−1/2 and let sk = P 
+
+> i∈Ck
+
+˜xi. Then: 1. Minimizing SK is equivalent to maximizing PKk=1 ∥sk∥.2. Minimizing the orthogonally-constrained SymNMF objective ∥ ˜X⊤ ˜X − ˜L ˜L⊤∥2 
+
+> F
+
+is equivalent to maximizing PKk=1 ∥sk∥2/n k.
+
+The two objectives differ only by cardinality weighting: spherical K-means maximizes P
+
+> k
+
+∥sk∥,while constrained SymNMF maximizes P
+
+> k
+
+∥sk∥2/n k. For balanced partitions ( nk ≈ n/K ) the weights are nearly common and the objectives align, so SymNMF on ˜X⊤ ˜X acts as a continuous relaxation of spherical K-means that tends to recover the same structure [7, 5]; the alignment loosens for strongly unbalanced partitions. The distinction from Theorem 6.1 is that the spherical centroid is the normalized sum ˜ ck =
+
+sk/∥sk∥, not the mean sk/n k. That blocks the idempotent projection argument that gives an exact algebraic equivalence in the Euclidean case. Both objectives penalize dispersed clusters and reward tightly aligned groups, so SymNMF on the matrix remains a surrogate for angular clustering. Both inputs are unit-diagonal, so spherical K-means is the matched discrete objective; classical K-means would suit an un-standardized input such as raw covariance. Given only S, we run it on the rows of S; unconstrained Frobenius SymNMF further drops orthogonality. 24 Table 8: Spherical K-means (Lloyd on the rows of S) across scales and types. Hardware matches the SymNMF benchmarks: single GPU at n ≤ 10 4, four GPUs at n = 10 5, 16 nodes (64 GPUs) at n = 10 6. True fp32 with TF32 off; means over seeds {7, 42 , 99 }, all converged. Silhouette is label-free. At n = 10 6 TPDM uses k = 400 (Section 4.2).                                              
+
+> Type nkSilhouette iters wall (s) CORR 100 10 0.78 50.015 1 000 31 0.71 60.040 10 000 100 0.57 12 0.146 100 000 316 0.48 12 1.93 1 000 000 1 000 0.32 17 23.7 TPDM 100 10 0.75 30.13 1 000 31 0.67 90.044 10 000 100 0.60 12 0.145 100 000 316 0.37 17 2.20 1 000 000 400 ≈046.9
+
+# 6.2 Computational Comparison 
+
+We benchmark spherical K-means (Lloyd) on the rows of S against the Phase 2 SymNMF solvers under a matched setup: the same PyTorch + NCCL row-sharding and the same hardware allo-cation as Section 5.3. Both SymNMF and K-means are reported in fp32; SymNMF residuals are additionally unchanged under TF32 (Section 4.3), whereas K-means on TPDM is sensitive to that setting, so we keep TF32 off for the K-means runs. The convergence criteria differ, so iteration counts are not comparable. SymNMF must clear the three-criterion rule (12); K-means stops on objective stagnation alone, a relative drop in P
+
+> i
+
+(1 −cos) below 10 −4, as soon as the Lloyd assignments stabilize, and all runs converged. K-means thus certifies a weaker condition on a simpler problem, and part of its speed advantage is the lighter stopping rule. We compare wall-clock and the silhouette of the resulting partition as a label-free quality summary. 
+
+Cost. A Lloyd step and a SymNMF gradient step share the same O(n2k) product of S with an n×k
+
+factor, so the wall-clock gap is iteration count: K-means finishes in at most 17 iterations, versus tens to hundreds for the Phase 2 leaders (Table 6). Where both produce a meaningful partition, K-means is several times faster at n ≥ 10 5. When only hard labels are needed, that is enough; the soft embedding H still requires the factorization. 
+
+A spectral limitation of the hard baseline. Table 8 also shows a limitation of spherical K-means. On correlation the silhouette degrades gracefully with scale; on TPDM it tracks correlation through moderate n and then collapses at n = 10 6, where Lloyd stops almost immediately on a meaningless partition. The cause is the effective-rank collapse of Table 3 ( reff = tr( S)/λ 1 → 1.1 at n = 10 6). Decompose the symmetric PSD input as S = P 
+
+> j
+
+λj uj u⊤ 
+
+> j
+
+with λ1 ≥ λ2 ≥ · · · ≥ 0; its i-th row is si =
+
+Sei = P 
+
+> j
+
+λj uji uj . Writing θi for the angle between si and the leading eigenvector u1, and using 25 u⊤ 
+
+> 1
+
+si = λ1u1i with P 
+
+> i
+
+u21i = 1, 
+
+P
+
+> i
+
+∥si∥2 sin 2 θi
+
+P
+
+> i
+
+∥si∥2 = ∥S∥2 
+
+> F
+
+− λ21
+
+∥S∥2
+
+> F
+
+=
+
+P 
+
+> j≥2
+
+λ2
+
+> j
+
+P 
+
+> j
+
+λ2
+
+> j
+
+≤ (reff − 1) 2, (14) where the bound follows from P 
+
+> j≥2
+
+λ2 
+
+> j
+
+≤ (tr S − λ1)2 = λ21(reff − 1) 2 and ∥S∥2 
+
+> F
+
+≥ λ21. At n = 10 6
+
+this caps the norm-weighted root-mean-square of sin θi at reff − 1 = 0 .1. Moreover the TPDM is entrywise positive and irreducible, so Perron–Frobenius gives a unique strictly positive u1. Every row then has a positive projection onto u1, and after unit normalization all rows concentrate on that same direction. The spherical K-means objective is near-zero for every partition, so the assignment is non-identifiable and the silhouette vanishes, for any k and any optimizer. The bound (14) is monotone in reff − 1, matching Table 3: hard angular clustering fails when a single common factor dominates. SymNMF avoids it by fitting magnitudes rather than angles, reconstructing the same matrix to the precision floor by HH ⊤ (Et → 0; Section 5.3). The soft factorization stays necessary both for the embedding and in this near-rank-1 regime. 
+
+# 7 Related Work 
+
+Extreme value theory and dependence modeling. The TPDM of [1] admits exact (PCA-like) factorizations for regularly varying vectors; we use SymNMF for an approximate factorization at scales where those methods are impractical. Multivariate regular variation follows [3, 37], with extreme-value background in [2, 36]. Tail dependence in financial risk is motivated by regulation and portfolio construction [38, 39, 40]; Pareto(2) margins are standard [43, 44]. 
+
+NMF, SymNMF, and distributed solvers. NMF was popularized by [8, 9]; SymNMF and its link to graph clustering by [4, 5], with identifiability in [10]. Lines we benchmark include dampened MU [12], ANLS/HALS [26, 25], PGNCG and the CPU/MPI library PLANC [30, 31], ADMM in non-convex and SymNMF settings [11, 60, 61, 62], and deep unfolding [33]. MPI-FAUN [63] is the other mature CPU-cluster NMF stack. We target single- and multi-GPU settings and compare these families under one convergence criterion, rather than a wall-clock head-to-head against MPI on CPU. 
+
+Clustering via SymNMF. Orthogonality-constrained SymNMF is equivalent to K-means on the latent factors [7, 5]; spherical K-means replaces Euclidean distance by cosine similarity [58, 59]. We use Lloyd on the rows of S as the discrete baseline when only hard labels are needed (Section 6), and keep unconstrained Frobenius SymNMF when a soft embedding is required or angular structure collapses. 
+
+Convergence criteria. Projected-gradient stopping for constrained NMF follows [46]. Our three-criterion AND rule (Section 4.1) adds a loss gate and per-element KKT normalization. 
+
+Constraint handling. Smooth bijections for H ≥ 0 connect to mirror descent and multiplicative weights [13, 64]; common maps are eΘ, Θ 2, and softplus [34]. The interaction of the bijection with optimizer memory length (Section 5.2) appears new in the NMF setting. 
+
+Adaptive gradients and stochastic SymNMF. AdaGrad’s growing accumulator [6] saturates on long runs; RMSprop and Adam forget via EMAs [18, 19, 65]. The decaying step size, not the direction, often drives AdaGrad’s behavior [66]. Scheduled remedies include accumulator decay [67], cosine learning-rate restarts [68], and non-monotone accumulators [69]. Piecewise AdaGrad instead 26 resets on objective stagnation, recalibrates the accumulator per entry, and leaves the learning rate untouched (Section 5.1). For cheaper steps we adapt SVRG [22] to row and block entry sampling under AdaGrad. Ran-domized SymNMF of [32] samples inside constrained least-squares subproblems; we sample the gradient itself and feed it to an AdaGrad accumulator. Growing-batch follows the norm test and sample-complexity bounds of [23, 24]; we adapt them to non-convex SymNMF, where block sam-pling creates an accumulator heterogeneity that SVRG must repair (Section 5.1). 
+
+# 8 Conclusions 
+
+Removing n × n intermediates makes dense SymNMF practical through n = 10 6. Five AdaGrad-family methods converge at that scale; ADMM reaches a lower reconstruction floor at n = 10 5 than the projected first-order methods, but is not among the fastest there and was not scaled further. A central finding is that diagonal AdaGrad, standard in deep learning but not previously studied for dense SymNMF, is the method that makes this problem tractable at scale: we apply it and its adaptive relatives through n = 10 6 and find that they alone occupy the reliability–efficiency frontier. AdaGrad is the simplest member of that family and the default when runs stay short. Piecewise AdaGrad is fastest at n = 10 5, but its accumulator resets become fragile on long smooth descents. When iteration counts grow, Block-SVRG AdaptGrow ’s cheaper sub-block step pays off once it matches full-batch iterations; because it grows the batch from the same stagnation signal, it can start stochastic and fall back to full-batch AdaGrad without choosing a regime in advance. Projection is preferred for long-memory adaptive methods at scale; softplus helps short-memory and some second-order methods only at small n.When only hard labels are needed and angular structure is present, spherical K-means is cheaper than SymNMF-then-argmax. As the effective rank falls toward one, that baseline fails: the same near-rank-1 regime that breaks angular clustering makes AdaptGrow’s random sub-block a low-variance, cheap gradient estimate, while the soft factorization still fits. Natural next steps are streaming SymNMF for rolling windows and a profiled multi-node scaling study. Open theoretical questions remain: when the spectral gap selects the faster solver, when low effective rank makes sub-sampling faithful, and how the learning rate should grow with n.
+
+# Acknowledgements 
+
+We thank Siddharth Samsi and Saleh Ashkboos for help in reviewing the paper, and Ioana Boier for helpful advice and broader guidance throughout this work. 27 Appendix 
+
+# A Proofs 
+
+Regular variation of the factor model. The following results underlie the TPDM construction of Section 3.3; ∥ · ∥ 2 is the Euclidean norm, matching the polar decomposition of Section 3.2. 
+
+Proposition A.1. (Theorem 7.4 in [3]) Let X1, X2 ∈ RV n 
+
+> +
+
+(α) be independent random vectors with a common normalizing sequence {bN } such that N P(b−1 
+
+> N
+
+X1 ∈ · ) v
+
+−→ νX1 (·) and N P(b−1 
+
+> N
+
+X2 ∈·) v
+
+−→ νX2 (·). Then X1 + X2 ∈ RV n 
+
+> +
+
+(α) and 
+
+N P(b−1 
+
+> N
+
+(X1 + X2) ∈ · ) v
+
+−→ νX1 (·) + νX2 (·).
+
+Proposition A.2. (See e.g. Proposition 5.3 in [3]) Let X ∈ RV n 
+
+> +
+
+(α) such that N P(b−1 
+
+> N
+
+X ∈ · ) v
+
+−→
+
+νX (·) in M+ ([0 , ∞]n\{ 0}). Then for a ∈ R+,
+
+N P(b−1 
+
+> N
+
+(aX) ∈ · ) v
+
+−→ aανX (·).Proof of Proposition A.2. For a = 0 the conclusion is trivial. For a > 0, and any C ⊂ ([0 , ∞]n\{ 0}), using the scaling property of the limiting measure, 
+
+N P(b−1 
+
+> N
+
+(aX) ∈ C) = N P(b−1 
+
+> N
+
+X ∈ a−1C) v
+
+−→ νX (a−1C) = aανX (C). 
+
+Corollary A.1. Let a ∈ Rn
+
+> +
+
+, where max i=1 ,...,n ai > 0. Let Z be a regularly varying α random variable with {bN }N ≥1 ⊂ R such that N P(b−1 
+
+> N
+
+Z > z ) → z−α, z > 0. Then aZ ∈ RV n 
+
+> +
+
+(α) and when normalized by {bN } has angular measure 
+
+HaZ (·) = ∥a∥α 
+
+> 2
+
+δa/∥a∥2 (·).Proof of Corollary A.1. Theorem 6.1 in [3] guarantees that it is sufficient to prove convergence on sets [0 , x]c, x > 0, to ensure convergence on M+ ([0 , ∞]n\{ 0}). 
+
+N P(b−1 
+
+> N
+
+(aZ) ∈ [0 , x]c) = N P [
+
+> i:ai>0
+
+{b−1 
+
+> N
+
+(aiZ) > x i}
+
+!
+
+= N P [
+
+> i:ai>0
+
+{Z > b N a−1 
+
+> i
+
+xi}
+
+!
+
+= N P
+
+
+
+b−1 
+
+> N
+
+Z > min  
+
+> i:ai>0
+
+a−1 
+
+> i
+
+xi
+
+
+
+→
+
+
+
+max  
+
+> i:ai>0
+
+aix−1
+
+> i
+
+α
+
+= max  
+
+> i=1 ,...,n
+
+aαi x−αi
+
+= ∥a∥α 
+
+> 2
+
+max  
+
+> i=1 ,...,n
+
+x−αi (ai/∥a∥2)α .Then νX ([0 , x]c) = 
+
+Z
+
+> Sn−1+
+
+max 
+
+> i=1 ,...,n
+
+(wαi /x αi )dHX (w), and we can identify 
+
+HaZ (·) = ∥a∥α 
+
+> 2
+
+δa/∥a∥2 (·). 
+
+Corollary A.2. Let A = ( a1, . . . , ak) ∈ Rn×k 
+
+> +
+
+be a matrix with max i=1 ,...,n aij > 0, for all j =1, . . . , k and let Z = ( Z1, . . . , Z k)⊤ be a vector of independent and identically distributed regularly 
+
+28 varying α random variables with {bN }N ≥1 ⊂ R such that 
+
+N P(b−1 
+
+> N
+
+Zj > z ) → z−α, for all j = 1 , . . . , k .Then AZ = Pki=1 aiZi ∈ RV n 
+
+> +
+
+(α) and, when normalized by {bN },
+
+HAZ (·) = 
+
+> k
+
+X
+
+> j=1
+
+∥aj ∥α 
+
+> 2
+
+δaj /∥aj ∥2 (·).Proof of Corollary A.2. From Corollary A.1, Haj Zj (·) = ∥aj ∥α 
+
+> 2
+
+δaj /∥aj ∥2 (·) for all j = 1 , . . . , k .Using AZ = Pkj=1 aj Zj and the additivity of limiting measures for independent regularly varying summands (Proposition A.1), 
+
+HAZ (·) = 
+
+> k
+
+X
+
+> j=1
+
+Haj Zj (·) = 
+
+> k
+
+X
+
+> j=1
+
+∥aj ∥α 
+
+> 2
+
+δaj /∥aj ∥2 (·). 
+
+Proof of Theorem 6.1. We have M = XBD −1, and the cost function can be rewritten as 
+
+JK =
+
+> K
+
+X
+
+> k=1
+
+X
+
+> i∈Ck
+
+∥xi − mk∥2 = ∥X − M B ⊤∥2
+
+> F
+
+= ∥X − XBD −1B⊤∥2 
+
+> F
+
+= ∥X(In − BD −1B⊤)∥2
+
+> F
+
+= Tr  (In − BD −1B⊤)⊤X⊤X(In − BD −1B⊤) = Tr  (In − BD −1B⊤)X⊤X
+
+= Tr( X⊤X) − Tr( BD −1B⊤X⊤X) = Tr( X⊤X) − Tr 
+
+
+
+(XBD −1/2)⊤(XBD −1/2)
+
+
+
+.
+
+Let L := BD −1/2 ∈ Rn×K 
+
+> +
+
+. Then L⊤L = D−1/2B⊤BD −1/2 = IK , so 
+
+JK = Tr( X⊤X) − Tr( L⊤X⊤XL ).
+
+Under L⊤L = IK and L ≥ 0, min JK ⇐⇒ max Tr( L⊤X⊤XL ) ⇐⇒ min ∥X⊤X − LL ⊤∥2 
+
+> F
+
+.
+
+Proof of Theorem 6.2. (1). For unit-norm data ∥ ˜xi∥ = 1 and normalized centroids ˜ ck = sk/∥sk∥,
+
+SK =
+
+> K
+
+X
+
+> k=1
+
+X
+
+> i∈Ck
+
+ 1 − ˜x⊤ 
+
+> i
+
+˜ck
+
+ = n −
+
+> K
+
+X
+
+> k=1
+
+s⊤
+
+> k
+
+sk
+
+∥sk∥ = n −
+
+> K
+
+X
+
+> k=1
+
+∥sk∥.
+
+(2). Define ˜L := ˜B ˜D−1/2. As in the proof of Theorem 6.1, ˜L⊤ ˜L = IK and ˜L ≥ 0. Applying the Euclidean K-means trace expansion to unit-norm data (Theorem 6.1 with ˜X in place of X), Tr( ˜L⊤ ˜X⊤ ˜X ˜L) = 
+
+> K
+
+X
+
+> k=1
+
+∥sk∥2
+
+nk
+
+.
+
+Minimizing ∥ ˜X⊤ ˜X − ˜L ˜L⊤∥2 
+
+> F
+
+under the orthogonality constraint is equivalent to maximizing this trace. 29 Gap between the two objectives. (1) maximizes P
+
+> k
+
+∥sk∥; (2) maximizes P
+
+> k
+
+∥sk∥2/n k. By Cauchy–Schwarz, P
+
+> k
+
+∥sk∥2/n k ≥ (P
+
+> k
+
+∥sk∥)2/n , with equality iff ∥sk∥ ∝ nk. The two objec-tives therefore differ only through the cardinality weighting 1 /n k, which is nearly common across clusters for balanced partitions, leaving them closely aligned in practice. 
+
+# B Benchmark Data Generation 
+
+Storage for the dense n × n input scales as: 
+
+n k = ⌊√n⌋ S (fp32) H (fp32) 
+
+100 10 40 KB 4 KB 1,000 31 4 MB 124 KB 10 ,000 100 400 MB 4 MB 100 ,000 316 40 GB 126 MB 1,000 ,000 1,000 4 TB 4 GB At n = 10 5, S still fits on a single 192 GB GPU under the trace reformulation (Table 1); Phase 2 shards across four GPUs for throughput. At n = 10 6, S is 4 TB and requires multi-node distribution across 16 nodes (64 GPUs). 
+
+Factor model and mixing matrix. Both types share A ∈ Rn×(k+1) + : column 0 is a common factor (mean loading 0 .8, Gaussian noise σ = 0 .15 on all rows); columns 1 , . . . , k are group factors with strong on-block loadings (uniform in [0 .6, 1.8]), off-block noise σ = 0 .05, and block sizes ±40% around n/k . Entries are clamped to R+; the resulting A has full column rank k+1 in every generated instance. Before computing S, the rows of A (and the corresponding ground-truth labels) are randomly permuted. Permuting A early rather than the n × n output avoids an O(n2) random-access shuffle on the final matrix when S is memory-mapped. Each matrix is stored with its permutation vector and ground-truth cluster labels. 
+
+TPDM construction. We generate nsample = 40 ,000 synthetic observations via X = AZ + ε,where Z ∈ R(k+1) ×nsample has iid Pareto( α = 2) entries and ε has iid 0 .3 · Pareto( α = 2) entries. Each observation Xj is mapped to polar coordinates ( rj , wj ) = ( ∥Xj ∥, X j /∥Xj ∥). The nexc =
+
+⌊q · nsample ⌋ observations with largest radial norm rj are retained as exceedances ( q = 0 .01), and their angular components form the rows of Ω ∈ Rnexc ×n (Section 3.4). The empirical TPDM is ˆΣ = ( n/n exc ) Ω ⊤Ω, normalized to unit diagonal. By Corollary A.2, under the noiseless factor model the population TPDM is Σ = D−1/2AA ⊤D−1/2 with Dii = ( AA ⊤)ii (recall α = 2); with the same-index Pareto noise used here, this is the leading factor contribution to which the estimator converges as nsample → ∞ . Fixing nsample (hence nexc = 400) makes large-n TPDM hardness mix spectral flattening with a fixed exceedance budget. 
+
+Correlation construction. Using the same mixing matrix A and nsample = 40 ,000, we generate 
+
+X = AZ + ε with Z ∼ N (0 , I k+1 ) and ε ∼ N (0 , I n). The Pearson sample correlation is Cij =ˆCov( Xi, X j )/(ˆ σi ˆσj ). Since A ≥ 0 and Z, ε are zero-mean Gaussian, the population covariance 
+
+AA ⊤ + In has non-negative off-diagonals, so sample negatives arise only from finite-sample noise. The SymNMF input is Sij = |Cij |, symmetric, non-negative, unit-diagonal, and valued in [0 , 1]. 30 Rank choice. The generative rank is k∗ = ⌊√n⌋ + 1; the factorization rank is k = ⌊√n⌋, one below, so solvers must absorb the common factor into the group columns of H (Section 4.4). The fixed-rank stress test kfix = 25 is likewise defined there. 
+
+Scalability. At n ≤ 10 ,000, all intermediates fit in GPU RAM. At n ≥ 10 5, the n × nsample 
+
+intermediate is generated in row-chunks and the outer product (Ω ⊤Ω for TPDM, covariance tiles for correlation) is accumulated tile-by-tile into a memory-mapped file; no n × n intermediate is materialized. GPU-accelerated tiling uses deterministic per-block seeds for reproducibility. 
+
+Ledoit–Wolf shrinkage. When n/n sample > 0.1, the sample correlation is ill-conditioned. Ledoit– Wolf shrinkage [47] replaces it by Sshrunk = (1 − λLW )S + λLW μI with μ = tr( S)/n and analytically estimated intensity λLW . The TPDM is not a sample covariance, so Ledoit–Wolf does not apply. 
+
+# C Detailed Algorithm Descriptions 
+
+All solvers minimize f (H) = ∥S−HH ⊤∥2 
+
+> F
+
+with H ∈ Rn×k 
+
+> +
+
+, using the gradient ∇H f = 4( H(H⊤H)−
+
+SH ) from Section 2.1. In projected mode, every update is followed by the element-wise clamp [X]+ = max( X, 0); in LogSpace mode, the optimizer acts on the unconstrained variable Θ with 
+
+H = softplus(Θ) (Section 2.3). For each family we give the update rule and its per-iteration cost. 
+
+Family 1: Multiplicative / Mirror Descent. The dampened MU rule of [12] is 
+
+H ← 12 H ⊙  1 + SH ⊘ (H(H⊤H) + ϵ),
+
+identical to (3), where ⊙ and ⊘ denote element-wise multiplication and division, and ϵ is fp32 machine epsilon ( ≈ 1.2 × 10 −7), matching the implementation default. MU preserves H ≥ 0 by construction and guarantees monotonic decrease of an auxiliary function [12]. We test four variants: random initialization, NNDSVD [51] initialization, trace-norm regularization ( λ(tr( S) − ∥ H∥2 
+
+> F
+
+)2), and mirror descent (exponentiated gradient H ← H ⊙ exp( −η∇H f )). 
+
+Family 2: Projected Gradient Methods. Projected Gradient Descent (PGD) with Armijo backtracking performs 
+
+H(t+1) = H(t) − ηt∇H f (H(t))
+
+> +
+
+,
+
+where ηt is reduced by factor β = 0 .5 until the sufficient-decrease condition f (H(t+1) ) ≤ f (H(t)) −
+
+c η t∥∇ H f ∥2 
+
+> F
+
+holds ( c = 10 −4). Accelerated Proximal Gradient (APG / FISTA) [16] introduces the extrapolation step 
+
+Y (t) = H(t) + τt − 1
+
+τt+1 
+
+(H(t) − H(t−1) ), τt+1 = 12 (1 + 
+
+q
+
+1 + 4 τ 2 
+
+> t
+
+),
+
+and applies PGD to Y (t). Adaptive restart [17] resets τ to 1 whenever f (H(t+1) ) > f (H(t)), preventing oscillation in the non-convex setting. Achieves O(1 /t 2) rate for convex problems. Heavy-ball momentum on projected PGD was tested and excluded (momentum fights the non-negativity clamp; see skipped solvers below). 
+
+Family 3: Adaptive First-Order Methods. All methods in this family maintain per-element running statistics of the gradient and use them to scale the learning rate. Letting gt = ∇H f (H(t)): 
+
+AdaGrad [6]: Gt = Gt−1 + gt ⊙ gt, H(t+1) = [ H(t) − η g t ⊘ (√Gt + ϵ)] +. The cumulative sum 
+
+Gt yields a monotonically decreasing effective learning rate. Benchmark: η = 2 .0. 
+
+Piecewise AdaGrad : between resets, identical to AdaGrad above. On objective stagnation (criterion 3, Section 4.1), fire a reset only while the per-element projected gradient remains well 31 above the KKT gate ( ∥∇ proj ∥F /(nk ) > c r τg , with cr ∈ { 3, 10 , 30 }) and a median-squared-gradient floor holds (median( g2 
+
+> t
+
+) > ϵ ), then recalibrate: Gi ← max  c · g2
+
+> t,i
+
+, c · median( g2 
+
+> t
+
+). The median floor prevents Gi → 0 on near-zero-gradient entries; the gradient-margin gate escapes large-scale plateaus early and self-terminates near convergence, replacing an absolute Et cap that fails at 
+
+n = 10 6. After a reset, stagnation detection stays off until P 
+
+> i
+
+Gi doubles from its post-reset value. A subsequent reset fires only if the previous one produced measurable loss reduction; otherwise resets are permanently disabled. Benchmark: η = 1 .0, c = 10. 
+
+RMSprop [18]: vt = α v t−1 + (1 − α) gt ⊙ gt, mt = μ m t−1 + η g t ⊘ (√vt + ϵ), H(t+1) =[H(t) − mt]+. Benchmark: η = 0 .05, α = 0 .99, μ = 0 .5. 
+
+Adam [19]: mt = β1mt−1 + (1 − β1)gt, vt = β2vt−1 + (1 − β2)gt ⊙ gt, ˆmt = mt/(1 − βt
+
+> 1
+
+), ˆvt = vt/(1 − βt
+
+> 2
+
+), H(t+1) = [ H(t) − η ˆmt ⊘ (√ˆvt + ϵ)] +. Benchmark: η = 0 .01, β1 = 0 .9, β2 = 0 .999. NAdam [20] replaces ˆ mt with β1 ˆmt +(1 −β1)gt/(1 −βt
+
+> 1
+
+) (Nesterov look-ahead). Adan [21] maintains three buffers with Nesterov-style gradient differences. 
+
+Row-Stochastic AdaGrad : sample a row index set I ⊂ [n] and form the exact partial gradient on those rows (cost O(|I| nk )). Plain sub-sampling leaves unsampled rows with stale Gi and fails the KKT gate; Row-Stochastic SVRG repairs this with a periodic full-gradient snapshot μ = ∇H f (H): fresh gradients on I, snapshot rows elsewhere, so every row of H and of G updates each iteration while retaining O(|I| nk ) cost between snapshots. Phase 1/2 anchor: ( η, |I|/n ) = (2 .0, 0.5). 
+
+Entry-stochastic AdaGrad : sample m pairs ( i, j ) and accumulate the per-entry contributions 
+
+gi += 2  h⊤ 
+
+> i
+
+hj − Sij 
+
+ hj , gj += 2  h⊤ 
+
+> i
+
+hj − Sij 
+
+ hi
+
+(cost O(mk ); unbiased for ∇H f up to a global factor absorbed by η). Fixed small m/n 2 fails the full-gradient KKT gate (Section 5.1); Appendix D records the variance-reduction attempts. 
+
+Block-SVRG AdaptGrow : sample index sets I, J with |I| = |J| = ⌈√ϕ n ⌉ and form the dense I × J residual tile via cuBLAS ( RIJ = HI H⊤ 
+
+> J
+
+− SIJ ), contributing gI += 2 RIJ HJ and 
+
+gJ += 2 R⊤ 
+
+> IJ
+
+HI . Coverage is ϕn 2 entries per step. Grow ϕ ← min(2 ϕ, 1) when objective stagnation persists for a short window while ∥∇ proj ∥F /(nk ) remains above a multiple of τg (norm-test style; Section 5.1); once ϕ = 1 the step is full-batch AdaGrad. An SVRG hybrid uses a full-gradient snapshot as the placeholder on rows outside I ∪J, which prevents per-row accumulator heterogeneity during the stochastic phase. Benchmark anchors: ϕ0 ∈ { 0.5, 0.75 } with snapshot period ∼1/ϕ .
+
+Family 4: Block Coordinate Descent. Both methods use the two-factor formulation of [26]: min   
+
+> H,W ≥0
+
+∥S − W H ⊤∥2 
+
+> F
+
++ α∥H − W ∥2 
+
+> F
+
+,
+
+where α ≫ 1 couples W ≈ H. Each sub-problem is then a standard (asymmetric) NMF update. 
+
+HALS [25]: Updates one column hj of H at a time. Letting Rj = S − P  
+
+> l̸=j
+
+wlh⊤ 
+
+> l
+
+denote the residual with column j removed, 
+
+hj ←
+
+h R⊤ 
+
+> j
+
+wj + α w j
+
+∥wj ∥2 + α
+
+i
+
+> +
+
+,
+
+with W held fixed at the previous H for a full column sweep of H, then refreshed ( W ← H) on the next outer iteration. Incremental residual updates avoid recomputing Rj from scratch. Per-iteration cost is O(n2k). Benchmark: α ∈ { 10 2, 10 3, 10 4}.
+
+ANLS [26]: Solves the H-update as a non-negative least squares problem by forming 
+
+H⊤ ← arg min 
+
+> ˜H≥0
+
+"
+
+W
+
+√α I k
+
+#
+
+˜H −
+
+"
+
+S
+
+√α W ⊤
+
+# 2
+
+> F
+
+,
+
+32 requiring a k × k Cholesky factorization per column and O(n2) memory for the stacked system. Benchmark: α ∈ { 10 2, 10 3}.
+
+Family 5: Second-Order Methods. Diagonal Newton with Levenberg–Marquardt regulariza-tion: at each iteration, compute the diagonal of the Hessian dij = [ ∇2f ]ij,ij and step 
+
+H(t+1) =
+
+h
+
+H(t) − η [∇H f ]ij 
+
+|dij | + λreg 
+
+i
+
+> +
+
+,
+
+with Armijo backtracking on η. The absolute value |dij | handles indefinite Hessian entries from saddle points. Per-iteration cost: O(n2k). Benchmark: η = 0 .1, λreg = 0 .5. 
+
+L-BFGS [29]: Approximates the inverse Hessian via m stored gradient pairs ( si, y i) using the two-loop recursion. Each line-search evaluation costs O(n2k), and the overall cost is O(m · n2k) per outer step. Benchmark: m = 100, with projected Armijo line search. 
+
+PGNCG [30]: Projected Gauss–Newton with truncated CG (basis of PLANC [31]). Each outer step solves a linearized least-squares subproblem in the free variables by CG; per-iteration cost remains O(n2k) plus CG matvecs. Under our three-criterion gate it reaches only 11/18 runs and no n = 10 ,000 run (Section 5.1). 
+
+Family 6: Splitting Methods. ADMM : We split non-negativity from the factorization via an auxiliary factor W and scaled dual U , with consensus H = W and W ≥ 0. Each iteration is 
+
+H(t+1) =  2SW (t) + ρ(W (t) − U (t))  2W (t)⊤W (t) + ρ I k
+
+−1, (15) 
+
+W (t+1) = H(t+1) + U (t)
+
+> +
+
+, (16) 
+
+U (t+1) = U (t) + H(t+1) − W (t+1) , (17) i.e. an unconstrained least-squares H-update for the bilinear surrogate ∥S −HW ⊤∥2 
+
+> F
+
+with consensus penalty, followed by the Euclidean projection of H + U onto Rn×k 
+
+> +
+
+. Convergence and reported solutions are tracked on the feasible factor W . The H-update inverts a single k × k matrix (cost 
+
+O(k3)) and one O(n2k) product SW . Benchmark: ρ ∈ { 50 , 500 }.
+
+Randomized LAI-SymNMF [32]: Computes a rank-k approximate eigendecomposition S ≈
+
+U ΛU ⊤ by a randomized range finder (cost O(n2k)) and then runs two-block HALS on n × k
+
+factors ( H, W ) with the cheap matvec U (Λ ⊙ (U ⊤H)) in place of SH , using the same α-coupling as Family 4. Optional refinement on the full S was tested and disabled in the reported runs (0 refine iterations). Benchmark: α = 100. 
+
+Family 7: Deep Unfolding. SymNMF-Net [33]: Unfolds T iterative updates into a trainable network with learnable parameters {Pt, λ }. Each block consists of an inversion layer ( H⊤H +λI )−1,a linear layer with parameter Pt, and a ReLU activation for non-negativity. The network is trained from scratch for each input S using Adam on the reconstruction loss, yielding T blocks of cost 
+
+O(n2k) each per training iteration. Benchmark: T = 5, η = 0 .1. 
+
+Skipped solvers and documented failure modes. Two solver configurations were excluded from the benchmark after initial testing revealed structural (not hyperparameter) failures; a third, ANLS, is benchmarked but does not scale: 
+
+• PGD + Momentum (projected): Momentum carries H past zero; the projection clamps it back to 0 while the momentum buffer retains the negative velocity. This feedback loop drives 
+
+H → 0 within ∼10 iterations ( Et = 1 .0). 33 • Shampoo [70]: Tested via torch optimizer.Shampoo in projected and LogSpace modes. For 
+
+H ∈ Rn×k the left Kronecker factor is n × n, so each matrix-root update is O(n3) and already impractical at our scales. Early runs also failed (projected: NaN in the matrix root by n ≥ 100; LogSpace: no useful progress on Et). Excluded on cost; the failures are secondary. 
+
+• ANLS converges at n ≤ 1,000 (Section 5) but is impractical beyond it: the stacked least-squares system carries the n × n block S on its right-hand side, costing O(n2) additional memory and ∼10 s per outer iteration at n = 10 ,000, where it exhausts the iteration budget without converging, leaving it uncompetitive with adaptive methods that finish in < 1 s total. 
+
+# D Sub-quadratic SymNMF: failed approaches and structural constraints 
+
+This appendix records the exploratory analysis behind Block-SVRG AdaptGrow (Section 5.1): why fixed-fraction entry sampling fails the KKT gate under variance reduction, why low-rank sketching is not a substitute, and why adaptive batch growth is specific to entry-stochastic AdaGrad. 
+
+Variance reduction at fixed entry fraction. Section 5.1 frames the fixed-fraction failure as a criterion mismatch: updates use sparse entry gradients, while certification requires the exact full gradient below τg . The per-iteration entry budget therefore caps the achievable KKT residual at a fixed fraction m/n 2, independent of how that budget is aggregated. We tested three variance-reduction strategies; none closes the gap. 
+
+SVRG variance reduction. By analogy with the row-sampled SVRG variant, we periodically compute a full-gradient snapshot μ = ∇H f (H) and construct a hybrid gradient: fresh entry-sampled estimates on touched rows, stale μ elsewhere [22]. Near a stationary point H∗ the stale components carry systematic bias proportional to ∥H − Hsnap ∥. For the oscillation amplitude to fall below the KKT threshold, snapshots must be refreshed every 10–100 iterations at O(n2k) cost each, at which point the amortized cost approaches full-batch AdaGrad. 
+
+Polyak–Ruppert iterate averaging. Suffix averaging [52, 53] maintains ¯HT = (1 /T ′) PTt=T −T ′ H(t)
+
+after a warm-up triggered at Et < 0.1. Averaging reduces objective variance, but the projected-gradient norm of the averaged iterate ¯H remains far above threshold because ∇f ( ¯H)̸ = ∇f (H(t))for non-linear f .
+
+Dual averaging. The ADAGRAD-RDA framework of [54] accumulates gradients in a dual vari-able Zt = Pts=1 gs and recovers the primal iterate via a proximal step: 
+
+H(t) = arg min 
+
+> H≥0
+
+n
+
+⟨Zt, H ⟩ + 1
+
+η
+
+X
+
+> i,j
+
+pGt,ij H2 
+
+> ij
+
++ δ√t
+
+2 ∥H∥2
+
+> F
+
+o
+
+, (18) where Gt is the AdaGrad accumulator and δ√t prevents divergence. The proximal step enforces 
+
+H ≥ 0 without the gradient–projection conflict of primal methods. However, ∇H f (0) = 0, so H = 0 is a critical point of the SymNMF objective, and the proximal recovery initializes H near zero. A primal-AdaGrad warm-up escapes this neighborhood before transitioning to dual accumulation, but the KKT residual remains large under the same fixed entry budget. 
+
+Why sketching is not a natural alternative. A tempting sub-quadratic strategy is to replace 
+
+S with a rank-r spectral truncation ˆS = U ΛU ⊤ (r ≪ n) and solve min H≥0 ∥ ˆS − HH ⊤∥2 
+
+> F
+
+at cost 
+
+O(nrk ) per iteration [55, 56]. The gradient error is bias ( ∥∇ f ˆS − ∇ fS ∥ ≤ O(∥S − ˆS∥F )) rather than variance. However, the dependence matrices here are not well approximated at small r: correlation has a Marchenko–Pastur bulk with slowly decaying eigenvalues (Table 3), and the empirical TPDM, 34 though rank-deficient with rank ≤ nexc = 400, concentrates its remaining spectrum on a flat plateau. A modest-rank sketch therefore leaves ∥S− ˆS∥F above the KKT scale; raising r to O(√n) only mildly subquadratizes the cost ( O(n3/2k)). The downstream user also typically needs the factorization of the true S, not a surrogate. 
+
+Why growing-batch is specific to entry-stochastic AdaGrad. Two natural questions arise: (1) can adaptive batch growth be applied to row-sampled stochastic AdaGrad, and (2) can stochastic sampling be combined with RMSprop? Both answers are negative for structural reasons. 
+
+Row-sampled AdaGrad does not benefit from batch growth. Naive row sampling fails the KKT gate through a mix of gradient noise and uneven accumulator growth: infrequently sampled rows develop stale Gi and mismatched per-row rates η/ √Gi. Row-SVRG already closes that gap at fixed 
+
+|I|/n by writing a hybrid gradient on every row each step (fresh on I, snapshot elsewhere), so G
+
+grows uniformly without growing the batch. Batch growth would only erase the per-step saving that makes row-SVRG useful at Phase 2. 
+
+RMSprop’s EMA is not missing-data stable under the same masking. Write an unsampled coordinate as gt,i = 0 (the natural input to a dense adaptive optimizer). AdaGrad is invariant: 
+
+Gt,i = Gt−1,i + 0 freezes the rate. An EMA is not: vt,i = αv t−1,i + (1 − α) 0 = αv t−1,i decays on every miss, so the next touch is overscaled (at α = 0 .99, roughly α−∆/2 after ∆ misses). Skipping unsampled coordinates instead of writing zeros leaves both accumulators unchanged on those rows, but standard dense RMSprop implementations apply the EMA to the full tensor and therefore see the zeros. AdaGrad’s additive update is the same under either convention; the EMA is not. SVRG does not repair this for RMSprop. The hybrid step feeds a nonzero placeholder μi into every row each iteration, so the EMA is continuously driven by stale μ2 
+
+> i
+
+between snapshots. Under entry sampling the short EMA window also retains sampling variance that AdaGrad’s 1 /t average damps. After ϕ → 1, AdaGrad can keep accumulating on top of the stochastic history; an EMA still has to forget that history over its effective window. In summary, the four stochastic variants in this work (row-sampled, entry-sampled, SVRG, 
+
+AdaptGrow ) are built on AdaGrad’s monotone accumulator because it is stable under partial observation. RMSprop’s exponential forgetting helps in the full-batch regime (Section 5.1) but rules it out here. 
+
+Dense-phase reset does not repair block-sampling heterogeneity. Block-structured sam-pling (Section 5.1) makes AdaGrad’s accumulator Gi heterogeneous across rows; the recommended fix is the SVRG hybrid snapshot, which smooths the per-row update density preemptively. We also tested a corrective alternative: once the batch is full ( ϕ = 1), on the next stagnation event recal-ibrate Gi ← max( c g 2 
+
+> i
+
+, c median( g2)) from a single fresh dense gradient (the Piecewise AdaGrad rule, applied only after the batch is full so the reset never bakes stochastic-phase heterogeneity into G), with a cooldown until G doubles and auto-disable if no objective progress follows. This does not resolve the heterogeneity: the reset fires on transient stagnation and disrupts the per-row scaling rather than repairing it. Stacking the reset on top of the SVRG hybrid is likewise counterproductive: it disrupts an already-coherent G. The dense-phase reset is therefore at best a memory-constrained fallback when SVRG snapshots are infeasible, and should not be combined with the SVRG snapshot. 35 References 
+
+[1] Daniel Cooley and Emeric Thibaud. Decompositions of dependence for high-dimensional ex-tremes. Biometrika , 106(3):587–604, 06 2019. [2] Stuart Coles. An Introduction to Statistical Modeling of Extreme Values . Springer-Verlag, 2001. [3] Sidney I. Resnick. Heavy-Tail Phenomena: Probabilistic and Statistical Modeling . Springer Series in Operations Research and Financial Engineering. Springer New York, 2010. [4] Da Kuang, Chris Ding, and Haesun Park. Symmetric nonnegative matrix factorization for graph clustering. In Proceedings of the 2012 SIAM International Conference on Data Mining ,pages 106–117. SIAM, 2012. [5] Da Kuang, Sangwoon Yun, and Haesun Park. Symnmf: Nonnegative low-rank approximation of a similarity matrix for graph clustering. Journal of Global Optimization , 62(3):545–574, 2015. [6] John Duchi, Elad Hazan, and Yoram Singer. Adaptive subgradient methods for online learning and stochastic optimization. Journal of Machine Learning Research , 12:2121–2159, 2011. [7] Chris Ding, Xiaofeng He, and Horst D. Simon. On the equivalence of nonnegative matrix factorization and spectral clustering. In Proc. SIAM Int. Conf. Data Mining , pages 606–610, 2005. [8] Daniel D. Lee and H. Sebastian Seung. Learning the parts of objects by non-negative matrix factorization. Nature , 401(6755):788–791, 1999. [9] Daniel D. Lee and H. Sebastian Seung. Algorithms for non-negative matrix factorization. In 
+
+Advances in Neural Information Processing Systems 13 (NIPS 2000) , pages 556–562. MIT Press, 2001. [10] Nicolas Gillis. Nonnegative Matrix Factorization . Fundamentals of Algorithms. SIAM, 2020. [11] Stephen Boyd, Neal Parikh, Eric Chu, Borja Peleato, and Jonathan Eckstein. Distributed optimization and statistical learning via the alternating direction method of multipliers. Foun-dations and Trends in Machine Learning , 3(1):1–122, 2011. [12] Zhaoshui He, Shengli Xie, Rafal Zdunek, Guoxu Zhou, and Andrzej Cichocki. Symmetric non-negative matrix factorization: Algorithms and applications to probabilistic clustering. IEEE Transactions on Neural Networks , 22(12):2117–2131, 2011. [13] Arkadi S. Nemirovsky and David B. Yudin. Problem Complexity and Method Efficiency in Optimization . Wiley, 1983. [14] Larry Armijo. Minimization of functions having Lipschitz continuous first partial derivatives. 
+
+Pacific Journal of Mathematics , 16(1):1–3, 1966. [15] Boris T Polyak. Some methods of speeding up the convergence of iteration methods. USSR Computational Mathematics and Mathematical Physics , 4(5):1–17, 1964. 36 [16] Amir Beck and Marc Teboulle. A fast iterative shrinkage-thresholding algorithm for linear inverse problems. SIAM Journal on Imaging Sciences , 2(1):183–202, 2009. [17] Brendan O’Donoghue and Emmanuel Cand` es. Adaptive restart for accelerated gradient schemes. Foundations of Computational Mathematics , 15(3):715–732, 2015. [18] Geoffrey Hinton, Nitish Srivastava, and Kevin Swersky. Lecture 6.5—RMSProp: Divide the gradient by a running average of its recent magnitude. Neural Networks for Machine Learning, Coursera Lecture 6e, 2012. [19] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 2014. [20] Timothy Dozat. Incorporating Nesterov momentum into Adam. ICLR Workshop , 2016. [21] Xingyu Xie, Pan Zhou, Huan Li, Zhouchen Lin, and Shuicheng Yan. Adan: Adaptive nes-terov momentum algorithm for faster optimizing deep models. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(4):1791–1804, 2024. [22] Rie Johnson and Tong Zhang. Accelerating stochastic gradient descent using predictive vari-ance reduction. Advances in Neural Information Processing Systems , 26, 2013. [23] Michael P. Friedlander and Mark Schmidt. Hybrid deterministic-stochastic methods for data fitting. SIAM Journal on Scientific Computing , 34(3):A1380–A1405, 2012. [24] Richard H. Byrd, Gillian M. Chin, Jorge Nocedal, and Yuchen Wu. Sample size selection in optimization methods for machine learning. Mathematical Programming , 134(1):127–155, 2012. [25] Hyunsoo Kim and Haesun Park. Nonnegative matrix factorization based on alternating non-negativity constrained least squares and active set method. SIAM Journal on Matrix Analysis and Applications , 30(2):713–730, 2008. [26] Jingu Kim, Yunlong He, and Haesun Park. Algorithms for nonnegative matrix and tensor factorizations: A unified view based on block coordinate descent framework. Journal of Global Optimization , 58(2):285–319, 2014. [27] Kenneth Levenberg. A method for the solution of certain non-linear problems in least squares. 
+
+Quarterly of Applied Mathematics , 2(2):164–168, 1944. [28] Donald W. Marquardt. An algorithm for least-squares estimation of nonlinear parameters. 
+
+Journal of the Society for Industrial and Applied Mathematics , 11(2):431–441, 1963. [29] Jorge Nocedal and Stephen J. Wright. Numerical Optimization . Springer Series in Operations Research. Springer, 2nd edition, 2006. [30] Srinivas Eswar, Koby Hayashi, Grey Ballard, Ramakrishnan Kannan, Richard Vuduc, and Haesun Park. Distributed-memory parallel symmetric nonnegative matrix factorization. In 
+
+SC20: International Conference for High Performance Computing, Networking, Storage and Analysis , pages 1–14. IEEE/ACM, 2020. 37 [31] Srinivas Eswar, Koby Hayashi, Grey Ballard, Ramakrishnan Kannan, Michael A. Matheson, and Haesun Park. PLANC: Parallel low-rank approximation with nonnegativity constraints. 
+
+ACM Transactions on Mathematical Software , 47(3):1–37, 2021. [32] Koby Hayashi, Sinan G. Aksoy, Grey Ballard, and Haesun Park. Randomized algorithms for symmetric nonnegative matrix factorization. arXiv preprint arXiv:2402.08134 , 2024. [33] Mingjie Li, Haoyang Kong, and Zhouchen Lin. Symnmf-net for the symmetric nmf problem. 
+
+arXiv preprint arXiv:2205.13214 , 2022. [34] Deepak Subramani, Takumi Imoto, Toshihisa Sato, Nobutaka Ono, and Shoji Miyazaki. Re-thinking non-negative matrix factorization with implicit neural representations. In Proc. In-terspeech , 2024. [35] Paul Embrechts, Claudia Kl¨ uppelberg, and Thomas Mikosch. Modelling extremal events: for insurance and finance , volume 33 of Springer Science & Business Media . Springer Science & Business Media, 2013. [36] Laurens de Haan and Ana Ferreira. Extreme Value Theory: An Introduction . Springer Series in Operations Research and Financial Engineering. Springer New York, 2010. [37] Sidney I. Resnick. Extreme Values, Regular Variation and Point Processes . Springer, 2014. [38] Basel Committee on Banking Supervision. Basel iii: A global regulatory framework for more resilient banks and banking systems, 2011. [39] Giovanna De Luca and Paolo Zuccolotto. A tail dependence-based dissimilarity measure for financial time series clustering. Adv Data Anal Classif , 5:323–340, 2011. [40] Harald Lohre, Carsten Rother, and Kilian Axel Sch¨ afer. Hierarchical risk parity: Accounting for tail dependencies in multi-asset multi-factor allocations. In Emmanuel Jurczenko, editor, 
+
+Machine Learning and Asset Management , pages 332–368. Iste and Wiley, 2020. [41] Masaaki Sibuya. Bivariate extreme statistics. Annals of the Institute of Statistical Mathematics ,11(2):195–210, 1960. [42] Martin Schlather and Jonathan A. Tawn. A dependence measure for multivariate and spatial extreme values: Properties and inference. Biometrika , 90(1):139–156, 2003. [43] Henrik Hult and Filip Lindskog. Extremal behavior of stochastic integrals driven by regularly varying l´ evy processes. The Annals of Probability , 35(1):225–264, jan 2007. [44] Meng Cheng, Dimitrios G. Konstantinides, and Dingding Wang. Multivariate regularly varying insurance and financial risks in multidimensional risk models. Journal of Applied Probability ,61(4):1319–1342, 2024. [45] Dimitri P. Bertsekas. Nonlinear Programming . Athena Scientific, Belmont, MA, 2nd edition, 1999. [46] Chih-Jen Lin. Projected gradient methods for nonnegative matrix factorization. Neural Com-putation , 19(10):2756–2779, 2007. 38 [47] Olivier Ledoit and Michael Wolf. A well-conditioned estimator for large-dimensional covariance matrices. Journal of Multivariate Analysis , 88(2):365–411, 2004. [48] Vladimir A. Marchenko and Leonid A. Pastur. Distribution of eigenvalues for some sets of random matrices. Matematicheskii Sbornik , 114(4):507–536, 1967. [49] Jing Lei and Alessandro Rinaldo. Consistency of spectral clustering in stochastic block models. 
+
+The Annals of Statistics , 43(1):215–237, 2015. [50] Jose Menchero, D. J. Orr, and Jun Wang. The Barra US equity model (USE4). MSCI Barra Research Notes , 2011. [51] Christos Boutsidis and Efstratios Gallopoulos. Svd based initialization: A head start for nonnegative matrix factorization. Pattern Recognition , 41(4):1350–1362, 2008. [52] Boris T. Polyak and Anatoli B. Juditsky. Acceleration of stochastic approximation by averag-ing. SIAM Journal on Control and Optimization , 30(4):838–855, 1992. [53] David Ruppert. Efficient estimations from a slowly convergent Robbins–Monro process. Tech-nical Report, Cornell University , 1988. [54] Lin Xiao. Dual averaging methods for regularized stochastic learning and online optimization. 
+
+Journal of Machine Learning Research , 11:2543–2596, 2010. [55] Nathan Halko, Per-Gunnar Martinsson, and Joel A. Tropp. Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions. SIAM Review ,53(2):217–288, 2011. [56] David P. Woodruff. Sketching as a tool for numerical linear algebra. Foundations and Trends in Theoretical Computer Science , 10(1–2):1–157, 2014. [57] James MacQueen. Some methods for classification and analysis of multivariate observations. In Proc. 5th Berkeley Symp. Math. Statist. Prob. , pages 281–297, 1967. [58] Inderjit S. Dhillon and Dharmendra S. Modha. Concept decompositions for large sparse text data using clustering. Machine Learning , 42:143–175, 2001. [59] Kurt Hornik, Ingo Feinerer, Martin Kober, and Christian Buchta. Spherical k-means clustering. 
+
+Journal of Statistical Software , 50(10):1–25, 2012. [60] Wei Deng, Ming-Jun Lai, and Wotao Yin. Nonconvex admm for sparse+sparse matrix decom-position. arXiv preprint arXiv:1212.0437 , 2012. [61] Songtao Lu, Mingyi Hong, and Zhengdao Wang. A stochastic nonconvex splitting method for symmetric nonnegative matrix factorization. In International Conference on Machine Learning (ICML) , pages 2232–2241, 2017. [62] Mingyi Hong, Zhi-Quan Luo, and Meisam Razaviyayn. Convergence analysis of alternating direction method of multipliers for nonconvex problems. Journal of Optimization Theory and Applications , 172(3):33–64, 2016. 39 [63] Ramakrishnan Kannan, Grey Ballard, and Haesun Park. MPI-FAUN: An MPI-based frame-work for alternating-updating nonnegative matrix factorization. IEEE Transactions on Knowl-edge and Data Engineering , 30(3):544–558, 2018. [64] Ehsan Amid and Manfred K. Warmuth. Winnowing with gradient descent. In Proc. Conference on Learning Theory (COLT) , 2020. [65] Mahesh Chandra Mukkamala and Matthias Hein. Variants of RMSProp and Adagrad with logarithmic regret bounds. In Proc. ICML , 2017. [66] Naman Agarwal, Rohan Anil, Elad Hazan, Tomer Koren, and Cyril Zhang. Disentangling adaptive gradient methods from learning rates. 2020. [67] Alibaba Group. AdagradDecay optimizer. https://deeprec.readthedocs.io/en/latest/ AdagradDecay-Optimizer.html , 2023. DeepRec framework for recommendation and search. [68] Ilya Loshchilov and Frank Hutter. SGDR: Stochastic gradient descent with warm restarts. In 
+
+Proc. ICLR , 2017. [69] Aaron Defazio, Baoyu Zhou, and Lin Xiao. Grad-gradagrad? a non-monotone adaptive stochastic gradient method. arXiv preprint arXiv:2206.06900 , 2022. [70] Vineet Gupta, Tomer Koren, and Yoram Singer. Shampoo: Preconditioned stochastic tensor optimization. In Proceedings of the 35th International Conference on Machine Learning , pages 1842–1850. PMLR, 2018. 40

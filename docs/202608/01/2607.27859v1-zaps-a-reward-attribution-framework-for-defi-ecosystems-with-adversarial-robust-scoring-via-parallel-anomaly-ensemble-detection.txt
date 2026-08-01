@@ -1,0 +1,631 @@
+Title: ZAPs: A Reward Attribution Framework for DeFi Ecosystems with Adversarial-Robust Scoring via Parallel Anomaly Ensemble Detection
+
+URL Source: https://arxiv.org/pdf/2607.27859v1
+
+Published Time: Fri, 31 Jul 2026 00:42:32 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# ZAPs: A Reward Attribution Framework for DeFi Ecosystems with Adversarial-Robust Scoring via Parallel Anomaly Ensemble Detection 
+
+Girish G N Ashutosh Sahoo Ajay Bhat 
+
+Head of AI/ML Chief Executive Officer Chief Operating Officer 
+
+Zeru Finance Zeru Finance Zeru Finance 
+
+Akshay SP Gurukiran S Parag Paul 
+
+Chief Product Officer Chief Technology Officer Advisor 
+
+Zeru Finance Zeru Finance Zeru Finance 
+
+Dhanashekar Kandaswamy 
+
+The Ohio State University, USA 
+
+Abstract 
+
+Incentive programs dominate user acquisition in decentralized finance. Points systems, retroactive airdrops, and liquidity-mining campaigns distribute billions in token value against on-chain activity, yet nearly all attribute rewards through naive heuristics—raw volume, trans-action count, wallet count—that bots and sybil operations manufacture at industrial scale. The result is a systematic transfer from genuine participants to industrialized farming. This pa-per presents ZAPs, an attribution framework that addresses the failure jointly rather than piecewise. A composite activity score normalizes user volume against each protocol’s own population distribution via high-percentile anchoring, bounding whale dominance while pre-serving differentiation across the remaining population. A two-layer cross-domain weighting mechanism—protocol-share within sector, multiplied by sector-share within ecosystem—prices protocol significance and makes niche-protocol farming structurally unprofitable; we prove that the maximum extractable reward at any protocol is bounded by that protocol’s global volume share, independent of how cheaply local dominance is purchased. A four-layer adversarial de-tection stack combines transaction-level gates, a parallel anomaly ensemble pairing a one-class reconstruction model against an isolation-forest outlier detector, post-distribution memory, and graph-based sybil clustering, all feeding graduated, non-binary penalty multipliers. On a la-beled corpus of 1,073 malicious wallets spanning 124,638 transactions, the ensemble reaches 
+
+0.923 ± 0.013 ROC-AUC against 0.891 ± 0.016 for the reconstruction model alone—but only when the isolation forest is fit on the benign population; fitting it on the pooled population inverts its polarity and destroys the ensemble gain entirely. Controlled adversarial simulation reduces reward capture by 30–90% across attack archetypes while legitimate-user scenarios shift by 1–8%, and live production campaigns recorded a 56% reduction in sybil allocation, a 49% increase in quality-wallet participation, and a 50% reduction in sell pressure. This work extends the zScore reputation lineage [6, 7] from behavioral reputation to reward attribution, where direct financial incentives make adversarial robustness a first-order design requirement. 
+
+1arXiv:2607.27859v1 [q-fin.GN] 30 Jul 2026 1 Introduction 
+
+Decentralized finance has largely replaced the loyalty and rewards apparatus of traditional financial platforms with permissionless incentive design. Where a centralized exchange grants fee tiers to verified customers, a DeFi protocol distributes tokens to pseudonymous addresses based solely on observed on-chain behavior. The scale of the substitution is substantial: retroactive airdrops and points programs now routinely allocate token supplies worth hundreds of millions of dollars, and eligibility is computed, not negotiated [16]. The attribution mechanisms behind these distributions have not kept pace with their economic weight. Most programs reward raw activity—total volume transacted, number of transactions, number of participating wallets—under the implicit assumption that activity proxies for genuine participation. That assumption fails in an adversarial setting, and the setting is now reliably adver-sarial. Farming operations manufacture qualifying activity at industrial scale: spam bots generate thousands of low-value transactions, sybil operators split capital across hundreds of coordinated wal-lets [12], and volume routes through obscure protocols where small absolute amounts translate into large relative shares. Each strategy converts a naive attribution heuristic directly into extractable value. Prior work, including the zScore lineage [6, 7], has addressed the adjacent problem of wallet 
+
+reputation —scoring the quality and consistency of on-chain behavior for credit assessment, segmen-tation, and trust modeling. Reputation scoring is not attacked the way reward attribution is. Areputation score misjudging a wallet produces a mislabeled profile; a reward function misjudging a wallet pays the attacker. The direct financial payoff changes the threat model qualitatively. This paper asks the question directly: can a reward-attribution mechanism simultaneously re-ward genuine economic contribution in proportion to ecosystem significance, and remain robust to adversarial manufacturing of that same activity? We answer affirmatively and present ZAPs, a deployed framework whose design and evaluation constitute the following contributions. 
+
+• A composite reward score (Section 3.2) combining percentile-normalized volume, engage-ment duration, and an extensible behavioral quality signal, bounded so that no component dominates the composite through scale alone. 
+
+• A two-layer cross-domain weighting mechanism (Section 3.3) establishing a formal notion of ecosystem-relative economic significance. Proposition 1 proves that maximum ex-tractable attribution at a protocol is bounded by that protocol’s global volume share, which closes the most common structural exploit in volume-based programs. 
+
+• A four-layer adversarial detection stack (Section 3.5) combining per-trade integrity gates, a parallel anomaly ensemble, post-distribution memory, and graph-based cross-wallet sybil clustering, feeding graduated penalty multipliers that bound false-positive harm relative to binary exclusion. 
+
+• Empirical validation (Sections 4 and 5) combining deployment statistics, a held-out evalua-tion on 1,073 labeled malicious wallets, controlled adversarial simulation, and live production campaigns. We identify a training-regime condition on the isolation forest that is outcome-determining for the ensemble and, to our knowledge, unreported: fitting the detector on the pooled population rather than the benign population inverts its discriminative polarity. 22 Related Work 
+
+2.1 Reputation and Scoring Systems in Crypto 
+
+Wallet-level reputation modeling developed rapidly as DeFi shifted analytical attention from plat-forms to participants. Udupi et al. introduced zScore, a universal cross-protocol reputation system built on semi-supervised neural scoring of on-chain activity [6]. The same lineage was specialized to decentralized exchanges, combining an interpretable behavioral blueprint with a noise-augmented deep residual network to score liquidity providers and traders [7]. Lin et al. proposed RiskProp, propagating de-anonymization-derived risk ratings across the Ethereum transaction graph [8], and Nguyen et al. applied PageRank to borrower trustworthiness in lending protocols [9]. Jain et al. combined on-chain behavioral metrics with machine learning in a general-purpose Web3 reputation engine [10], while Packin and Lev-Aretz examined the opacity and fairness risks such systems inherit [11]. These systems answer the question how trustworthy or sophisticated is this wallet? The present work answers a different one: how much should this wallet be paid? —a question in which the scoring function itself becomes the attack surface. ZAPs is positioned as the attribution-layer continuation of the zScore lineage, inheriting its behavioral-modeling foundations while adding the fairness weighting and adversarial machinery that direct financial distribution requires. 
+
+2.2 Market Structure and Volume Semantics 
+
+The economics of decentralized exchange establish why raw volume is a poor proxy for contribution. Malamud and Rostek showed that decentralized market structure alters welfare properties relative to centralized venues [1]; Lo and Medda documented the emergence of automated market makers as a distinct microstructure [2]; and Aspris et al. characterized the resulting trading environment and its weak surveillance guarantees [3]. Work on liquidity provision quantified the gap between nominal volume and realized economic return [4, 5]. Volume transacted and value contributed diverge, and an attribution mechanism that conflates them inherits the divergence. 
+
+2.3 Incentive Design and Sybil-Resistant Distribution 
+
+The mechanism-design literature offers principled treatments of fair allocation under strategic be-havior, most prominently quadratic funding, which reasons explicitly about the tension between capital-weighted and participant-weighted allocation [15]—the same tension any reward program must resolve. Allen et al. analyze airdrops from an economic perspective, documenting their role as ownership-distribution and marketing instruments [16]. Academic treatment of adversarially robust airdrop and points design is thin. Practitioner liter-ature abounds—post-mortems of farmed distributions, ad hoc sybil-hunting bounties—but formal frameworks connecting attribution formulas to attack economics are scarce. The gap is itself a find-ing: the mechanisms distributing the largest sums in the ecosystem have received the least formal scrutiny. 
+
+2.4 Sybil Detection in Decentralized Systems 
+
+Douceur’s foundational result establishes that sybil attacks cannot be prevented in permissionless systems without external identity anchors—only made expensive [12]. Social-graph approaches such as SybilGuard bound sybil influence via trust-network topology [13], and Victor developed address-clustering heuristics resolving multiple Ethereum addresses to common controlling entities through 3deposit-address reuse and airdrop-claim patterns [14]. The clustering layer of Section 3.5.4 extends this tradition to reward attribution: first-funder provenance graphs and behavioral uniformity scor-ing within candidate families detect coordinated multi-wallet operations that per-wallet detectors cannot reach. 
+
+2.5 Anomaly Detection Methods 
+
+Isolation Forest isolates anomalies through random recursive partitioning, exploiting the property that outliers require fewer splits to isolate [17]; it remains a strong baseline for unlabeled tabular anomaly detection and serves as one of two detectors in our ensemble. Autoencoder-based detection takes the complementary approach: a network trained to reconstruct a reference distribution recon-structs out-of-distribution inputs poorly [18, 19]. We invert the usual polarity, training on malicious wallets so that low reconstruction error indicates membership in the malicious manifold. Chala-pathy and Chawla survey the broader deep anomaly-detection landscape [20]. In credit-scoring contexts, Dastile et al. [21] and Bücker et al. [22] emphasize the interpretability obligations of ML scoring systems—a constraint addressed here through per-feature reconstruction-error attribution. 
+
+2.6 Positioning 
+
+The individual ingredients of ZAPs—percentile normalization, anomaly ensembles, multiplicative weighting, graph-based clustering—are each established. The contribution is their joint composition into a reward-attribution mechanism: nested cross-domain fairness weighting closing structural formula-level exploits, and a four-layer detection stack closing behavioral activity-level exploits, evaluated together against both attack archetypes and legitimate-user controls. 
+
+# 3 Methodology 
+
+Figure 1 gives the end-to-end architecture. The remainder of this section develops each stage. 
+
+3.1 Data Collection and Preprocessing 
+
+The pipeline draws from five DeFi sectors—DEX swaps, lending, perpetual futures, NFT trading, and staking—each carrying transaction semantics that a single aggregate volume figure would erase before attribution begins. A swap, a borrow, and a stake represent different economic commitments, and the framework treats them as such. Protocols are assigned to sectors through a maintained classification; protocols absent from the mapping are excluded rather than defaulted, on the principle that an uncategorized protocol should not silently receive credit. Three filters encode the system’s definition of economic signal. Zero-value transactions are dis-carded: they commit no capital. Approval and revocation operations are excluded, since they modify permissions rather than positions. Transactions exceeding a normalization ceiling are dropped, be-cause at that scale records are overwhelmingly artifacts of pricing error or internal bookkeeping, and their inclusion would distort the population distribution used to score every other participant. Attribution is computed per (wallet, protocol) pair, not per wallet. Let W denote the wallet set, 
+
+P the protocol set, and σ : P → S the protocol-to-sector assignment. A user active across several protocols receives independent scores at each, summed into a single reward. The decomposition is load-bearing for the fairness mechanism of Section 3.3: a wallet cannot farm a niche protocol and carry that credit into a dominant sector. The weight is applied where the activity occurred. 4Multi-chain transaction stream 
+
+Ingestion gates     
+
+> zero-value ·ap-prove/revoke ·ceiling
+
+(w, p ) pair decomposition 
+
+Volume 
+
+> percentile
+
+Engagement 
+
+> capped span
+
+Quality  
+
+> zScore
+> Composite score sw,p
+
+Cross-domain weight 
+
+ωp = Vp
+
+Vσ(p)
+
+· Vσ(p)
+
+VE
+
+= Vp
+
+VE
+
+L1 
+
+> Trade gates
+
+L2 
+
+> Anomaly ens.
+
+L3 
+
+> Dump memory
+
+L4 
+
+> Sybil cluster
+> Adversarial stack
+
+Graduated penalty 
+
+μ(w) ∈ (0 , 1] 
+
+Rw = μ(w) X
+
+> p∈P w
+
+sw,p ωp
+
+Figure 1: ZAPs attribution pipeline. The structural path (composite score, cross-domain weighting) and the behavioral path (the four-layer adversarial stack) run in parallel and compose multiplica-tively at the attribution step. 
+
+3.2 Composite Reward Score 
+
+Each pair (w, p ) receives a score composed from three independent dimensions: activity volume, temporal engagement, and behavioral quality. Writing S for the common per-dimension scale, 
+
+sw,p = α v w,p + β h w,p + γ q w,p , α + β + γ = 1 , α, β, γ > 0, (1) so that sw,p ∈ [0 , S ]. The dimensions combine additively—none substitutes for the others—and each is individually bounded, so no single component dominates the composite through scale alone. The mixing coefficients (α, β, γ ) are calibrated empirically and withheld; the analysis that follows depends only on their positivity and on the boundedness of each term. 
+
+Volume. Let Vw,p be the wallet’s dollar-denominated activity at protocol p, and let Π(τ ) 
+
+> p
+
+denote the τ -th percentile of the volume distribution over all participants at that protocol, for a high fixed 
+
+τ . Then 
+
+vw,p = S · min Vw,p 
+
+Π(τ )
+
+> p
+
+, 1
+
+!
+
+. (2) The reference is population-derived and per-protocol: a venue dominated by institutional partici-pants develops a high reference, one of small retail users a low one, and identical dollar volumes score relative to the protocol’s own economic scale. The choice of a high percentile over the maximum or the mean is deliberate. Max-normalization makes the reference a function of a single outlier, so one anomalous wallet compresses every other score toward zero. Mean-normalization places the reference inside the bulk of the distribution, so the clip in Equation (2) binds for a large fraction 5of participants and differentiation collapses. A high percentile is robust to individual outliers while remaining far enough into the tail that saturation affects only genuine whales. Section 5 quantifies both failure modes. 
+
+Engagement. Let ∆tw,p be the span between the wallet’s first and last interaction with p, and 
+
+T ∗ a design-chosen ceiling: 
+
+hw,p = S · min 
+
+ ∆tw,p 
+
+T ∗ , 1
+
+
+
+. (3) The ceiling screens out single-transaction tourists without imposing indefinite lock-in. A wallet that appears once and vanishes contributes nothing here; sustained participation saturates the cap. 
+
+Quality. qw,p is an extensible slot for sector-specific behavioral indicators—repayment discipline in lending, realized-PnL character in perpetuals, token-quality mix in DEX activity—backed by the model of Section 3.4. In the reference deployment this component is held at a calibrated baseline for all users, which provides a small floor of credit independent of volume. Section 6 treats the consequences. 
+
+3.3 Cross-Domain Fairness Weighting 
+
+Equation (1) answers a local question: how substantial was this activity relative to this protocol? It cannot answer a global one: how significant is this protocol to the ecosystem? Any mechanism that skips the second question is structurally exploitable, because an attacker’s optimal strategy becomes locating the smallest protocol whose scoring reference can be dominated cheaply. Let Vp denote total volume at protocol p, Vσ(p) = P 
+
+> p′:σ(p′)= σ(p)
+
+Vp′ total volume in its sector, and VE total ecosystem volume. The effective weight is the product of two nested shares: 
+
+ωp = Vp
+
+Vσ(p)
+
+| {z } 
+
+> protocol within sector
+
+· Vσ(p)
+
+VE
+
+| {z } 
+
+> sector within ecosystem
+
+= Vp
+
+VE
+
+. (4) The product telescopes to the protocol’s global share, but the decomposition is retained de-liberately. A two-layer structure makes the fairness arithmetic auditable at each level, allows a deployment to reweight a sector without recomputing intra-sector proportions, and ensures the classification step and the weighting step share a single reference point. Total attribution for a wallet, over its active protocol set Pw, is 
+
+Rw = μ(w) X
+
+> p∈P w
+
+sw,p ωp, (5) where μ(w) ∈ (0 , 1] is the penalty multiplier of Section 3.5. 
+
+Proposition 1 (Niche-protocol unprofitability) . Fix any protocol p. The attribution any single wallet can obtain at p satisfies 
+
+sw,p ωp ≤ S · Vp
+
+VE
+
+,
+
+independently of Vw,p , of the wallet’s share of p, and of the cost of acquiring that share. Proof. Each of vw,p , h w,p , q w,p lies in [0 , S ] by Equations (2) and (3) and the construction of q. Since 
+
+α + β + γ = 1 with all coefficients positive, Equation (1) gives sw,p ≤ S. Substituting the telescoped form of Equation (4) yields sw,p ωp ≤ S V p/V E .6Remark 1. The bound is the structural content of the mechanism. An attacker who manufactures 
+
+total dominance of a protocol still cannot extract more than that protocol’s global volume share, so the return to capturing a venue is governed by the venue’s ecosystem weight rather than by how cheaply it can be captured. Saturation in Equation (2) makes the bound tight: once Vw,p ≥ Π(τ ) 
+
+> p
+
+,additional capital yields no additional volume credit. 
+
+The effect is sharpest numerically. Consider two protocols with comparable local dominance in the reference deployment. Protocol A holds a 19 .4% share of the DEX sector, which carries 85 .7% of global volume, giving ωA ≈ 0.166 . Protocol B holds a 71 .3% share of the staking sector—near-total local dominance—but staking carries 0.47% of global volume, giving ωB ≈ 0.0034 . Protocol B’s users dominate their sector roughly three times more thoroughly and receive about one-fiftieth of the weight. 
+
+3.4 Deep Behavioral Quality Model 
+
+The quality signal is backed by zScore, the behavioral engine behind Zeru’s reputation systems [6, 7]. The same engine that scores wallet trustworthiness for credit assessment feeds the quality dimension of ZAPs, ensuring that attribution and reputation share a behavioral substrate rather than drifting into incompatible representations of the same wallet. The model evaluates on-chain history across five dimensions—wealth magnitude, behavioral consistency, protocol diversity, token-category diversity, and gas-consumption behavior—each nor-malized against population-derived references recomputed from periodic sampling of the live wallet base. A wallet’s score reflects its position relative to the current user distribution, not a static benchmark that drifts into irrelevance as the population evolves. Two modeling decisions bear directly on adversarial properties. 
+
+Frequency-adjusted consistency. Raw flow volatility penalizes high-frequency participants au-tomatically: a market-making wallet executing many transactions daily exhibits large absolute fluc-tuations as a mechanical consequence of cadence, not as evidence of erratic behavior. Writing ¯ςw for the mean of the wallet’s inbound and outbound flow standard deviations and ρw for its transaction rate, the model scores 
+
+ςeff  
+
+> w
+
+= ¯ςw
+
+1 + ln(1 + ρw) , cw = cmin + ( C − cmin ) · clip 
+
+
+
+1 − ςeff 
+
+> w
+
+Θ , 0, 1
+
+
+
+, (6) for a reference dispersion Θ and a guaranteed floor cmin . Dividing by a log-compressed transaction rate measures regularity conditional on the wallet’s natural operating tempo. A capital-intensity gate caps the consistency contribution for wallets below a minimum lifetime value, which defeats the complementary exploit of manufacturing behavioral regularity through dust transactions. 
+
+Economic-substance weighting of diversity. Protocol and token diversity are not raw counts. Each token is assigned a tier weight θ(t) reflecting economic substance—stablecoins, majors, and liquid-staking derivatives at the top; established governance and blue-chip DeFi assets next; un-classified assets at unit weight; and assets matching points-, test-, and airdrop-voucher patterns discounted by more than an order of magnitude relative to the top tier. The diversity input is P 
+
+> t∈T w
+
+θ(t) rather than |T w|, passed through a saturating transform. An attacker who manufactures diversity by deploying disposable contracts and minting valueless tokens generates a quantity the model treats as noise. 7A deterministic persona-tagging layer sits downstream of scoring. A stable hash of the wallet’s score bucket and identifier selects among candidate labels, guaranteeing that repeated scoring of the same wallet produces identical categorical output on any worker in a distributed deployment, without coordination or shared state. 
+
+3.5 Adversarial Detection 
+
+The structural defenses of Sections 3.2 and 3.3 close formula-level exploits. They cannot distinguish a human trader from a bot executing identical nominal volume. ZAPs layers four defense classes against behavioral manufacturing. 
+
+3.5.1 Layer 1: Transaction-level gates 
+
+Before any behavioral model fires, each transaction passes checks for signals with no honest expla-nation. Same-block round-trip trades—a position opened and closed within a single block, carrying zero net economic exposure—contribute nothing to any score, irrespective of nominal magnitude. Fee-to-volume ratios below a protocol’s plausible range are treated identically, indicating rebate or wash-trading mechanics rather than genuine capital commitment. These checks are binary, deter-ministic, and applied upstream of everything else. 
+
+3.5.2 Layer 2: Parallel anomaly ensemble 
+
+Two detectors operate over a common wallet-level feature space x ∈ Rd, d = 10 , aggregating each wallet’s full transaction history into transaction count, active-day count, mean and standard deviation of transaction value, total value, mean gas cost, distinct counterparty count, distinct token count, token-transaction share, and mean daily transaction rate. 
+
+Detector A: one-class reconstruction model. Let fθ = g ◦ e with encoder e : Rd → Rk and decoder g : Rk → Rd, realized as 10 → 64 → 16 → 64 → 10 with ReLU activations and a linear output layer (Figure 2). Training minimizes reconstruction error over a corpus of labeled malicious wallets only ,
+
+θ∗ = arg min 
+
+> θ
+
+1
+
+|D mal |
+
+X
+
+> x∈D mal
+
+x − fθ(x) 22, (7) by Adam with learning rate 10 −3, batch size 128 , for 50 epochs, with inputs standardized to zero mean and unit variance and best-validation checkpointing on a held-out 15% split. The polarity is inverted relative to standard autoencoder anomaly detection. Because the model sees only malicious behavior, low reconstruction error indicates membership in the malicious man-ifold. Writing ε(x) = 1 
+
+> d
+
+∥x − fθ∗ (x)∥22 and (με, s ε) for its mean and standard deviation over the training corpus, the emitted probability is 
+
+PA(x) = 
+
+
+
+1 + exp  z(x)−1
+
+, z(x) = ε(x) − με
+
+sε
+
+, (8) which is decreasing in reconstruction error and bounded in (0 , 1) . Because ε decomposes per coor-dinate as εj (x) = ( xj − fθ∗ (x)j )2, the model emits a ranked attribution over the top-k contribut-ing features, satisfying the interpretability obligations emphasized in the credit-scoring literature [21, 22]. 8input           
+
+> d= 10
+> ReLU
+> 64
+> latent
+> k= 16
+> ReLU
+> 64
+> output
+> d= 10
+> encoder edecoder g
+> trained on malicious only
+> low ε(x)⇒malicious
+> k > d : over-complete (Remark 2)
+
+Figure 2: One-class reconstruction detector. The latent width exceeds the input width, so discrim-ination derives from one-class training rather than compression. 
+
+Remark 2 (On the latent dimension) . With d = 10 inputs and k = 16 latent units the representation is over-complete : the architecture imposes no dimensional compression and could in principle realize the identity map. The regularization that makes Equation (8) discriminative comes from one-class training—the model is never shown benign wallets—together with ReLU sparsity and early stopping, not from a capacity bottleneck. We flag this because the design is easily misread as compressive, and because it predicts the failure mode observed in Section 5: the detector generalizes to unseen malicious wallets but carries no explicit pressure to reconstruct benign wallets poorly. 
+
+Detector B: isolation forest. An isolation forest [17] operates on the same feature space, scoring points by the average path length E[h(x)] required to isolate them under random recursive parti-tioning, normalized by the expected path length c(n) of an unsuccessful binary-search over n points: 
+
+iso( x) = 2 −E[h(x)] /c (n). Trained without labels, it captures statistical outlier-ness independent of any previously observed archetype. We map its raw outlier score r(x) to a comparable scale by 
+
+PB(x) = 
+
+
+
+1 + exp   − (r(x) − ¯r)/s r
+
+−1
+
+. (9) Section 5 establishes that the population on which this detector is fit determines whether Equa-tion (9) is informative or actively misleading. 
+
+Fusion. The two probabilities combine convexly, 
+
+P (x) = λ P A(x) + (1 − λ) PB(x), λ ∈ [0 , 1] . (10) The production value of λ is calibrated against held-out adversarial and legitimate-user scenarios and is withheld. Section 5 reports the full sweep over λ from our own replication. The detectors fail in complementary directions. A model trained on known attacks misses genuinely novel automation that reconstructs unremarkably; an isolation forest misses bots tuned to sit inside the population’s typical parameter ranges. An attacker must simultaneously avoid resembling every known malicious archetype and avoid statistical distinguishability from organic behavior. 9a1    
+
+> family Fa1
+> CV = 0 .36 (low)
+> a2
+> family Fa2
+> CV = 0 .39 (low)
+> CEX
+> high-degree funder
+> excluded
+
+Figure 3: Funding-provenance clustering. Wallets sharing a first funder form candidate families; behavioral uniformity within a family (Equation (11)) separates coordinated operations from coin-cidence. High-degree funders representing exchange and bridge infrastructure are removed before grouping to prevent spurious families. 
+
+3.5.3 Layer 3: Post-distribution memory 
+
+A wallet that liquidates the majority of received rewards within a short window of distribution carries that record into subsequent allocation cycles. Future eligibility is adjusted; rewards are not retroactively clawed back. For an adversary operating at scale, every liquidation trades short-term extraction against degraded positioning in every future allocation window referencing the same behavioral record, which converts single-campaign optimization into a multi-campaign constraint. 
+
+3.5.4 Layer 4: Cross-wallet sybil clustering 
+
+Per-wallet detectors are blind to relationships between wallets. An operation splitting activity across many addresses, each individually unremarkable, passes per-wallet scrutiny entirely. The clustering layer operates on the funding provenance graph (Figure 3). Let ϕ(w) denote the address that first funded wallet w. Candidate families are the fibers 
+
+Fa = {w : ϕ(w) = a} with |Fa| ≥ 2. High-degree funders corresponding to exchange and bridge infrastructure are excluded before grouping; in the validation scan below, 39 such funders were removed. Within each surviving family, behavioral uniformity is scored by the mean coefficient of variation across transaction-signature attributes A (cadence, value distribution, protocol mix): 
+
+CV( F ) = 1
+
+|A| 
+
+X
+
+> a∈A
+
+ςa(F )¯ma(F ) , (11) where ςa and ¯ma are the standard deviation and mean of attribute a across the family’s wallets. Low CV indicates that independently-operated wallets would not plausibly exhibit such uniformity; shared funding provenance combined with low CV yields high-confidence sybil classification. Afamily-level risk score composes CV( F ), |Fa|, and a funder-validation gate over four structural metrics. Algorithm 1 states the procedure. 
+
+3.5.5 Graduated penalty structure 
+
+The four layers feed a penalty multiplier anchored to four qualitative tiers. Wallets in the lowest tier receive full attribution. Wallets exhibiting ambiguous behavioral signals receive no penalty. Penalties activate only when multiple strong signals fire jointly, producing approximately a 50% 
+
+10 Algorithm 1 Sybil family resolution over the funding-provenance graph 
+
+Require: wallet set W; first-funder map ϕ; degree bound Dmax ; uniformity bound CV max ; attribute set A
+
+Ensure: sybil families with risk scores  
+
+> 1:
+
+F ← ∅  
+
+> 2:
+
+A ← { ϕ(w) : w ∈ W} ▷ candidate funders  
+
+> 3:
+
+for a ∈ A do  
+
+> 4:
+
+Fa ← { w ∈ W : ϕ(w) = a} 
+
+> 5:
+
+if |Fa| > D max then  
+
+> 6:
+
+continue ▷ exchange or bridge hub; excluded before grouping  
+
+> 7:
+
+end if  
+
+> 8:
+
+if |Fa| ≥ 2 then  
+
+> 9:
+
+F ← F ∪ { Fa} 
+
+> 10:
+
+end if  
+
+> 11:
+
+end for  
+
+> 12:
+
+for F ∈ F do  
+
+> 13:
+
+CV( F ) ← 1
+
+> |A|
+
+P 
+
+> a∈A
+
+ςa(F )/ ¯ma(F ) ▷ Equation (11)  
+
+> 14:
+
+g(F ) ← number of structural metrics passed by funder of F 
+
+> 15:
+
+risk( F ) ← Ψ  CV( F ), |F |, g (F ) ▷ Ψ decreasing in CV , increasing in |F | and g 
+
+> 16:
+
+label F as sybil if CV( F ) ≤ CV max and g(F ) meets the validation gate  
+
+> 17:
+
+end for  
+
+> 18:
+
+return {(F, risk( F )) : F ∈ F} 
+
+reduction in the third tier and approximately 80% in the fourth. Numeric breakpoints are withheld. Figure 4 contrasts the resulting response with binary exclusion: a legitimate wallet misclassified by one tier receives a proportional reduction rather than losing everything. 
+
+# 4 Results 
+
+4.1 Reference Deployment Statistics 
+
+Table 1 summarizes distributional properties of the reference deployment; Table 2 reports the reward distribution across percentiles. Each headline statistic verifies a distinct design property. The Gini coefficient of 0.718 sits inside the band treated as healthy for incentive distributions: below it, rewards fail to differentiate contribution levels; above it, rewards collapse into concentration. Perfect equality would itself be a design failure, since the objective is proportionate inequality rather than flatness. Top-decile concentration is the direct read-out of the percentile cap in Equation (2). The ten largest recipients hold 0.4% of all rewards and the top hundred hold 2.8% —figures that would be one to two orders of magnitude higher under uncapped volume-proportional attribution on a population of this size. The distinct-score-value ratio of 63 .4% confirms a fine-grained continuous gradient rather than bucket collapse; a bracketed scheme over the same population would produce a ratio near zero. The P99/P50 spread of 36 .6× quantifies what the cap permits: a top-percentile participant out-earns the median by roughly 37 ×, enough that genuine contribution is visibly worth making, bounded enough that the median reward remains non-trivial. 11 tier 1 tier 2 tier 3 tier 4  
+
+> 0
+> 0.2
+> 0.5
+> 1.0
+> aggregate suspicion signal →
+> retained attribution  μ(w)
+> graduated (ZAPs)
+> binary exclusion
+
+Figure 4: Graduated versus binary penalty response. Under binary exclusion a one-tier misclassifi-cation is total loss; the graduated curve bounds false-positive harm to the tier increment. Table 1: Reference deployment summary. Metric Value Wallets scored 320M+ Aggregate volume $300B Total reward units distributed 16,080 Gini coefficient 0.718 Top-10-wallet reward share 0.4% Top-100-wallet reward share 2.8% Distinct score value ratio 63.4% P99 / P50 reward ratio 36.6 ×
+
+4.2 Sector-Level Distribution 
+
+Table 3 reports volume, sector weighting, and reward share across the five sectors. Reward shares track volume shares closely by construction—the property Equation (4) exists to enforce. One deployment observation illustrates its bite. The protocol with the largest wallet count in the dataset, over half of all scored wallets, received 1.3% of total rewards, because its volume share within its sector was 0.6% . Under wallet-count or transaction-count attribution the same protocol would have dominated the distribution outright. Head-count is the cheapest metric to manufacture, and Proposition 1 prices it accordingly. 
+
+4.3 Detector Evaluation on Labeled Malicious Wallets 
+
+We evaluate the ensemble of Section 3.5.2 on a corpus of 1,073 labeled malicious wallets spanning 
+
+124 ,638 transactions, drawn from public exploit and phishing attributions, against a benign com-parison set of 383 wallets spanning 326 ,943 transactions. The reconstruction model is retrained one-class on a 70% fold of the malicious corpus; the held-out 30% (322 wallets) plus the full benign set form the evaluation set, so no evaluated malicious wallet was seen in training. All figures are means over five random seeds. Table 4 reports the result. Three findings follow. First, the one-class reconstruction model is the stronger individual de-tector at 0.891 ROC-AUC, consistent with its access to labeled attack archetypes. Second, the isolation forest’s training regime is outcome-determining. Fit on the pooled population it achieves 12 Table 2: Reward distribution percentiles. Percentile P10 P25 P50 P75 P90 P95 P99 Max Reward 0.003 0.010 0.084 0.689 1.843 2.307 3.089 6.597 Table 3: Sector-level volume, weighting, and reward shares in the reference deployment. Sector Volume Sector weight Vσ/V E Reward share DEX swap $35.3B 0.8570 93.8% Lending $4.2B 0.1015 2.8% Perpetuals $1.1B 0.0279 1.8% NFT $369M 0.0090 0.7% Staking $191M 0.0047 0.9% 
+
+0.250 —far below chance, meaning statistical outlier-ness inversely predicts maliciousness. The ma-licious wallets outnumber the benign ones in the pooled corpus and are individually sparser (median 
+
+21 transactions against 499 ), so they define the dense region of the feature space and the genuinely heavy-activity benign wallets are isolated as outliers. Fit on the benign population alone, as a proper normality model, the same detector reaches 0.638 with correct polarity. Third, only the benign-fit configuration produces an ensemble that beats its strongest member: 0.923 against 0.891 , a gain of 
+
++0 .032 ROC-AUC at λ∗ = 0 .90 . Under the pooled fit the optimum sits at λ = 1 .00 , which discards the second detector entirely. Figure 5 plots the full sweep. The low correlation between detectors under the benign fit (−0.217 ) is what makes the ensemble gain available; the strong negative correlation under the pooled fit ( −0.686 ) reflects the polarity inversion rather than complementarity. 
+
+4.4 Adversarial Robustness 
+
+The detection and penalty stack is evaluated on eight constructed scenarios: four adversarial archetypes drawn from observed farming patterns and four legitimate-user controls. Each is scored through the full pipeline with and without the adversarial defenses activated. Table 5 reports absolute attribution and the resulting change. The headline property is asymmetry. Every adversarial archetype loses double-digit percentages of reward capture, the two purest automation patterns losing approximately 90% , while no legitimate control shifts by more than 8% and the most common legitimate profile is effectively untouched. This asymmetry, rather than raw detection rate, is the correct figure of merit for an attribution system: a mitigation layer that halved bot rewards while halving power-user rewards would be a failure regardless of its recall. The gradient across adversarial scenarios carries structural information. The spam bot and diversity farmer are single-wallet strategies whose behavioral signatures—cadence without idle peri-ods, value uniformity, protocol concentration—fall squarely within what the ensemble detects. The flash-loan exploiter retains more ( −43% ) because its distinguishing behavior concentrates in a small number of high-value events rather than a sustained pattern. The sybil operator retains the most (−30% ): each constituent wallet viewed in isolation resembles a modest legitimate participant, and only the clustering layer of Section 3.5.4 reaches it. 13 Table 4: Detector performance on held-out malicious wallets. The isolation forest is reported under both training regimes. ROC-AUC, mean ± s.d. over five seeds; 322 held-out malicious and 383 
+
+benign wallets. Detector Training regime ROC-AUC corr( PA, P B)
+
+Reconstruction model PA one-class, malicious only 0.891 ± 0.016 —Isolation forest PB pooled population 0.250 ± 0.015 −0.686 
+
+Isolation forest PB benign population 0.638 ± 0.011 −0.217 
+
+Ensemble, λ = 1 .00 (equivalent to PA alone) 0.891 ± 0.016 —Ensemble, λ∗, pooled fit best over sweep 0.891 ± 0.016 —
+
+Ensemble, λ∗ = 0 .90 , benign fit best over sweep 0.923 ± 0.013 —         
+
+> 00.20.40.60.81
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> fusion weight λ(weight on reconstruction model PA)
+> ROC-AUC
+> isolation forest fit on benign population
+> isolation forest fit on pooled population
+> PAalone
+
+Figure 5: Ensemble ROC-AUC across the fusion weight λ of Equation (10). Only the benign-fit configuration rises above the single-detector baseline, peaking at λ = 0 .90 . Under the pooled fit the sweep is monotone toward λ = 1 , so the second detector contributes nothing. 
+
+4.5 Sybil Clustering Validation 
+
+A validation scan over 500 wallets resolved 32 candidate families spanning 97 wallets, after excluding 
+
+39 high-degree first funders corresponding to exchange and bridge infrastructure. Nine families passed the four-metric funder validation gate. Table 6 reports the family-size distribution and associated risk scores. Family sizes skew small: 17 of 32 families are wallet pairs. The largest resolved family spans eight wallets. Risk scores concentrate in a narrow band ( 0.39 –0.63 ), consistent with families that share funding provenance and exhibit partial behavioral uniformity rather than mechanical dupli-cation. One two-wallet family moved approximately $191 M inbound against $191 M outbound with a low DeFi-activity share, a near-perfect pass-through signature more consistent with exchange in-frastructure than with a farming operation; cases of this shape are the reason the funder-exclusion step precedes grouping. 
+
+4.6 Bot Classification Population Breakdown 
+
+Table 7 reports the distribution of wallets across the four graduated penalty tiers. Two observations anchor the interpretation. First, the Suspicious tier, flagged but unpenalized, 14 Table 5: Reward capture under adversarial and control scenarios, before and after activation of the four-layer defense stack. Scenario Undefended Defended Change 
+
+Adversarial archetypes 
+
+Diversity farmer (spread across spam protocols) 10.53 1.11 −89% 
+
+Spam bot (high-frequency, low-value, uniform) 15.96 1.62 −90% 
+
+Flash-loan exploiter (single-block round-trip) 18.56 10.65 −43% 
+
+Sybil operator (coordinated small-volume wallets) 211.50 148.80 −30% 
+
+Legitimate controls 
+
+Diversified multi-protocol holder 52.38 53.11 +1% 
+
+High-volume trader 88.31 87.49 −1% 
+
+Derivatives trader 36.41 34.21 −6% 
+
+NFT collector 25.01 23.04 −8% 
+
+Table 6: Sybil families resolved in a 500-wallet validation scan. Risk score composes family size, funder validation, and the uniformity statistic of Equation (11). Family size Families Wallets Risk-score range 2 17 34 0.39 – 0.57 3 7 21 0.42 – 0.60 4 4 16 0.42 – 0.52 5 1 5 0.63 6 2 12 0.45 – 0.55 8 1 8 0.45 
+
+Total 32 97 0.39 – 0.63 carries 84% of all distributed rewards. This is the no-penalty design decision doing its intended work. The wallets generating the most substantial genuine activity are precisely those whose operational regularity trips partial behavioral signals: power users, market makers, and institutional accounts whose disciplined patterns resemble automation. A penalty policy triggered on partial evidence would have confiscated the bulk of legitimately earned rewards. Second, the empty Hard Bot tier reflects the reference population rather than a gap in the mechanism. No wallet fired extreme signals across every detector simultaneously. The tier exists as the asymptotic bound the graduated penalty curve applies when one does. 
+
+4.7 Production Campaign Results 
+
+In live token-distribution campaigns deploying the full stack against real adversarial populations, the framework recorded a 56% reduction in sybil allocation, a 49% increase in quality-wallet par-ticipation, and a 50% reduction in post-distribution sell pressure, measured against comparable un-mitigated campaigns. Allocation to low-quality wallets fell from 21 .0% to 13 .5% of the distributed pool while allocation to high-quality wallets rose from 41 .7% to 54 .7% , and mean post-distribution holding duration extended from 9.8 to 12 .6 days. 15 Table 7: Classification tiers over the reference population. Tier Wallets Share Penalty Aggregate rewards Normal 10,366 33% none 465 Suspicious 13,819 44% none 13,547 Likely bot 7,532 24% ∼50% 2,067 Hard bot 0 0% ∼80% —
+
+4.8 Computational Cost 
+
+Scoring is linear in transaction count per wallet and parallelizes across wallets without coordina-tion, a property inherited from the deterministic hashing of Section 3.4. A wallet carrying 40 ,000 
+
+transactions scores in 0.295 s. Across a 1,400 -wallet synthetic population, total runtime was 2.48 sat a mean of 1.77 ms and a P95 of 3.19 ms per wallet. 
+
+# 5 Ablation Studies 
+
+5.1 Normalization Reference 
+
+Equation (2) anchors the volume score to a high population percentile. Two alternatives fail in opposite directions. Under max-normalization the reference becomes a function of the single largest participant, so a lone anomalous wallet—or a pricing artifact surviving the ingestion ceiling— compresses every other score toward zero and the distinct-score ratio collapses. Under mean-normalization the reference sits inside the bulk of a heavy-tailed distribution, so the clip binds for a large fraction of participants, scores pile at the cap, and differentiation across the majority is lost. The percentile anchor is the configuration for which neither degeneracy occurs: robust to individual outliers, far enough into the tail that saturation reaches only genuine whales. 
+
+5.2 Ensemble Composition 
+
+Table 4 and Figure 5 constitute a leave-one-detector-out ablation over Equation (10), since λ = 1 
+
+and λ = 0 recover the individual detectors. Removing the isolation forest ( λ = 1 ) costs 0.032 
+
+ROC-AUC under the benign-fit configuration. Removing the reconstruction model ( λ = 0 ) costs 
+
+0.285 . The reconstruction model is the load-bearing component; the isolation forest is a genuine but secondary contributor, and only under the correct training regime. The training-regime result deserves emphasis as a finding in its own right. Isolation forests are routinely described as unsupervised detectors that may be fit on whatever data is available. In this setting that framing is actively harmful: pooled fitting produced a detector at 0.250 ROC-AUC, which is worse than the trivial constant predictor and would degrade any ensemble it entered. The corrective condition is that the forest must model the benign population specifically, so that outlier-ness and maliciousness point in the same direction. Any deployment that assembles its unlabeled training pool from production traffic—which necessarily contains the attackers—inherits this inversion in proportion to the attacker prevalence. 
+
+5.3 Penalty Shape 
+
+Replacing the graduated multiplier with binary exclusion at the third tier (Figure 4) would remove 
+
+2,067 reward units of Likely Bot attribution instead of approximately half that. The relevant 16 cost is borne by false positives. Under the deployment distribution of Table 7, a legitimate wallet misclassified into the third tier retains 50% of its attribution under the graduated curve and 0% 
+
+under exclusion. Given that the Suspicious tier—adjacent to Likely Bot and explicitly unpenalized— carries 84% of all distributed rewards, the population most exposed to a one-tier misclassification is also the population holding the majority of legitimate value. 
+
+# 6 Limitations and Future Work 
+
+Quality dimension is static in the reference deployment. The qw,p term of Equation (1) is held at a calibrated baseline for all users in the deployment reported here, so Equation (1) effectively reduces to a two-signal composite plus a constant floor. Sector-specific quality signals—repayment discipline, realized-PnL character, token-quality mix—are specified in Section 3.4 and integrated in the behavioral engine, but the reported distributional statistics do not yet reflect them. 
+
+Benign comparison set is small and activity-skewed. The evaluation of Section 4.3 uses 
+
+383 benign wallets with a median of 499 transactions, against malicious wallets with a median of 
+
+21 . The benign sample therefore over-represents high-activity participants. This skew is precisely what drives the polarity inversion under pooled fitting, and while the direction of the effect is robust across seeds and forest sizes, its magnitude should be expected to depend on the benign sampling frame. A representative benign panel would sharpen the estimate of the isolation forest’s standalone contribution. 
+
+Labeled malicious corpus reflects exploit attribution, not farming. The 1,073 -wallet cor-pus is drawn from public exploit and phishing attributions. Airdrop farming and exploit activity are related but distinct behavioral classes, so Table 4 measures transfer to a proxy population rather than direct farming detection. The scenario results of Table 5 address farming archetypes directly but are constructed rather than observed. 
+
+Post-distribution memory is unquantified. The mechanism of Layer 3 is specified quali-tatively. Neither the liquidation-share threshold, the observation window, nor the decay of the eligibility adjustment across cycles is characterized here, and no ablation isolates its contribution to the production results. 
+
+Cross-chain identity. The clustering layer of Section 3.5.4 operates on single-chain funding provenance. An operation that funds wallets across chains, or through bridges whose deposit ad-dresses are excluded as high-degree funders, evades first-funder grouping. Cross-chain identity resolution is the most consequential open extension. 
+
+Detector drift. Both detectors are fit offline. An adaptive adversary can probe the deployed penalty structure and migrate behavior toward regions that reconstruct poorly and appear statisti-cally ordinary. Online retraining against observed behavioral drift, and periodic recalibration of λ,are required for the asymmetry of Table 5 to persist. 
+
+# 7 Conclusion 
+
+We presented ZAPs, a reward-attribution framework for DeFi ecosystems that treats adversarial robustness as a design requirement rather than a retrofit. The framework composes a percentile-17 normalized activity score that bounds whale dominance while preserving differentiation; a nested cross-domain weighting mechanism for which Proposition 1 establishes that extractable attribution at any protocol is bounded by that protocol’s global volume share, closing the niche-protocol exploit structurally rather than heuristically; a four-layer adversarial detection stack feeding graduated penalties that bound false-positive harm; and an attribution algebra composing these into a single per-wallet reward. On a held-out evaluation over 1,073 labeled malicious wallets, the parallel anomaly ensemble reaches 0.923 ± 0.013 ROC-AUC against 0.891 ± 0.016 for the reconstruction model alone. That gain is conditional on a training-regime requirement we believe has not been reported: an isolation forest fit on the pooled population rather than the benign population inverts its discriminative polarity, scoring at 0.250 and contributing nothing to any ensemble. Under adversarial simulation the mitigation stack removes 30 –90% of attacker reward capture at a cost of 1–8% to legitimate-user scenarios. Live production campaigns recorded a 56% reduction in sybil allocation, a 49% increase in quality-wallet participation, and a 50% reduction in sell pressure. Reward attribution, airdrop eligibility, sybil-resistant incentive design, and composable on-chain reputation reduce to the same underlying question—what did this wallet actually contribute?—and the framework described here is one deployed, measured answer to it. 
+
+# References 
+
+[1] S. Malamud and M. Rostek. Decentralized exchange. American Economic Review ,107(11):3320–3362, 2017. [2] Y. C. Lo and F. Medda. Uniswap and the emergence of the decentralized exchange. Journal of Financial Market Infrastructures , 10(2):1–25, 2021. [3] A. Aspris, S. Foley, J. Svec, and L. Wang. Decentralized exchanges: The “wild west” of cryp-tocurrency trading. International Review of Financial Analysis , 77:101845, 2021. [4] L. Heimbach, E. Schertenleib, and R. Wattenhofer. Risks and returns of Uniswap v3 liquidity providers. In Proc. 4th ACM Conference on Advances in Financial Technologies , pages 89–101, 2022. [5] A. A. Aigner and G. Dhaliwal. Uniswap: Impermanent loss and risk profile of a liquidity provider. arXiv preprint arXiv:2106.14404 , 2021. [6] H. Udupi, A. Sahoo, A. S. P., G. S., P. Paul, and P. C. Martens. zScore: A universal de-centralised reputation system for the blockchain economy. arXiv preprint arXiv:2503.05718 ,2025. [7] D. Kandaswamy, A. Sahoo, A. SP, G. S, P. Paul, and G. G. N. Deep reputation scor-ing in DeFi: zScore-based wallet ranking from liquidity and trading signals. arXiv preprint arXiv:2507.20494 , 2025. [8] D. Lin, J. Wu, Q. Fu, Z. Zheng, and T. Chen. RiskProp: Account risk rating on Ethereum via de-anonymous score and network propagation. IEEE Transactions on Dependable and Secure Computing , 2024. [9] M.-T. Nguyen, T.-D. Trinh, and V.-B. Pham. A reputation scoring framework for lending pro-tocols using the PageRank algorithm. In International Symposium on Information and Com-munication Technology , pages 478–494. Springer, 2024. 18 [10] S. S. Jain, H. Zhou, and G. Gu. Wire: Web3 integrated reputation engine. In 2024 IEEE 44th International Conference on Distributed Computing Systems (ICDCS) , pages 1388–1399. IEEE, 2024. [11] N. G. Packin and Y. Lev-Aretz. Decentralized credit scoring: Black box 3.0. American Business Law Journal , 61(2):91–111, 2024. [12] J. R. Douceur. The Sybil attack. In International Workshop on Peer-to-Peer Systems (IPTPS) ,pages 251–260. Springer, 2002. [13] H. Yu, M. Kaminsky, P. B. Gibbons, and A. Flaxman. SybilGuard: Defending against Sybil attacks via social networks. In Proc. ACM SIGCOMM , pages 267–278, 2006. [14] F. Victor. Address clustering heuristics for Ethereum. In Financial Cryptography and Data Security (FC) , pages 617–633. Springer, 2020. [15] V. Buterin, Z. Hitzig, and E. G. Weyl. A flexible design for funding public goods. Management Science , 65(11):5171–5187, 2019. [16] D. W. E. Allen, C. Berg, S. Davidson, and J. Potts. Why airdrop cryptocurrency tokens? 
+
+Journal of Business Research , 163:113945, 2023. [17] F. T. Liu, K. M. Ting, and Z.-H. Zhou. Isolation Forest. In 2008 Eighth IEEE International Conference on Data Mining (ICDM) , pages 413–422. IEEE, 2008. [18] M. Sakurada and T. Yairi. Anomaly detection using autoencoders with nonlinear dimension-ality reduction. In Proc. MLSDA 2014 2nd Workshop on Machine Learning for Sensory Data Analysis , pages 4–11, 2014. [19] C. Zhou and R. C. Paffenroth. Anomaly detection with robust deep autoencoders. In Proc. 23rd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , pages 665–674, 2017. [20] R. Chalapathy and S. Chawla. Deep learning for anomaly detection: A survey. arXiv preprint arXiv:1901.03407 , 2019. [21] X. Dastile, T. Celik, and M. Potsane. Statistical and machine learning models in credit scoring: A systematic literature survey. Applied Soft Computing , 91:106263, 2020. [22] M. Bücker, G. Szepannek, A. Gosiewska, and P. Biecek. Transparency, auditability, and ex-plainability of machine learning models in credit scoring. Journal of the Operational Research Society , 73(1):70–90, 2022. 19
