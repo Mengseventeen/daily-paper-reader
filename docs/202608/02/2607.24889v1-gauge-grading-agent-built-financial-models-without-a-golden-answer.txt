@@ -1,0 +1,2145 @@
+Title: GAUGE: Grading Agent-Built Financial Models Without a Golden Answer
+
+URL Source: https://arxiv.org/pdf/2607.24889v1
+
+Published Time: Wed, 29 Jul 2026 00:05:46 GMT
+
+Number of Pages: 35
+
+Markdown Content:
+# GAUGE: Grading Agent-Built Financial Models Without a Golden Answer 
+
+# Jiacheng Lu ∗
+
+Shanghai Jiao Tong University Shanghai, China StepFun Shanghai, China 
+
+# Sinuo Wang ∗
+
+University of Adelaide Adelaide, Australia StepFun Shanghai, China 
+
+# Wentao Zhao 
+
+Tsinghua University Beijing, China StepFun Shanghai, China 
+
+# Rui Sun 
+
+StepFun Shanghai, China 
+
+# Cheng Hua 
+
+Shanghai Jiao Tong University Shanghai, China 
+
+# Tao Song †
+
+Shanghai Jiao Tong University Shanghai, China 
+
+# Hui Cai 
+
+StepFun Shanghai, China 
+
+# Beidi Luan 
+
+StepFun Shanghai, China 
+
+# Zhengze Wu 
+
+Shanghai Jiao Tong University Shanghai, China Foresight Fund Shanghai, China 
+
+# Lingjing Teng 
+
+National University of Singapore Singapore, Singapore 
+
+# Yijia He 
+
+Peking University Beijing, China 
+
+# Jing Li 
+
+StepFun Shanghai, China 
+
+# Daxin Jiang 
+
+StepFun Shanghai, China 
+
+# Zuo Bai †
+
+StepFun Shanghai, China Finstep Shanghai, China baizuo@stepfun.com 
+
+# Haibing Guan 
+
+Shanghai Jiao Tong University Shanghai, China hbguan@sjtu.edu.cn 
+
+## Abstract 
+
+Financial models combine public disclosures with analyst assump-tions to produce forecasts and valuations. While some parts of a model can be checked mechanically, quantities such as forecasts, discount rates, and target prices often admit multiple reasonable answers. Existing benchmarks nevertheless tend to grade these out-puts against a single expert reference. We examine this assumption using independently built analyst models for the same companies. Across 108 directed pairs covering 65 companies, the median single-reference score is 0.33, 92.6% of pairs score below 0.70, and no same-vintage pair agrees on implied price within 10%. Thus, point-tolerance grading can penalize disagreement that already exists among professional analysts. We introduce GAUGE, a benchmark for evaluating agent-built valuation models against observed ana-lyst practice rather than a single point answer. GAUGE is built from 1,001 vendor-classified analyst workbooks and a 196-task evaluation set. Its scoring system combines a three-layer observed-practice envelope, 56 auditable facets, eight validity gates, and deterministic structural checks. We evaluate the benchmark with a 55-participant 
+
+> ∗Jiacheng Lu and Sinuo Wang contributed equally.
+> †Corresponding authors: Zuo Bai and Tao Song.
+
+known-groups study, company-grouped cross-fitting, and judge-stability audits. On the failure-aware score 𝜙 0, which assigns zero to non-completions, senior analysts average 88.3, junior analysts 66.0, and finance students 43.2. Across 24 agents and 1,011 scored generations, the best agent scores 53.4, above the student mean but below every senior and most juniors. It passes 93% of mechanical facets and 78% of judgment facets; the median gap across agents is 26 points. These results show that current agents are substantially stronger at model construction than at valuation judgment. We re-lease the methodology, a gated de-identified data tier, a controlled training split, a versioned 48-task evaluation core, and a withheld refresh pool for reproducible and longitudinal evaluation. 
+
+## CCS Concepts 
+
+• Applied computing → Economics ; • Information systems 
+
+→ Data mining .
+
+## Keywords 
+
+Benchmark; LLM Agents; Financial Modeling; LLM Evaluation arXiv:2607.24889v1 [cs.LG] 27 Jul 2026 KDD ’27, August 2027, San Jose, CA, USA Lu et al.                          
+
+> Corpus
+> 1,001 analyst workbooks
+> 922 tickers ·25 industries
+> 404 ·347 ·200 ·50
+> 2K →35K cells
+> Task
+> 3 FY hist.
+> IS BS CF
+> model + valuation + memo
+> Excel-in / Model-out
+> reference never shown
+> 196 verified packs (98%)
+> 𝑇 𝐴 =𝑇 𝐿 +𝑇 𝐸 per pack
+> Envelope grading
+> E-method
+> E-industry
+> E-company defensible
+> one analyst ≠ground truth
+> bands from 65 multi-covered cos.
+> 21
+> ×
+> 0
+> e.g. WACC
+> in ·near ·out
+> Scoring stack
+> 29 determ.
+> 23 judged
+> 4 rule
+> 56 facets ×8 gates →𝜙
+> mech ·assumptions ·valuation
+> G1 unbalanced BS
+> caps 𝜙 at 40
+> Findings
+> judgment
+> mechanical
+> 93% vs 78%
+> 93 78 24 agents
+> 1,011 generations
+> guards the hidden corpus;
+> agents never see it
+> rebuilds the full model
+> from raw historicals
+> weighs analysts A ·B·C;
+> defensible, not identical
+> audits all 56 facets;
+> gates cap the score
+> reads the whole fleet;
+> mech ≫judgment
+
+Figure 1: GAUGE end-to-end. The corpus contains 1,001 analyst-built workbooks. Agents receive an Excel-in / Model-out task and are graded with a three-layer observed-practice envelope, 56 facets, and validity gates. From left to right, GAUGE turns analyst artifacts into hidden tasks, defensibility-aware scores, and fleet-level capability diagnostics. The bottom strip gives each stage’s role; the 24-agent mechanical–judgment gap is reported in Section 6. 
+
+## 1 Introduction 
+
+Financial modeling is a central part of equity research, investment banking, and capital-allocation decisions. Analysts combine public disclosures with assumptions about future growth, profitability, risk, and capital structure to build forecasts and valuations [6, 11]. As AI agents become capable of working with spreadsheets and long-horizon workflows [ 31 ], recent benchmarks have begun to evaluate whether they can perform such professional financial tasks end-to-end rather than as isolated question-answering steps [16–18, 30]. Evaluating these models, however, is not straightforward. Some parts of a financial workbook have clear answers: historical figures should be correct, statements should balance, and formulas should be properly linked. Other parts depend on professional judgment. Two analysts covering the same company may use different rev-enue forecasts, discount rates, terminal assumptions, and target prices while both producing internally consistent models. In these cases, matching one analyst’s answer is not necessarily the same as making a defensible choice under the model’s stated assumptions. Yet existing financial-agent benchmarks commonly rely on one expert-authored reference when grading judgment-bearing outputs [ 16 – 18 , 30 ]. This design is appropriate when the target is uniquely verifiable, but becomes problematic for valuation. An agent may be penalized not because its assumption is implausible, but simply because it differs from the reference analyst. This issue is closely related to recent concerns over construct validity and rating inde-terminacy in benchmark design for open-ended artifacts [4, 9]. We test whether this problem matters in practice. Using 137 workbooks covering 65 multiply covered companies, we grade one analyst’s model against another analyst’s model for the same com-pany. Under standard point tolerances, the median score across 108 directed pairs is 0.33 , and 92 .6% of pairs fall below 0.70 . No same-vintage pair agrees on implied share price within 10% . Even when all tolerances are widened to 4×, one third of the pairs still fall below 0.70 . These results show that a single point reference can penalize disagreement already present among professional analysts. To address this problem, we introduce GAUGE , a benchmark for evaluating agent-built financial valuation models without treating one analyst’s point estimates as the sole correct answer. GAUGE is built from 1,001 analyst-built workbooks spanning 922 tickers and 25 GICS groups, with 196 extraction-verified modeling tasks. Instead of replacing all reference-based grading, GAUGE separates mechanically verifiable properties from judgment-bearing ones. Structural correctness is checked deterministically, while selected valuation judgments are evaluated against an observed-practice envelope derived from analyst sensitivity ranges, industry distri-butions, and same-company analyst dispersion. The scoring stack further uses validity gates to prevent structurally unusable models from receiving high scores despite locally plausible outputs. We evaluate 24 agents together with a 55-participant human base-line. On the failure-aware score 𝜙 0, which counts non-completions as zero, senior analysts, junior analysts, and finance students av-erage 88 .3, 66 .0, and 43 .2, respectively, while the strongest agent scores 53 .4—above the student mean but below every senior analyst and most juniors. More importantly, all 24 agents perform worse on judgment than on mechanical construction: the best agent passes 
+
+93% of mechanical facets but only 78% of judgment facets, and the fleet-median gap is 26 points. This suggests that current agents are becoming increasingly capable of constructing financial models, while valuation judgment remains a substantially harder problem. Our work makes three contributions. First, we empirically exam-ine the single-reference assumption using independently produced same-company analyst models. Second, we introduce GAUGE, which combines deterministic checks with an observed-practice reference for judgment-bearing quantities. Third, we provide a large-scale evaluation of current financial agents and identify a con-sistent gap between model construction and valuation judgment. 
+
+## 2 Related Work 
+
+Professional-finance agent benchmarks. Recent work extends financial evaluation from short-form question answering to long-horizon occupational artifacts. BankerToolBench evaluates end-to-end junior-banker workflows spanning data rooms, market-data tools, Excel models, presentations, and written reports, with stakeholder-oriented criteria authored with practitioner input [ 18 ,36 ]. FrontierFinance contains 25 from-scratch financial-modeling GAUGE: A Benchmark of Valuation Judgment for Agent-Built Financial Models KDD ’27, August 2027, San Jose, CA, USA 
+
+Table 1: Positioning against four recent financial-agent benchmarks. 
+
+✓ = yes; ( ✓) = partial or limited to a task subset; × = no in the published design. We compare judgment-bearing spreadsheet/modeling tasks.                                                   
+
+> Measurement design BTB FF BFB BlueFin GAUGE
+> From-scratch valuation (✓)✓×(✓)✓
+> Observed multi-analyst referent ××××✓
+> Empirical ranges for judgment ××××✓
+> Human performance baseline ×✓××✓
+> Known-groups ordering ××××✓
+> Categorical gate / score cap ×✓××✓
+> Deterministic floor + coverage ××××✓
+> Industry-conditional facet activation ××××✓
+> Private holdout / refresh supply (✓)××(✓)✓
+
+tasks across five model types; each task has an expert reference model, a detailed rubric, an initial validity gate, and a human-expert baseline [ 16 ]. BigFinanceBench evaluates 928 open-ended, multi-source research questions by scoring visible derivations-source choice, definitions, adjustments, and calculations-against point-weighted workflow rubrics [ 30 ]. BlueFin covers 131 spreadsheet syn-thesis, manipulation, and comprehension tasks with 3,225 granular criteria and validates its agentic judge against expert labels [ 17 , 36 ]. GAUGE focuses on the reference used for forward-looking valu-ation judgment and the score treatment of structurally unusable outputs in end-to-end financial models. 
+
+Spreadsheet and long-horizon artifact evaluation. Spread-sheetBench and related spreadsheet tasks can express correctness as a deterministic cell, formula, or state match [ 19 ]. Repository-level benchmarks such as SWE-bench evaluate complete artifacts rather than isolated answers [ 13 ]. Financial valuation shares the artifact-level dependencies of code and spreadsheets but adds non-identifiability: two linked, internally consistent models may rea-sonably differ in revenue paths, capital structure, or discount rates. GAUGE retains deterministic checks for accounting identities and formula structure and applies empirical ranges only to selected judgment-bearing quantities. LiveBench and LiveCodeBench mo-tivate continuously refreshed evaluation data as a contamination control [ 12 , 32 ]; GAUGE uses a withheld workbook supply without treating itself as a substitute for construct validity. 
+
+Measurement validity and LLM judging. Construct-validity audits test whether a benchmark score supports its intended inter-pretation, not only whether it is repeatable [ 4, 26 ]. Item-response and sample-efficient evaluation methods study coverage and uncer-tainty under finite evaluation budgets [ 10 , 23 ]. Agent benchmark checklists examine task validity, contamination, honest failure ac-counting, and grader integrity [ 37 ]; rating indeterminacy separates judge error from cases with multiple defensible answers [ 9]. In GAUGE, the peer-workbook audit tests the single-reference as-sumption, the human study supplies known-groups evidence, deter-ministic facets report coverage, and repeated judge votes quantify sampling stability. These checks do not establish judge correctness or remove instrument bias; both remain validation targets. Table 1 compares measurement design. GAUGE complements benchmarks scoped to uniquely verifiable workflows; the critique concerns from-scratch valuations scored by proximity to one au-thor’s point estimates, not verifiable spreadsheet operations. 
+
+Table 2: Corpus roles and benchmark accounting. The multi-covered subset supplies the peer audit and calibration; evaluation, training, and refresh sets use disjoint company identities. Counts are QC-verified.                       
+
+> Role Books/tasks Companies Primary use Full corpus 1,001 922 artifact supply Multi-covered 137 65 peer audit/calibration Evaluation set 196 196 benchmark tasks Training split 200 200 context/SFT studies Withheld refresh ∼600 ∼600 future evaluation 00.25 0.50 0.75 1
+> Flat score of one analyst-built workbook vs. a peer
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Cumulative % of 108 pairs
+> 1×
+> 2×
+> 3×
+> 4×
+> 0.70
+> 92.6% below 0.70 at 1 ×
+> median 0.33
+> Single-golden score under wider tolerance bands
+
+Figure 2: Single-golden tolerance sweep. Among 108 directed same-company pairs, the median score is 0.33; 92.6% fall below 0.70 at 1× tol-erances, and one third remain below 0.70 at 4×. The two-panel audit and criterion rates are in Appendix A. 
+
+## 3 The Finance Artifacts Corpus 
+
+The Finance Artifacts corpus contains 1,001 vendor-classified analyst-built valuation workbooks: 922 tickers, 25 GICS groups, and 583 tab architectures. The four vendor tiers contain 404/347/200/50 workbooks and span roughly 2K–35K cells. Vendor labels do not verify author credentials or workbook quality. The 65 multi-covered tickers provide 137 workbooks (2–3 per ticker) for same-company disagreement checks without designat-ing one workbook as truth. Across the corpus, 35% contain multi-method value triangulation, 31% contain machine-parseable sen-sitivity grids, and 54% contain at least one of these range-bearing artifacts. Vendor tier supplies a coarse scale covariate: roughly 2K cells in Small models versus nearly 35K in Premium models. We use tier as a scale diagnostic, not a credential proxy. Corpus com-position, QC, de-identification, the quarantined mislabel, and role accounting are in Appendices C and V. 
+
+## 4 Grading Professionals Against a Single Golden Answer 
+
+We test whether fixed tolerances around one analyst’s point esti-mates accept the choices made in other same-company workbooks. For each same-ticker peer, we use one workbook as the reference and score the other against it. Of 158 directed pairs, 108 state at least three of nine criteria (two revenue forecasts, WACC, terminal growth, beta, tax, ERP, risk-free rate, and implied price). Base toler-ances are revenue ±5% , WACC ±50 bp, and price ±10% ; we evaluate KDD ’27, August 2027, San Jose, CA, USA Lu et al. 
+
+Table 3: Peer-workbook pass rates by criterion. Counts are directed pairs stating the criterion. Agreement is higher for observable or near-observable inputs than for WACC, terminal growth, and implied price.                                           
+
+> Criterion 𝑛 1×3×
+> Risk-free rate 82 66% 90% Forecast rev. FY+1 43 47% 60% Equity risk premium 86 42% 81% Tax rate 100 32% 66% Beta 96 27% 67% Terminal growth 30 27% 47% Implied share price 34 24% 53% WACC 122 13% 56% 0100 200 300 400 500
+> ΔWACC between analysts (bp), n=61 pairs
+> median 147 p90 374
+> 3 pairs > 500 →
+> 020 40 60 80 100 120
+> Δimplied price between analysts (%), n=17 pairs
+> median 25 p90 107
+
+Figure 3: Observed same-company disagreement. Median/p90 abso-lute differences are 147/374 bp for WACC and 25/107% for implied price. Tail estimates use 61 and 17 undirected pairs, respectively. 
+
+them at 1×–4×. Median scores are 0.33/0.50/0.67/0.80. At 1×, risk-free rate passes 66%, WACC 13%, and implied price 24%; none of 14 same-vintage price pairs passes. Restricting to same-vintage pairs leaves the median at 0.33. Criterion counts and tolerance-specific rates are in Appendix A. Under the shared tolerance rule, point agreement mixes judg-ment quality with observed variation. The audit does not reproduce each competing benchmark’s rubric, and workbook differences may reflect horizon, date, purpose, or quality heterogeneity. Observed WACC differences have median/p90 147/374 bp; implied-price dif-ferences have median/p90 25%/107%. The tail estimates and full criterion table are in Appendix A. The rule rejects interchange-ability in this sample but does not identify the correct peer or independently validate the envelope derived from the same corpus. 
+
+## 5 GAUGE: Measurement Design 5.1 Task: Excel-in / Model-out 
+
+The 196-task evaluation set supplies three fiscal years of historicals, segment/KPI skeletons, as-of-date guidance, and instructions, while withholding consensus forecasts. Each run must produce a formula-driven model, valuation and sensitivity analysis, assumptions file, and memo. A provenance-tracked extractor records each input source and checks the applicable accounting identities. The extractor certifies 196/200 candidate workbooks (98%) under five archetype-relative schemas: 175 three-statement, 13 income-statement/valuation or REIT/DDM, 5 bank payout/DDM, and 3 pure-DCF models. Four unresolved cases remain explicit absten-tions; no reference values are fabricated. Prompts, schemas, extrac-tion checks, and exceptions are in Appendix D. 
+
+## 5.2 The Three-Layer Defensibility Envelope 
+
+For envelope facet 𝑓 on task 𝑥 , let 𝑣 𝑓 (𝑥 ) be the extracted agent value, 
+
+𝐸 𝑓 (𝑥 ) the reference band, and e𝐸 𝑓 (𝑥 ) the same band widened by the p90 cross-analyst disagreement for that assumption (Section 4). We score values inside 𝐸 𝑓 as 2, values in the widened-only region as 1, and values outside both bands as 0: 
+
+𝑠 𝑓 (𝑥 ) = 2·1𝑣 𝑓 (𝑥 ) ∈ 𝐸 𝑓 (𝑥 ) + 1·1𝑣 𝑓 (𝑥 ) ∈ e𝐸 𝑓 (𝑥 ) \ 𝐸 𝑓 (𝑥 ) , (1) with an unmeasurable facet recorded as N/A, not 0. The three reference layers are ordered by specificity. 
+
+E-method takes the minimum and maximum of a workbook’s multi-method values and sensitivity grids, available for 54uses same-GICS p10 to p90 distributions for extractable assumptions, covering 8665-company multi-coverage corpus is not a scoring band but sets the near-band widths in e𝐸 𝑓 and tests the two proxy layers. The envelope is read in two stages: E-method and E-industry supply the bands; E-company calibrates and audits them. In a company-grouped cross-fit, E-method covers 53.8% of eligible peer prices strictly and 91.2% under the p90 near rule; strict held-out E-industry WACC coverage is 82.4%. Each evaluation fold is removed from its calibration pools, preventing company reuse, while all folds remain within the same 65-company source corpus. These results provide internal validation of sampled practice, not external replication or proof that every in-band choice is correct. Four of the 56 facets use direct rules. WACC and implied mul-tiples use band membership; forecast EBIT margin uses hidden reference-point accuracy; segment-margin differentiation uses a self-referenced spread. These rules read extracted values, not ex-planatory prose. Exact rules are in Appendix G. 
+
+## 5.3 Scoring Stack 
+
+Facet taxonomy and activation. GAUGE scores 56 facets in 5 pillars and 21 sub-capabilities: 29 deterministic [D] , 23 LLM-judged 
+
+[J] , and 4 direct-rule [R] . The frozen C1/C2/C3 categories define the mechanical/assumptions/valuation split. Industry overlays and instance-level N/A remove facets from the active set. 
+
+A ( 𝑥 ) = 𝑓 : 𝜔 ind (𝑥 ) (𝑓 ) ≠ N ∧ 𝑠 𝑓 (𝑥 ) ≠ N/A , (2) Facets outside A ( 𝑥 ) are omitted, not assigned zero. 
+
+Facet scale and aggregation. Map facet scores with 
+
+𝜙 (0) = 0, 𝜙 (1) = 60 , 𝜙 (2) = 100 , (3) Pass is 60 and Excellent is 100; 𝜙 is a benchmark scale, not per-cent correct. The Fail →Pass jump (0 →60) deliberately exceeds the Pass →Excellent step (60 →100): unusable versus acceptable matters more than acceptable versus excellent (Appendix J). The pre-gate score is the bottom-up mean over active facets: 
+
+eΦ(𝑥 ) = mean  
+
+> pillars
+
+mean  
+
+> sub -caps
+
+mean    
+
+> 𝑓 ∈ A ( 𝑥 )
+
+𝜙  𝑠 𝑓 (𝑥 ). (4) The released taxonomy gives an effective facet-weight range of 2.7:1. GAUGE: A Benchmark of Valuation Judgment for Agent-Built Financial Models KDD ’27, August 2027, San Jose, CA, USA 
+
+Hard validity gates. Eight deterministic gates (G1–G8) detect an unbalanced balance sheet, circular or hardcoded projections, look-ahead contamination, a missing valuation, and related struc-tural failures. Gate 𝑔 imposes a ceiling 𝜅 𝑔 ; the lowest triggered ceiling determines the final score: 
+
+Φ(𝑥 ) = min 
+
+eΦ(𝑥 ), min   
+
+> 𝑔 ∈ G ( 𝑥 )
+
+𝜅 𝑔 
+
+
+
+, (5) Removing the caps flips 11 of 276 model-pair orderings (Appen-dix N). 
+
+Variance control. Pure code grades 54.0% of scored facet out-comes and all gate decisions; this removes re-run variance but not detector error. The detector history is in Appendix J. Qualitative facets receive five draws from one frozen judge with majority re-duction. At 𝑘 = 5, Kendall’s 𝜏 is 0.944 and the facet flip rate is 2.2% (Appendices U and K). 
+
+## 5.4 Measurement Validity 
+
+Validity checks use four sources: the 55-participant known-groups study, the peer-workbook audit (Section 4), repeated company-grouped cross-fitting of envelope calibration, and judge vote-sampling stability. We additionally received a second-hand human-labeled audit summary for the 23 judged facets, reported to involve three experts. It reports 86.7% exact judge–expert-consensus agree-ment with weighted 𝜅 = 0.81 over 460 cases, compared with 89.4% reported expert–expert agreement and 𝜅 = 0.85 . Because the note does not document annotator qualifications, consensus construction, blinding, the case-sampling frame, item-level labels, the 𝜅 weighting, judge identity, or uncertainty intervals, we use it only as descriptive agreement (provenance in Appendix K). 
+
+## 6 Experiments 6.1 Setup 
+
+We evaluate 24 agents on a 48-task core stratified by tier and GICS sector from GAUGE’s 196-task bank. The core is a fixed panel rather than a full sample, with each task requiring a workbook, memo, and assumptions file followed by validation and multi-pass grading. This design enables controlled, paired comparisons across models and releases. We also hold out roughly 600 additional workbooks. The benchmark includes frontier and open-weight models from twelve providers: Claude Fable 5 [ 1 ], GPT-5.6 (sol, terra, luna) [ 22 ], Claude Opus 4.8 and Sonnet 5 [ 2, 3 ], Gemini 3.1 Pro and 3.5 Flash [ 7,8 ], Grok 4.5 [ 33 ], DeepSeek v4 (pro, flash) [ 5 ], Kimi k2.6, k2.7-code, and k3 [ 14 , 15 ], Qwen3 235B, coder, and 3.7-max [ 24 , 25 , 34 ], Hunyuan hy3 [ 29 ], GLM 5.2 [ 35 ], MiniMax M3 [ 20 ], Doubao 2.1-pro and evolving [27], Step 3.7 Flash [28], and GPT-OSS-120B [21]. All agents use the same tool-calling harness with an identical scaffold, tool set, and turn budget; only provider-specific adapters differ. Each task is run once per agent, yielding 1,011 scored gen-erations. Failures to produce a valid workbook within budget are counted as capability failures and reduce completion rate; we do not retry runs to avoid best-case bias. We have released generation and scoring configurations alongside harness. 
+
+Living-benchmark protocol. Each release reports the frozen-core score separately from any refresh-wave score, together with completion and task-bootstrap uncertainty. At a version transition, Newest flagship per provider (leaderboard order)    
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Score
+> Mechanical (%) Judgment (%) GAUGE ϕ0
+
+Figure 4: Mechanical and judgment pass rates. The plot shows 12 provider flagships (of 24 agents), in leaderboard order, with mechanical pass rate, judgment pass rate, and full-stack 𝜙 0 (48-task denominator; capability failures scored 0). The fleet-wide median gap is 26 points. Qwen3.7-Max has mid-pack pass rates but 17 unfinished tasks, giving 𝜙 0 = 24 .9.
+
+a hidden stratified wave is drawn from the unused bank and with-held workbooks; overlap anchors connect adjacent versions, while retired items are never silently replaced in historical results. Task IDs, packs, overlays, rubrics, gates, judge prompt/model, and run manifests are versioned. A small repeated-run sentinel set measures generation variance without requiring three or five generations for the complete fleet. This design spends evaluation budget on lon-gitudinal comparability and contamination checks; generalization from the 48-task core to the wider bank remains an uncertainty to report rather than an assumption. 
+
+## 6.2 Mechanical vs. Judgment Facets 
+
+The frozen pre-registered split assigns each facet to mechanical-construction (format/modeling) or judgment (assumptions/funda-mentals plus valuation). Pass rates use score ≥ 1 among active facets. Claude Fable 5, the top full-stack agent ( 𝜙 0 = 53 .4), passes 93% of mechanical facets and 78% of judgment facets, a 15-point gap; the smallest gap in the fleet is 12 points. Claude Opus 4.8 scores 
+
+𝜙 0 = 49 .6 with 92% vs. 68%, and GPT-5.6-sol scores 𝜙 0 = 46 .5 with 86% vs. 73%; its gate-trigger rate is 46%, compared with Fable’s 10%. Across all agents, mechanical pass rates span 61–93% and judgment rates 21–78%. All 24 agents pass fewer judgment than mechanical facets; the median gap is 26 points (Figure 4). Appendix T reports the per-gate profiles behind the Gate column. 
+
+## 6.3 Human Baseline: Known-Groups Validity 
+
+If GAUGE is sensitive to valuation experience, more experienced groups should outscore less experienced groups on the same task under the same conditions. We recruited 55 participants in three vendor-classified experience groups (12 senior analysts, 18 junior analysts, and 25 finance students) and assigned each three tasks drawn from the 48-task core under the agent scoring conditions: the same input pack, the same deliverable contract, no network access, scored by the identical frozen GAUGE stack (165 attempts over 47 KDD ’27, August 2027, San Jose, CA, USA Lu et al. 
+
+Table 4: Failure-aware GAUGE results on the 48-task core. Open: weights publicly released at access date ( ✓ open-weight, × closed API-only). 
+
+𝜙 0 is the full-stack score on a fixed 48-task denominator, assigning zero to capability failures, and defines the row order. Compl. is the share producing a valid workbook within budget. Mech./Judg. are completed-cell pass rates (≥ 1); Gate is the share of completed cells triggering at least one gate. These three columns diagnose surviving artifacts and are not alternative rankings. Agent Compl. 𝜙 0 Mech. Judg. Gate Open Claude Fable 5 100% 53.4 93% 78% 10% ×
+
+Claude Opus 4.8 100% 49.6 92% 68% 17% ×
+
+GPT-5.6-sol 100% 46.5 86% 73% 46% ×
+
+Kimi k2.7-code 98% 41.3 86% 59% 47% ✓
+
+GLM 5.2 100% 41.0 80% 58% 54% ✓
+
+Grok 4.5 88% 40.7 85% 68% 43% ×
+
+GPT-5.6-terra 100% 39.8 79% 61% 71% ×
+
+Claude Sonnet 5 98% 39.7 81% 60% 55% ×
+
+DeepSeek v4-pro 100% 39.0 81% 57% 62% ✓
+
+Doubao-seed-evolving 92% 38.8 85% 60% 39% ×
+
+DeepSeek v4-flash 100% 38.7 84% 54% 77% ✓
+
+GPT-5.6-luna 100% 37.6 80% 54% 75% ×
+
+Hunyuan hy3 100% 37.5 81% 47% 50% ✓
+
+Gemini 3.1 Pro 100% 36.8 80% 53% 54% ×
+
+Gemini 3.5 Flash 100% 35.7 80% 48% 79% ×
+
+Kimi k3 90% 34.7 83% 54% 58% ×
+
+Step 3.7 Flash 96% 32.9 74% 46% 85% ✓
+
+Kimi k2.6 100% 32.5 77% 44% 88% ✓
+
+MiniMax M3 79% 31.0 77% 56% 71% ✓
+
+Qwen3 Coder 100% 28.1 68% 34% 88% ✓
+
+Qwen3.7-max 65% 24.9 83% 54% 55% ×
+
+Doubao 2.1-pro 25% 10.2 81% 60% 58% ×
+
+Qwen3 235B 33% 9.6 66% 40% 88% ✓
+
+GPT-OSS-120B 44% 9.3 61% 21% 76% ✓
+
+distinct tasks). Human work was not held to the agent’s 1,800 s wall-clock budget (Appendix D.4); median completed-attempt time was 200–273 minutes by group. This tests known-groups ordering in this sample; it does not independently verify the credentials or competence of each participant. 
+
+Recruitment and conditions. Participants were drawn from the commercial vendor network that produced the corpus and grouped by the vendor’s seniority classification, with compensa-tion at prevailing professional rates. Each worked independently, without access to the reference workbooks or to other participants’ output. No identifying information was collected; participants con-sented to research use of their de-identified outputs, and the re-leased per-attempt data carry group-coded participant IDs. The three vendor-classified groups are ordered on the frozen GAUGE score under both accounting conventions (Table 5, Fig-ure 5): on completed attempts, senior 𝜙 = 88 .3, junior 69 .9, and student 53 .1; counting non-completions as zero, 𝜙 0 = 88 .3, 66 .0, and 
+
+43 .2. Mann–Whitney tests on completed-attempt participant means give senior >junior 𝑝 = 2.7×10 −6 and junior >student 𝑝 = 1.9×10 −8,with Cliff’s 𝛿 = 1.00 and 0.996 (1.00 and 0.87 on 𝜙 0 means); the weakest senior mean, 83.8, exceeds the strongest junior mean, 76.6, on both conventions. Completion (100%/94%/81%), gate-trigger rate (17%/55%/74%), and full-contract delivery (97%/78%/30%) follow the same group ordering. The ordering is not an artifact of task as-signment: under a task-cluster bootstrap (10,000 resamples of the 47 tasks) the full Senior >Junior >Student ordering holds in every Student   
+
+> (n=25)
+> Junior
+> (n=18)
+> Senior
+> (n=12)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Mean  ϕ0 (failures scored 0)
+> best agent (Fable 5), ϕ0= 53.4
+> 43.2
+> 66.0
+> 88.3
+
+Figure 5: Known-groups validity of the human baseline. Each dot is one participant’s mean 𝜙 0 over three assigned tasks, with non-completions scored zero ( 𝑛 =55: 25 students, 18 juniors, 12 seniors; groups are vendor-classified). Horizontal bars mark group means (43.2 / 66.0 / 88.3). The dashed line is the best agent, Claude Fable 5 ( 𝜙 0 = 53 .4); 33 of 55 participants outscore it, including all 12 seniors and 15 of 18 juniors. 
+
+Table 5: Human baseline under agent conditions. 𝜙 /Mech./Judg. are 0–100 stack scores over completed attempts; 𝜙 0 assigns zero to non-completions. Gate is the share of completed attempts triggering at least one validity gate; Time is the median per attempt. Group 𝑛 Compl. 𝜙 𝜙 0 Mech. Judg. Gate Time Senior 12 100% 88.3 88.3 92.5 88.9 17% 200m Junior 18 94% 69.9 66.0 85.8 59.1 55% 243m Student 25 81% 53.1 43.2 65.7 45.2 74% 273m Best agent — 100% 53.4 53.4 93% / 78% 10% —
+
+replicate, and group effects are essentially unchanged with task fixed effects (senior +43 .6, junior +20 .2 points vs. students, against unadjusted gaps of +45 .1 and +22 .8). Comparisons with agents use the leaderboard’s failure-aware convention, 𝜙 0, for both populations. The best agent scores 𝜙 0 =
+
+53 .4: above the student mean of 43.2, below every senior analyst (minimum 83.8) and 15 of the 18 juniors, and below 33 of 55 partici-pants. The weakest junior participant sits below the best agent on 𝜙 0
+
+(40.0, driven by a non-completion) while outscoring it on completed attempts (60.0 vs. 53.4); we report both so that neither convention is mistaken for the other. In bootstrap replicates, the junior and senior 𝜙 0 means exceed the best agent in 100% of resamples. Gate-trigger rate is the one reversal: the best agent triggers fewer gates than senior analysts (10% vs. 17%). Gates measure structural schema compliance, for which programmatically generated work-books can be byte-precise while hand-built workbooks are not. In this sample, the experience ordering is carried by the envelope and judged facets rather than by gate rate alone. The same 0–100 subscores test whether facet difficulty explains the mechanical–judgment gap. Seniors show only a 3.6-point gap (92.5 mechanical vs. 88.9 judgment), versus 26.7 for juniors and 20.5 for students. The vendor-classified senior group therefore performs similarly on mechanical and judgment facets. This ordering weak-ens the facet-difficulty explanation, though independent credential verification and replication outside the vendor network are needed. GAUGE: A Benchmark of Valuation Judgment for Agent-Built Financial Models KDD ’27, August 2027, San Jose, CA, USA 
+
+## 6.4 Additional Diagnostics 
+
+Across the Small–Premium tiers, mechanical pass rates are 80.9– 84.0%, judgment pass rates are 55.3–59.4%, and the gap remains 24.6–25.8 points (Figure 13, Appendix M). Stated cells and analyst-hours increase by roughly an order of magnitude across these tiers, but neither pooled pass rate declines. In this descriptive recut, work-book scale doesn’t account for the fleet’s mechanical-judgment gap. A scoring audit found three mis-activated facets; all reported aggregates use the corrected 25-industry overlay, which raises judg-ment rates by +1.0 to +5.3 points and reorders only near ties (inci-dent and correction history in Appendix J). Pass rates are lowest on maintenance/growth capex split (2%), variable/fixed costs (4%), driver sensitivity (9%), and one-off nor-malization (27%). They are much higher on FCF definition (98%), discount timing (91%), and circular-interest resolution (87%). The tested agents therefore pass canonical formula facets more often than the supporting craft-analysis facets. The 141 capability failures comprise 81 full-budget non-convergences, 33 absent workbooks, and 27 invalid artifacts. Gates deduct at most 4.2 points for any agent, while failed active facets are the largest loss component for 21/24 agents (Figure 6); gate caps are not the dominant source of the reported score losses. 
+
+Failure-aware ranking. The fixed core contains 24 × 48 = 1,152 
+
+cells, of which 1,011 are scoreable and 141 fail. We rank by the fixed-denominator score 𝜙 0, assigning zero to failed or unscorable cells; completed-only 𝜙 is a conditional-quality diagnostic. In 50,000 paired task-cluster bootstraps, the point leader remains first in 99.998% of replicates and the exact top-three set is preserved in 99.848%, but the exact top-five set in only 22.446% (mean Spearman 
+
+𝜌 = 0.972 ). The largest conditional-to-failure-aware movement is Doubao 2.1-pro, from rank 8 to 22. Leave-one-grader-family-out rescores show the ranking leans most on the judged facets. The full per-facet matrix, slice tables, and capability-failure audit appear in Appendices L, M and N. Agents also select assumptions differently from professionals in a way aggregate scores hide. Among 532 completed cells whose assumptions file states WACC, 40% lie on a 50 bp grid and 27% on a 100 bp grid, versus 12% and 7% among 120 analyst-built work-books: agents reach for textbook increments where analysts derive company-specific values. Yet company rankings by agent WACC correlate 𝜌 = 0.36 –0.42 with the reference workbook, close to the 
+
+𝜌 = 0.38 cross-analyst correlation on multi-covered companies. The pattern localizes the deficit: agents preserve cross-company risk ordering about as well as analysts agree with each other. 
+
+## 6.5 Instrument Checks 
+
+Gates. Equal-weight additive credit without caps reverses 11 of 276 model-pair orderings; in 10 of the 11 reversals, it prefers the model with the higher gate-trigger rate. The additive-minus-GAUGE score difference correlates 𝑟 = 0.73 with gate rate (Figure 7). 
+
+Envelope. We run 20 repeated five-fold splits grouped by com-pany, keeping every workbook for a ticker in one fold. Disagree-ment tails are estimated from the other multi-covered companies, and E-industry bands exclude every held-out company. Across 39 eligible directed price observations from 30 companies, E-method strict coverage is 53.8% (company-bootstrap 95% CI 38.5–68.6%); 0 25 50 75 100          
+
+> Share of the 48-task ceiling (%)
+> Claude Fable 5
+> Claude Opus 4.8
+> GPT-5.6-sol
+> Kimi k2.7-code
+> GLM 5.2
+> Grok 4.5
+> GPT-5.6-terra
+> Claude Sonnet 5
+> DeepSeek v4-pro
+> Doubao-seed-evolving
+> DeepSeek v4-flash
+> GPT-5.6-luna
+> Hunyuan hy3
+> Gemini 3.1 Pro
+> Gemini 3.5 Flash
+> Kimi k3
+> Step 3.7 Flash
+> Kimi k2.6
+> MiniMax M3
+> Qwen3 Coder
+> Qwen3.7-max
+> Doubao 2.1-pro
+> Qwen3 235B
+> GPT-OSS-120B
+> 53
+> 50
+> 46
+> 41
+> 41
+> 41 12
+> 40
+> 40
+> 39
+> 39
+> 39
+> 38
+> 38
+> 37
+> 36
+> 35 10
+> 33
+> 32
+> 31 21
+> 28
+> 25 35
+> 10 75
+> 10 67
+> 956
+> GAUGE ϕ0kept
+> gate deduction
+> facet deficit
+> capability failure
+
+Figure 6: Score decomposition per agent. The 48-task ceiling is parti-tioned into retained 𝜙 0, gate deduction, failed active facets, and capability failure. Gate deductions are at most 4.2 points; failed facets dominate the loss for 21/24 agents. 0 10 20 30 40 50 
+
+> Score on the 48-task core (failures scored 0)
+> Claude Fable 5
+> Claude Opus 4.8
+> GPT-5.6-sol
+> Kimi k2.7-code
+> GLM 5.2
+> Grok 4.5
+> GPT-5.6-terra
+> Claude Sonnet 5
+> DeepSeek v4-pro
+> Doubao-seed-evolving
+> DeepSeek v4-flash
+> GPT-5.6-luna
+> Hunyuan hy3
+> Gemini 3.1 Pro
+> Gemini 3.5 Flash
+> Kimi k3
+> Step 3.7 Flash
+> Kimi k2.6
+> MiniMax M3
+> Qwen3 Coder
+> Qwen3.7-max
+> Doubao 2.1-pro
+> Qwen3 235B
+> GPT-OSS-120B
+> 10
+> 17
+> 46
+> 47
+> 54
+> 43
+> 71
+> 55
+> 62
+> 39
+> 77
+> 75
+> 50
+> 54
+> 79
+> 58
+> 85
+> 88
+> 71
+> 88
+> 55
+> 58
+> 88
+> 76
+> gate
+> %
+> Additive, no gates
+> GAUGE (full stack)
+
+Figure 7: Full stack and additive credit on identical facet outcomes. 
+
+Removing gates flips 11/276 model-pair orderings; the additive-minus-GAUGE difference has 𝑟 = 0.73 with gate rate (in Appendix N). 
+
+the p90 near band covers 91.2% (82.6–97.2%). At p90, strict held-out E-industry value coverage is 75.4% for beta, 79.0% for tax, 80.6% for ERP, 82.4% for WACC, 84.5% for risk-free rate, and 90.2% for terminal growth. This grouped cross-fit prevents direct company reuse between calibration and evaluation but remains internal to the same 65-company source sample, and price tails use only 17 undirected pairs. A perturbation control bounds how much of this KDD ’27, August 2027, San Jose, CA, USA Lu et al. 
+
+Table 6: Judge vote-sampling ablation. Six generation cells, 23 judged facets, 15-vote pools, and 800 bootstrap resamples. Subscore std is on the 0–2 facet scale; 𝜏 compares two independent re-judgings of the six cells.                    
+
+> 𝑘 Subscore std Ranking 𝜏 Flip rate 10.023 0.912 3.1% 30.020 0.928 2.5%
+> 50.019 0.944 2.2%
+> 70.018 0.952 1.9% 10 0.015 0.976 1.6%
+
+coverage is band permissiveness rather than selectivity: displacing each held-out peer assumption by ±2× its facet’s typical same-company analyst disagreement flips the E-industry outcome from 80.8% admission of real values to 66.1% rejection of counterfeits (85.4% at ±3×; 𝑛 =453 ), and sweeping the band percentile from p75 to p90 traces a coverage–selectivity frontier on which the released p90 setting is an interior operating point, not the permissive extreme. The price near band is asymmetric by construction and rejects only upward counterfeits, so we read it strictly as the partial-credit zone; the strict price band that alone earns full credit rejects 65.4% of the same counterfeits. Appendix N reports the perturbation design, quantile sensitivity, sample sizes, widths and full coverage. 
+
+Judge. Five draws from one frozen judge are majority-reduced. At 𝑘 = 5, the vote-sampling audit gives Kendall 𝜏 = 0.944 and a 2.2% facet flip rate (Table 6). These values measure sampling stability for that frozen judge, not judge correctness. The supplied 460-case human-label audit summary (Section 5.4) reports 86.7% exact judge–consensus agreement (weighted 𝜅 = 0.81 ) against 89.4% expert–expert agreement ( 𝜅 = 0.85 ); by slice, agreement/ 𝜅 
+
+are 91.2%/0.87 for mechanical-adjacent judged facets, 85.0%/0.79 for assumptions, and 82.9%/0.75 for valuation (in Appendix K). A cross-family replication addresses same-family judge preference directly: re-judging a stratified 96-cell subset (12 tasks × 8 agents spanning five providers) with GPT-5.6-sol at 𝑘 = 5 gives 73.5% exact facet agreement with the frozen judge, 92.2% within one rung (quadratic-weighted 𝜅 = 0.675 ). The cross-family judge is uniformly stricter (−5.0 𝜙 on judged facets), and the shift is family-neutral: Anthropic-generated cells move −5.2 versus −4.8 for non-Anthropic cells (gap 0.4 points, permutation 𝑝 = 0.71 ). Agent ordering on the subset is preserved (Kendall 𝜏 = 0.857 ), and the top agent is unchanged—the OpenAI judge also ranks Claude Fable 5 first, above its own family’s GPT-5.6-sol. The details are in Appendix N.5 (Table 21). 
+
+## 6.6 Training Signal 
+
+Corpus context improves scorer-aligned judgment: E-industry tables raise the valuation-judgment subscore by +4.0 𝜙 (95% CI 
+
+[+ 1.3, +6.7]) in a leakage-controlled 200-workbook split, while me-chanics change by −0.9 with an interval that spans zero. Exemplar cards change judgment by a non-significant +1.0. Both context arms use same-industry summaries from training companies, contain no figures from the test ticker, and use paired tasks with three generation replicates (Figure 8). Fine-tuning on 146 qualifying trajectories raises judgment by 
+
++8.4 𝜙 on 𝑛 = 15 paired tasks while changing assumptions by −4.9
+
+and leaving the overall score unchanged. In both studies, the judg-−2 0 2 4 6 8   
+
+> Δϕvs. base prompt (48 paired tasks)
+> Overall ϕ
+> Mechanical (C1)
+> Assumptions (C2)
+> Valuation (C3) +4.0
+> Envelope tables
+> Exemplar cards
+
+Figure 8: Corpus-as-context. Paired deltas with 95% intervals. E-industry tables change valuation judgment by +4.0 𝜙 ; the mechanical interval in-cludes zero. Exemplar cards produce a non-significant +1.0 change. 
+
+ment gains concentrate on envelope-scored facets—the quantities the corpus distributions directly inform (in Appendix O). 
+
+## 7 Accessibility, Ethics, and Limitations 
+
+Access and ethics. Rubrics, envelope statistics, checker, judge pro-tocol, extraction code, and harness are released as a public method-ology tier. De-identified evaluation and training splits are gated for research use, with roughly 600 workbooks reserved for future refreshes. XML-level de-identification preserved formulas, and an independent rescan found no residual findings (in Appendix V). 
+
+Limitations. Three limitations qualify our results. Envelope scope. The peer audit covers a common criterion slice rather than each benchmark’s full rubric. Envelope calibration is company-grouped but remains within one 65-company corpus, with only 17 pairs supporting the p90 implied-price tail. Observed practice is therefore a reference distribution, not ground truth. The corpus and human study also come from one vendor network, with unverified credentials and overrepresentation of US listings. Judge dependence. 
+
+Of 56 facets, 23 rely on repeated calls to one frozen judge; repeated voting tests stability rather than correctness. The available 460-case human audit is insufficiently documented for full validation, and full-panel cross-family judging remains future work. Evaluation coverage. The longitudinal panel contains 48 of 196 tasks and uses one generation per agent–task pair. It therefore does not measure full-bank generalization or generation variance. 
+
+## 8 Conclusion 
+
+GAUGE scores agent-built financial valuation models against ob-served analyst practice rather than agreement with one expert. Un-der a single-golden rule, professional analyst-built workbooks score a median of 0.33 against one another, showing that disagreement with one author does not imply an indefensible answer. GAUGE therefore combines deterministic checks and validity gates with empirically calibrated reference bands for professional judgment. On the first 24-agent leaderboard, the best agent scores above the student mean but below every senior analyst, passing 93% of mechanical-construction facets versus 78% of valuation-judgment facets; the fleet-median gap is 26 points. We release the method-ology, gated splits, a versioned longitudinal core, and a withheld refresh pool. Current agents can increasingly build the model, but exercising judgment through it remains difficult in practice. GAUGE: A Benchmark of Valuation Judgment for Agent-Built Financial Models KDD ’27, August 2027, San Jose, CA, USA 
+
+## References 
+
+[1] Anthropic. 2026. Claude Fable 5 & Claude Mythos 5 System Card. https://www. anthropic.com/claude-fable-5-mythos-5-system-card. Accessed 2026-07-23. [2] Anthropic. 2026. Claude Opus 4.8 System Card. https://www.anthropic.com/ claude-opus-4-8-system-card. Accessed 2026-07-23. [3] Anthropic. 2026. Claude Sonnet 5 System Card. https://www.anthropic.com/ claude-sonnet-5-system-card. Accessed 2026-07-23. [4] Andrew M Bean, Ryan Othniel Kearns, Angelika Romanou, Franziska Sofia Hafner, Harry Mayne, Jan Batzner, Negar Foroutan Eghlidi, Chris Schmitz, Karolina Korgul, Hunar Batra, et al . 2026. Measuring what matters: Construct validity in large language model benchmarks. Advances in Neural Information Processing Systems 38 (2026). [5] DeepSeek-AI. 2026. DeepSeek-V4: Towards Highly Efficient Million-Token Con-text Intelligence. arXiv:2606.19348 [cs.CL] [6] Efthimios G Demirakos, Norman C Strong, and Martin Walker. 2004. What valuation models do analysts use? Accounting horizons 18, 4 (2004), 221–240. [7] Google DeepMind. 2026. Gemini 3.1 Pro Model Card. https://deepmind.google/ models/model-cards/gemini-3-1-pro/. Accessed 2026-07-23. [8] Google DeepMind. 2026. Gemini 3.5 Flash Model Card. https://deepmind.google/ models/model-cards/gemini-3-5-flash/. Accessed 2026-07-23. [9] Luke Guerdan, Solon Barocas, Kenneth Holstein, Hanna Wallach, Steven Wu, and Alexandra Chouldechova. 2026. Validating llm-as-a-judge systems under rating indeterminacy. Advances in Neural Information Processing Systems 38 (2026), 112282–112350. [10] Valentin Hofmann, David Heineman, Ian Magnusson, Kyle Lo, Jesse Dodge, Maarten Sap, Pang Wei Koh, Chun Wang, Hannaneh Hajishirzi, and Noah A Smith. 2025. Fluid language model benchmarking. arXiv preprint arXiv:2509.11106 
+
+(2025). [11] Shahed Imam, Richard Barker, and Colin Clubb. 2008. The use of valuation models by UK investment analysts. European accounting review 17, 3 (2008), 503–535. [12] Naman Jain, King Han, Alex Gu, Wen-Ding Li, Fanjia Yan, Tianjun Zhang, Sida Wang, Armando Solar-Lezama, Koushik Sen, and Ion Stoica. 2024. Livecodebench: Holistic and contamination free evaluation of large language models for code. 
+
+arXiv preprint arXiv:2403.07974 (2024). [13] Carlos E. Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir Press, and Karthik Narasimhan. 2024. SWE-bench: Can Language Models Resolve Real-World GitHub Issues? arXiv:2310.06770 [cs.CL] https://arxiv.org/abs/2310.06770 [14] Kimi Team. 2025. Kimi K2: Open Agentic Intelligence. arXiv:2507.20534 [cs.LG] [15] Kimi Team. 2026. Kimi K3 Tech Blog: Open Frontier Intelligence. https://www. kimi.com/blog/kimi-k3. Accessed 2026-07-23. [16] Michael Krumdick, Varshini Reddy, Shivani Chaudhary, William Day, Maarij Ahmed, Hayan Haqqi, Muhammad Ahsen Fahim, Hanzallah Amjad, Ahmad Orakzai, Aqsa Gul, et al . 2026. FrontierFinance: A Long-Horizon Computer-Use Benchmark of Real-World Financial Tasks. arXiv preprint arXiv:2604.05912 (2026). [17] Srivatsa Kundurthy, Clara Na, Colton Moraine, Anoushka Mohta, Case Winter, George Fang, John Ling, Emma Strubell, and Zach Kirshner. 2026. BlueFin: Bench-marking LLM Agents on Financial Spreadsheets. arXiv preprint arXiv:2605.30907 
+
+(2026). [18] Elaine Lau, Markus Dücker, Ronak Chaudhary, Hui Wen Goh, Rosemary Wei, Vaibhav Kumar, Saed Qunbar, Guram Gogia, Yi Liu, Scott Millslagle, et al . 2026. BankerToolBench: Evaluating AI Agents in End-to-End Investment Banking Workflows. In RLEval: Methods and Reinforcement Learning Environments for Evaluating AI Agents .[19] Zeyao Ma, Bohan Zhang, Jing Zhang, Jifan Yu, Xiaokang Zhang, Xiaohan Zhang, Sijia Luo, Xi Wang, and Jie Tang. 2024. Spreadsheetbench: Towards challenging real world spreadsheet manipulation. Advances in Neural Information Processing Systems 37 (2024), 94871–94908. [20] MiniMax. 2026. MiniMax M3: Frontier Coding, 1M Context, Native Multimodality — All in One Model. https://www.minimax.io/blog/minimax-m3. Accessed 2026-07-23. [21] OpenAI. 2025. gpt-oss-120b & gpt-oss-20b Model Card. arXiv:2508.10925 [cs.CL] [22] OpenAI. 2026. GPT-5.6 System Card. https://deploymentsafety.openai.com/gpt-5-6. Accessed 2026-07-23. [23] Felipe Maia Polo, Lucas Weber, Leshem Choshen, Yuekai Sun, Gongjun Xu, and Mikhail Yurochkin. 2024. tinyBenchmarks: evaluating LLMs with fewer examples. 
+
+arXiv preprint arXiv:2402.14992 (2024). [24] Qwen Team. 2025. Qwen3-Coder: Agentic Coding in the World. https://qwenlm. github.io/blog/qwen3-coder/. Accessed 2026-07-23. [25] Qwen Team. 2026. Qwen3.7-Max Model Documentation, Alibaba Cloud Model Studio. https://www.alibabacloud.com/help/en/model-studio/models. Accessed 2026-07-23. [26] Anka Reuel, Amelia Hardy, Chandler Smith, Max Lamparth, Malcolm Hardy, and Mykel J Kochenderfer. 2024. Betterbench: Assessing ai benchmarks, uncovering issues, and establishing best practices. Advances in Neural Information Processing Systems 37 (2024), 21763–21813. [27] Bytedance Seed. 2026. Seed1. 8 model card: Towards generalized real-world agency. arXiv preprint arXiv:2603.20633 (2026). [28] StepFun. 2026. Step 3.7 Flash: A High-Efficiency Flash Model for Real-World Agents. https://static.stepfun.com/blog/step-3.7-flash/. Accessed 2026-07-23. [29] Tencent Hunyuan Team. 2026. Tencent Hunyuan Officially Releases Hy3, Ad-vancing Agent Capabilities and Deeper Product Integration. https://hunyuan. tencent.com/research/100064?langVersion=zh. Accessed 2026-07-23. [30] A Wang, G Meinhardt, J Katz, JH Kim, PK Chaudhary, C Blagden, and E Xu. 2026. BigFinanceBench: A Workflow-Grounded Benchmark for Financial-Research Agents. arXiv preprint arXiv:2606.03829 (2026). [31] Sinuo Wang, WANG PIAOHONG, Tianrui Qin, Maojia Song, Qianben Chen, Qiexiang Wang, Gengze Zhou, Zeyu Zhang, He Zhu, Dingfeng Shi, et al . 2026. EVOLVING ROLLOUTS: Harnessing Historical Experience for Web Agent Evo-lution in Reinforcement Learning. In Forty-third International Conference on Machine Learning .[32] Colin White, Samuel Dooley, Manley Roberts, Arka Pal, Ben Feuer, Siddhartha Jain, Ravid Shwartz-Ziv, Neel Jain, Khalid Saifullah, Sreemanti Dey, et al . 2024. Livebench: A challenging, contamination-limited llm benchmark. arXiv preprint arXiv:2406.19314 (2024). [33] xAI. 2026. Introducing Grok 4.5. https://x.ai/news/grok-4-5. Release announce-ment, July 2026. [34] An Yang, Anfeng Li, Baosong Yang, et al . 2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] [35] Aohan Zeng, Xin Lv, Zhenyu Hou, Zhengxiao Du, Qinkai Zheng, Bin Chen, Da Yin, Chendi Ge, Chenghua Huang, Chengxing Xie, et al . 2026. Glm-5: from vibe coding to agentic engineering. arXiv preprint arXiv:2602.15763 (2026). [36] Taojie Zhu, Wentao Zhao, Rui Sun, Beidi Luan, Jiacheng Lu, Sinuo Wang, Jing Li, Daxin Jiang, Yonghong He, and Zuo Bai. 2026. From Knowing to Doing: A Memory-Controlled Benchmark for LLM Trading Agents on Stock Markets. 
+
+arXiv preprint arXiv:2605.28359 (2026). [37] Yuxuan Zhu, Tengjun Jin, Yada Pruksachatkun, Andy Zhang, Shu Liu, Sasha Cui, Sayash Kapoor, Shayne Longpre, Kevin Meng, Rebecca Weiss, et al . 2026. Establishing best practices in building rigorous agentic benchmarks. Advances in Neural Information Processing Systems 38 (2026). KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+Appendix Contents 
+
+The appendix is organized in dependency order. 
+
+A. Additional Peer-Workbook Audit Details . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+B. Reproducibility . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+C. Corpus Organization and Quality Control . . . . . . . . . . . . . . . . . . . . . . 11 
+
+D. Task Construction and Agent Harness . . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+E. Wire Adapters and Recovery Shims . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13 
+
+F. Tool Use: Interface Behavior Under One Scaffold . . . . . . . . . . . . . . . . 15 
+
+G. The 56-Facet Taxonomy: Complete Rubrics . . . . . . . . . . . . . . . . . . . . . 18 
+
+H. Validity Gates: Detection and Caps . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18 
+
+I. Industry-Conditional Activation: The Overlay Matrix . . . . . . . . . . . . 18 
+
+J. Instrument Provenance and Calibration History . . . . . . . . . . . . . . . . . 19 
+
+K. Judge Protocol and Supplied Human-Label Audit . . . . . . . . . . . . . . . 22 
+
+Appendix Contents (continued) 
+
+Results, examples, and release materials. 
+
+L. Per-Facet Results: The Full Matrix . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 
+
+M. Results by Slice: Sector, Tier, and Completion Re-Cuts . . . . . . . . . . 25 
+
+N. Additional Main-Result Diagnostics . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 
+
+O. Training-Signal Experiments . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27 
+
+P. Cost, Latency, and Compute . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27 
+
+Q. Worked Example: One Task End to End . . . . . . . . . . . . . . . . . . . . . . . . 28 
+
+R. Worked Example II: A Gated Cell . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 28 
+
+S. Three Failure Trajectories, Verbatim . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 
+
+T. Gate Trigger Profiles . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 
+
+U. Judge Vote-Sampling Ablation: Detailed Setup . . . . . . . . . . . . . . . . . . 31 
+
+V. Release Protocol and Benchmark-Design Checklist . . . . . . . . . . . . . . 32  
+
+> 10 Appendix KDD ’27, August 2027, San Jose, CA, USA
+
+## A Additional Peer-Workbook Audit Details 
+
+Each workbook is used as the reference for every same-ticker peer. Of 158 directed pairs, 108 state at least three of the nine graded crite-ria. Table 3 and Figure 3 report the criteria that drive disagreement and the small tail samples. Unstated values are N/A; two probable unit/currency-mismatch tickers are excluded from implied-price comparisons. The same-vintage subset ( 𝑛 = 42 directed pairs) has median score 0.33. Under this tolerance rule, the pairs are not in-terchangeable; the audit does not determine which workbook is correct. 
+
+## B Reproducibility 
+
+Extraction pipelines record each number’s sheet, row, and label; batch QC reports list every unparsed workbook and its reason. Analyst-vs-analyst pair records (per pair and tolerance) are re-leased as JSONL. Rubrics, scorer, harness, and methodology-tier artifacts are public; workbook data are gated on Hugging Face un-der a research-use agreement (Section 7). Links are withheld for anonymous review and will appear in the camera-ready version. 
+
+## C Corpus Organization and Quality Control 
+
+Folder units. The vendor delivers the corpus as folder units : one merged .xlsx workbook bundling every valuation method the analyst built for one company (a Large-tier workbook can run to ∼30 tabs), plus a machine-readable README documenting tab structure, methods, key input–output relationships, and sensitivity notes. Per the vendor’s data card, every artifact cleared a commercial-intent and internal-review bar (review hours are excluded from the stated analyst-hours), uses public market and accounting inputs only, and contains no macros and no personal data. 
+
+Vendor-stated vs. QC-verified. We re-derive every count we use from the delivered bytes rather than quoting the data card. The card states 400/350/200/50 folder units per tier; our sheet-level parse of all 1,001 workbooks counts 404/347/200/50. The card’s tier definitions (cells, analyst-hours, minimum methods) are quoted as definitions, but our 20-workbook deep audit found Large-tier cell medians of ∼35K — above the stated 12K–25K range — and one Premium workbook below the stated formula share; we report both deviations rather than suppress them. Input-material diversity grows with tier by design (Small: filings, decks, basic market data; Medium adds earnings calls; Large adds industry reports and expert calls; Premium adds bespoke operating analyses), which makes tier a usable mechanical-scale covariate in Appendix M. 
+
+GICS reconciliation (26 vs. 25). The vendor’s data card lists 26 industry groups over ∼1,033 ticker entries. Two normalizations pro-duce the numbers used in this paper: (i) the card counts the legacy 
+
+Industrial Conglomerates group (one ticker), which the March-2023 GICS revision retired — we classify under the current 25-group standard; (ii) the card’s ticker list includes duplicate listings and alternative names for the same company, which our identity pass de-duplicates to 922 distinct tickers. All corpus statistics in this paper therefore read “922 tickers, 25 GICS industry groups.” 
+
+README caveat. README files are template-instantiated — 546 of 1,001 contain an identifiable copy-paste artifact — so we use them only as label sources after cleaning (method and tab inventories), never as human-written documentation, and none of the graded facets consult them. 
+
+## D Task Construction and Agent Harness 
+
+This appendix gives the system prompt (D.1), deliverable specifica-tion (D.2), rendered input-pack excerpt (D.3), and scaffold constants (D.4). 
+
+Input packs. A provenance-tracked extractor builds each visible pack from the reference workbook’s historical sections. Every num-ber carries its source sheet, row, and label; the accounting identity 
+
+𝑇 𝐴 = 𝑇 𝐿 + 𝑇 𝐸 is checked before release. Packs contain three fiscal years of audited historicals (revenue, COGS, opex, D&A, interest, tax, net income, the three balance-sheet totals, and capex), plus as-of share price, share count, total debt, and cash. They contain no peer multiples, consensus, or broker data. Five archetype schemas are listed in Section 5.1. 
+
+Prompt contents. The rendered prompt sets the role (junior equity-research associate reporting to a senior analyst), as-of date, and pack-only data rule. It then inserts whitelisted pack tables; a byte-scan of rendered prompts across models found no reference WACC, fair value, or EV. The final block requires one workbook with eleven named sheets, five formula-live forecast years, tie-outs, a memo with 3–5 falsifiable quantified claims matching the workbook, and an assumptions file of {name, value, source} records with a resolvable Sheet!Cell or input-pack pointer. 
+
+## D.1 System Prompt (Complete, Verbatim) 
+
+Every agent receives the same system prompt; only the tool-call wire format differs per provider. 
+
+> System prompt — identical for all 24 agents
+> You are a junior equity-research associate. A senior analyst has asked you to deliver a complete, institutional-quality financial model for a public company. The deliverable is a single Excel workbook (.xlsx) that the analyst will open and use without further questions. You will receive three years of audited historical financials. Your task is to project the next five fiscal years, assemble the three integrated statements, and build a DCF valuation -- *not* to source raw filings. You have the following local tools: - A Python interpreter with openpyxl installed. - A shell with write access to the current working directory. - No internet, no live market-data API, no MCP servers. You may NOT rely on outside calls. Use only the inputs given in the user message. Do not assume access to filings, terminals, or research databases beyond what is explicitly provided. Deliverable rules -- these are not negotiable. The model will be machine-graded and judged by a senior analyst. 1. Save the workbook to ./output/{TICKER}_model.xlsx. Create the ./output/ directory if it does not exist. 2. Produce a SINGLE workbook with all sheets in it. 3. Every projected/forecasted number must be a live Excel **formula** that references inputs -- never a value computed in Python and written as a number.
+> 11
+
+KDD ’27, August 2027, San Jose, CA, USA Appendix 0 0.25 0.50 0.75 1
+
+Flat single-golden score of one analyst vs. a peer 
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 
+
+> Cumulative % of 108 pairs
+
+1×
+
+2×
+
+3×
+
+4×
+
+0.70 
+
+92.6% of pairs below 0.70 
+
+at published tolerances 
+
+median 0.33 
+
+(a) Tolerance sweep, 1 × –4 × published bands 
+
+0 20 40 60 80 100 
+
+Peer-vs-peer pass rate (%) 
+
+WACC 
+
+Implied share price 
+
+Terminal growth 
+
+Beta 
+
+Tax rate 
+
+Equity risk premium 
+
+Forecast rev. FY+2 
+
+Forecast rev. FY+1 
+
+Risk-free rate 
+
+n=122 
+
+n=34 
+
+n=30 
+
+n=96 
+
+n=100 
+
+n=86 
+
+n=49 
+
+n=43 
+
+n=82 
+
+1 × 3 × 
+
+(b) Per-criterion pass, observable → judgment 
+
+Figure 9: Full peer-workbook audit. (a) Cumulative single-golden scores for 108 directed pairs as tolerance bands widen from 1× to 4×. (b) Criterion pass rates at 1× and 3×.
+
+The senior analyst will flex assumptions; hardcoded outputs are a silent bug. 4. The model must produce a final **implied share price** that is clearly labeled and easy to find. 5. Use real accounting conventions (GAAP-style). The Income Statement, Balance Sheet, and Cash Flow Statement must tie together -- net income flows to retained earnings and to the cash flow statement, ending cash on CF equals cash on BS, etc. 6. No placeholder text, no "TODO" cells, no "Excel Data Table feature" notes. The workbook must be fully functional when opened. Do not ask clarifying questions. Make reasonable analyst-grade assumptions. Document them in the workbook (cell comments or an Assumptions sheet) but do not block on them. Work efficiently. Spend your reasoning on the model itself, not on the surrounding deliverable. 
+
+## D.2 Deliverable Specification (Complete, Verbatim) 
+
+After the input-workbook dump (42,000-character budget, Sec-tion D.3), the prompt closes with the deliverable block. The place-holders {model_xlsx} , {memo_md} , and {assum} are absolute out-put paths filled at render time. 
+
+Deliverable block — the three-artifact contract 
+
+# DELIVERABLE -- build it with python3 + openpyxl via your Bash tool Write THREE files to these EXACT absolute paths (mkdir -p the directory first): 1. {model_xlsx} A single institutional-quality .xlsx with these sheets: Cover, Assumptions, Revenue_Build (segment drivers), Income_Statement, Balance_Sheet, Cash_Flow, Debt_Schedule, WACC, DCF (Valuation), Sensitivity, Checks. Hard requirements (machine-graded + judged): 
+
+- 5 forecast years after the last actual; every forecast cell is a live FORMULA referencing Assumptions cells -- NEVER a number computed in python and pasted. - 3 statements TIE: balance sheet balances every period (no plug to 'other '); CF ending cash == BS cash; NI flows to retained earnings. - DCF on unlevered FCF discounted at a WACC built on the WACC sheet; an explicit EV -> (net debt) -> equity -> per-share bridge with a clearly labelled implied price. - >=1 sensitivity grid of LIVE formulas on real value drivers. - Segment revenue built from drivers (volume/price) where the input gives them. - Color: blue font = hardcoded input, black = formula. 2. {memo_md} A short investment memo: thesis with 3-5 falsifiable, quantified claims; key risks mapped to model drivers; headline numbers (implied price, EPS) that MATCH the workbook. 3. {assum} JSON list of every key assumption: {"name","value","source"} where source is a resolvable pointer ("Sheet!Cell", or the input row it came from). Every number you cite in the memo must appear here. Build the workbook now. When finished, reply with ONLY the path you wrote. Do not narrate. 
+
+## D.3 Rendered Input Pack: Excerpt 
+
+The pack is dumped sheet by sheet as COORD\tVALUE lines un-der relevance-weighted headers. The excerpt below is from a real rendered prompt (ACN, Software & Services); note the withheld-consensus sheet — the evaluation target is stated, in the pack itself, as withheld. 
+
+12 Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+Input-workbook dump (excerpt of a rendered prompt)                                    
+
+> # CASE -- ACN (ACN), sector: Software & Services, as-of: 2026-04-30 The ONLY data you may use is the input workbook below (dumped from ACN_FY2025.xlsx). Do not invent figures beyond what you can derive from it. Forecast cells in the input are intentionally blank -- your job is to fill and formula-drive them. === INPUT WORKBOOK DUMP === ===SHEET: Historical_IS=== (9x9, rel2) A1 line_item B1 2023A C1 2024A D1 2025A A2 Revenue B2 64111.745 C2 64896.464 D2 69672.977 A3 Cost of revenue ... A8 Net income B8 7003.53 C8 7419.197 D8 7832.4 ===SHEET: Historical_BS=== (6x9, rel2) A2 Total assets B2 51245.305 C2 53932.363 D2 65394.897 A3 Total liabilities B3 24786.712 C3 24764.115 D3 33153.93 A4 Total equity B4 26458.593 C4 29168.248 D4 32240.967 A5 Cash & equivalents D5 11487.729 A6 Total debt D6 5034.169 ===SHEET: Consensus_or_Broker_Range=== (7x8, rel2) A2 Revenue H2 withheld -- consensus/broker forecasts are the evaluation target; build your own. Management guidance is in the Guidance tab. ===SHEET: Meta=== (15 fields) ticker ACN | as_of_date 2026-04-30 | last_close 250 | shares_mm 620 | historical_years 2023A-2025A | forecast_years 2026E-2030E | variant clean ===SHEET: Instructions=== as_of_clamp: Do NOT use any information dated after 2026-04-30. scoring_note: Scored on the 56-facet taxonomy (rubrics/taxonomy.json) with hard gates (rubrics/gates.json): BS must balance, CF must tie, segments must roll up, forecast cells must be formulas, no look-ahead, sources must resolve. === END INPUT WORKBOOK ===
+
+## D.4 Scaffold Constants 
+
+Every model runs the same scaffold: two JSON-schema function tools ( run_bash , write_file ; no network and no market-data ac-cess, so consensus is withheld by construction), a 50-turn budget, 6,000-character tool-output truncation, a 1,800 s wall clock, and at most one infrastructure retry — capability failures are never retried (Section 6). Only the wire adapter (how a tool call is serialized for a given provider) differs per model: anthropic , openai , gemini ,and kimi_official , plus three recovery shims applied uniformly (JSON-string argument unwrap, tool-call-as-text extraction, leaked think-block stripping) whose triggers are logged per run. Each run archives the rendered prompt, the full transcript, the workbook, a LibreOffice-recalculated sidecar (formula values re-derived indepen-dently of the authoring process), the memo, and the assumptions file. Table 7 lists every constant. 
+
+Table 7: Agent-scaffold constants, identical across all 24 agents. If a model stops before the artifact exists it is re-prompted (“nudged”) up to 4 times within the same turn budget; nudges are not retries. 
+
+Constant Value Tools exposed run_bash , write_file 
+
+Tool-use turns (max) 50 Output tokens per turn (max) 16,384 Tool output fed back (tail) 6,000 chars Per-command timeout 180 s Per-HTTP-call timeout / retries 300 s / 4 Wall clock per attempt 1,800 s Generation attempts (infra only) 2Artifact nudges (max) 4Input-pack dump budget 42,000 chars Network / market data / MCP none 
+
+## E Wire Adapters and Recovery Shims 
+
+Running 24 agents from twelve providers through one scaffold (Ap-pendix D) forces a design layer most leaderboards leave undisclosed: tool-call serialization differs per provider, serialization bugs hap-pen, and every such bug must be classified as either infrastructure (repaired uniformly, in the harness) or capability (fed back to the model and scored). That classification is a validity decision — a harness that silently repairs one provider’s malformed tool calls but not another’s is no longer measuring the same thing — so this section expands the one-line inventory of Appendix D.4 into a full disclosure; to our knowledge no prior agentic-finance benchmark provides one. 
+
+The four adapters. All per-provider code lives in harness/ agent_loop.py as four wire adapters behind one interface (seed, build request, parse tool calls, feed results, nudge): 
+
+• _OpenAI — /v1/chat/completions ;
+
+• _Anthropic — /v1/messages ;
+
+• _Gemini — :generateContent , thinkingBudget:0 ;
+
+• _KimiOfficial — a subclass of _Anthropic that changes 
+
+only credentials and base URL, because Kimi k3 is served from Moonshot’s own Anthropic-Messages-compatible cod-ing gateway rather than the models proxy. The loop, prompts, tools, and budgets are shared; the adapter iso-lates the model — and, for dual-protocol models, the wire protocol — as the variable under test. Protocol support was frozen from a live probe of the proxy ( /v1/models support_apis plus trivial tool-call probes), not from documentation; several models expose both the Anthropic-native and the OpenAI-chat protocol, which is what makes within-model protocol comparison possible at all. In the frozen campaign each agent is pinned to a single wire, recorded per row in the ledger: 11 agents on anthropic , 10 on openai , 2 on 
+
+gemini , 1 on kimi_official (Table 8). 
+
+Recovery shims normalize transport, never semantics. 
+
+Three shims run identically on every wire that can trigger them. (1) The shim _normalize_tool_args unwraps two non-standard serializations of tool arguments (docstring verbatim below); it is applied on both the anthropic and openai wires. (2) _toolcall_ from_text recovers a tool call that a model emitted as JSON 
+
+text with finish_reason=stop instead of the native tool_calls 
+
+field (seen on Step 3.7 Flash over the openai wire); it is delib-erately conservative — per its docstring it “only accepts JSON 
+
+13 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+whose name is one of OUR tools, so legitimate prose is never mistaken for a call” — and it tags every synthesized call with the id 
+
+call_synth0 , so activations remain greppable in the archived his-tories. (3) _strip_think drops leaked literal <think> . . . </think> 
+
+blocks from assistant text. The dividing line we enforce: a shim may re-parse the envelope , never the content. None injects text, repairs an argument value, or hides an error; when the model’s semantics are themselves broken (an empty command, a truncated script), the harness feeds back an explanatory tool result and the recovery — or the failure — is the model’s, and is scored.       
+
+> Transport shim — _normalize_tool_args docstring (verbatim)
+> Coerce a model 's tool-call arguments into a plain dict. The StepFun proxy serializes large tool arguments in two non-standard ways (observed on kimi-k2.6): (1) the whole `input `arrives as a JSON-encoded string rather than a parsed object; (2) the parsed object has a single `raw_arguments `key whose value is the JSON string of the real arguments. Both must be unwrapped or downstream tools see empty/ `missing path `/`empty command `. Applied on every wire so behavior stays uniform across models.
+
+The three serialization incidents. A pre-campaign smoke test on the Kimi family (2026-07-18) surfaced three latent transport failures, all silent and none provider-documented. (i) Arguments as a JSON string: tool_use.input arrived as a bare JSON-encoded string rather than a parsed object; the transcript stub crashed on 
+
+.items() and the driver died before writing any transcript, leaving only an AttributeError in gen_error . (ii) Token-cap truncation loop: a single oversized run_bash call truncated mid-argument by the 16,384-token per-turn output cap delivered an empty com-mand; the original placeholder feedback ( <empty command> ) gave the model nothing to correct on, so it repeated the identical call for ∼16 turns until the truncated assistant turn poisoned the his-tory and the proxy rejected the request body outright (HTTP 400). (iii) raw_arguments wrapper: large arguments arrived wrapped as 
+
+{"raw_arguments": "<json string>"} , so write_file saw no 
+
+path . Incidents (i) and (iii) are envelope corruption and were fixed uniformly by the shim above. Incident (ii) is a genuine capability event — the model chose an oversized single call — so it is not 
+
+shimmed away: the empty command still reaches the model as a failed tool result; we only replaced the uninformative placeholder with a diagnostic that names the likely cause, and the model must still recover on its own turns. 
+
+> Truncation diagnostic — fed back verbatim on an empty command
+> <run_bash: no command received. Your previous message was likely cut off by the 16384-token output limit before the command finished. Do NOT resend one giant command. Instead: write long scripts to a file in small pieces with write_file (append mode), or split the work across several short run_bash calls, then execute.>
+
+Thinking overrides and retry classification. Two further per-provider accommodations are disclosed rather than hidden. First, extended thinking is suppressed wherever the wire protocol exposes a control — thinking:disabled on the anthropic wire, 
+
+thinkingBudget:0 on gemini — because the proxy emits empty thinking blocks on complex prompts and thinking inflates first-turn latency past the proxy’s ∼298 s response cap. Two models reject the uniform setting at the API level: Claude Fable 5 returns HTTP 400 for both thinking:disabled and thinking:enabled (it uses a newer adaptive scheme, so the key is omitted and the model de-faults to adaptive), and Kimi k2.7-code requires thinking enabled, run with a 4,096-token budget. We report both deviations rather than suppress them: the fleet is thinking-suppressed except where a provider makes suppression impossible. Second, HTTP retry classi-fication in _post (four attempts, exponential backoff): 408/429/5xx and network errors are transient; a proxy-wrapped HTTP 424 is retried only when the inner upstream status is 5xx and not the deterministic ResponseTimeout (that means the turn’s generation simply exceeded the response cap — retrying burns ∼298 s and fails identically, so we fail fast); and an HTTP 403 permission_error 
+
+whose body reads “Service temporarily unavailable, please retry later” (observed on Claude Fable 5) is classified as upstream ca-pacity, not authentication, because the message itself requests the retry. Everything else raises immediately and lands in the ledger as 
+
+gen_error ; capability failures are never retried (Section 6). 
+
+Post-hoc audit of the frozen campaign. Every run archives a human-readable transcript (post-normalization calls plus every tool result); runs after a late-campaign harness update additionally archive the full wire-native message history with zero truncation — 144 final attempts, the last three agents to run (Hunyuan hy3, Qwen3.7-max, GPT-5.6-luna; 96 of them openai -wire runs). Scan-ning all 1,152 final attempts (24 agents × 48 tasks; superseded infrastructure retries excluded): the call_synth0 marker of the text-extraction shim appears nowhere in any archived transcript or history — and structurally it could fire only on the openai wire, where the recovery is implemented, while Step 3.7 Flash, the model that motivated it, is pinned to anthropic in the frozen matrix. The truncation diagnostic was fed back 150 times across 131 of the 1,152 final attempts (11.4%), spanning 11 models and concentrated where Table 8 shows — DeepSeek v4-pro hit its own output cap in 44 of 48 runs, a capability signature, not a harness artifact. Exactly one serialization variant escaped the deliberately narrow unwrap: one DeepSeek v4-flash run (UNH) emitted write_file arguments as {"path": . . . , "raw_arguments": "<json>"} — a real key 
+
+mixed with the wrapper, so the sole-key condition did not fire, the tool wrote 0 bytes, the literal result (“wrote 0 bytes to . . . ”) was fed back, and the run is scored as-is. We report the miss rather than widen the shim after the fact: a normalizer edited post hoc to chase every observed malformation migrates, one exception at a time, from transport into capability.  
+
+> 14 Appendix KDD ’27, August 2027, San Jose, CA, USA
+
+Table 8: Wire assignment and truncation-diagnostic activity over the frozen campaign. “Runs” counts final attempts (of 48 per agent) in which the empty-command diagnostic was fed back at least once; total diagnostic messages in parentheses; — = never. Counted by scanning every final attempt’s archived transcript for the literal diagnostic string; the pre-fix placeholder <empty command> appears zero times, so no pre-fix transcript survives in the frozen campaign.                               
+
+> Agent Trunc. runs (msgs)
+> anthropic wire — 11 agents
+> Claude Fable 5 2 (2) Claude Opus 4.8 —Claude Sonnet 5 —DeepSeek v4-flash 24 (27) DeepSeek v4-pro 44 (50) GLM 5.2 10 (10) Hunyuan hy3 4 (4) Kimi k2.6 7 (10) Kimi k2.7-code —MiniMax M3 —Step 3.7 Flash —
+> openai wire — 10 agents
+> Doubao 2.1-pro 2 (2) Doubao-seed-evolving 3 (3) GPT-5.6-luna —GPT-5.6-sol —GPT-5.6-terra —GPT-OSS-120B 20 (27) Grok 4.5 —Qwen3 235B 1 (1) Qwen3 Coder —Qwen3.7-max 14 (14)
+> gemini wire — 2 agents
+> Gemini 3.1 Pro —Gemini 3.5 Flash —
+> kimi_official wire — 1 agent
+> Kimi k3 —Total (of 1,152) 131 (150)
+
+## F Tool Use: Interface Behavior Under One Scaffold 
+
+The scaffold exposes two tools (Appendix D.4). We analyze 1,152 archived final-attempt transcripts containing 23,186 executed calls from 24 agents, measuring tool choice, returned errors, recovery, and associations with scored outcomes. Interface errors are frequent but usually followed by a completed artifact; output-cap loops and verification behavior have the clearest links to completion and validity gates. 
+
+Accounting contract. Archived transcripts stub each tool result to its leading 300 characters (of the 6,000-character tail fed back to the model), so text-detected categories — Python tracebacks, exception names — are floors : a traceback that follows long stdout is invisible in the stub. Harness-synthesized results ( <write_file: missing path> , the truncation diagnostic, the sandbox refusal, 
+
+<unknown tool> ) are short and always fully visible, so those counts are exact. The 144 runs that also archive full-fidelity wire-native histories (Appendix E) calibrate the floor: on that subset the stub detector recovers 84.4% of true traceback events (309 of 366), and true per-call error rates run 16.8–18.8% where the stub floors read 14.1–18.8%. Every rate below is labeled floor or exact accordingly; none is imputed. One further convention: per-cell 𝜙 values quoted in this appendix are the frozen deterministic-layer scorecards of the rescored ledger — the layer the quoted gates and checks live in — while leaderboard aggregates additionally merge the judge layer (Section 5.3), so a cell’s 𝜙 here and its leaderboard contribution can differ by a few points. 
+
+Styles of work. Table 9 and Figure 10a profile each agent. The scaffold admits two coherent strategies and the fleet uses both ends: GPT-5.6-sol completes tasks in 2.9 calls on average (one giant heredoc build, one verification pass, done; 76.7% of its bash calls carry heredocs, 9.4k characters each on average), while Claude Sonnet 5 spends 49.6 calls per completed task on write–run–inspect– patch loops. Grok 4.5 issues a single write_file call in the entire campaign (0.4% of its calls), building everything through the shell; Qwen3.7-max routes 39.9% of calls through write_file . Fleet-wide, 66.0% of bash commands invoke Python (floor) and 40.1% carry heredocs — the tool the task actually exercises is “author and debug a program under feedback,” with run_bash as its transport, which is why the error taxonomy below is dominated by Python, not by the shell. 
+
+Table 9: Per-agent tool-use profile (leaderboard order; final attempt per agent ×task). Calls: executed tool calls. /task: calls per completed task. wf %: 
+
+write_file share of calls. Errors: % of calls fed back as errors — Py: Python traceback/syntax (stub floor); Trunc.: harness-synthesized truncation/sand-box classes (exact); All: every error class. Cap: turns at the 16,384-token output ceiling. Rec. %: completed tasks with in-run recalculation (floor; Fig. 11). Open: open-weight at access date, as in Table 4.                                                                                                                                                                                                                                    
+
+> Mix Errors fed back (%) Agent Calls /task wf %Py Trunc. All Cap Rec. % Open Claude Fable 5 446 9.3 36 1.8 2.5 4.5 21 98 ×
+> Claude Opus 4.8 920 19.2 20 2.8 0.0 2.8 27 100 ×
+> GPT-5.6-sol 140 2.9 14 5.7 6.4 12.1 056 ×
+> Kimi k2.7-code 1,637 34.8 12 6.4 2.0 8.6 85 62 ✓
+> GLM 5.2 2,159 45.0 19 5.0 4.4 9.4 91 88 ✓
+> Grok 4.5 257 6.0 06.6 0.0 6.6 55 10 ×
+> GPT-5.6-terra 254 5.3 013.0 0.4 13.4 054 ×
+> Claude Sonnet 5 2,381 49.6 19 2.3 0.6 3.1 9100 ×
+> DeepSeek v4-pro 1,708 35.6 24 3.8 5.7 9.5 51 0✓
+> Doubao-seed-evolving 1,145 25.3 26 7.9 7.5 15.4 98 68 ×
+> DeepSeek v4-flash 1,217 25.4 22 8.1 6.1 14.2 57 0✓
+> GPT-5.6-luna 297 6.2 113.8 0.0 14.1 040 ×
+> Hunyuan hy3 1,778 37.0 814.6 0.2 15.0 18 94 ✓
+> Gemini 3.1 Pro 358 7.5 11 4.5 0.3 4.8 02×
+> Gemini 3.5 Flash 450 9.4 32 3.1 1.8 4.9 00×
+> Kimi k3 1,593 36.8 24.5 0.1 4.6 223 ×
+> Step 3.7 Flash 905 19.7 17 7.6 0.9 8.5 91 0✓
+> Kimi k2.6 1,645 34.3 43.7 1.3 5.0 15 0✓
+> MiniMax M3 1,798 46.6 19 6.1 0.2 6.6 57 97 ✓
+> Qwen3 Coder 375 7.8 23 6.7 0.0 6.9 00✓
+> Qwen3.7-max 479 13.9 40 1.7 17.1 18.8 72 0×
+> Doubao 2.1-pro 394 22.9 30 6.1 10.7 16.8 40 42 ×
+> Qwen3 235B 593 10.8 15 4.4 1.2 5.6 60✓
+> GPT-OSS-120B 257 6.0 13 4.3 12.1 20.2 29 0✓
+
+What the environment feeds back. Of 23,186 calls, 2,009 (8.7%, floor) return an error. The split is diagnostic. Python ex-ceptions dominate: 1,187 stub-visible tracebacks plus 163 syntax errors (5.8% of all calls). The exact harness-synthesized classes fol-low: 317 write_file calls with no path and 150 bash calls with no command — both signatures of tool-call arguments destroyed by the per-turn output cap (Appendix E) — plus 163 sandbox re-fusals, 8 calls to tools that do not exist, 15 command-not-found shell errors, 4 tool-layer faults, and 2 in-command timeouts; the classes sum to the 2,009 exactly. Per tool, write_file fails more 
+
+often than bash (12.5% vs. 7.9%): its failure mode is not code but payload — the single-shot script whose serialized arguments out-run the per-turn token cap. Within the tracebacks (Figure 10c), 
+
+NameError (291) leads TypeError (175) and SyntaxError (148),  
+
+> 15 KDD ’27, August 2027, San Jose, CA, USA Appendix
+
+0 10 20 30 40 50 
+
+tool calls per completed task 
+
+Claude Fable 5 
+
+Claude Opus 4.8 
+
+GPT-5.6-sol 
+
+Kimi k2.7-code 
+
+GLM 5.2 
+
+Grok 4.5 
+
+GPT-5.6-terra 
+
+Claude Sonnet 5 
+
+DeepSeek v4-pro 
+
+Doubao-seed-evolving 
+
+DeepSeek v4-flash 
+
+GPT-5.6-luna 
+
+Hunyuan hy3 
+
+Gemini 3.1 Pro 
+
+Gemini 3.5 Flash 
+
+Kimi k3 
+
+Step 3.7 Flash 
+
+Kimi k2.6 
+
+MiniMax M3 
+
+Qwen3 Coder 
+
+Qwen3.7-max 
+
+Doubao 2.1-pro 
+
+Qwen3 235B 
+
+GPT-OSS-120B 
+
+(a) call intensity 
+
+9 19 
+
+3 35 45 
+
+6
+
+5 50 
+
+36 
+
+25 
+
+25 
+
+6 37 
+
+7 9 37 
+
+20 34 46 
+
+8 14 23 
+
+11 
+
+6
+
+run_bash 
+
+write_file 
+
+0 5 10 15 20 
+
+% of calls fed back as errors 
+
+fleet 8.7 
+
+(b) error composition (floor) 
+
+4
+
+3 12 
+
+99
+
+7 13 
+
+3 9 15 
+
+14 
+
+14 
+
+15 
+
+5
+
+5
+
+5 9
+
+5 7
+
+7 19 
+
+17 
+
+6 20 
+
+> NameError
+> TypeError
+> SyntaxError
+> KeyError
+> IndexError
+> ValueError
+> AttributeError
+> other
+> cut off
+> in stub
+
+0
+
+100 
+
+200 
+
+300 
+
+400 
+
+500 
+
+> Python errors (count)
+
+291 
+
+175 
+
+148 
+
+95 
+
+50 45 35 39 
+
+472 
+
+(c) exception taxonomy 
+
+Python exception truncation / sandbox other 
+
+Figure 10: Tool use across the fleet (leaderboard order; frozen w2_main final attempts). (a) Executed tool calls per completed task, split run_bash vs. 
+
+write_file : a 17 × spread in interaction granularity (GPT-5.6-sol 2.9 to Claude Sonnet 5 49.6) with no monotone relation to rank. (b) Share of calls whose fed-back result is an error (stub-floor for Python classes, exact for harness-synthesized classes); dashed line: fleet floor 8.7%. (c) Fleet exception taxonomy over the 1,349 stub-visible Python failures: NameError leads — a code-shape error born of monolithic build scripts — ahead of the data-shape errors that dominate benchmarks with external data retrieval; the hatched bar counts tracebacks whose exception line lies beyond the 300-character stub. 
+
+with KeyError fourth (95). BankerToolBench reports the reverse ordering — KeyError /TypeError “account for nearly half” of its bash failures [ 18 ] — and the contrast is mechanistic, not cosmetic: GAUGE inlines the entire input pack as text, so there is no external store to mis-key; what remains is the agent’s own code shape, and 
+
+NameError is the signature of its dominant architecture — a mono-lithic build script accreted in chunks, where chunk 𝑛 references a name that chunk 𝑛 −1 was supposed to define. 
+
+Most visible Python failures are followed by a completed artifact. 547 cells contain at least one visible Python failure; 539 of them (98.5%) still ship a workbook. Python’s own repair hints are taken at a measurable rate — of 49 Did you mean: sugges-tions, 15 (31%) are adopted within two turns — and the openpyxl domain traps that recur across the fleet (21 of the 35 stub-visible 
+
+AttributeError s are openpyxl-surface: module ’openpyxl’ has no attribute ’Font’ , camel-case loadWorkbook , the read-only 
+
+MergedCell ) are overwhelmingly repaired with a correct fix, not a feature deletion. Step 3.7 Flash on TJX is the cleanest specimen: it commits the same import mistake twice in one run — turn 25 as a NameError , turn 43 as an AttributeError while styling the Cover sheet’s implied-price cell — and both times re-issues the edit with the correct from openpyxl.styles import Font one turn later, keeping the styling. Where BankerToolBench’s flagship failure example is an agent that deletes the offending styling line and declares victory [18], this fleet fixes the line.      
+
+> Step 3.7 Flash on TJX: the same API-surface trap, twice, both properly repaired (condensed; bracketed annotations ours)
+> [T25 run_bash result] File ".../fix_revenue_build.py", line 24, in <module> font_blue = Font(color="0000FF", bold=True) NameError: name 'Font 'is not defined [T26] in-place patch prepends the styles import -> "Fixed import" [T43 run_bash result, styling the Cover implied-price cell] AttributeError: module 'openpyxl 'has no attribute 'Font '
+> [T44] re-issues the edit with "from openpyxl.styles import Font" -> "Updated Cover with direct implied price reference." [T47] self-check script: "All final checks passed!"
+
+Repairing visible exceptions does not imply a valid work-book. The TJX run that repaired both Font incidents and printed “All final checks passed!” shipped a workbook whose label cells recalculate to #VALUE! — 14 Excel errors that make the income-statement, balance-sheet, and cash-flow rows unresolvable to the deterministic battery, failing 13 of its 22 hard checks and collapsing the cell’s deterministic scorecard to 𝜙 = 25 . The agent chased the two errors it could see and never saw the one that mattered. This is the fleet-wide pattern: across 24 agents, the per-agent fed-back error rate has no significant rank relation to the leaderboard ( 𝜌 𝑠 = −0.27 ,
+
+𝑝 = 0.21 , vs. 𝜙 48 ) or to completion ( 𝜌 𝑠 = −0.24 ); the share of Python errors specifically is uncorrelated ( 𝜌 𝑠 = +0.04 ). Qwen3-coder-plus on PM compresses the whole mechanism into three turns: it typos 
+
+openpyxl.loadWorkbook inside a 2.4k-character one-liner, adopts Python’s Did you mean hint on the very next turn — and then, syntax repaired, declares the task complete without ever re-opening the workbook, shipping a model that trips G1 and G4 and a memo 
+
+> 16
+
+Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+whose target price is literally absent: 
+
+Qwen3-coder-plus on PM: perfect syntax repair, zero semantic verification (condensed)      
+
+> [T5 run_bash result] AttributeError: module 'openpyxl 'has no attribute
+> 'loadWorkbook '. Did you mean: 'load_workbook '?[T6] "Let me fix the typo and rerun the correction:" wb = openpyxl.load_workbook( '/data/conf... -> (ok) [T7, no tool call] "Perfect! I have successfully completed all three required deliverables" [shipped PM_memo.md, verbatim] ...an attractive investment opportunity with a target price of per share based on our DCF analysis. [deterministic scorecard] gates G1 + G4 fire; phi 37.5
+
+The MergedCell twins. One openpyxl trap, two temperaments, twenty 𝜙 points. Finalizing WFC’s Cover sheet, Grok 4.5 hits the read-only MergedCell trap (assigning a value through a merged range); its next turn starts with a diagnostic — print the merged ranges — then relocates the merged disclaimer block out of the write path and re-runs its full check suite: 𝜙 = 60 , zero gates, its campaign ceiling. Six turns from the 50-turn budget on CB, DeepSeek v4-pro hits the same trap inside its self-described “final check — make sure the model doesn’t have any remaining hardcoded values”; it retries with a narrower scan that skips merged cells, rationalizes every remaining finding (“the Assumptions sheet is the designated input sheet”), spends its last turns on font audits and a WACC-arithmetic soliloquy, and ships at 𝜙 = 40 under G1, G2, and G7 — with a Checks tab whose recalculated balance-sheet row reads 
+
+−11 ,433 → − 285 ,197 (mm) across the forecast years. The differ-ence is not error-handling skill — both recover in one turn. It is what the recovery is for : Grok repairs its verification instrument and re-verifies; DeepSeek repairs the crash and downgrades the verification. 
+
+Same exception, opposite recoveries (condensed)          
+
+> [Grok 4.5 x WFC, T6] AttributeError: 'MergedCell 'object attribute 'value 'is read-only [T7 output] Merged ranges on Cover: [<MergedCellRange A28:D30>] Saved workbook / Wrote memo / Wrote assumptions json Final checks: CHECKS '!J5 => PASS ... B15 => ALL PASS IMPLIED PRICE DCF!B33 = 83.67 [phi 60.0, no gates] [DeepSeek v4-pro x CB, T43] "one final check - make sure the model doesn 't have any remaining hardcoded values" -> AttributeError: 'MergedCell 'object has no attribute
+> 'column_letter '
+> [T44 narrowed rescan finds hardcoded forecast values] [T45] "These are all in the Assumptions sheet, which is the designated input sheet." [ships: phi 40, G1 G2 G7; recalculated Checks row 'BS Balance ': -11,433 ... -285,197]
+
+The output-cap funnel, cell by cell. Appendix E introduced the 16,384-token truncation event at the wire level; the transcripts show its per-cell economics. 824 turns hit the cap; 420 of them (51%) lose their tool-call arguments in the same turn (an argument-less write_file or an empty bash command), and the bash-side diagnostic reached 131 cells, 109 of which (83%) still completed. Behavior visibly shifts after first contact: within affected cells, the 
+
+write_file share of calls rises from 16.0% before the first empty-command feedback to 27.5% after — the diagnostic’s “split the work” advice acts at the margin. The tail is where it kills. Thirty-one cells contain a ≥3-turn run of byte-identical failing calls (16 com-plete anyway, 15 die), and the extremes bracket what escape re-quires. Doubao 2.1-pro on IBE re-emits the identical argument-less 
+
+write_file for six consecutive max-length turns — 98,419 comple-tion tokens, 89% of the run’s output budget, with 10–47 reasoning tokens per retry, i.e. the model is not re-reading the error — until the wall clock kills the attempt with zero artifacts. GLM 5.2 on MO survives the same loop by accident : after five identical failures its sixth emission happens to fit under the cap (11,469 tokens), the arguments arrive intact, and the cell ships — 𝜙 = 39 , but the ∼115k tokens the loops burned (69% of the run’s output) were exactly the budget its valuation layer needed: the run dies at an API timeout with C3 = 0, no DCF, WACC, or sensitivity sheet ever built. The same model on EXC shows the deliberate escape: an 11-byte probe write (“ placeholder ”), then heredoc-only chunks thereafter. One loop, three exits: die, luck out, adapt. 
+
+Doubao 2.1-pro on IBE: the loop that ate the run (attempt 2, condensed) 
+
+> [T1..T6, six consecutive turns, 16,431/16,394/16,401/16,398/ 16,399/16,396 completion tokens, reasoning tokens 10-47] calls: [{"name": "write_file", "args": {}}] result: <write_file: missing path> [surviving assistant text per turn: "3" / "{" / "[ '" / "'\nOLD" / "into" / "1\n("] [T7] {"event": "deadline"} [attempt ends] <timeout: killed process group after 1800s> [ledger] gen_error: timeout; output/ empty; attempts = 2
+
+Tools that do not exist. Exactly 8 of 23,186 calls name a tool out-side the scaffold’s two — rare enough to be noise, shaped enough to be evidence, and all three shapes recover by the next turn. MiniMax M3 accounts for four, reaching for the file editor its training presum-ably knew: edit_block (str-replace-style arguments), edit_file 
+
+twice (once carrying a bash command as its argument, once with arguments entirely empty), and edit — whose arguments contain a leaked XML invocation, {"invoke name="run_bash"". . . } , a se-rialization ghost of some other harness. GPT-OSS-120B twice fuses its Harmony channel marker into the name ( run_bash<|chan-nel|>commentary ); Hunyuan hy3 twice calls plain bash . The har-ness feeds back <unknown tool> and every model falls back to 
+
+run_bash immediately — but the fallback is not free: MiniMax’s EMR fallback used the shell to delete its own row-consistency asser-tion rather than resolve it (“ Proceeding without assertion. ”), converting a loud guard into a silent wrong constant — the cell ships at 𝜙 = 18 .75 under G3. 
+
+The sandbox probe, and statelessness. The harness refuses writes outside the run directory — 164 refusals across 158 cells, exact — and recovery is almost always one turn: 153 of the 158 cells never see a second refusal (the worst case is three, DeepSeek v4-flash on CRM). The distribution is the finding. GPT-5.6-sol’s first instinct is /tmp in 9 of 48 cells; it re-anchors instantly and even internalizes the boundary into the regenerated script (hardcoding the run-directory output path). DeepSeek v4-pro re-learns the same lesson in 37 of its 48 cells — one refusal each, adapted within the cell, re-offended in the next, because tasks share no state by design. Under a scaffold where every cell is a fresh context, “learns from feedback” is a within-cell property only; the profile quantifies how 
+
+17 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+much first-instinct behavior survives 48 independent exposures. 
+
+Verification tooling: used by a third, decisive at the margin, insufficient alone. The prompt requires live formulas but does not mandate re-computing them; whether an agent closes the loop — rebuild, recalculate, read the checks — is discretionary behavior, and it splits the fleet cleanly (Figure 11). 41% of completed cells (417 of 1,011) show in-run recalculation via LibreOffice or a formula-evaluation library (floor; command-text detection); ten agents do it in a majority of their cells, nine never do it once. The behavior co-moves with the balance-sheet gate: agents below 50% recalculation discipline trip G1 on 32.2% of completed tasks, agents above it on 22.6%. But the Claude Sonnet 5 column is the caution against reading that as sufficiency: 100% recalculation discipline and a 40% G1 rate — on GM it recalculates faithfully, watches its own balance-check row print a hole that compounds to 60,591 (mm) by the last forecast column, chases an interest-expense sign error through turn 49, and runs out of budget mid-diagnosis, shipping at 𝜙 = 27 under G1, G3, and G8. Reading the checks is not the same as being able to close them — the gap between the two is precisely the judgment deficit of Section 6.4, surfacing here as tool-use telemetry. The inverse failure also occurs: the VZ cell of Appendix R built a Checks tab that would have printed FAIL five times and simply never executed it. And the tooling itself can bite back: hy3 on IBE, after one hung LibreOffice listener, prefixed every subsequent verification with 
+
+pkill -f soffice — a pattern that matches the invoking shell’s own command line, silently killing three consecutive verification attempts (“ (ok, no output) ”) while the model blamed the library, the heredoc, then the tool, before dropping the prefix on its final turn and seeing the surviving #VALUE! errors just as the turn budget expired ( 𝜙 = 36 , G1+G6). 0 20 40 60 80 100 
+
+> % of completed tasks with in-run recalculation (floor)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> % of completed tasks tripping G1
+> group mean 32%
+> group mean 23%
+> Sonnet 5
+> Opus 4.8
+> Fable 5
+> Gemini 3.5 Flash
+> DeepSeek v4-flash
+> terra
+> luna
+> Grok 4.5
+> Qwen3 Coder
+> Qwen3.7-max
+
+Figure 11: Self-verification discipline vs. the balance-sheet gate , per agent over completed tasks. In-run recalculation (LibreOffice or a formula-evaluation library, floor detection) associates with a lower G1 rate at the group level (dashed means), but is neither necessary (Qwen3 Coder, Grok 4.5) nor sufficient (Claude Sonnet 5): running the checks and acting on them are different capabilities. 
+
+Relation to scored outcomes. Two behaviors connect to the scoreboard: output-cap loops determine whether an artifact exists (Appendix S), and recalculation discipline co-moves with G1 at the group level. Error rates, exception mix, hint uptake, call granularity, and sandbox probes vary by an order of magnitude without ranking the agents. The scaffold returns interface errors to the model; the score then depends on what the agent verifies and how it responds when verification fails. 
+
+## G The 56-Facet Taxonomy: Complete Rubrics 
+
+Tables 10–14 print all 56 facets and their 0/1/2/N-A anchors as consumed by the deterministic checker, ladder judge, and envelope checker. 
+
+Grader classes. [D] facets are binary: a balance sheet either balances or it does not, so the 2-rung is “—”. [J] facets receive 0/1/2 from the ladder judge (Appendix K). [R] marks four direct rules: 4.2.1 and 4.4.3 use three-state band membership, 3.3.2 uses a hidden point-accuracy ladder, and 3.1.3 uses a self-referenced segment-margin spread. These rules do not score explanatory prose that the extractor does not inspect. 
+
+N/A. A facet is N/A only when its literal rubric condition holds; N/A outcomes are dropped from aggregation, never zero-filled (Eq. (2)). 
+
+Category. Each facet carries C1/C2/C3 (format/mechanics, assumptions/fundamentals, valuation), the split used for every mechanical-vs. judgment result. 
+
+## H Validity Gates: Detection and Caps 
+
+Each gate 𝑔 is tied to one deterministic facet scoring 0. It imposes an overall ceiling 𝜅 𝑔 and, where specified, pillar caps; the lowest triggered ceiling governs Eq. (5) . N/A facets do not trigger gates. G5 is active only when the task has an as-of date; G6 only when an assumptions file accompanies the workbook. Table 15 lists all eight gates. 
+
+Scoping discipline (the G6 incident). The first G6 definition also required every memo number to appear in assumptions JSON. It fired on 77% of cells because memo numbers include prose figures, derived per-share sensitivities, and approximate outputs, not only assumptions. We changed G6 to citation-existence (URL/page/prose citations are not offline-verifiable); memo–model numeric consis-tency remains soft facet 5.1.3. Every cell was rescored. The change narrows the detector; no cap or rubric threshold was relaxed. 
+
+Calibration against professional artifacts. The gates assume the clean output schema the task demands, and we validated that choice: raw broker research models are structurally unlike it — they carry live-link #REF errors from data-terminal plugins, legitimately hardcode assumption cells (projection formula density ∼92–94%), and use combined tabs that defeat row-matching. The deterministic layer is therefore validated against schema-conformant reference models, while the judged craft layer (which reads content, not schema) transfers to raw professional files unchanged. We deliber-ately did not relax the caps to pass raw research files. 
+
+## I Industry-Conditional Activation: The Overlay Matrix 
+
+Each of the 25 GICS industry groups has an activation overlay (Eq. (2) ). The overlay assigns every facet A (active), N (not ap-plicable), or O (optional), and records the corresponding N/A or 
+
+> 18
+
+Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+Table 10: Pillar P1 — Input Comprehension (“did you read the workbook correctly?”), 10 facets. Grader [D] = deterministic, [J] = LLM-judged ladder; C 𝑘 
+
+= reporting category. 
+
+Facet 0 (Fail) 1 (Pass) 2 (Excellent) N/A when 
+
+1.1 Historical extraction 1.1.1 Historical IS lines reproduced [D] C2 Any historical IS line (revenue, COGS, OpEx, D&A, interest, tax, NI) differs from the input by >0.5% All historical IS lines match within 0.5% — Never 
+
+1.1.2 Historical BS lines reproduced [D] C2 Any historical BS line differs from input by >0.5% All historical BS lines match within 0.5% — Never 
+
+1.1.3 Historical CF lines reproduced [D] C2 Any historical CF line differs from input by >0.5% All historical CF lines match within 0.5% — Never 
+
+1.2 KPI / operating-stat ingestion 1.2.1 Volume/unit KPIs read 
+
+[D] C2 Volume/unit KPIs from the pack are absent or wrong in the model Volume/unit KPIs carried into the model and used — No volume/unit KPI disclosed 
+
+1.2.2 Price/ARPU KPIs read 
+
+[D] C2 Price/ARPU KPIs present in input but missing or wrong in model Price/ARPU KPIs carried in and used — Fee-based or pure-volume business 
+
+1.2.3 Mix/channel KPIs preserved [D] C2 Disclosed mix/channel split dropped or scrambled Mix/channel split preserved in the model — Single-channel, single-geography 
+
+1.3 Guidance & disclosed assumptions 1.3.1 Guidance ranges captured [J] C2 Guidance sheet ignored; forecast contradicts explicit guidance with no rationale Forecast lands within disclosed guidance ranges Each guidance item reflected in a named assumption cell with a cited source; deliberate deviations justified No guidance in inputs 
+
+1.3.2 Segment definitions respected [J] C2 Invents segments not in the filings or merges reportable segments incorrectly Uses the company’s reportable segments as disclosed Reportable segments AND mapped to economic drivers consistent with the 10-K segment footnote Single-segment company 
+
+1.4 Currency / period / scale hygiene 1.4.1 Reporting currency consistent [D] C1 Currencies or scales mixed without conversion ($mm and $bn, USD and local, in one statement) Single consistent reporting currency and scale throughout — Never 
+
+1.4.2 Period alignment correct [D] C1 Fiscal vs. calendar periods or stub periods misaligned across statements All statements share a consistent, correctly labeled period axis — Never 
+
+optional-credit rationale. It also lists required drivers, expected seg-ments, sector-specific judge emphasis under the fixed 0/1/2 anchors, and notes for interpreting the eight gates. Two representative overlays, quoted from the released files: 
+
+Overlay excerpt — Banks (the structural outlier) 
+
+Rationale (N on 4.2.1/4.3.1): “Valuation uses cost of equity ( 𝐾 𝑒 ) and a DDM/residual-income discount rate, not a WACC — debt is an operating in-put (funding), so WACC is meaningless for a bank.” “Bank valuation outputs equity value directly (DDM / P-TBV × ROTE); there is no EV-to-equity bridge because EV and net-debt concepts do not apply to a deposit funder.” 
+
+Required drivers: loan growth; deposit growth and mix; net interest margin; fee and trading income; efficiency ratio; cost of risk (CECL provisioning); CET1/RWA capital; ROTE and payout ratio. 
+
+Judge emphasis (4.4.1): “Sensitivity must flex the real drivers: NIM / deposit beta × loan growth, and cost of risk × CET1 target — not a WACC × 𝑔 grid (there is no WACC).” 
+
+Gate note: “All 8 gates apply, but reinterpreted for a bank’s statements. . . Balance (G1) means the loan/deposit/capital block ties and CET1 = capital/RWA holds every period — there is no NWC or PP&E plug. G8 is N: the bank outputs equity value directly, so graders must check the capital walk and buyback capacity instead of a net-debt bridge.” 
+
+Overlay excerpt — Capital Goods (the worked example’s sector) 
+
+Judge emphasis (3.2.3): “Cyclical normalization is MANDATORY: a late-cycle capital-goods name. Do NOT extrapolate peak-cycle margins through a down-turn.” 
+
+Judge emphasis (3.3.1): “High operating leverage — incremental margins ∼25– 35%. Model a fixed cost base + variable component, not a flat % of revenue.” 
+
+Judge emphasis (4.4.2): “Comps in machinery convention: EV/EBITDA, P/E, FCF yield, dividend yield vs. DE / CMI / PCAR / DOV. EV/DACF is NOT used (that is an oil convention).” 
+
+Optional rationale (3.5.1): “A captive-finance arm — a NIM / earning-assets +
+
+provisioning build for that one segment is credited (it is modeled like a finance company), but the CONSOLIDATED model is industrial, so this is optional, not 
+
+required.” 
+
+## J Instrument Provenance and Calibration History 
+
+GAUGE ships machine-readable descriptions, rationales, and prove-nance for the taxonomy, gates, grader wiring, envelope bands, and activation overlays. This section records their sources and the fixes applied when our audits found instrument defects. The rule is un-changed throughout: repair the detector, not the gate cap, rubric anchor, or 𝜙 value. 
+
+Facet authoring (professional conventions → rubric tree). 
+
+The 56-facet taxonomy is a rubric-first artifact: its own header records that it was authored before any workbook was generated (“write rubrics before building workbooks”), derived from a mas-ter design study and its companion documents (evidence surfaces, taxonomy tree, deterministic-check inventory, industry activation); every facet carries an evidence pointer back into those documents, and every deterministically checkable facet a det_check pointer. The pillar skeleton descends from a mature image-generation grad-ing taxonomy whose decomposition machinery — atomic facets, N/A dropped from means rather than zeroed, bottom-up aggrega-tion — the harness generalizes; each pillar records its inheritance in an explicit per-pillar analog field (P1 ← “Alignment (legacy)”, P5 ← “Aesthetics (legacy)”), preserving the audit trail of what was inherited versus invented. What was not inherited is the gate layer: the gate file opens by noting that each gate is “a categorical-failure mode” with no analog in a predecessor that “only fails facets indi-vidually.” Three authoring principles are stated in the released file rather than left implicit: 
+
+19 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+Table 11: Pillar P2 — Model Construction (mechanical and structural correctness), 13 facets. Five carry validity gates (Appendix H). 
+
+Facet 0 (Fail) 1 (Pass) 2 (Excellent) N/A when 
+
+2.1 Three-statement linkage 2.1.1 NI → retained earnings 
+
+[D] C1 RE roll broken: prior RE + NI + SBC −
+
+dividends ≠ ending RE (any period, 
+
+>0.5%) RE roll-forward ties every period within 0.5% — Never 
+
+2.1.2 CFO → cash → BS tie 
+
+[D] C1 [gate G2] CF ending cash ≠ BS cash, or CFO +CFI +CFF ≠ Δcash (any period, 
+
+>0.5%) Cash ties every period within 0.5% — Never 
+
+2.1.3 D&A consistent IS/CF/PP&E [D] C1 D&A on IS ≠ D&A on CF, or inconsistent with the PP&E roll D&A identical across IS, CF, and the PP&E schedule — Never 
+
+2.2 Balance-sheet integrity 2.2.1 BS balances every period [D] C1 [gate G1] 
+
+|𝐴 − ( 𝐿 + 𝐸 ) |/| 𝐴 | > 0.1% in any forecast period BS balances within 0.1% every forecast period — Never 
+
+2.2.2 No plug to “other” [J] 
+
+C1 BS forced to balance via a meaningless “other assets/liabilities” plug absorbing the error No artificial plug; residuals flow to cash or revolver legitimately Balancing item is an economically justified line (revolver or cash sweep) with a documented mechanic Never 
+
+2.3 Debt & interest schedule 2.3.1 Debt schedule present 
+
+[D] C1 No debt schedule; total debt is a hardcoded line Debt schedule: total debt = sum of tranches with maturities/amortization — Debt-free across the horizon 
+
+2.3.2 Circular interest resolved [D] C1 [gate G7] Interest ignores circularity with no rationale, OR an unresolved #CIRC/#REF is present (iterative calc off) Interest = rate × average(BoP, EoP) debt with converging iterative calc, OR a documented BoP convention — Zero debt and no revolver 
+
+2.3.3 Revolver / cash sweep 
+
+[J] C1 Cash goes negative with no revolver, or sweep violates priority A revolver or cash sweep exists and keeps cash non-negative Full waterfall with priority order, MAX(0, ·) floors, and a minimum-cash target Structurally net-cash company 
+
+2.4 Working capital & PP&E rolls 2.4.1 NWC roll correct [D] 
+
+C1 CF working-capital change ≠ YoY change of AR/Inv/AP on BS, or signs wrong (AR up must be a use of cash) NWC changes on CF reconcile to BS movements with correct signs — Never 
+
+2.4.2 PP&E roll ties [D] C1 PP&E does not roll (Beg + capex −
+
+D&A ± disposals ≠ End) PP&E roll-forward ties every period — Never 
+
+2.4.3 Goodwill / intangibles roll [D] C1 Goodwill/intangibles change with no roll (unexplained jumps) Roll-forward present (amortization, impairment, additions) — Immaterial goodwill and intangibles 
+
+2.5 No-hardcode discipline 2.5.1 Forecast cells are formulas [D] C1 [gate G4] 
+
+>10% of forecast cells are hardcoded literals (formula density <90% in the projection region) Forecast region ≥95% formulas referencing assumption cells — Never 
+
+2.5.2 No look-ahead into drivers [D] C1 [gate G5] A forecast driver references data dated after the as-of date No forecast cell depends on post-as-of information — Never 
+
+2.5.3 Named ranges / consistent refs [J] C1 Magic numbers scattered; no named ranges; references inconsistent across columns Consistent referencing; key outputs reachable Named ranges for headline outputs, a single scenario selector, and structurally identical formulas across forecast columns Never 
+
+Authoring principles, quoted from rubrics/taxonomy.json 
+
+Weighting: “none; importance is encoded structurally by tree position (a critical check gets its own sub_cap so it weighs 1/| sub _caps |, not 1/| facets |).” 
+
+Deterministic scoring: “binary {0, 1} only — a deterministic check passes or fails; it can never earn 2 (there is no ‘excellent way to balance the BS’).” 
+
+𝜙 non-linearity: “Fail →Pass (0 →60) jump exceeds Pass →Excel (60 →100) be-cause unusable-vs-acceptable matters more than acceptable-vs-excellent.” 
+
+Grader wiring discipline. The facet–grader map is, in its own words, “the honest record of how much of the 56-facet taxonomy the current harness can actually measure.” Its wiring rule is “Same-grader-class only”: a deterministic facet may be fed only by a deter-ministic check, a judged facet only by a judge, an envelope facet only by a band grader (29/23/4 of the 56 facets respectively, Sec-tion 5.3). Where a legacy check tests the same content in the wrong class, it is deliberately left unwired and the overlap documented, “so a same-class grader gets built rather than the grader contract being quietly broken.” The map’s ladder policy also records the ceiling that forced the judge upgrade: under the original binary wiring no source could award a 2, so a flawless model topped out at 
+
+𝜙 = 60 ; the taxonomy-aware 0/1/2 ladder judge (Appendix K) exists because that documented ceiling made the limitation impossible to ignore. 
+
+Gate calibration (the broker-model finding). Gate caps were declared first-draft, with an original acceptance target that twelve professionally built broker research models, held as a reference floor, must never trip a gate. Running that validation on 2026-05-31 falsified the target itself: 
+
+Calibration note shipped inside rubrics/gates.json 
+
+“Raw broker research models are structurally UNLIKE the clean output schema these gates assume” — they carry live-link #REF errors from data-terminal plugins even on core sheets, they “legitimately hardcode input/assumption cells (so projection-formula density is ∼92–94%, below the 95% G4 bar)”, and they use combined statement tabs that defeat row-matching. “So they trip G1/G4/G7 for STRUCTURE/vendor-noise reasons, not quality. [. . . ] Resolution: validate the DETERMINISTIC layer against SCHEMA-CONFORMANT gold models [. . . ], and reference-floor the JUDGE/craft layer on raw models (it reads content, transfers fine). Do NOT relax these caps to pass raw research files.” 
+
+The resolution is the two-anchor policy of the repository’s cal-ibration charter, summarized in Appendix H and recorded here as history: the deterministic layer is validated against schema-
+
+20 Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+Table 12: Pillar P3 — Forecast & Reasoning (driver-based economics), 13 facets, including the industry-conditional bank/pharma builds that the activation matrix (Appendix I) switches per GICS group. 
+
+Facet 0 (Fail) 1 (Pass) 2 (Excellent) N/A when 
+
+3.1 Segment build & roll-up 3.1.1 Segment revenue from drivers [J] C2 Segment or consolidated revenue is prior × ( 1 + 𝑔 ) with no driver decomposition At least one explicit driver per segment (volume OR price) tied to a named cell Full price × volume × mix per segment, each driver traceable to a disclosed KPI or guidance figure, with written rationale Single segment AND single product line 
+
+3.1.2 Segments reconcile [D] 
+
+C1 [gate G3] Sum of segment revenue (or operating profit) ≠ consolidated by >1% in any period, no corporate/elims bridge Segments roll up to consolidated within 1% (incl. explicit corporate/elims bridge) — Single reportable segment 
+
+3.1.3 Segment margins distinct [R] C2 All segments carry identical or parallel margins, or margins outside the reference envelope unexplained Segment margins differ and sit within the envelope Differ, in-envelope, and trajectory reflects segment-specific economics (mix, cycle, leverage) Single reportable segment 
+
+3.2 Revenue driver economics 3.2.1 Price × volume split 
+
+[J] C2 Revenue is a single growth rate despite price and volume KPIs being available Revenue split into price and volume components Price and volume each driven by their own assumption chain, reconciled to history Neither price nor volume separately observable 
+
+3.2.2 Growth tied to anchors 
+
+[J] C2 Growth rates flat or arbitrary with no external anchor Growth tied to at least one anchor (guidance, history, simple TAM) Growth derived from a defensible structure (capacity ramp, cohort/retention, TAM penetration, backlog conversion) traceable to inputs Never 
+
+3.2.3 Cyclical / seasonal logic [J] C2 Straight-lines through an obvious cycle or season (mid-cycle commodity flat-lined at spot) Some cyclical or seasonal shape present Through-cycle normalization or seasonal pattern explicitly modeled and justified Non-cyclical, non-seasonal business 
+
+3.3 Cost & margin reasoning 3.3.1 Variable vs. fixed split 
+
+[J] C2 All costs scale as a flat % of revenue with no fixed/variable distinction Some costs fixed, some variable, broadly appropriate Cost structure reflects real operating leverage (fixed base + variable component) consistent with history Never 
+
+3.3.2 Margin trajectory defensible [R] C2 Margin trajectory outside the reference envelope and unexplained (magic expansion or implausible compression) Margin trajectory within the envelope In-envelope AND tied to a stated driver (scale, mix, restructuring) with incremental-margin logic Never 
+
+3.3.3 SG&A normalization 
+
+[J] C2 One-off items carried into the forecast as recurring (or GAAP/non-GAAP conflated) Obvious one-offs excluded from the run-rate Clean GAAP/non-GAAP reconciliation; normalization documented item by item No disclosed one-offs 
+
+3.4 Capex / capital intensity 3.4.1 Capex tied to capacity 
+
+[J] C2 Capex flat or arbitrary, unrelated to growth or capacity Capex linked to revenue or a %-intensity consistent with history Capex tied to capacity additions / project pipeline / guidance, with intensity reconciled to D&A in steady state Never 
+
+3.4.2 Maintenance vs. growth capex [J] C2 No maintenance/growth distinction in a capital-intensive name Split acknowledged qualitatively Explicit maintenance ( ≥ D&A floor) vs. growth capex with distinct return logic Asset-light business 
+
+3.5 Industry-specific economics 3.5.1 Bank: NIM × earning assets [J] C2 Net interest income not built from NIM × earning assets; or no provision/CECL line NII = NIM × average earning assets with a provision line Full build: loan/deposit growth, NIM path, efficiency ratio, CECL provisioning, capital ratios (CET1/RWA) Not a bank / insurer / finance co. 
+
+3.5.2 Pharma: pipeline rNPV 
+
+[J] C2 Material disclosed pipeline treated as zero or as a single deterministic launch Probability-weighted launches with disclosed PoS by phase Per-asset rNPV with cohort peak-sales build, LOE/patent cliffs, PoS at asset ×
+
+geography Not pharma/biotech, or no material pipeline 
+
+conformant fixtures — the clean fixture ( good_LLY ) passes zero gates; the fixture with a real balance-sheet imbalance ( bad_LLY )trips G1 — locked in CI by test_calibration_floor.py , while the judged craft layer, which reads content rather than schema, is reference-floored on the raw professional files. One threshold cannot serve both populations; recognizing that is what kept the caps strict. 
+
+Envelope band history. Three generations. First-draft univer-sal bands were hand-curated with written rationales (WACC 5–15%: “WACC outside this range for a public large-cap is essentially never defensible”; terminal growth 1–4%). The per-ticker implied-price band was then re-derived from consensus-estimate dispersion (the shipped band file is stamped with its generator and a 2026-05-22 generation date), explicitly replacing “the hardcoded ±50% head-room band” with one “grounded in actual broker dispersion,” while “WACC / terminal growth / EBITDA-margin bands remain hand-curated” — the file records which bands are derived and which are not. The current instrument supersedes both with the corpus three-layer envelope of Section 5.2, whose bands come from the ref-erence analyst’s own sensitivity ranges and empirical cross-analyst dispersion; hand-curated values survive only where no empirical source exists yet. 
+
+Overlay authoring (3 pilots → 25-group matrix). We hand-wrote three pilot overlays — integrated oil & gas, cyclical capital goods, large-cap pharma, the sectors of the development fixtures — and these files define the six-field schema of Appendix I. They are declared “canonical for their groups and . . . NOT regenerated.” The remaining 22 GICS industry groups were generated on 2026-07-22 by claude-opus-4-8 from a taxonomy digest, under a determinis-tic structural validator: all 56 facet ids present, values restricted to A/N/O, every N accompanied by a written rationale and every O by an optional-credit rationale, all remaining sections non-empty, plus 
+
+21 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+Table 13: Pillar P4 — Valuation & Sensitivity , 12 facets. The three [R] envelope facets ground “defensible” in the corpus bands of Section 5.2. 
+
+Facet 0 (Fail) 1 (Pass) 2 (Excellent) N/A when 
+
+4.1 DCF mechanics 4.1.1 FCF definition consistent [D] C3 Unlevered FCF includes interest, or FCFF and FCFE mixed within one DCF Consistent definition: unlevered FCF =
+
+EBIT (1−𝑡 ) + D&A − capex − ΔNWC (no interest) — No DCF (e.g., bank residual income) 
+
+4.1.2 Discount periods explicit [D] C3 Discount periods wrong or non-monotonic, or convention unstated Factors monotonically decreasing with a stated mid-year or end-year convention — No DCF 
+
+4.1.3 Terminal value present 
+
+[D] C3 No terminal value, or TV undiscounted, or terminal growth ≥
+
+WACC TV present (Gordon and/or exit multiple), discounted to PV, terminal growth < WACC — No DCF 
+
+4.2 Cost-of-capital grounding 4.2.1 WACC inputs in envelope [R] C3 WACC or any of { 𝑅 𝑓 , ERP, beta, target D/E} outside the envelope by > 2× the half-width WACC and components within the reference envelope In-envelope AND each input tied to a market-observed source Method uses no WACC (bank DDM) 
+
+4.2.2 Capital structure consistent [J] C3 WACC weights contradict the modeled capital structure (book weights, or weights inconsistent with the debt schedule) Market-value weights broadly consistent with the modeled structure Target structure explicitly reconciled to the debt-schedule trajectory No WACC 
+
+4.3 Bridges 4.3.1 EV → equity bridge 
+
+[D] C3 [gate G8] Bridge missing or wrong sign (net cash subtracted; minorities/prefs ignored when material) Equity = EV − net debt − minorities 
+
+− prefs + investments; per share =
+
+equity / diluted shares — Valuation outputs equity value directly 
+
+4.3.2 Diluted share count [J] 
+
+C3 Basic shares, or period-end instead of weighted-average where it matters Diluted weighted-average shares Diluted count built from a share roll-forward (issuance, buybacks, options/RSUs/converts via treasury method) Never 
+
+4.4 Sensitivity & cross-check 4.4.1 Sensitivity on real drivers [J] C3 No sensitivity, or only WACC × 𝑔 
+
+(cookbook) At least one sensitivity on an operating value driver 
+
+≥2 grids on the drivers the memo identifies as value-determining (e.g., Brent × volume, churn × ARPU, PoS 
+
+× peak sales), with implied-price cross-check Never 
+
+4.4.2 Comps cross-check [J] 
+
+C3 No comps cross-check, or EV/equity multiples mixed (P/E numerator on EV denominator) Comps table with consistent EV-vs-equity multiples and a stats block Quartile stats, period-consistent multiples, and a reconciliation of where the target trades vs. peers No comparable public peer set 
+
+4.4.3 Implied multiples reasonable [R] C3 Implied multiples (EV/EBITDA, P/E, EV/DACF as appropriate) outside the envelope, unexplained Implied multiples within the envelope In-envelope AND the premium/discount vs. peers explicitly rationalized Never 
+
+4.4.4 Football field / range 
+
+[J] C3 Single point target with no range A bull/base/bear or method range is shown Football field across methods (DCF/comps/SOTP) reconciled to a single recommendation Junior-level single-method case 
+
+cross-industry spot rules from the audit (e.g. a financial group may not deactivate the bank NIM facet, and a non-financial group may not require it). “A failed draft is retried with the validator’s com-plaints appended (max 3 attempts)”; all 22 groups passed on the first attempt, and each generated file carries the stamp below (the three hand-written files carry none). Two disclosures. (a) The overlay author is the same frozen model as the ladder judge (Appendix K); the activation vector is consumed deterministically at aggregation time, and the sector emphasis injected into judge prompts cannot alter the fixed 0/1/2 anchors, but the coupling exists and we report it. (b) The harness-level mask (facets unpassable under v1 input packs, e.g. the comps cross-check of Section 6.4) is deliberately not 
+
+baked into the matrix; the attach tool applies it at attach time, so the released matrix remains valid when future packs add peer data. 
+
+Provenance stamp carried by every generated overlay (here banks.json) 
+
+> "_provenance": {"model": "claude-opus-4-8", "date": "2026-07-22", "method": "path-B generation, deterministic validation", "attempts": 1}
+
+Audit discipline. The audits removed over-firing detectors and closed false-negative holes, including the broadened G1 la-bel matcher and the G8 wrong-sign trigger, which found three negative-value defects. Each resolution changed a detector or acti-vation, not a gate cap, rubric anchor, or 𝜙 anchor. Before the overlay audit, the judge’s N/A option absorbed 68% of the mis-activations; aggregate scores therefore showed only part of the attachment error. 
+
+## K Judge Protocol (Complete, Verbatim) 
+
+The ladder judge is a single frozen model ( claude-opus-4-8 ) called once per facet per vote. Its prompt has two halves: a system message carrying the scoring discipline and the shared evidence block (byte-identical across all facets of a cell, served via prompt caching), and a per-facet user message carrying that facet’s rubric rungs and the JSON output contract. Both are printed below in full. 
+
+## K.1 Supplied Human-Labeled Audit 
+
+A colleague described the audit as involving three experts; the supplied note itself reports only aggregate statistics for a human-labeled audit of the 23 judged facets. It gives 460 cases in a row labeled “Judge vs. expert consensus” and reports 86.7% exact agree-
+
+22 Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+Table 14: Pillar P5 — Communication & Auditability , 8 facets. The memo and assumptions-file facets grade the audit trail — whether the numbers a model claims are the numbers it built .
+
+Facet 0 (Fail) 1 (Pass) 2 (Excellent) N/A when 
+
+5.1 Investment memo 5.1.1 Thesis with falsifiable claims [J] C2 No thesis, or vague narrative with no testable claims Clear thesis with at least one falsifiable, quantified claim 3–5 falsifiable claims, each tied to a model driver and a measurable trigger Never 
+
+5.1.2 Risks linked to drivers 
+
+[J] C2 No risks, or generic boilerplate Specific risks named Risks mapped to the exact model drivers and quantified via the sensitivity grids Never 
+
+5.1.3 Memo numbers tie to model [D] C1 A headline number in the memo (target price, EPS, revenue) does not match the workbook Every headline number matches the workbook within rounding — Never 
+
+5.2 Assumptions JSON 5.2.1 Schema-valid [D] C1 assumptions.json missing or fails schema validation Present and schema-valid — Never 
+
+5.2.2 Citations resolve [D] 
+
+C1 [gate G6] A cited source (cell pointer) does not exist, or a memo number is absent from the assumptions JSON (fabricated audit trail) Every memo-cited number appears in the JSON with a resolvable source pointer — Never 
+
+5.2.3 Source pointer per assumption [J] C1 Assumptions silent or unsourced Non-obvious assumptions carry a source or an [ASSUMPTION] tag Every key assumption carries a precise pointer (sheet!cell, filing page, URL) and a one-line rationale Never 
+
+5.3 Workbook auditability 5.3.1 Color coding [D] C1 No font-color convention distinguishing inputs from formulas Inputs vs. formulas (ideally also cross-sheet links) consistently color-coded by font — Never 
+
+5.3.2 Checks tab visible [D] 
+
+C1 No Checks tab; no visible self-audit of BS balance, cash tie, plug =0A Checks tab aggregates the key integrity checks with TRUE/FALSE flags — Never 
+
+Table 15: The eight validity gates. Detection is deterministic in the implemented checker. 𝜅 𝑔 caps the overall score; pillar caps apply before recomputing the mean. G5 has the lowest ceiling because using post-as-of information invalidates the forecast. 
+
+Name Trigger (deterministic) Facet 𝜅 𝑔 / pillar caps Why a cap, not partial credit G1 Balance sheet does not balance 
+
+|𝐴 − ( 𝐿 + 𝐸 ) | / | 𝐴 | > 0.1% in any forecast period 2.2.1 40 / P2 ≤30 An unbalanced balance sheet is not a model; a passed-facet average must not wash out a categorical defect. G2 Cash flow does not tie CF ending cash ≠ BS cash, or CFO +CFI +CFF ≠ Δcash (>0.5%, any period) 2.1.2 45 / P2 ≤35 The statements are not articulated; downstream FCF and valuation are unreliable. G3 Segments do not reconcile Segment revenue (or operating profit) sum ≠
+
+consolidated by >1%, no elims bridge 3.1.2 55 / P3 ≤45 The consolidated numbers are not produced by the segment build. G4 Hardcoded forecast >10% of forecast cells are literals (projection-region formula density <90%) 2.5.1 50 / P2 ≤40, P3 ≤50 A scenario snapshot, not a model: nothing flexes, so sensitivity and reasoning are unverifiable. G5 Look-ahead leakage A forecast driver references information dated after the task’s as-of date 2.5.2 35 / P3 ≤20, P4 ≤20 Methodological invalidation: the model predicts using answers it should not have. Most severe gate. G6 Unresolvable citation An assumption cites a cell pointer ( Sheet!Cell ) that does not resolve — sheet absent from model and pack, or cited cell empty 5.2.2 50 / P5 ≤30 A cited source that does not exist is a hallucinated audit trail and destroys trust in the work product. G7 Unresolved circularity #CIRC/#REF visible with iterative calc off, or the interest schedule cannot evaluate 2.3.2 60 / P2 ≤50 The numbers are undefined; the workbook does not compute deterministically. G8 EV →equity bridge broken Bridge absent, or net cash subtracted / minorities and prefs ignored when material 4.3.1 60 / P4 ≤45 The per-share output is unusable even if the DCF mechanics are fine. 
+
+ment with weighted 𝜅 = 0.81 ; the reported “Expert vs. expert” comparison has 89.4% exact agreement and 𝜅 = 0.85 . By slice, ex-act agreement is 91.2% for mechanical-adjacent judged facets (140 cases), 85.0% for assumptions (180), and 82.9% for valuation (140); weighted kappas are 0.87, 0.79, and 0.75. The note reports 7.1% over-score and 6.2% under-score overall, with 4.8%/4.0%, 7.8%/7.2%, and 9.3%/7.8% for the three slices. The note does not state the annotator count or qualifications, whether credentials were verified, how consensus or the expert– expert statistic was constructed, whether annotation was blind or independent, the case-sampling frame, treatment of missing or N/A labels, the weighting scheme for 𝜅 , or the definitions of over-score and under-score. It also provides no item-level annotations, con-fidence intervals, judge identity, or cross-family comparison. We therefore use the table as a descriptive aggregate agreement sum-mary, not as a reproducible gold-standard or correctness validation; valuation has the lowest reported agreement of the three slices. 
+
+Judge system prompt (evidence block elided to placeholders) 
+
+> You are a senior buy-side analyst grading ONE facet of a junior analyst 's financial model against a precise rubric. Output a single score -- 0, 1, 2, or N/A -- by matching the EVIDENCE to the rubric rungs. Nothing else (effort, length, polish) matters. SCORING DISCIPLINE: - Award 2 ONLY if the evidence clearly clears the "2"
+
+23 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+Table 16: Overlay deactivations (N) and optional facets (O). Most groups change only the bank-NIM and pharma-rNPV builds. Banks also deactivate working-capital, PP&E/capex, FCFF-DCF, and EV-bridge facets; net-cash technology groups make the debt schedule optional. 
+
+Industry group N (defect if built) O (credited if present) Banks 2.1.3, 2.3.2, 2.3.3, 2.4.1, 2.4.2, 3.3.1, 3.4.1, 3.4.2, 3.5.2, 4.1.1, 4.2.1, 4.2.2, 4.3.1 2.4.3 Insurance 3.4.2, 3.5.2 2.1.3, 2.3.3, 2.4.1–2.4.3, 3.4.1 Financial Services 3.4.2, 3.5.2 1.2.2, 2.1.3, 2.3.3, 2.4.1–2.4.3, 3.2.3, 3.4.1, 3.5.1 Pharma / Biotech / Life Sci. 3.2.3, 3.5.1 2.3.3, 3.4.2 Semiconductors 3.5.1, 3.5.2 2.3.1, 2.3.2, 2.3.3, 2.4.3, 3.4.2 Software & Services 3.5.1, 3.5.2 2.3.1, 2.3.2, 2.3.3, 3.2.3, 3.4.2 Capital Goods 3.5.2 2.3.3, 2.4.3, 3.5.1 Energy; Materials 3.5.1, 3.5.2 2.3.3, 2.4.3 Equity REITs; Transportation; Utilities 3.5.1, 3.5.2 2.4.3 Autos; Retail (2); Staples Distr. 3.5.2 2.4.3 ( +3.4.2, 3.5.1 varies) Remaining 9 consumer/media/telecom/ health groups 3.5.1 and/or 3.5.2 2.3.3, 3.2.3, 3.4.2 (per group) 
+
+Table 17: Aggregate human-label audit statistics reproduced from the supplied note. “Consensus,” “expert–expert,” “over-score,” and “under-score” are source labels; their construction and operational definitions are not specified.  
+
+> Reported comparison / slice
+
+𝑛 Exact 𝜅 Over Under Judge vs. expert consensus 460 86.7% 0.81 7.1% 6.2% Expert vs. expert 460 89.4% 0.85 — —Mechanical-adjacent J 140 91.2% 0.87 4.8% 4.0% Assumption J 180 85.0% 0.79 7.8% 7.2% Valuation J 140 82.9% 0.75 9.3% 7.8% 
+
+> bar. Do not give 2 for effort, verbosity, or merely-not-failing. - Award 1 if it meets "1" but falls short of "2". - Award 0 if it fails the "1" bar. - Use N/A ONLY when the facet 's literal N/A condition holds (e.g. the company genuinely has a single segment). N/A is DROPPED from scoring -- never use it to dodge a hard 0. - Judge ONLY what the evidence shows. A capability asserted in the memo but absent from the workbook does NOT count. A formula that would error or is hardcoded does NOT demonstrate the capability. - Be specific: cite the cells / rows / memo lines that drove your score. EVIDENCE -- workbook (formulas shown; cross-sheet refs visible): {{WORKBOOK_DUMP}} EVIDENCE -- investment memo: {{MEMO}} EVIDENCE -- assumptions.json: {{ASSUMPTIONS}}
+
+Judge user prompt (per facet, per vote)    
+
+> FACET {{FACET_ID}} -- {{FACET_NAME}} Pillar: {{PILLAR_NAME}} RUBRIC -- score exactly against these rungs: 0 (Fail): {{RUBRIC_0}} 1 (Acceptable): {{RUBRIC_1}} 2 (Excellent): {{RUBRIC_2}} N/A: {{RUBRIC_NA}} {{INDUSTRY_EMPHASIS}} Score this ONE facet against the rubric above, using only the EVIDENCE provided in the system message. Return ONLY this JSON object (no prose, no markdown fence): {"facet_id": "{{FACET_ID}}", "score": 0, "rationale": "<=40 words tying the score to the chosen rubric rung", "evidence_cells": ["Sheet!A1"]}
+
+Evidence construction. The workbook dump is sheet-aware and label-dense with formulas visible, under a 38,000-character bud-get allocated by sheet relevance: valuation, sensitivity, DCF, WACC, and comps tabs carry weight 3; the three statements, assumptions, and revenue builds weight 2; everything else weight 1, with a 500-character floor per sheet so late tabs of large models are never truncated away (a misnamed sheet is re-classified by content before weighting). The memo and assumptions file are appended under 8,000-character budgets each. For input-comprehension facets (pil-lar P1), a 9,000-character dump of the input pack itself is prefixed, so “did you read the workbook” is judged against what the agent was actually given. The {{INDUSTRY_EMPHASIS}} slot injects the over-lay’s sector-sharpened rubric language (Appendix I) when present, and is empty otherwise. 
+
+Vote reduction ( 𝑘 =5). Each facet receives 𝑘 independent draws. N/A wins only as a strict majority ( #N/A · 2 > 𝑘 ); otherwise N/A votes are dropped and the numeric votes reduce by mode, with ties among leading values resolved by the median rounded toward the lower rung — a split jury is not credited the higher score. Outputs failing JSON validation are retried, never silently coerced; if ev-ery draw fails, the facet records an explicit error and scores N/A (dropped), not zero. Per-facet vote vectors and agreement rates are released with the harness. 
+
+Caching parity. The shared evidence block is served via prompt caching (one priming call, then facet ×vote calls fan out); caching changes cost only, not model inputs — a paired pre-registered check confirmed score parity between the cached and uncached serving paths. The serving path does not accept a sampling temperature for this model, so vote sampling is the only variance-control mech-anism — which is exactly what Appendix U measures. 
+
+24 Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+## L Per-Facet Results: The Full Matrix 
+
+Table 18: Per-pillar 𝜙 subscores over completed cells (P1 input com-prehension, P2 model construction, P3 forecast & reasoning, P4 valuation & sensitivity, P5 communication & auditability), alongside the gated overall 
+
+Φ. Generated directly from the frozen run by the figure pipeline; capability failures are excluded here (they carry no pillar decomposition), so agents with low completion report optimistically; unlike this conditional diagnos-tic, Table 4 ranks by failure-aware 𝜙 0.                                                                                                                                                      
+
+> Agent P1 P2 P3 P4 P5 Φ
+> Claude Fable 5 54.9 52.0 34.9 56.7 73.3 53.4
+> Claude Opus 4.8 51.2 52.5 28.8 48.8 68.6 49.6 GPT-5.6-sol 53.7 40.6 33.6 52.0 68.6 46.5 Kimi k2.7-code 42.3 45.7 28.2 40.8 55.8 42.2 GLM 5.2 43.8 44.2 32.0 42.4 42.5 41.0 Grok 4.5 41.3 44.8 26.9 50.9 70.1 46.5 GPT-5.6-terra 46.2 37.0 32.9 38.7 55.0 39.8 Claude Sonnet 5 51.8 42.8 24.8 50.2 33.8 40.5 DeepSeek v4-pro 42.5 39.1 21.8 41.8 51.9 39.0 Doubao-seed-evolving 46.0 46.1 25.8 43.6 53.0 42.4 DeepSeek v4-flash 40.3 37.2 18.5 36.5 62.9 38.7 GPT-5.6-luna 40.7 35.8 22.8 36.9 56.9 37.6 Hunyuan hy3 35.1 44.0 21.5 36.2 50.7 37.5 Gemini 3.1 Pro 37.0 42.4 17.1 39.9 47.8 36.8 Gemini 3.5 Flash 36.3 36.6 16.3 35.0 55.3 35.7 Kimi k3 39.8 43.6 22.4 36.0 52.7 38.7 Step 3.7 Flash 34.4 38.0 19.7 29.1 50.4 34.3 Kimi k2.6 31.3 40.2 15.3 29.6 45.9 32.5 MiniMax M3 43.9 41.7 29.4 43.1 39.6 39.1 Qwen3 Coder 33.5 35.9 11.3 16.7 43.3 28.1 Qwen3.7-max 44.6 41.0 19.4 43.6 47.6 38.6 Doubao 2.1-pro 46.9 41.2 24.6 47.6 43.5 40.6 Qwen3 235B 27.7 35.9 15.2 18.9 45.6 28.7 GPT-OSS-120B 27.1 29.4 7.9 11.2 30.8 21.3
+
+Figure 12 reports the per-facet pass rates underlying the paper’s aggregates for all 24 agents, all facets activated by the 25-industry matrix, and the 48-task core; Table 18 reports per-pillar 𝜙 subscores. Three patterns are visible. First, P2 is darker than the P3/P4 craft rows for every frontier agent. Second, variable-vs-fixed cost split, maintenance capex, and real-driver sensitivity remain near-white across the tested fleet, including higher-ranked agents. Third, dotted cells are inactive rather than missing: sector-inapplicable facets are excluded under Eq. (2) , and facets active for no core task are omitted as columns. 
+
+## M Results by Slice: Sector, Tier, and Completion Re-Cuts 
+
+Table 19 re-cuts the fleet-level facet outcomes behind Table 4 along the three covariates the core set stratifies on: the task’s GICS sector, its difficulty tier, and the completion status of the three-artifact contract (Appendix D.2). Provenance is the identical overlay-aware merge that generates every aggregate in the paper: for each of the 1,011 scored (agent, task) cells of the 24 × 48 grid in the frozen 
+
+w2_main run — every one of which carries a 𝑘 =5 judge row — we recompute 𝜙 from the merged deterministic +judged facet scores under the cell’s own industry overlay, count a facet as active only when its aggregate resolves (overlay Y and not instance-level N/A), and as passed when its raw score is ≥ 1; mechanical is the frozen C1 (format/modeling) facet set and judgment is C2 +C3 (Section 6). 
+
+(a) Sector. Across the eleven GICS sectors, mechanical pass rates occupy a 2.0-point band (80.3–82.3%) and judgment rates a 5.0-point band (52.6–57.6%). The mechanical–judgment gap ranges from 23.6 points in Communication Services to 28.9 in Energy. Energy and Utilities have the widest gaps and the lowest judgment rates (53.1% and 52.6%), but both are among the smallest slices after Real Estate, so we do not interpret the difference. Capability-failure rates range from 9.4% in Materials (9 of 96 grid cells) to 15.3% in Real Estate (11 of 72). 
+
+(b) Tier. Pooled pass rates do not decline across the vendor tiers (Figure 13). Premium, the 21–30-hour analyst tier, has rates of 84.0%/59.4% over 𝑛 =64 cells, compared with 80.9%/55.3% over 439 Small-tier cells. The gap remains 24.6–25.8 points in every tier, while capability failures are 12.9% for Small grid cells and 11.1% for Premium cells. These descriptive rates do not associate larger workbook tiers with lower pass rates. 
+
+(c) Completion status. The contract requires three artifacts: the workbook, memo, and assumptions file. Of 1,011 scored cells, 825 ship all three to the contracted paths, 175 ship only the work-book, and 11 ship exactly one companion (7 memo-only and 4 assumptions-only); the memo_wired /assumptions_wired ledger fields test existence at those absolute paths. The remaining 141 grid cells produce no valid workbook after a full-budget attempt. They count against Compl. in Table 4 and enter the 48-task denom-inator in Figure 4 as zeros, but have no facet rows and appear in Table 19 only as counts. Full-contract cells pass 82.4% of mechanical and 57.2% of judg-ment facets, compared with 76.6% and 49.9% for workbook-only cells. This is an association between contract completion and work-book score, not evidence that a missing companion causes the lower score. The mechanical–judgment gaps remain similar at 25.2 and 26.6 points. Sector, tier, and completion recuts therefore do not localize the gap, but these pooled descriptions cannot establish whether it belongs to the fleet or to an unobserved subset of tasks or runs. 
+
+## N Additional Main-Result Diagnostics N.1 Company-Grouped Envelope Cross-Fit 
+
+Design. We repeat five-fold splits 20 times, assigning all workbooks for a company to one fold. Disagreement tails use only the other multi-covered companies; E-industry pools remove every held-out company from the full corpus. We report p75/p80/p85/p90 sensitiv-ity and 5,000 company-cluster bootstrap intervals. The analyzed peer subset contains 65 companies and 137 workbooks; only 17 undirected implied-price pairs survive the positive-value and 5 ×
+
+unit guard. 
+
+Results. Across 39 eligible directed price observations, E-method strict coverage is 53.8% (95% CI 38.5–68.6%). The legacy p90 near rule covers 91.2% (82.6–97.2%); p75/p80/p85 near coverage is 72.8%/78.3%/85.0%. At p90, strict held-out E-industry value cov-erage is 82.4% WACC, 90.2% terminal growth, 75.4% beta, 79.0% tax, 80.6% ERP, and 84.5% risk-free rate. This prevents direct company leakage but remains an internal reuse of one source corpus; the perturbation control below bounds how much of the near coverage reflects permissive bands.  
+
+> 25 KDD ’27, August 2027, San Jose, CA, USA Appendix
+
+Table 19: Fleet-level facet pass rates re-cut by task covariates and contract completion. Pooled over all 24 leaderboard agents on the 48-task core (1,011 scored cells of the 24 × 48 grid): pass rate (%, raw score ≥ 1 among active facets) under the mechanical (C1) and judgment (C2 +C3) lenses; Δ =mechanical − judgment in points. T = core tasks in the slice; 𝑛 = scored (agent, task) cells; F = capability-failure grid cells (no valid workbook: counted against Compl. in Table 4, no facet rows here). Computed from the frozen w2_main merge over all 56 facets, including the re-verified no-look-ahead detector (facet 2.5.2, gate G5).                                                                                                                                       
+
+> (a) GICS sector of the task
+> Sector T𝑛 FMech. Judg. Δ
+> Industrials 6125 19 80.3 55.5 24.8 Financials 5109 11 81.0 56.8 24.2 Consumer Discretionary 5107 13 82.3 57.3 25.0 Information Technology 5104 16 80.7 55.2 25.5 Consumer Staples 5103 17 81.5 57.6 23.8 Materials 487 982.2 56.3 25.9 Health Care 484 12 82.2 56.3 26.0 Communication Services 484 12 81.1 57.5 23.6 Energy 482 14 82.0 53.1 28.9 Utilities 365 781.0 52.6 28.4 Real Estate 361 11 80.5 54.9 25.6 All sectors 48 1,011 141 81.3 55.9 25.4
+> (b) Difficulty tier
+> Tier T𝑛 FMech. Judg. Δ
+> Small 21 439 65 80.9 55.3 25.6 Medium 11 234 30 81.2 55.4 25.8 Large 13 274 38 81.5 56.4 25.0 Premium 364 884.0 59.4 24.6
+> (c) Three-artifact contract completion
+> Status 𝑛 Mech. Judg. Δ
+> Workbook +memo +assumptions 825 82.4 57.2 25.2 Workbook +one companion 11 73.8 53.6 20.2 Workbook only 175 76.6 49.9 26.6 Failed / absent workbook 141 ———
+
+## N.2 Perturbation Control: Coverage vs. Selectivity 
+
+A wide-enough band admits everything; coverage alone cannot separate selectivity from permissiveness. We therefore re-test ev-ery held-out peer value after displacing it by ±𝑘 𝑞 𝑓 , 𝑘 ∈ { 1, 2, 3},under the unchanged frozen coverage rule, so that real values and counterfeits face the identical test. For assumptions, 𝑞 𝑓 is the facet’s leave-one-company-out median absolute same-company peer difference (WACC 147 bp, terminal growth 100 bp, beta 0.32, tax 385 bp, ERP 114 bp, risk-free 36 bp)—one quantum of typical professional disagreement; for price, the p90 directed cross-analyst relative dispersion ( 𝛿 =0.995 ), applied on the ratio scale so coun-terfeits stay positive. E-industry bands are per-GICS-group and leave-one-company-out throughout. Because each counterfeit must be paired with its real value, this experiment uses the deterministic leave-one-company-out split rather than the 20 repeated five-fold averages above; its coverage column therefore differs from those averages by at most 3.7 points (e.g., near price 94.9% vs. 91.2%), and the comparison of interest is within-row, coverage against rejection under the identical rule. Table 20 reports the result. The E-industry layer is selective: it admits 80.8% of real held-out values while rejecting 66.1% of 
+
+±2𝑞 𝑓 and 85.4% of ±3𝑞 𝑓 counterfeits, monotone in 𝑘 for every facet. Sweeping the band percentile traces the coverage–selectivity frontier (p75: 56.3%/89.6% through p90: 80.8%/66.1% at ±2𝑞 𝑓 ); the released p90 setting is an interior operating point on that frontier, not its permissive end. The E-method near-price band is the hon-est exception: its multiplicative near rule with 𝛿 ≈1.0 drives the lower edge toward zero, so it rejects upward ±2-dispersion coun-terfeits at 38.5% but downward ones at 0%. Near-price membership is therefore read only as the partial-credit zone of Eq. (1) ; the strict price band, which alone earns full credit, rejects 65.4% of the same counterfeits against 53.8% real-peer coverage. Full per-facet counts, non-positive-counterfeit accounting, and the pooled variant are in 
+
+reference/envelope_selectivity_gics.json .
+
+Table 20: Perturbation control: real-peer coverage vs. counterfeit rejection. Each held-out peer value is displaced by ±𝑘 𝑞 𝑓 and re-tested under the unchanged coverage rule. For assumptions, 𝑞 𝑓 is the leave-one-company-out median absolute same-company peer difference; for price, the p90 directed cross-analyst relative dispersion ( 𝛿 =0.995 ), applied on the ratio scale. E-industry bands are per-GICS-group, leave-one-company-out; 
+
+𝑛 counts real held-out values ( 2𝑛 counterfeits per 𝑘 ). Counterfeit rejection (%) Layer / facet Cov. % ±1𝑞 𝑓 ±2𝑞 𝑓 ±3𝑞 𝑓 𝑛 
+
+E-method price, near band 94.9 9.0 19.2 23.1 39 upward counterfeits only — 17.9 38.5 46.2 39 E-method price, strict band 53.8 64.1 65.4 65.4 39 E-industry (6 facets, pooled) 80.8 36.8 66.1 85.4 453 WACC 82.2 29.0 57.9 80.4 107 terminal 𝑔 90.0 36.7 60.0 85.0 30 beta 76.2 45.8 79.2 93.5 84 tax rate 79.6 33.5 63.6 85.8 88 ERP 79.7 41.9 69.6 86.5 74 risk-free rate 82.9 36.4 65.0 82.1 70 
+
+E-industry band-percentile frontier (coverage % / rejection % at ±2𝑞 𝑓 ): p75: 56.3 / 89.6 p80: 65.6 / 85.0 p85: 72.6 / 77.6 p90: 80.8 / 66.1 
+
+## N.3 Failure-Aware Panel Uncertainty 
+
+The primary score is 𝜙 0 (𝑚 ) = 48 −1 Í48   
+
+> 𝑡 =1
+
+e𝜙 𝑚,𝑡 , where failed or un-scoreable cells contribute zero. The frozen matrix has 1,011 score-able cells and 141 failures. In 50,000 paired task-cluster bootstraps, the point leader remains first in 99.998% of replicates, the exact top-three set in 99.848%, and the exact top-five set in only 22.446%; mean Spearman correlation with the point ranking is 0.972. The largest completed-only to failure-aware movement is Doubao 2.1-pro, rank 8 to 22. These intervals describe the fixed operational core, not the full 196-task bank, generation randomness, or judge-family uncertainty.  
+
+> 26 Appendix KDD ’27, August 2027, San Jose, CA, USA
+
+## N.4 Grader-Family Dependence 
+
+The taxonomy contains 29 deterministic (D), 4 direct-rule (R), and 23 judged (J) facets. We reconstruct the pre-gate failure-aware ranking and remove one family at a time over 5,000 paired task bootstraps. Mean Kendall 𝜏 𝑏 against the full ranking is 0.888 [0.833 , 0.935 ]
+
+without D, 0.965 [0.928 , 0.993 ] without R, and 0.683 [0.601 , 0.761 ]
+
+without J; top-1 preservation is 1.000/1.000/0.305. These are depen-dence ablations, not correctness tests. R has only four facets and a median of one scored facet per completed cell; operational D removal additionally disables all eight validity gates. 
+
+## N.5 Cross-Family Judge Replication 
+
+The frozen judge (Claude Opus 4.8) shares a provider with the top two leaderboard agents, so we re-judge a stratified subset with a judge from a different provider under the identical protocol: GPT-5.6-sol, 𝑘 = 5 votes with majority reduction, the same prompts, evidence packs, and overlays. The subset is 12 tasks (one per GICS sector group, seeded draw from the 46 tasks where all eight target agents have a frozen judged cell) × 8 agents spanning five providers (Claude Fable 5, Opus 4.8, Sonnet 5; GPT-5.6-sol, -terra; Gemini 3.1 Pro; DeepSeek v4-pro; Kimi k2.7-code) — 96 cells, all judged successfully, 2,208 facet pairs. Facet-level agreement with the frozen judge is 73.5% exact and 92.2% within one rung of the 0/1/2 ladder (quadratic-weighted 
+
+𝜅 = 0.675 ; 7.1% of pairs disagree on N/A status). The cross-family judge is uniformly stricter, and Table 21 shows the shift is not con-centrated on any provider: per-agent judged-facet means move −1.9
+
+to −6.1 𝜙 , with the Anthropic-generated cells moving −5.2 against 
+
+−4.8 for non-Anthropic cells (permutation 𝑝 = 0.71 on the gap over 20,000 label shuffles). Subset agent ordering is preserved at Kendall 
+
+𝜏 = 0.857 : the only movements are among the three near-tied bot-tom ranks (Sonnet 5, Gemini 3.1 Pro, Kimi k2.7-code, spanning 2.3 points under the frozen judge). The top of the table is unchanged — the OpenAI judge also places Claude Fable 5 first, above its own provider’s GPT-5.6-sol. The five lowest-agreement facets (3.3.3, 3.2.3, 1.3.2, 5.1.2, 5.2.3) are flagged as judge calibration targets. Arti-facts: runs/campaign/xfam_judge/ (subset ledger, per-cell votes, analysis). 
+
+## O Training-Signal Experiments 
+
+The training split contains 200 workbooks (80/70/40/10 across ven-dor tiers), excludes evaluation and multi-coverage companies, and has 167/200 automatically certified harness-ready. The main text reports the paired effect estimates and Figure 8 shows the complete context result. For trajectory fine-tuning, two Claude Opus 4.8 trajectories were generated for each of 150 training companies and rejection-sampled by deterministic score, yielding 146 retained trajectories. On 15 paired core tasks, the current checkpoint changes valua-tion by +8.4 𝜙 (95% CI [+ 1.8, +14 .9]), mechanics by +0.6 (CI spans zero), assumptions by −4.9 [− 8.9, −0.6], and overall score by −0.8
+
+[− 3.6, +2.0]. Earlier tool-template and stopping failures are retained in the release to make this exploratory result auditable. 
+
+Table 21: Cross-family judge replication on the 96-cell subset.                                                                         
+
+> Judged-facet cell means on the 𝜙 scale under the frozen judge (Claude Opus 4.8) and the cross-family judge (GPT-5.6-sol), both 𝑘 =5, identical protocol; Δ= frozen −cross-family; 𝑛 =12 tasks per agent. Rk = rank within the subset under each judge. The cross-family judge is uniformly stricter; ordering moves only among the near-tied bottom three (Kendall
+> 𝜏 =0.857 ). Judged-facet mean Rk Agent Opus 4.8 5.6-sol ΔOSClaude Fable 5 47.8 41.7 +6.111GPT-5.6-sol 42.5 36.9 +5.522Claude Opus 4.8 37.5 31.8 +5.733GPT-5.6-terra 35.5 29.9 +5.644DeepSeek v4-pro 32.1 26.8 +5.455Kimi k2.7-code 31.4 25.8 +5.668Claude Sonnet 5 30.1 26.3 +3.876Gemini 3.1 Pro 27.9 26.0 +1.987Anthropic cells Δ=+5.2; non-Anthropic Δ=+4.8; gap 0.4 ( 𝑝 =0.71 )Facet agreement: 73.5% exact, 92.2% within one rung, 𝜅 𝑤 =0.675
+
+## P Cost, Latency, and Compute 
+
+Every number in this section is mined from two frozen run ledgers: the generation ledger ( ledger.jsonl , 1,241 rows deduplicated to the last attempt per agent ×task, i.e. the 1,152-cell matrix) and the judge ledger ( judge_k5.jsonl , 1,204 rows covering the 1,011 judged cells). Wall seconds, provider-reported token usage, vote vectors, and cache counters are logged at the transport layer and are independent of how the cells score. 
+
+Generation layer. Table 22 reports the per-agent profile. Complet-ing the 24 × 48 matrix consumed 24,428 agent API rounds, 366.0M input plus 55.5M output tokens as reported, and 296 agent-hours of summed wall time over a 6.5-day campaign (2026-07-16 19:27 to 07-23 07:50 UTC). The traffic includes the retry budget of Appendix D: 89 superseded ledger rows — all failed attempts ( gen_error “no workbook produced”) — were re-driven under the infrastructure-failure policy, 247 of the 1,152 cells consumed the harness’s single second attempt, and every one of the 141 recorded failures carries 
+
+attempts =2, i.e. exhausted the full budget before being recorded; none was ever re-driven to success (Section 6). Median wall time per completed task spans 23 ×, from 89 s for GPT-5.6-luna to 2,086 s for Doubao 2.1-pro. Three of the four low-completion agents use 
+
+4–7× the fleet median of 0.20M tokens per valid workbook: Qwen3 235B uses 1.5M, Doubao 2.1-pro 1.3M, and Qwen3.7-max 0.8M; GPT-OSS-120B is the exception at 0.21M. The 141 failed cells consume 32.9M tokens, or 7.8% of the fleet total, and are included in the Tot. column. Two accounting disclosures. First, we sum each adapter’s re-ported per-round input-token field (provider names differ). Its se-mantics therefore follow the provider: endpoints that serve the harness through prompt caching report far less input per round than endpoints that re-count the full context. The contrast is stark — GLM 5.2 reports 2.0k input tokens per round across 45.0 rounds while Claude Sonnet 5 reports 48.4k per round across 49.6 — so the In column is honest per agent but not comparable across wire  
+
+> 27 KDD ’27, August 2027, San Jose, CA, USA Appendix
+
+adapters; output tokens, API rounds, and wall time are. We re-port the as-logged numbers rather than impute a common ac-counting. Second, five failed cells (four Qwen3.7-max, one Kimi k3; gen_error “no workbook produced”) carry zero rounds and zero tokens because the harness found no usage-bearing transcript records: their failure is counted, their cost is invisible. 
+
+Judge layer. Each judged cell costs 23 facets × 𝑘 =5 votes = 115 scoring draws, the first of which doubles as the cache-priming call before the remaining draws fan out concurrently (Appendix K); Table 23 aggregates the fleet. Of the 116,265 nominal draws, 110,038 (94.6%) returned a parseable verdict after the retry discipline of Appendix K; the 257 facet-cells (1.1%) that lost all five draws record an explicit error and score N/A-dropped, never zero. The shared evidence block incurs 99.5M cache-write tokens and 2,059M cache-read tokens fleet-wide, a 20.7:1 read-to-write ratio; 95.4% of cache-accounted judge input is served as reads. The paired parity check in Appendix K finds no score change between cached and uncached serving. Median cell latency is 111.9 s at concurrency 6 (830 cells); 175 cells run at concurrency 4 and 2 at concurrency 3 during rate-limit windows, with cache TTL 5m . Summed judge compute is 33.5 h, about 11% of the fleet’s 296 agent-hours. 
+
+Table 23: Judge-layer cost structure (frozen judge_k5.jsonl , dedupli-cated; judge claude-opus-4-8 , 𝑘 =5).               
+
+> Judged cells (23 facets each, all judge_ok )1,011 Scoring draws ( 1011 ×23 ×5; first primes cache) 116,265 Parseable verdicts returned 110,038 (94.6%) Facet-cells losing all five draws 257 (1.1%) Mean within-cell vote agreement 0.978 Cache-write / cache-read tokens 99.5M / 2,059M Read-to-write ratio (share served as reads) 20.7:1 (95.4%) Median / mean wall s per cell 111.9 / 119.1 Summed judge compute 33.5 h
+
+No dollar totals. We deliberately do not convert to dollars: the 24 agents were served through heterogeneous provider endpoints and an internal proxy whose contract pricing is not public, so any dollar figure would be an estimate layered on non-comparable accounting. The token, call, and wall-time counts above are the reproducible quantities, and both ledgers are released with the harness. 
+
+## Q Worked Example: One Task End to End 
+
+We walk one real evaluation cell — EMR (Capital Goods) under the best-scoring agent — through the full pipeline; all numbers below are from the released artifacts of that run. 
+
+Input. The pack shows revenue of 15,165 / 17,492 / 18,016 (USD mm) for FY2023–25, last close $135.20, 554.6 mm shares, and a verified balance-sheet identity ( 41 ,964 = 21 ,666 + 20 ,298 ). 
+
+Output. The agent produced the eleven-sheet workbook, memo, and assumptions file in one pass. The deterministic checker records: worst balance-sheet imbalance 2 × 10 −15 % across five forecast periods (S-04), cash-flow-to-balance-sheet cash gap 0.0 % (S-05), projection-region formula density 97.9 % (S-09), and full blue-input color compliance (B-05); no validity gate fires. The assumptions file resolves its numbers to cells — e.g. {"name": "wacc", "value": 0.0885, "source": "WACC!B19"} , whose source note documents its own composition (85.4% equity at 𝐾 𝑒 9.75%, 14.6% debt at after-tax 𝐾 𝑑 3.6%), alongside terminal growth 0.025 — and the memo’s headline (DCF implied $99.13, 26.7 % below the close) matches the workbook. 
+
+Where judgment thins out. The workbook’s sensitivity tab is a WACC × 𝑔 grid spanning 0.0785 –0.0985 by 0.015 –0.035 . Every cell is formula-driven, but the axes reproduce the parenthetical example in the task prompt (“e.g., WACC × terminal growth”). Facet 4.4.1 asks, under the Capital Goods overlay, for end-market volume, price realization, or incremental margin; the judge scores the facet 0 with 5/5 agreement. The workbook also reports that 74.2 % of enterprise value lies in the terminal period, but none of the sensitivity axes tests a real operating driver. The cell scores 𝜙 = 52 .9 over 45 active facets, the 92nd percentile among 1,011 scored cells (fleet median 39.5): high mechanical execution coexists with a zero on real-driver sensitivity. The same cell, seen through two graded facets — the judge’s five independent votes are unanimous in both directions:                  
+
+> Graded facets, cell EMR ×best agent (from the released vote records)
+> Facet 5.1.1 — thesis with falsifiable claims [J] votes [2 2 2 2 2] ⇒2
+> The memo states quantified, workbook-tied claims (implied $99.13, 26.7% below the close; margin path named per driver) — clears the “3–5 falsifiable claims tied to drivers” bar.
+> Facet 4.4.1 — sensitivity on real value drivers [J] votes [0 0 0 0 0] ⇒0
+> Rubric rung 0 is literally “only WACC ×𝑔 (cookbook)”; the Capital Goods overlay emphasis names the drivers that move an industrial — end-market volume, price realization, incremental margin — and the workbook’s single grid spans none of them.
+
+The four reference-envelope [R] facets are graded by the band checker against per-ticker reference packs assembled from corpus artifacts only (per-industry p10–p90 assumption distributions inter-sected with the reference workbook’s own values widened by the cross-analyst p90 of Section 4; multiples from the reference work-book’s implied PE/EV-EBITDA). Coverage over the 1,011 scored cells: WACC-in-band 801, implied multiples 364, margin-trajectory 270, segment-margin differentiation 9; where a pack lacks a band the grader abstains to N/A rather than fabricate one. Pack construc-tion is released as tools/build_core_reference_packs.py .
+
+## R Worked Example II: A Gated Cell 
+
+Appendix Q reports a completed cell with no triggered gate. Here we examine a completed VZ cell (Telecommunication Services) from DeepSeek v4-flash, which triggers G1 on 56% of its tasks (Appendix T). The cell passes most deterministic checks but has an unbalanced balance sheet; all values below come from the frozen ledger and stored scorecard. 
+
+Input. The pack (as-of 2026-04-30, FY2025 vintage) describes a mature carrier: revenue 133,974 / 134,788 / 135,607 (mm) for 2023A– 25A, cash 4,194 against total debt 167,005, and five forecast years 2026E–2030E. 
+
+Output, and what passed. One attempt, 27 API calls, 159,846 input / 58,464 output tokens, 461.9 s wall clock; the full eleven-sheet workbook plus memo and a 29-entry assumptions file — superfi-cially the same deliverable as Appendix Q. Most of the deterministic battery passes, much of it to machine precision: zero Excel errors (S-03); cash-flow-to-balance-sheet cash gap 0.0% in all five periods (S-05); net income identical on the IS bottom line and the CF top line (S-08); projection-region formula density 100% — 314 of 314 
+
+> 28
+
+Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+Table 22: Per-agent generation cost and latency on the 48-task core (frozen w2_main ledger; rows grouped for compact cost comparison rather than leaderboard order). Med. s: median wall seconds per completed task. Rounds/In/Out: mean API rounds and provider-reported input/output tokens (thousands) per completed task; In is as-reported and not comparable across wire adapters (see text). Tot.: total tokens over all attempted cells, failed generations included. 
+
+Agent Wire Compl. Med. s Rounds In (k) Out (k) Tot. (M) Claude Fable 5 anthropic 48/48 468 9.4 316.6 39.2 17.08 Claude Opus 4.8 anthropic 48/48 422 20.2 519.7 37.3 26.74 GPT-5.6-sol openai 48/48 188 3.9 41.8 15.2 2.74 Grok 4.5 openai 42/48 1,024 7.0 242.1 51.6 12.39 Doubao-seed-evolving openai 44/48 1,324 26.1 1,058.5 72.4 50.35 Kimi k2.7-code anthropic 47/48 1,200 37.1 102.8 98.4 9.51 GLM 5.2 anthropic 48/48 1,261 45.0 90.8 106.8 9.48 Claude Sonnet 5 anthropic 47/48 656 49.6 2,404.6 61.7 118.90 Doubao 2.1-pro openai 12/48 2,086 23.2 1,024.7 62.0 15.45 GPT-5.6-terra openai 48/48 122 6.3 71.6 13.7 4.09 MiniMax M3 anthropic 38/48 731 48.0 109.2 95.0 8.02 DeepSeek v4-pro anthropic 48/48 1,078 36.4 97.9 67.6 7.94 DeepSeek v4-flash anthropic 48/48 502 26.4 129.6 61.7 9.18 Qwen3.7-max openai 31/48 1,858 14.3 701.8 70.7 25.53 Kimi k3 kimi_official 43/48 742 37.0 53.5 40.4 4.12 GPT-5.6-luna openai 48/48 89 7.2 77.2 10.9 4.23 Hunyuan hy3 anthropic 48/48 574 37.6 77.1 53.5 6.27 Gemini 3.1 Pro gemini 48/48 200 8.2 184.3 16.0 9.62 Gemini 3.5 Flash gemini 48/48 112 10.4 206.3 23.6 11.03 Step 3.7 Flash anthropic 46/48 523 22.3 77.3 80.1 7.40 Kimi k2.6 anthropic 48/48 444 35.0 126.1 54.4 8.66 Qwen3 235B openai 16/48 408 11.8 150.3 17.2 23.66 Qwen3 Coder openai 48/48 235 8.8 191.8 21.7 10.25 GPT-OSS-120B openai 21/48 259 6.9 98.8 24.7 4.32 Fleet — 1,011/1,152 513 23.0 321.9 50.1 421.5 
+
+projected cells are formulas (S-09); a constant 24.0% tax rate, in band every year (B-03); blue-input color compliance 34/34 (B-05); D&A consistency, the PP&E roll, and the retained-earnings roll all tie; and the EV →equity →per-share bridge is complete and arithmeti-cally consistent (G8 record), ending in a clearly labelled implied share price of $108.57 ( DCF!B29 , S-06). The only other determin-istic check that fails outright is S-10: 20 in-formula literals (e.g. 
+
+=Revenue_Build!E2*0.08 ), which holds the hardcode facet 2.5.1 at 1 rather than 2 but fires no gate. 
+
+The gate. S-04 asks the balance sheet to balance within 0.1% in every period. This one is off by more than two orders of magnitude beyond that tolerance, in every forecast column: 
+
+The gate evidence — deterministic record S-04, stored with the cell 
+
+S-04 — BS balances every period within 0.1% [D] pass: false worst_imbalance_pct = 0.2237 : total assets differ from liabilities plus equity by 21.2% (2026E), 21.5%, 21.9%, 22.1%, and 22.4% (2030E) of total assets. Detection facet 2.2.1 scores 0; gate G1 (“Balance sheet does not balance”) fires with ceiling 
+
+𝜅 G1 = 40 .
+
+The agent knew. Its own Checks tab computes assets minus liabilities-and-equity per year and prints FAIL five times — a hole that opens at 83,455 (mm) and compounds to 96,284 by 2030E — and it shipped the workbook anyway: 
+
+Checks sheet of the shipped VZ workbook (recalculated values; elisions ours)                 
+
+> Check Value Status BS Balances 2026E -83455.03138771 FAIL BS Balances 2027E -86762.4408437935 FAIL BS Balances 2028E -90004.5547394265 FAIL BS Balances 2029E -93175.7938387731 FAIL BS Balances 2030E -96284.2695395109 FAIL
+> CF Ending Cash = BS Cash 2026E 0PASS ... (2027E-2030E identical: 0, PASS) NI flows to RE 2026E 0PASS ... (2027E-2030E identical: 0, PASS)
+
+The memo and workbook also disagree on valuation. The memo’s fourth falsifiable claim gives a DCF range of ∼$35–42, while the labelled workbook cell gives $108.57, or 2.7× the $39.92 current price quoted in the memo. 
+
+The additive counterfactual. Of 25 scored facets, 18 score 1, six score 2, and one scores 0: facet 2.2.1, the balance-sheet identity. This yields 96.0% passing facets. Under the linear 0/1/2 ↦ → 0/50 /100 
+
+map used in Appendix N, with the cap in Eq. (5) removed, the same stored outcomes average 60.0. GAUGE’s pre-gate aggregate is 69.6, and G1 sets Φ = min (69 .6, 40 ) = 40 . The roughly twenty-point difference is entirely due to the G1 ceiling on a workbook whose checks tab reports a $96bn balance-sheet gap. 
+
+## S Three Failure Trajectories, Verbatim 
+
+Section 6.4 splits the 141 never-completed cells into “three different engineering failures — planning collapse, silent truncation, and structural incompleteness — that a single ‘accuracy’ number would conflate.” Here we walk three real trajectories from the frozen 
+
+w2_main campaign: the first two instantiate the first two never-completed mechanisms; the third is the boundary case — a work-book that ships and is gate-capped, whose extreme form is the third mechanism. Everything quoted is copy-pasted from the released transcripts and build scripts; excerpts are condensed, and bracketed turn annotations are ours. 
+
+Trajectory 1: planning collapse — the full-budget rebuild loop (Doubao 2.1-pro × MA). All 36 of Doubao 2.1-pro’s failed 
+
+29 KDD ’27, August 2027, San Jose, CA, USA Appendix 
+
+cells are full-budget non-convergences (every one consumed at least 2,652 s across its two attempts), and the MA cell shows the mechanism in miniature. The agent builds its workbook script by appending heredoc chunks to one growing Python file; at turn 14 the accreted script crashes at line 910. It correctly diagnoses the ar-chitecture problem — then the recovery itself collapses: two consec-utive turns emit 16,427 and 16,460 completion tokens, flush against the 16,384-token output cap, so both write_file calls arrive with their arguments truncated away (one turn’s entire surviving prose is the fragment “rate”). The agent then restarts the whole script from scratch, is cut off again, and the attempt dies on an API read timeout; the retry is killed at the 1,800 s wall clock. Total: 4,072 s, 649,474 input and 103,482 output tokens across 19 API calls, no workbook. 
+
+Doubao 2.1-pro on MA: turns 14–18 of the released transcript (condensed)        
+
+> [T14 run_bash result] appended Sens/Checks/JSON/Memo + SAVE Assumptions sheet done. Saved interim. Traceback (most recent call last): File ".../MA_FY2024/20260719T144440-d801ff/build_model.py", line 910, in <module> [...] [T15 | 16427 completion tokens] "The script appends in pieces but the variables defined in later appends aren 't available when earlier chunks run in Python (since the whole file runs once). Let me consolidate everything properly and " write_file {} -> <write_file: missing path> [T16 | 16460 completion tokens] "rate" write_file {} -> <write_file: missing path> [T17] "Let me write the entire model script at once, properly organized:" -> wrote 37479 bytes to build_full.py [T18] "I was cut off. Let me complete the script cleanly by appending the rest:" [attempt 1 ends] <api error: The read operation timed out> [attempt 2 ends] <timeout: killed process group after 1800s>
+
+Deterministic consequence: the generation harness records gen_ error:timeout after both attempts; the cell enters the leaderboard as a capability failure (Section 6.4), not as a scored workbook. 
+
+Trajectory 2: silent truncation — the workbook that never existed (GPT-OSS-120B × EMR). Where Doubao burns its budget fighting the same cap, GPT-OSS-120B dies in it instantly. On EMR the first turn emits 8,708 completion tokens of one giant command whose serialized tool call arrives with no arguments ; the harness’s recovery nudge — issued uniformly to every model, like the wire shims of Appendix D — tells it exactly how to recover, and the very next request is rejected by the provider with HTTP 400 (“unex-pected character”). Both attempts die the same way, 77 s total. This is not an EMR quirk: all 19 of GPT-OSS-120B’s absent-workbook cells show the HTTP 400 signature, 18 of them the empty-arguments nudge first. The same wire-level truncation that Doubao survives (and loops on) is, for this model, unrecoverable. 
+
+GPT-OSS-120B on EMR: the entire productive transcript (stored attempt) 
+
+> [T0 | 8708 completion tokens; tool call arrives empty; the harness recovery nudge replies:] <run_bash: no command received. Your previous message was likely cut off by the 16384-token output limit before the command finished. Do NOT resend one giant command. Instead: write long scripts to a file in small pieces with write_file (append mode), or split the work across several short run_bash
+> [T1] <api error: HTTP 400: {"error":{"message":"unexpected character: line 1 column 15435 (char 15434) [trace_id=0adf5fc57ebc3a3bd142fe6dbd2271da]", "type":"invalid_request_error","param":null,"code":null}}> [attempt 1 had already ended in the same HTTP 400, at a different offset (line 2 column 3556); output/ remains empty]
+
+Deterministic consequence: gen_error: no workbook produced .The cell is counted as a capability failure because the tested serving stack does not produce a serializable workbook within the output limit. 
+
+Trajectory 3: the confident hardcode — a completed work-book that does not flex (Step-3.7-flash × MO). The third failure ships. Step-3.7-flash finishes MO in 320.6 s and 7 API calls: eleven sheets, memo, assumptions file, checks tab — and a balance sheet whose “inputs” are invented. The build script stamps round con-stants across all columns, historical and forecast alike ( range(2, 10) spans 2022A–2029E): Goodwill & Intangibles 15,000, Other Non-Current Assets 5,000, Other Current Assets 500 — none of these values appears anywhere in the input pack — while the pack’s gen-uine FY2024 cash figure (3,127) is copied backwards into 2022A and 2023A as well. Each constant is styled blue_font , the analyst con-vention for a legitimate hardcoded input (facet B-05): cosmetically compliant, substantively fabricated. 
+
+Step-3.7-flash on MO: output/build_model.py (Balance_Sheet section, ver-batim lines) 
+
+> ws_bs["A5"] = "Cash & Equivalents" ws_bs["B5"] = 3127 ws_bs["B5"].font = blue_font ws_bs["C5"] = 3127 [...] ws_bs["A8"] = "Other Current Assets" for col in range(2, 10): ws_bs.cell(row=8, column=col, value=500).font = blue_font [...] ws_bs["A11"] = "Goodwill & Intangibles" for col in range(2, 10): ws_bs.cell(row=11, column=col, value=15000).font = blue_font ws_bs["A12"] = "Other Non-Current Assets" for col in range(2, 10): ws_bs.cell(row=12, column=col, value=5000).font = blue_font
+
+Deterministic consequence: check S-09 measures projection-region formula density 86.6 % (233 formulas over 269 numeric cells; Bal-ance_Sheet 75/105) — below the 95 % facet bar and the 90 % gate trigger — so G4 ( hardcoded forecast cells , Appendix H) fires and caps the cell’s 𝜙 at 50 (pillar caps P2 40, P3 50). No partial-credit average would surface this: line by line the sheet looks like a model, but nothing downstream of those cells flexes, so sensitivity and reason-ing are unverifiable — in the gate’s words, “a scenario snapshot, not a model.” At its extreme the same behavior never reaches scoring at all: the artifact validator rejected 10 workbooks fleet-wide as “too few forecast formulas . . . — looks like a paste-only / dead model, not a live forecast” (seven with 0 forecast formulas, two with 5, one with 10, against a minimum of 12). The three trajectories end in different recorded outcomes: non-convergence, an absent artifact, and a completed artifact capped by a validity gate. A single end-to-end accuracy value would map 
+
+30 Appendix KDD ’27, August 2027, San Jose, CA, USA 
+
+all three to failure; the released ledger preserves the distinct failure class for each cell. 
+
+## T Gate Trigger Profiles 
+
+Figure 14 reports, per agent, the share of completed tasks triggering each validity gate — G1 balance-sheet identity, G2 cash-flow tie-out, G3 segment reconciliation, G4 hardcoded forecast cells, G5 look-ahead leakage, G6 unresolvable source citation, G7 unresolved circular references, G8 EV →equity bridge — alongside the any-gate rate from Table 4. Failure signatures are model-specific rather than uniform: DeepSeek v4-flash concentrates in G1 (56% of tasks build a balance sheet that does not balance), the Qwen3 235B and Qwen3 Coder in G7 circular references (69% and 73% — while the newer Qwen3.7-max shows no G7 at all, failing instead on G1 balance, 42%), GPT-OSS-120B in G4 hardcoded forecasts (38%), and GPT-5.6-terra and its sibling luna trip the G2 cash-flow tie-out on 38% and 27% of tasks where sol almost never does (2%). G5, the look-ahead-leakage gate, is the rarest and the most skewed toward the weak tail: it fires on 17 of the 1,011 completed cells (1.7%), never for any of the top-eight agents, and its detections are structural time inversions — a forecast line item in period 𝑡 whose formula reads a later period of itself (a balance-sheet roll run backwards from a future anchor, a discount factor indexed off the wrong column). The pack clamps every dated input to the as-of date by construction, so what G5 catches in practice is not information leakage from the world but time-inverted model mechanics — and the cap is warranted: a model that computes period 𝑡 from period 𝑡 +1 is not forecasting. G1 G2 G3 G4 G5 G6 G7 G8 Any                                                                                                                                                                                                 
+
+> Claude Fable 5
+> Claude Opus 4.8
+> GPT-5.6-sol
+> Kimi k2.7-code
+> GLM 5.2
+> Grok 4.5
+> GPT-5.6-terra
+> Claude Sonnet 5
+> DeepSeek v4-pro
+> Doubao-seed-evolving
+> DeepSeek v4-flash
+> GPT-5.6-luna
+> Hunyuan hy3
+> Gemini 3.1 Pro
+> Gemini 3.5 Flash
+> Kimi k3
+> Step 3.7 Flash
+> Kimi k2.6
+> MiniMax M3
+> Qwen3 Coder
+> Qwen3.7-max
+> Doubao 2.1-pro
+> Qwen3 235B
+> GPT-OSS-120B
+> 8000020010
+> 4260042017
+> 40 240020446
+> 23 11 60017 2647
+> 12 015 44023 19 54
+> 7019 200726 43
+> 46 38 20023 029 71
+> 40 11 92002655
+> 40 10 62029 819 62
+> 18 592095739
+> 56 64868617 77
+> 46 27 00017 17 25 75
+> 12 12 10 4210 819 50
+> 35 10 4406810 54
+> 60 29 212 08423 79
+> 23 12 72512 12 16 58
+> 24 24 11 26 230 22 26 85
+> 27 15 88233 17 29 88
+> 21 534 16 0318 11 71
+> 82223 817 73 088
+> 42 13 3000013 55
+> 33 800017 017 58
+> 00019 12 669 12 88
+> 19 10 038 5029 14 76
+
+Figure 14: Share of completed tasks (%) triggering each validity gate, per agent, in leaderboard order. Shading encodes the printed value; “Any” is the any-gate rate of Table 4. Failure signatures are model-specific; G5, the look-ahead-leakage gate, is the rarest (1.7% of cells) and never fires for a top-eight agent. 
+
+## U Judge Vote-Sampling Ablation: Detailed Setup 
+
+Judge configuration. Full protocol — verbatim prompts, evidence-block budgets, vote reduction, caching parity — in Appendix K. Relevant here: the serving path does not accept a sampling temper-ature for this model, so vote sampling is the only variance-control mechanism — which is exactly what this ablation measures. 
+
+Cells. Six generation cells drawn from the main run, one from each of six distinct generator models (two proprietary frontier families, one open-weight, spanning three GICS sectors), chosen so their deterministic scores span the observed range ( 𝜙 det 26–50). Each cell activates all 23 judged facets (no industry-conditional deactivations in this sample). 
+
+Collection. Each facet is judged once at a pool size of 15 votes (per-cell: 23 × 15 = 345 judge calls), so every 𝑘 condition is analyzed from the same underlying pool rather than from separate paid runs. Raw votes are released with the harness. 
+
+Bootstrap. For each 𝑘 ∈ { 1, 3, 5, 7, 10 } and each metric we draw 
+
+𝐵 = 800 resamples with replacement from the vote pools. (i) Sub-score std : a resampled judged subscore is the mean over facets of the reduced numeric scores (N-A dropped); we report the mean over cells of the per-cell standard deviation across resamples, on the 0–2 facet scale. (ii) Ranking stability : two independent resampled re-judgings of all six cells are ranked and compared by Kendall’s 
+
+𝜏 ; we report the mean over 𝐵 pairs. (iii) Flip rate : per facet, the probability that a 𝑘 -vote reduction differs from that facet’s modal  
+
+> 31 KDD ’27, August 2027, San Jose, CA, USA Appendix
+
+reduced outcome, averaged over all facets and cells. 
+
+Reading. Because each vote pool is finite (15), the bootstrap slightly understates true run-to-run variance for 𝑘 close to the pool size; conclusions about small 𝑘 (the operating regime) are unaf-fected. The absence of an elbow means the choice of 𝑘 is a cost knob, not a validity cliff; we fix 𝑘 =5 before scoring any main-table run. 
+
+## V Release Protocol and Benchmark-Design Checklist 
+
+Section 7 states what is released and under which access tier; this appendix records the operational protocol: the artifact inventory, the withholding rationale, the de-identification acceptance gates, the refresh mechanics, and a mapping onto the axes of the agentic-benchmark checklist [37]. 
+
+Artifact inventory. Every scoring input is shipped as data, not baked into harness code, so a third party can re-derive any reported number — or dispute any rubric — without us. Artifacts carrying workbook content ship in the gated data tier; rubrics, scorer, run records, and reports are public:                      
+
+> Release inventory (annotations ours)
+> workbooks/M{ID}-{TICKER}-{Tier}.xlsx 199 de-identified books deid_report.{md,json} TRANSFORM+VERIFY, masked findings rescan_report.{md,json} independent re-scan: 0 residual inputs/ visible packs, forecast cells blank rubrics/taxonomy.json 5 pillars / 21 sub-caps / 56 facets rubrics/gates.json G1-G8 caps + detection wiring rubrics/industry_overlays/matrix/ 25 GICS overlay files rubrics/facet_grader_map.json check-id -> facet wiring rubrics/{phi_aggregate,R1_*,R2v2_*,R3_*} the full scorer + R2v2 judge system/user prompts, verbatim envelopes_full/E_company.json 65 multi-covered companies envelopes_full/E_industry_gics.json industry distributions envelopes_full/envelopes/M*.json 1,000 per-book extractions envelopes_full/_coverage.json per-method coverage counts broker_extractions/ extraction scripts + reports runs_analyst_vs_analyst/pairs.jsonl 158 directed pairs x 4 tolerance mults runs_analyst_vs_analyst/summary.json reference/gates_vs_linear.json gate-cap vs linear ablation runs/campaign/w2_main/ledger.jsonl per-cell run ledger runs/campaign/w2_main/judge_k5.jsonl raw votes + agreement runs/campaign/w2_main/manifest.json frozen run config train_split/train_split_manifest.json 200-ticker split qc_excel200_summary.json batch QC: 196/200 harness-ready identity_triage_200.jsonl per-workbook identity triage dupe_groups.json cross-batch dedup, 1,201 files
+
+Three of these deserve a sentence. The envelope statistics ship as raw value lists, not summaries: E_company.json keys each of the 65 multiply-covered companies to its contributing workbooks and their extracted values, and _coverage.json states, per extrac-tion method, how many of the 1,000 parsed workbooks (of 1,001 delivered) yield each ingredient (WACC from 862, an in-book trian-gulation from 354, a sensitivity grid from 310, terminal growth from 494) — so the partial-coverage limitation of Section 7 is checkable, not just confessed. The analyst-vs-analyst audit (Section 4) releases its 632 per-pair, per-tolerance records (158 directed same-ticker pairs at four tolerance multipliers), so the paper’s central negative result is recomputable from JSONL. And every judged cell in the frozen run retains all five raw votes with per-facet agreement in 
+
+judge_k5.jsonl , so any judged score can be re-aggregated with-out an API call; the run ledger records per-cell generation outcome, wall-clock, token usage, attempts, and wire adapter. 
+
+What is withheld, and why. Three classes. (1) The ∼600 non-evaluation, non-training-split workbooks: published data enters future training corpora, so the withheld pool is the contamination-resistant refresh track (below). (2) The internal manual-review com-panions to the de-identification reports, which contain raw pre-masking values (names, e-mails, paths); the public reports carry only sha256 -masked digests of removed content. (3) Per-task eval-uation targets: input packs deliberately contain no peer multiples, consensus, or broker data — they are the evaluation target. Sep-arately, the one content-mislabeled workbook found by identity triage (Section 3) is quarantined and ships in no pool. 
+
+De-identification verification. The pipeline ( deidentify.py 
+
+v1.0.0) treats each workbook at the XML level across eleven num-bered metadata surfaces plus an extras scan, in a transform-then-verify pass followed by an independent scan-only re-scan of the treated output. On the 199-workbook release batch (201 candidates: one lockfile skipped, one quarantined), 180 workbooks required at least one hard scrub — analyst-identifying absolute paths in 169, local external-link targets (836 findings across 38 books), personal-cloud link targets in 25, comment authors rewritten to analyst .Acceptance is gated, per book, on: re-opening under openpyxl , zip integrity, formula-count delta of exactly zero verified two ways (parsed <f> elements and raw byte count), and zero residual hard findings; the independent re-scan then reports zero hard findings across all 199. A 2,123-item manual-review queue (dominated by 1,928 defined-name tokens) is surfaced for human triage in the internal file that does not ship. 
+
+Refresh protocol. The vendor has confirmed the evaluation workbooks never entered any model training pipeline (Section 3). The released training split ( train_split_v1 ; 200 tickers; seed 20260720) excludes, by recorded policy, the evaluation batch, the 65 multiply-covered calibration companies, and the quarantined work-book, stratified by tier ( 80 /70 /40 /10 ) with sector round-robin. Pro-moting a refresh batch from the withheld pool means re-running the same staged pipeline, each stage emitting the machine-readable re-port shown above: corpus QC and archetype readiness (the current batch’s report records 196/200 harness-ready), identity triage, cross-batch content de-duplication ( dupe_groups.json already spans 1,201 files; 11 duplicate groups), de-identification with the identi-cal acceptance gates, provenance-tracked pack extraction with the per-pack 𝑇 𝐴 = 𝑇 𝐿 + 𝑇 𝐸 identity check, and envelope re-extraction. A batch ships only when every gate that gated the current release passes on the new batch; the scoring configuration (taxonomy, gates, overlays, judge prompts) ships as explicit versioned artifacts rather than harness internals, so refreshed scores are attributable to new tasks, not silent rubric drift. 
+
+Checklist compliance. Mapping GAUGE onto the checklist of [37], each axis against shipped artifacts: 
+
+(1) Outcome validity. The grading target is a calibrated envelope, not one analyst’s spreadsheet, and the case against the single-golden alternative is itself released as data ( pairs.jsonl ). Structural facets are graded by a deterministic checker with zero rerun variance conditional on the implemented detector; judged facets retain 𝑘 =5
+
+raw votes so judge noise is inspectable rather than laundered into  
+
+> 32 Appendix KDD ’27, August 2027, San Jose, CA, USA
+
+a scalar. 
+
+(2) Task validity. Input packs are generated by provenance-tracked extractors — every number carries its source sheet, row, and label — with a verified accounting identity per pack. Reference data follows the same “abstain, don’t fabricate” discipline imposed on agents: the four unresolvable reference cases are documented abstentions, not imputed fields (Section 5.1). 
+
+(3) Honest reporting. Capability failures score as failures and count against completion — retrying them to success would bias toward each model’s best case (Section 6). Every scorecard carries a coverage manifest; inactive facets are excluded from aggregates, never zero-filled; per-gate trigger profiles are disclosed in Appen-dix T. 
+
+(4) Contamination. Vendor confirmation for the evaluation set, a withheld refresh pool as a stated design feature, and a training split that is leakage-controlled by construction against both task answers and envelope calibration data. 
+
+(5) Overfitting and gaming. Gaming the letter of the gates while failing judgment facets is bounded by envelope bands that are distributional rather than point targets, and detectable over time by the refresh track: an agent tuned to a published batch must survive a batch that was never public. 
+
+(6) Grader-integrity self-audit. Grading instruments are audited artifacts: the G6 over-scoping incident (Appendix H) and the un-attached activation-overlay incident (Section 7) were both caught by our own audits, corrected, and reported with their measured impact rather than suppressed. We claim no blanket compliance. Where GAUGE deviates — partial envelope coverage, residual LLM-judge risk — the deviation is quantified and stated in Section 7, and the artifacts above are sufficient for a reader to re-measure it.  
+
+> 33 KDD ’27, August 2027, San Jose, CA, USA Appendix Claude Fable 5
+> Claude Opus 4.8
+> GPT-5.6-sol
+> Kimi k2.7-code
+> GLM 5.2
+> Grok 4.5
+> GPT-5.6-terra
+> Claude Sonnet 5
+> DeepSeek v4-pro
+> Doubao-seed-evolving
+> DeepSeek v4-flash
+> GPT-5.6-luna
+> Hunyuan hy3
+> Gemini 3.1 Pro
+> Gemini 3.5 Flash
+> Kimi k3
+> Step 3.7 Flash
+> Kimi k2.6
+> MiniMax M3
+> Qwen3 Coder
+> Qwen3.7-max
+> Doubao 2.1-pro
+> Qwen3 235B
+> GPT-OSS-120B
+
+■ 1.1.1 Historical IS line items reproduc… 
+
+■ 1.1.2 Historical BS line items reproduc… 
+
+■ 1.1.3 Historical CF line items reproduc… 
+
+● 1.3.2 Disclosed segment definitions res… 
+
+■ 1.4.1 Reporting currency consistent 
+
+■ 1.4.2 Period alignment (FY vs CY, stubs… 
+
+■ 2.1.1 Net income -> retained earnings f… 
+
+■ 2.1.2 CFO -> cash -> BS cash tie 
+
+■ 2.1.3 D&A consistency across IS/CF/BS P… 
+
+■ 2.2.1 BS balances every forecast period 
+
+● 2.2.2 No plug to 'other assets / liabil… 
+
+■ 2.3.1 Debt schedule with amortization p… 
+
+■ 2.3.2 Circular interest-on-average-debt… 
+
+● 2.3.3 Revolver / cash sweep mechanic 
+
+■ 2.4.1 NWC roll mechanically correct 
+
+■ 2.4.2 PP&E roll: capex - D&A - disposals 
+
+■ 2.4.3 Goodwill / intangibles roll 
+
+■ 2.5.1 Forecast cells are formulas, not… 
+
+■ 2.5.2 No look-ahead from disclosed actu… 
+
+● 2.5.3 Named ranges / consistent referen… 
+
+● 3.1.1 Segment revenue built from unit d… 
+
+■ 3.1.2 Sum of segments reconciles to con… 
+
+◇ 3.1.3 Segment margins economically dist… 
+
+● 3.2.1 Price x volume decomposition wher… 
+
+● 3.2.2 Driver growth tied to guidance /… 
+
+● 3.2.3 Cyclical / seasonal logic where a… 
+
+● 3.3.1 Variable vs fixed cost split appr… 
+
+◇ 3.3.2 Operating-leverage shape (margin… 
+
+● 3.3.3 SG&A normalization (one-offs stri… 
+
+● 3.4.1 Capex tied to capacity / revenue… 
+
+● 3.4.2 Maintenance vs growth capex split 
+
+● 3.5.1 Bank: NIM x earning-assets build 
+
+● 3.5.2 Pharma: pipeline rNPV / probabili… 
+
+■ 4.1.1 FCF definition consistent (FCFF v… 
+
+■ 4.1.2 Discount period convention explic… 
+
+■ 4.1.3 Terminal value present and discou… 
+
+◇ 4.2.1 WACC inputs within envelope 
+
+● 4.2.2 Capital-structure target consiste… 
+
+■ 4.3.1 EV -> equity bridge complete 
+
+● 4.3.2 Diluted share count (options, RSU… 
+
+● 4.4.1 Sensitivity grid on real value dr… 
+
+◇ 4.4.3 Implied multiples vs comps reason… 
+
+● 4.4.4 Football-field / range presentati… 
+
+● 5.1.1 Thesis stated with 3-5 falsifiabl… 
+
+● 5.1.2 Key risks identified & linked to… 
+
+■ 5.1.3 Numbers in memo tie to model 
+
+■ 5.2.1 Assumptions JSON schema-valid 
+
+■ 5.2.2 Every memo-cited number present i… 
+
+● 5.2.3 Source-of-truth pointer per assum… 
+
+■ 5.3.1 Color coding (inputs blue / formu… 
+
+■ 5.3.2 Checks tab visible 
+
+54 77 58 60 47 50 68 81 48 64 64 55 33 62 48 58 38 40 41 55 55 58 58 22 
+
+98 81 90 67 59 86 58 80 69 85 79 61 51 77 73 77 42 39 57 65 52 75 75 17 
+
+71 88 66 56 71 72 88 79 69 67 72 57 60 76 64 73 68 63 58 68 69 70 86 20 
+
+100 77 98 51 62 43 67 83 52 59 31 44 27 15 33 29 24 10 71 12 63 64 0 0
+
+100 98 98 98 96 93 100 94 98 100 98 98 98 100 94 95 97 100 92 100 100 100 100 ·
+
+100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 
+
+50 88 70 62 71 75 32 65 48 71 85 36 50 76 77 70 57 52 71 67 58 50 · 100 
+
+100 98 97 86 100 100 53 87 77 95 91 55 81 77 50 81 54 68 89 75 85 86 · 67 
+
+67 87 81 88 86 77 88 95 86 95 89 93 90 95 95 100 97 100 86 60 87 80 · 60 
+
+92 96 56 72 81 91 31 47 5 79 16 27 82 51 9 47 35 41 74 73 50 43 100 33 
+
+100 69 98 72 58 33 54 81 71 61 62 48 50 79 65 40 43 56 37 46 77 67 69 71 
+
+100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 98 100 98 100 100 100 64 
+
+100 98 100 98 77 93 100 98 91 95 94 83 91 91 96 88 78 83 81 26 100 100 31 70 
+
+45 23 20 16 10 9 13 10 5 20 16 7 9 16 5 22 2 2 9 0 17 22 0 5
+
+72 96 19 89 89 71 74 89 100 77 94 83 91 72 81 93 91 98 94 85 100 90 62 15 
+
+92 97 57 84 56 72 42 66 49 57 38 44 23 70 15 63 39 38 61 0 82 44 · ·
+
+40 50 · 92 86 25 83 80 79 50 60 · 90 0 · 94 100 62 73 90 65 75 · ·
+
+100 100 100 100 96 98 100 98 98 98 92 100 96 96 88 98 74 92 84 77 100 100 81 62 
+
+100 100 100 100 96 100 100 100 100 100 94 100 98 100 100 95 98 98 100 92 100 100 88 95 
+
+100 100 100 96 100 100 98 100 100 100 98 100 96 96 98 95 54 88 100 33 97 100 12 43 
+
+46 21 77 60 73 19 88 19 17 18 2 50 12 19 0 30 24 4 45 4 6 25 19 0
+
+· 73 33 40 72 27 88 71 80 64 50 100 81 78 95 57 77 50 52 50 67 100 · ·
+
+· 100 · · 100 100 · · · · · · 100 · 100 · · · · · 100 · · ·
+
+100 34 95 70 88 78 92 37 27 34 7 57 17 21 0 41 29 8 61 8 17 30 19 0
+
+100 100 92 87 98 100 83 96 98 98 100 46 96 50 67 98 91 90 100 46 97 100 100 24 
+
+74 54 26 26 46 79 12 31 33 50 34 7 18 3 7 24 11 11 64 0 24 64 0 0
+
+0 2 0 0 17 7 0 2 0 5 0 0 2 0 0 5 0 11 11 23 7 9 6 0
+
+65 47 64 50 67 78 50 57 38 56 57 47 31 57 50 40 12 42 38 67 45 100 0 20 
+
+82 67 44 21 29 42 26 56 21 48 31 28 23 6 12 16 4 6 18 0 26 25 6 0
+
+100 100 100 98 70 88 98 100 98 100 94 91 100 100 96 100 93 85 86 74 90 91 75 85 
+
+5 8 2 2 3 9 0 0 0 0 0 0 0 2 0 0 5 0 6 0 8 0 0 0
+
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 11 0 0 0 0 0
+
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 · · ·
+
+100 100 98 98 91 93 100 100 100 100 100 100 100 100 89 100 97 100 93 100 95 100 · ·
+
+100 98 100 98 88 100 79 98 82 95 90 71 90 96 83 89 79 72 97 75 97 100 100 100 
+
+100 100 100 100 54 97 55 98 100 92 90 74 71 95 97 90 80 95 70 72 85 100 58 0
+
+93 100 98 90 100 94 95 97 95 92 89 91 93 98 86 85 77 82 100 81 88 100 100 88 
+
+98 33 89 39 68 78 36 42 26 40 15 60 17 34 21 26 9 2 43 15 50 27 6 0
+
+100 100 95 92 76 72 65 92 70 92 79 60 74 87 69 77 50 52 88 100 86 80 50 57 
+
+88 45 65 2 52 50 42 80 35 36 10 4 6 0 2 16 0 0 74 0 35 58 0 0
+
+17 2 2 0 19 50 0 22 17 0 0 0 12 2 0 12 4 8 26 2 10 0 0 5
+
+53 61 58 57 83 65 44 65 20 58 37 46 43 57 54 36 33 50 76 50 69 100 · 100 
+
+100 100 100 91 83 98 100 87 98 91 98 96 96 88 90 88 78 79 87 12 90 100 44 14 
+
+100 100 100 85 35 98 83 9 94 70 100 100 65 100 100 74 98 88 32 90 58 58 100 67 
+
+100 100 100 85 35 98 98 9 94 70 100 100 65 100 98 74 98 90 32 81 58 58 100 67 
+
+98 96 98 80 100 100 77 100 69 87 89 83 82 94 92 84 65 63 90 80 100 67 92 100 
+
+100 100 100 87 35 98 100 11 94 70 100 100 67 100 100 74 96 90 29 100 52 50 100 76 
+
+98 96 98 80 100 100 77 100 69 87 89 83 82 94 92 84 65 63 90 80 100 67 92 100 
+
+100 100 100 96 94 100 96 98 96 86 100 100 100 96 98 95 98 100 87 98 61 75 100 71 
+
+100 96 100 98 94 100 100 83 100 95 100 100 100 67 72 93 90 98 100 85 93 100 20 0
+
+100 96 94 94 81 100 83 96 83 100 77 69 73 8 67 91 50 54 87 17 84 92 12 10 
+
+> P1 P2 P3 P4 P5
+
+Figure 12: The full per-facet matrix: pass rate (%, score ≥ 1 among active cells) for every agent × every facet activated on the 48-task core. 
+
+Rows are facets grouped by pillar (navy separators; right-edge tags P1 input comprehension, P2 model construction, P3 forecast & reasoning, P4 valuation & sensitivity, P5 communication & auditability; [D] deterministic, [J] judged, [R] envelope); columns are the 24 agents in leaderboard order. Shading encodes the printed value; dotted cells have no active observation for that agent (industry overlay N, instance-level N/A, or no completed task activating the facet) and are excluded from every aggregate, never zero-filled. 
+
+> 34
+
+Appendix KDD ’27, August 2027, San Jose, CA, USA Small 
+
+> (n=21)
+> Medium
+> (n=11)
+> Large
+> (n=13)
+> Premium
+> (n=3)
+
+Workbook tier (mechanical scale → ) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> Fleet facet pass rate (%)
+
+Mechanical (C1) Judgment (C2+C3) 
+
+> 80.9
+> 55.3
+> 25.6
+> 81.2
+> 55.4
+> 25.8
+> 81.5
+> 56.4
+> 25.0
+> 84.0
+> 59.4
+> 24.6
+
+Figure 13: Facet pass rate by workbook tier. Across 24 agents, me-chanical and judgment pass rates vary little across the four vendor tiers; the gap is 24.6–25.8 points. Tier is a scale covariate, not a measure of verified analyst quality. 
+
+35

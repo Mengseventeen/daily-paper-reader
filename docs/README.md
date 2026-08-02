@@ -6,34 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-01
-- 运行时间：2026-08-01 21:16:49 UTC
+- 最新运行日期：2026-08-02
+- 运行时间：2026-08-02 21:06:50 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：1
-- 速读区：3
+- 本次总论文数：1
+- 精读区：0
+- 速读区：1
 
 ### 今日简报（AI）
-今日精读1篇矩阵动态组合优化，另速读3篇降维、DeFi评分与时间序列解释论文。  
-最值得细看的是8分论文《Are Three Matrices All You Need To Beat the Market?》，其可观测矩阵动态为资产组合优化提供新视角。  
-普通读者建议优先了解矩阵驱动策略的原理，再评估其对实际投资的启发。
-- 详情：[/202608/01/README](/202608/01/README)
+今日速读1篇论文，聚焦无标准答案的金融模型智能体评测。
+
+最值得关注的是GAUGE方法：不依赖“黄金答案”即可为AI构建的金融模型打分（7.0/10）。
+
+普通读者可进一步了解AI在财务分析中的可信度评估趋势。
+- 详情：[/202608/02/README](/202608/02/README)
 
 ### 精读区论文标签
-1. [Are Three Matrices All You Need To Beat the Market? Observable Matrix Dynamics for Portfolio Optimization](/202608/01/2607.27461v1-are-three-matrices-all-you-need-to-beat-the-market-observable-matrix-dynamics-for-portfolio-optimization)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于可观测矩阵的动态组合优化方法
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Low-Rank Dependence Decomposition via Accelerated Symmetric Non-negative Matrix Factorization](/202608/01/2607.24518v1-low-rank-dependence-decomposition-via-accelerated-symmetric-non-negative-matrix-factorization)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：为大型投资组合提供可扩展的对称非负矩阵分解依赖分解方法，与智能投顾组合管理和风险估计相关。
-2. [ZAPs: A Reward Attribution Framework for DeFi Ecosystems with Adversarial-Robust Scoring via Parallel Anomaly Ensemble Detection](/202608/01/2607.27859v1-zaps-a-reward-attribution-framework-for-defi-ecosystems-with-adversarial-robust-scoring-via-parallel-anomaly-ensemble-detection)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：面向DeFi生态的机器学习奖励归属框架，结合对抗稳健评分与异常集成检测
-3. [Information Bottleneck Learning for Faithful Time Series Forecasting Explanations](/202608/01/2607.28124v1-information-bottleneck-learning-for-faithful-time-series-forecasting-explanations)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：可迁移至金融预测的可解释时间序列预测框架
+1. [GAUGE: Grading Agent-Built Financial Models Without a Golden Answer](/202608/02/2607.24889v1-gauge-grading-agent-built-financial-models-without-a-golden-answer)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：为AI构建的金融模型提供评估基准，直接对应人工智能在金融中的应用。
 
 
 <div class="dpr-home-promo-card">
