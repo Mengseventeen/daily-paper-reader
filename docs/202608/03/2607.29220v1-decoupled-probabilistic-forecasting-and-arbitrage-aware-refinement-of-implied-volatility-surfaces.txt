@@ -1,0 +1,1931 @@
+Title: Decoupled Probabilistic Forecasting and Arbitrage-Aware Refinement of Implied Volatility Surfaces
+
+URL Source: https://arxiv.org/pdf/2607.29220v1
+
+Published Time: Mon, 03 Aug 2026 00:41:38 GMT
+
+Number of Pages: 35
+
+Markdown Content:
+# Decoupled Probabilistic Forecasting and Arbitrage-Aware Refinement of Implied Volatility Surfaces 
+
+Lifeng Hao 1* † and Shaolin Ji 1†
+
+1* Zhongtai Securities Institute for Financial Studies, Shandong University, Jinan, 250100, Shandong, China. *Corresponding author(s). E-mail(s): 201911961@mail.sdu.edu.cn; Contributing authors: jsl@sdu.edu.cn; 
+
+†These authors contributed equally to this work. 
+
+Abstract 
+
+Implied volatility surface forecasting is essential for option valuation, hedging, and risk management, but remains difficult because future surfaces are stochas-tic while pricing inputs must satisfy static no-arbitrage shape restrictions. We propose a decoupled generative refinement framework for IVS forecasting as an operational risk surface modeling problem. The first stage uses a condi-tional diffusion model to learn the conditional distribution of future surfaces. The generated ensemble captures predictive distributional variation, and its median provides a robust representative surface for subsequent refinement. The second stage introduces a Surface Aware Attention Module (SAAM), a cross sec-tional refinement operator that improves fit to market observations and static no-arbitrage diagnostics for the representative surface. This design separates distribution learning from surface refinement, allowing the diffusion model to capture stochastic market dynamics while SAAM controls static no-arbitrage residual violations on the final surface. We evaluate the framework on CSI 300 index options from June 2020 to September 2024 under daily and minute level forecasting protocols. The diffusion stage improves forecasting accuracy and produces predictive intervals that vary across moneyness, maturity, and sam-pling frequency. The refinement stage improves fitting accuracy against market observations and reduces measured static no-arbitrage residual violations, with stronger gains at the minute level. Attention diagnostics suggest that SAAM performs adaptive cross sectional refinement rather than fixed local smoothing. 
+
+1arXiv:2607.29220v1 [q-fin.CP] 31 Jul 2026 Keywords: Implied volatility surface, Probabilistic forecasting, Static no-arbitrage, Conditional diffusion, Surface-aware attention, Option risk modeling 
+
+## 1 Introduction 
+
+The reliable modeling of option implied volatility surfaces (IVS) is a central problem in quantitative finance and risk management. IVS forecasts are key inputs for derivative valuation, hedging, portfolio risk measurement, and volatility trading. Unlike conven-tional financial time series, an IVS evolves over a moneyness and maturity domain and must satisfy static no arbitrage restrictions (Dupire et al. 1994; Heston 1993; Gatheral 2006). Accurate modeling therefore requires both stochastic predictive flexibility and consistency with static no arbitrage restrictions. We represent the IVS observed at time t as a two dimensional surface Σ t over moneyness m and time to maturity τ .As illustrated in Figure 1, empirical IV surfaces exhibit nonlinear structures such as term structures, volatility skews, and smiles (Franks and Schwartz 1991; Heynen et al. 1994; Dumas et al. 1998; Azzone and Torricelli 2025; Zaugg et al. 2025). Their dynamics are also affected by liquidity heterogeneity, asymmetric tail expectations, and latent market shocks (Cont and da Fonseca 2002). Consequently, future IVS states are better viewed as conditional distributions of possible market scenarios rather than as single deterministic trajectories. 0.6 0.8 1.0 1.2 1.4  
+
+> Moneyness
+> 0
+> 80
+> 160
+> 240
+> 320
+> Time to Maturity
+> 0.175
+> 0.200
+> 0.225
+> 0.250
+> 0.275
+> 0.300
+> 0.325
+> Fig. 1 Typical implied volatility surface (IVS) for CSI 300 options. The z-axis denotes the volatility level.
+
+A key challenge is to reconcile stochastic scenario generation with static no-arbitrage requirements. Flexible data-driven models can capture complex predictive dynamics, but may generate surfaces with static-arbitrage residual violations. Con-versely, imposing geometric penalties within a forecasting objective is nontrivial 2because empirical IVS observations may contain transient violations caused by uneven contract coverage, interpolation effects, bid-ask frictions, and microstructure noise. This creates a trade-off between empirical fidelity and static no-arbitrage residual control, especially in sparse, tail-sensitive, and high-frequency settings. Motivated by this optimization tension, we propose a decoupled probabilistic framework for IVS scenario generation and surface refinement with static no-arbitrage restrictions. The first stage uses a conditional diffusion model (Ho et al. 2020; Song et al. 2021; Tashiro et al. 2021) to learn the conditional distribution of future IVS states. It transforms IVS forecasting from deterministic surface extrapolation into probabilistic scenario generation. The generated ensemble is retained for distributional evaluation, and its median provides a robust representative forecast surface for Stage II refinement. The second stage introduces the Surface Aware Attention Module (SAAM), a coor-dinate based refinement operator. SAAM maps the representative forecast surface to arbitrary target coordinates, allowing supervision from scattered market observations and residual diagnostics. By aggregating information from the entire representative surface, SAAM exploits the cross sectional coupling of smiles and term structures rather than relying on isolated pointwise correction. The refined surface is designed to improve fit to market observations and static no-arbitrage residual control while preserving the Stage I predictive signal. The empirical evaluation follows this two stage design. Stage I is assessed by fore-casting accuracy and distributional forecast quality for future IVS states. Stage II is evaluated as a surface level refinement task, using fit to market observations and static no-arbitrage diagnostics for the refined representative surface. From an opera-tional perspective, this design separates the generation of future risk surface scenarios from the construction of a refined representative surface used for option valuation, risk measurement, and static no arbitrage assessment. The main contributions of this work are as follows: 1. A diffusion based probabilistic formulation for IVS forecasting. We intro-duce conditional diffusion into IVS forecasting to model the conditional distribution of future implied volatility surfaces. The model generates predictive surface ensem-bles for distributional evaluation, and their median provides a robust representative forecast surface for subsequent refinement. 2. A surface aware attention refinement operator. We introduce SAAM as a coordinate based refinement module that maps a representative forecast surface to arbitrary target coordinates, allowing fitting against scattered market observa-tions and evaluation on synthetic diagnostic grids. Its attention mechanism enables nonlocal information aggregation across the moneyness and maturity domain and supports residual based regularization for static no-arbitrage diagnostics. 3. Empirical evidence from CSI 300 index options. Using daily and minute level CSI 300 index option data, we show that the diffusion stage generates infor-mative predictive surface ensembles, while the SAAM stage improves fit to market observations and static no-arbitrage residual control. The learned attention pat-terns further provide diagnostic evidence on cross sectional information allocation across tail sensitive and maturity dependent regions. 32 Related Work 
+
+2.1 Classical Parameterizations and Stochastic Dynamic Modeling 
+
+Implied volatility surface (IVS) modeling has traditionally relied on static parametric specifications and continuous time stochastic processes. Classical parameterizations, such as the Stochastic Volatility Inspired (SVI) family (Gatheral and Jacquier 2014), provide parsimonious representations of IVS and can be made consistent with static no-arbitrage conditions under suitable parameter restrictions. However, they are pri-marily designed for cross sectional fitting or interpolation and do not by themselves provide an endogenous mechanism for forecasting future surface dynamics. To capture temporal evolution, market models employ factor structures or stochastic differential equations (Dewynne et al. 1999; Durrleman 2010; Audrino and Colangelo 2010; A¨ ıt-Sahalia et al. 2021; Cont and Vuleti´ c 2023). While theoretically rigorous and closely connected to arbitrage-free pricing theory, these approaches often rely on restrictive assumptions about the driving factors, volatility dynamics, or functional form of sur-face evolution. Their implementation can therefore become challenging when observed contracts are sparse and unevenly distributed across the moneyness and maturity domain, and when market observations are affected by regime dependent fluctuations. 
+
+2.2 Deep IVS Forecasting and Penalty Based Methods 
+
+The limitations of classical parametric and stochastic dynamic models have motivated the use of deep learning methods for IVS forecasting. Convolutional neural networks and recurrent architectures, such as LSTMs, provide data driven forecasting bench-marks by learning nonlinear temporal dependencies from historical IVS (Medvedev and Wang 2022; Zhang et al. 2022; Almeida et al. 2023; Olsen et al. 2025; Shao et al. 2025). However, when trained mainly with mean squared error objectives, these models tend to produce conditional mean forecasts, which may smooth future surface move-ments and underrepresent scenario diversity during regime shifts or tail risk repricing. In their standard form, they also do not explicitly model the conditional distribution of future IVS states, limiting their ability to represent market stochasticity in scenario based risk analysis. To improve financial consistency, recent studies often embed soft penalties for static no-arbitrage conditions into neural network losses (Ackerer et al. 2020; Zheng et al. 2021; Zhang et al. 2022). Such penalty based formulations are practical and empirically useful, and the refinement stage developed in this paper also adopts residual based regularization for static no-arbitrage restrictions. The main limitation is therefore not the use of soft penalties per se, but the frequent reliance on pointwise mappings such as multi layer perceptrons. In these coordinate to volatility architectures, the output at each target coordinate is generated mainly from local input features and is only indirectly coupled with other surface regions through shared parameters and global loss terms. This can be restrictive for IVS refinement, since option smiles, term structures, and static no-arbitrage conditions are intrinsically cross sectional. 4The closest methodological benchmark is the two step IVS prediction framework with static no-arbitrage penalties proposed by Zhang et al. (2022), which separates temporal prediction from surface construction and evaluates residual penalties on syn-thetic grids. We build on this decomposition principle and residual collocation logic, but use conditional diffusion to generate predictive IVS scenarios rather than a single forecast surface. At the surface refinement stage, we use SAAM instead of a pointwise MLP mapping. This allows each target coordinate to aggregate nonlocal information from the representative forecast surface, thereby exploiting the cross sectional coupling of smiles and term structures during refinement. 
+
+2.3 Generative Scenario Modeling 
+
+Generative models provide a natural route beyond single surface forecasts, since finan-cial risk analysis often requires multiple plausible future market states rather than a single conditional mean forecast. In option markets, VolGAN (Vuleti´ c and Cont 2025) provides an important example by simulating joint scenarios of the underlying asset and the implied volatility surface. VolGAN incorporates smoothness regulariza-tion into the generator objective, while static no-arbitrage considerations are handled mainly through ex-post scenario reweighting. This reweighting mechanism changes the probability weights over generated scenarios rather than directly modifying a given surface. The broader generative modeling literature provides further motivation for a diffu-sion based approach. Although GAN based models are effective for scenario simulation, adversarial training can be sensitive to instability and mode collapse (Thanh-Tung and Tran 2020; Jabbar et al. 2021). Diffusion models offer a non adversarial alterna-tive by learning to reverse a stochastic noising process, with score based formulations providing a closely related continuous time perspective (Ho et al. 2020; Song et al. 2021). These models have demonstrated strong sample quality and distributional cov-erage in high-dimensional generation (Dhariwal and Nichol 2021). Initially developed for high dimensional data generation (Yang et al. 2023; Harvey et al. 2022; Ho et al. 2022; Avrahami et al. 2022), diffusion based models have recently been adapted to conditional time series and spatiotemporal forecasting (Tashiro et al. 2021; MA 2026). This study addresses a complementary layer of the IVS forecasting problem. We use conditional diffusion to generate predictive ensembles of future IVS states, and retain these ensembles for distributional evaluation. Instead of reweighting generated scenarios, we extract a representative forecast surface and refine it directly through SAAM. The refinement stage uses attention based nonlocal information aggregation and residual regularization for static no-arbitrage diagnostics, allowing distributional scenario generation and representative surface refinement to be handled separately. 
+
+## 3 Problem Formulation and No-Arbitrage Constraints 
+
+This section provides essential background on the implied volatility surface (IVS). 53.1 Problem Formulation and State Representation 
+
+Implied volatility is defined implicitly via an option pricing formula. For a Euro-pean call option with strike K and time-to-maturity τ = T − t, let Ft(τ ) and Dt(τ )denote the corresponding forward index level and discount factor. Under the Black–76 convention, the pricing function is 
+
+CB76 (Ft(τ ), K, τ, σ ) = Dt(τ ) [ Ft(τ )N (d1) − KN (d2)] , (1) where 
+
+d1 = ln( Ft(τ )/K ) + 12 σ2τσ√τ , d2 = d1 − σ√τ , (2) and N (·) is the standard normal cumulative distribution function. Given an observed market price Cmkt  
+
+> t
+
+(K, T ), the implied volatility σt(K, T ) is defined as: 
+
+CB76 
+
+ Ft(τ ), K, τ, σ t(K, T ) = Cmkt  
+
+> t
+
+(K, T ). (3) For surface modeling, we reparameterize implied volatility using log-forward mon-eyness m = ln( K/F t(τ )) and maturity τ . The standardized implied volatility surface at time t is thus represented as Σt(m, τ ) := σt(Ft(τ )em, t + τ ). (4) For a fixed coordinate ( m, τ ), Σ t(m, τ ) evolves over time as a stochastic process; for a fixed date t, Σ t(·, ·) describes the prevailing cross-sectional option risk state. 
+
+3.2 Static No-Arbitrage Conditions 
+
+Conditions that ensure an IVS is free of static arbitrage have been well investigated in the literature (Lee 2004; Roper 2010; Gatheral and Jacquier 2014). Following this theoretical framework, we state these conditions in terms of the total implied variance: 
+
+ϕ(m, τ ) = Σ( m, τ )2τ. (5)          
+
+> Proposition 1 (Static arbitrage-free conditions) Consider an IVS Σ( m, τ )and its total implied variance ϕ(m, τ ) = Σ( m, τ )2τ. Suppose that the following conditions are satisfied:
+
+1. (Positivity) ϕ(m, τ ) > 0 for every (m, τ ).2. (Zero-Maturity Limit) lim τ ↓0 ϕ(m, τ ) = 0 for every m ∈ R.3. (Differentiability) For every τ > 0, m 7 → ϕ(m, τ ) is twice differentiable, and for every m ∈ R, τ 7 → ϕ(m, τ ) is differentiable. 4. (Monotonicity) For every m ∈ R, τ 7 → ϕ(m, τ ) is non-decreasing, yielding the calendar spread condition: 
+
+ℓcal (m, τ ) = ∂τ ϕ(m, τ ) ≥ 0. (6) 65. (Durrleman’s Condition) For every (m, τ ), the butterfly spread condition holds: 
+
+ℓbut (m, τ ) = 
+
+
+
+1 − m∂ mϕ
+
+2ϕ
+
+2
+
+− (∂mϕ)2
+
+4
+
+ 1
+
+ϕ + 14
+
+
+
++ ∂2
+
+> mm
+
+ϕ
+
+2 ≥ 0. (7) 
+
+6. (Tail Asymptotics) For every τ > 0, ϕ(m, τ ) = O(|m|) as |m| → ∞ .   
+
+> Then, Σ( m, τ )is free of static arbitrage.
+
+Condition 4 ensures the absence of calendar spread arbitrage, while Condition 5 guarantees the absence of butterfly arbitrage and the admissibility of the cross-sectional risk neutral density. These two quantities, ℓcal and ℓbut , thus provide the central diagnostics for arbitrage violations in our empirical assessment. 
+
+3.3 Continuous Surface Reconstruction from Scattered Market Observations 
+
+In listed option markets, the available strikes and maturities vary across dates as contracts are introduced, expire, or become inactive. Consequently, at time t, implied volatilities are observed only at an irregular and time-varying set of contract locations: Γt = {(mi, τ i, Σt(mi, τ i)) | i = 1 , . . . , n t} . (8) Since both the number of observations and their locations vary over time, a continuous surface representation is required before constructing a comparable IVS state across dates. We reconstruct the surface from scattered observations using the Nadaraya– Watson (NW) kernel estimator (H¨ ardle 1990). For any target coordinate ( m, τ ), the reconstructed implied volatility surface is defined as ˆΣt(m, τ ) = 
+
+Pnt 
+
+> i=1
+
+Σt(mi, τ i)gh1,h 2 (m − mi, τ − τi)
+
+Pnt 
+
+> i=1
+
+gh1,h 2 (m − mi, τ − τi) , (9) where gh1,h 2 (·, ·) is a bivariate Gaussian kernel with bandwidths h1 and h2. The bandwidths determine the degree of smoothing in the moneyness and maturity direc-tions and are selected date by date using least squares cross validation. The resulting reconstructed field ˆΣt(m, τ ) provides a continuous market state representation. 
+
+3.4 Structured Spatial Discretization 
+
+To map the continuous reconstructed surface ˆΣt into a standardized finite dimensional input for generative modeling, we discretize the surface onto a fixed moneyness– maturity grid D0. We restrict our domain to liquid regions by retaining out-of-the-money options within m ∈ [log(0 .6) , log(1 .5)] and τ ≥ 10 /365. The grid is defined as 
+
+D0 = {(m, τ ) | m ∈ M 0, τ ∈ T 0}, where: 
+
+M0 = {log( x) | x ∈ { 0.6, 0.7, 0.8, 0.85 , 0.9, 0.95 , 0.975 , 1, 1.025 , 1.05 , 1.1, 1.2, 1.3, 1.4, 1.5}} ,
+
+7T0 = {i/ 365 | i ∈ { 10 , 20 , 30 , 45 , 60 , 75 , 91 , 106 , 122 , 137 , 152 , 167 , 182 , 227 , 273 , 319 , 365 }} .
+
+Evaluating ˆΣt on these 15 × 17 spatial nodes yields the fixed grid state ¯Σt ∈ R15 ×17 + .This tensor sequence { ¯Σt} serves as the input to the generative model, while the original observations Γ t are retained separately for Stage-II data fidelity supervision. Building on this standardized representation and the diagnostics in Proposition 1, Section 4 introduces our decoupled generation and refinement framework. 
+
+## 4 Methodology Historical IVS States 
+
+> Continuous surfaces reconstructed from scattered market observations
+
+𝑌 = {Σ𝑡 }𝑡 0 
+
+> 𝑡 =𝑡 0−𝐻
+> Future IVS Target
+
+𝑦 𝑡 𝑎  
+
+> 0
+> training only Forward Noising Process
+
+𝑦 𝑡 𝑎 𝑘 = √ ¯𝛼 𝑘 𝑦 𝑡 𝑎  
+
+> 0
+
++√︁ 1 − ¯𝛼 𝑘 𝜖 
+
+> Conditional Noise Prediction
+
+𝜖 𝜃 
+
+(𝑦 𝑡 𝑎 𝑘 , 𝑘 | 𝑦 𝑐𝑜 
+
+> 0
+
+)
+
+> Conditional Reverse Sampling
+
+𝑝 𝜃 
+
+(𝑦 𝑡 𝑎 𝑘 −1 | 𝑦 𝑡 𝑎 𝑘 , 𝑦 𝑐𝑜 
+
+> 0
+
+)    
+
+> noised target 𝑦 𝑡 𝑎 𝑘 and sampled noise 𝜖
+> estimated noise 𝜖 𝜃
+> for reverse transition
+> Stage I: Conditional Distribution Learning
+> conditioning history
+> 𝑦 𝑐𝑜
+> 0
+> forward-noising input
+> Predictive IVS Ensemble
+
+{̂ 
+
+Σ(𝑏 )
+
+> 𝑡 +𝑟
+
+}𝐵 𝑏 =1 , 𝑟 ∈ Rℎ
+
+> Pointwise Median
+
+Σ 𝑚𝑒𝑑 𝑡 +𝑟 = median 1≤𝑏 ≤ 𝐵 ̂ Σ(𝑏 )
+
+> 𝑡 +𝑟
+> Representative forecast surface
+> repeated reverse sampling
+> Coordinate and Surface Encoding
+
+𝑄 𝑖 = 𝑓 𝑄 (𝑥 𝑄 𝑖 ), 𝐾 𝑗 = 𝑓 𝐾 (𝑥 𝐾 𝑗 ), 𝑉 𝑗 = 𝑓 𝑉 (𝑥 𝑉 𝑗 )
+
+> Cross-Sectional Attention
+
+𝛼 𝑖 𝑗 = exp (𝑄 𝑖 𝐾 ⊤ 
+
+> 𝑗
+
+/√𝑑 )
+
+Í𝑁 𝑛 =1 exp (𝑄 𝑖 𝐾 ⊤ 
+
+> 𝑛
+
+/√𝑑 ) , 𝑧 𝑖 =
+
+> 𝑁
+
+∑︁ 
+
+> 𝑗 =1
+
+𝛼 𝑖 𝑗 𝑉 𝑗 
+
+> Refinement Network
+
+̂
+
+Σref ,𝑡 +𝑟 (𝑚 𝑖 , 𝜏 𝑖 ) = Softplus ( 𝑓 out (𝑧 𝑖 ))  
+
+> encoded queries, keys, and values
+> cross-sectional representation
+> Stage II: Residual-Regularized Surface Refinement
+> representative forecast
+> Σ𝑚𝑒𝑑 𝑡 +𝑟
+> Observed Market Quotes
+
+Γ𝑡 +𝑟 = {( 𝑚 𝑖 , 𝜏 𝑖 , Σ𝑡 +𝑟 (𝑚 𝑖 , 𝜏 𝑖 ))} 𝑛 𝑡 +𝑟 
+
+> 𝑖 =1
+> Data-fitting supervision
+> Diagnostic Collocation Grids
+
+𝐼 syn , 𝐼 wing 
+
+> Calendar, butterfly, and wing residuals
+> SAAM Training Objective
+
+LSAAM = Lrec + 𝜆 (Lcal + L but + L wing 
+
+)
+
+> reconstruction loss
+> Lrec
+> diagnostic residual penalties
+> parameter update training only
+> Refined Representative Surface
+
+̂
+
+Σref ,𝑡 +𝑟 (𝑚, 𝜏 )  
+
+> Improved fit to market observations Reduced calendar and butterfly residual violations on the finite diagnostic grid
+> refined output
+> conditioning, generative sampling, and output flow internal SAAM forward computation training-only supervision and parameter updates
+
+Fig. 2 Overall architecture of the proposed decoupled IVS framework. 
+
+This section presents the proposed decoupled framework for conditional IVS sce-nario generation and representative surface refinement. As shown in Figure 2, Stage I learns the conditional distribution of future IVS states and generates an ensemble of possible risk surface scenarios. The full ensemble is retained for distributional evalua-tion, while its pointwise median provides a robust representative forecast for Stage II. Stage II refines this representative surface against scattered market observations. Its training objective combines data fitting with residual regularization for the calendar, butterfly, and wing diagnostics evaluated on synthetic collocation grids. This decom-position separates conditional distribution learning from surface refinement, allowing the diffusion model to capture stochastic market dynamics while SAAM improves fit to market observations and reduces finite-grid static no-arbitrage residual violations for the final representative surface. 
+
+4.1 Stage I: Conditional Scenario Generation via Diffusion 
+
+The D0 is the fixed moneyness–maturity grid with N = |D 0| = 255. For notational convenience, we vectorize each fixed grid IVS state as yt = vec( ¯Σt) ∈ RN
+
++ . Given a historical window of length H and a forecast path length h, define the horizon index set Rh = {1, . . . , h }. We construct the conditioning block and the future target block as 
+
+yco 0 = [ yt−H+1 , . . . , y t] ∈ RN ×H
+
++ , (10) 8yta 0 = [ yt+r]r∈R h ∈ RN ×h 
+
+> +
+
+. (11) When h = 1, the target reduces to the next fixed grid IVS state. When h > 1, the target represents the future IVS path over the next h horizons. Stage I approximates the conditional predictive distribution pdata (yta 0 | yco 0 ) by a parameterized generative model pθ(yta 0 | yco 0 ). We use k = 0 , . . . , K for the diffusion index, which is distinct from the time index t and the forecast horizon index r.
+
+4.1.1 Forward diffusion process 
+
+The forward process perturbs the future target block into Gaussian noise through the Markov chain 
+
+q(yta 1: K | yta 0 ) = 
+
+> K
+
+Y
+
+> k=1
+
+q(yta  
+
+> k
+
+| yta 
+
+> k−1
+
+), (12) where 
+
+q(yta  
+
+> k
+
+| yta 
+
+> k−1
+
+) = N
+
+
+
+yta  
+
+> k
+
+; p1 − βkyta 
+
+> k−1
+
+, β kIDh
+
+
+
+. (13) Here βk ∈ (0 , 1) is a pre-specified variance schedule and IDh is the Dh-dimensional identity matrix. Let αk = 1 − βk and ¯ αk = Qks=1 αs. Then 
+
+yta  
+
+> k
+
+= √¯αkyta 0 + √1 − ¯αkϵ, ϵ ∼ N (0 , I Dh ). (14) 
+
+4.1.2 Conditional reverse denoising process 
+
+The reverse process recovers the future target block from the noisy state while conditioning on the historical IVS trajectory: 
+
+pθ (yta 0: K | yco 0 ) = p(yta  
+
+> K
+
+)
+
+> K
+
+Y
+
+> k=1
+
+pθ (yta  
+
+> k−1
+
+| yta  
+
+> k
+
+, y co 0 ), (15) where p(yta  
+
+> K
+
+) = N (0 , I Dh ) and 
+
+pθ(yta  
+
+> k−1
+
+| yta  
+
+> k
+
+, y co 0 ) = N
+
+
+
+yta 
+
+> k−1
+
+; μθ (yta  
+
+> k
+
+, k | yco 0 ), ˜βkIDh
+
+
+
+. (16) The conditioning history yco 0 is kept noise free, so that the model learns the conditional transition from historical surfaces to future surface scenarios without corrupting observed market-state information. Using the standard noise prediction parameterization, the reverse mean is 
+
+μθ (yta  
+
+> k
+
+, k | yco 0 ) = 1
+
+√αk
+
+
+
+yta  
+
+> k
+
+− βk
+
+√1 − ¯αk
+
+ϵθ(yta  
+
+> k
+
+, k | yco 0 )
+
+
+
+, (17) with posterior variance ˜βk =
+
+
+
+1 − ¯αk−1
+
+1 − ¯αk
+
+βk, k > 1,β1, k = 1 .
+
+(18) 9The diffusion model is trained by minimizing 
+
+Ldiff = Eyta 0 ,y co 0 ,ϵ,k 
+
+h
+
+ϵθ(yta  
+
+> k
+
+, k | yco 0 ) − ϵ 22
+
+i
+
+. (19) After training, repeated reverse sampling gives a predictive ensemble of future IVS paths. For each sampled path and each horizon r ∈ R h, the corresponding vector is reshaped onto D0, yielding 
+
+nbΣ(b)
+
+> t+r
+
+oBb=1 
+
+, r ∈ R h. (20) To interface the generative stage with baselines and the subsequent refinement stage, we extract a representative forecast surface at each horizon by taking the pointwise ensemble median: 
+
+bΣmed  
+
+> t+r
+
+(m, τ ) = median 1≤b≤B bΣ(b)
+
+> t+r
+
+(m, τ ), r ∈ R h. (21) Thus, the diffusion model is not reduced to a single IVS forecast: its ensemble output supports distributional evaluation, while the median provides a stable representative surface for Stage II refinement. 
+
+4.2 Stage II: Surface Refinement with Static No-Arbitrage Restrictions 
+
+The diffusion stage generates predictive surface scenarios that need not satisfy the static no-arbitrage restrictions in Proposition 1. We introduce the Surface Aware Attention Module (SAAM) as a coordinate based refinement operator. In our empir-ical implementation, SAAM is applied horizon by horizon to the pointwise ensemble median bΣmed  
+
+> t+r
+
+, yielding a refined representative surface for comparison and static no-arbitrage evaluation. The design of SAAM is motivated by the uneven spatial coverage of observed option contracts. As shown in Figure 3, contracts cluster near-the-money and at-short-maturities, while wing and long maturity regions are more sparsely observed. Since calendar and butterfly restrictions involve cross-sectional relations across maturity and moneyness, a refinement rule based only on local observations may be unreliable in sparse regions. SAAM instead uses the fixed grid representative surface as a global reference and allows each target coordinate to aggregate information from all grid nodes. The contract density pattern motivates this global refinement design, but is not used as an explicit weighting scheme. For a given horizon r ∈ R h, let 
+
+eΣt+r(mj , τ j ) = bΣmed  
+
+> t+r
+
+(mj , τ j ), (mj , τ j ) ∈ D 0, (22) denote the unrefined representative forecast surface. SAAM uses the fixed grid nodes of eΣt+r as reference information and evaluates the refined surface at arbitrary target coordinates ( mi, τ i). This coordinate based construction allows data fitting terms to be evaluated at observed market locations and geometric residuals to be evaluated on synthetic collocation grids. 10 0.6 0.4 0.2 0.0 0.2 0.4 
+
+> Moneyness
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time to Maturity
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Density
+> Density of Implied Volatility Samples
+
+Fig. 3 Empirical density of observed option contracts over the moneyness and maturity domain for CSI 300 index options. 
+
+For a target coordinate ( mi, τ i), SAAM applies learnable encoders fQ, fK , and fV
+
+to construct the query, key, and value embeddings: 
+
+Qi = fQ(xQi ), Kj = fK (xKj ), Vj = fV (xVj ). (23) The cross sectional attention weights and the aggregated representation are computed by scaled dot product attention: 
+
+αij =exp 
+
+
+
+QiK⊤ 
+
+> j
+
+/√d
+
+PNn=1 exp 
+
+
+
+QiK⊤ 
+
+> n
+
+/√d
+
+ , (24) 
+
+zi =
+
+> N
+
+X
+
+> j=1
+
+αij Vj . (25) The refined implied volatility is then obtained through an output network and then a Softplus activation: 
+
+bΣref ,t +r(mi, τ i; θatt ) = Softplus ( fout (zi)) . (26) Thus, the refined value at each coordinate depends on the whole representative forecast surface rather than only on a local neighborhood. 
+
+4.2.1 SAAM Variants 
+
+We have two SAAM variants differ in how the query, key, and value inputs are constructed for cross sectional attention. 11 • Spatial Separation SAAM. Attention routing is based on spatial coordinates, while volatility information enters through the value embedding: 
+
+xQi = ( mi, τ i), xKj = ( mj , τ j ), xVj = eΣt+r(mj , τ j ). (27) This design separates spatial routing from the predicted volatility magnitude and emphasizes the geometric organization of the moneyness–maturity domain. 
+
+• Volatility Fusion SAAM. Spatial inputs are augmented with volatility level information. The target query incorporates a global volatility level proxy, while the reference keys and values incorporate pointwise predicted volatility: 
+
+xQi = ( mi, τ i, ¯vt+r), xKj = xVj = ( mj , τ j , eΣt+r(mj , τ j )) , (28) where ¯vt+r = 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+eΣt+r(mj , τ j ) (29) is the average predicted volatility level of the representative forecast surface at hori-zon r. This design allows the attention weights to depend on both spatial geometry and the prevailing volatility level regime. 
+
+Remark 1 The global volatility level proxy is motivated by empirical evidence that IVS dynamics are often driven by low dimensional common factors, especially a dominant level fac-tor (Cont and da Fonseca 2002). In this framework, the proxy is not an additional no-arbitrage constraint; it serves as a regime level conditioning signal for cross sectional information routing. 
+
+4.2.2 Training Objective and Synthetic Collocation Grids 
+
+SAAM is trained by combining data fitting on scattered market observations with penalties for the static no-arbitrage conditions in Proposition 1. Let Ttrain denote the set of training forecast origins. For each t ∈ T train and r ∈ R h, define the total implied variance associated with the refined representative surface as 
+
+ϕθatt ,t +r(m, τ ) = bΣref ,t +r(m, τ ; θatt )2τ. (30) The data fitting loss is evaluated on the scattered observation set Γ t+r:
+
+Lrec = 1
+
+|T train ||R h|
+
+X
+
+> t∈T train
+
+X
+
+> r∈R h
+
+1
+
+nt+rnt+r
+
+X
+
+> i=1
+
+bΣref ,t +r(mi, τ i; θatt ) − Σt+r(mi, τ i)
+
+2
+
+,
+
+(31) where ( mi, τ i, Σt+r(mi, τ i)) ∈ Γt+r. This term measures the discrepancy between the refined surface and the observed implied volatilities at available market locations. The first three conditions are enforced by the architecture and therefore require no additional penalty terms. Conditions 1 and 2 are satisfied by the output parametriza-tion: the output network fout , followed by the final Softplus layer, yields positive 12 implied volatility values, and the definition ϕθatt ,t +r(m, τ ) = bΣref ,t +r(m, τ ; θatt )2τ sat-isfies the zero-maturity boundary through the multiplicative factor τ . Condition 3 is satisfied by construction, since the encoders, fout , and the final Softplus layer use twice-differentiable operations. Hence, the penalty terms associated with Conditions 1 to 3 are set to zero. The calendar and butterfly penalties are evaluated by substi-tuting ϕ = ϕθatt ,t +r into the residual operators ℓcal and ℓbut . With [ x]+ = max( x, 0), the corresponding penalty terms are 
+
+Lcal = 1
+
+|T train ||R h|
+
+X
+
+> t∈T train
+
+X
+
+> r∈R h
+
+1
+
+|I syn |
+
+X
+
+> (mi,τ i)∈I syn
+
+[−ℓcal (ϕθatt ,t +r) ( mi, τ i)] + , (32) 
+
+Lbut = 1
+
+|T train ||R h|
+
+X
+
+> t∈T train
+
+X
+
+> r∈R h
+
+1
+
+|I syn |
+
+X
+
+> (mi,τ i)∈I syn
+
+[−ℓbut (ϕθatt ,t +r) ( mi, τ i)] + . (33) For the tail condition, a global check as |m| → ∞ is not possible on a finite empirical domain. We therefore use a boundary curvature penalty as a finite grid proxy: 
+
+Lwing = 1
+
+|T train ||R h|
+
+X
+
+> t∈T train
+
+X
+
+> r∈R h
+
+1
+
+|I wing |
+
+X
+
+> (mi,τ i)∈I wing
+
+∂2ϕθatt ,t +r(mi, τ i)
+
+∂m 2 . (34) The residuals are evaluated on dense synthetic grids over moneyness and maturity. Set mmin = log(0 .6), mmax = log(1 .5), and τmax = 1. The synthetic grids are 
+
+Msyn =
+
+n
+
+x3 | x ∈ linspace 
+
+
+
+−(−2mmin )1/3, (2 mmax )1/3, 60 
+
+o 
+
+, (35) 
+
+Tsyn = {exp( x) | x ∈ linspace (log(1 /365) , log( τmax ), 60) } . (36) The calendar and butterfly penalties are evaluated on 
+
+Isyn = Msyn × T syn , (37) whereas Iwing consists of boundary moneyness points selected from Msyn across the maturity grid. The same synthetic grid is used for out-of-sample finite-grid static no-arbitrage residual diagnostics, so that Ieval = Isyn . The total SAAM objective is 
+
+LSAAM = Lrec + λ (Lcal + Lbut + Lwing ) . (38) The resulting objective combines empirical data fitting with residual regularization for the main static no-arbitrage diagnostics. It improves fit to observed implied volatilities while reducing finite grid residual violations on the inspected diagnostic grid, but it is not an exact projection onto the continuous arbitrage free set. 
+
+Remark 2 The static no-arbitrage residuals are defined on a continuous moneyness and matu-rity domain, but they cannot be evaluated at every point in implementation. We therefore use Isyn as a dense diagnostic grid for the calendar and butterfly residuals. The tail condition 
+
+13 is asymptotic and cannot be verified on a finite empirical domain, so it is examined through the boundary set Iwing . Consequently, small residual values should be interpreted as numer-ical evidence that the refined surface satisfies the inspected finite domain diagnostics, rather than as a formal proof of global static arbitrage freedom. 
+
+## 5 Empirical Analysis and Results 
+
+This section evaluates the proposed decoupled framework using CSI 300 index options. Consistent with the two stage methodology, we first examine the fixed grid pre-dictive accuracy and distributional forecast quality of the diffusion stage. We then assess whether SAAM improves fit to market observations and reduces static no-arbitrage residual violations on the diagnostic grid. The section concludes with attention diagnostics that describe how cross sectional information is allocated across the surface. 
+
+5.1 Experimental Setup 
+
+5.1.1 Data Characteristics and Empirical Irregularities 
+
+We use CSI 300 index option data from RiceQuant, covering the period from June 10, 2020, to September 30, 2024. Implied volatilities are computed from end of interval option prices: daily observations use end of day prices, while minute level observations use the last available price within each one minute interval. The data are processed following the construction procedure in Section 3.4. Specifically, the original scattered market observations are first mapped onto fixed grid IVS states for Stage I forecasting, and are then used directly as observation targets in Stage II refinement. The main descriptive evidence in this subsection is reported at the daily frequency, while the corresponding minute level diagnostics are provided in Appendix A.  
+
+> Table 1 Descriptive statistics of implied volatility for CSI 300 index options, June 2020–September 2024.
+
+Category N Mean Std Skewness Kurtosis P5 Median P95 Panel A: By moneyness Deep OTM Put 18,139 0.3299 0.1806 3.2734 15.4377 0.1814 0.2792 0.6571 OTM Put 63,925 0.2071 0.0678 2.2701 15.0951 0.1176 0.1989 0.3082 ATM 40,479 0.1899 0.0492 1.1812 4.0362 0.1278 0.1794 0.2846 OTM Call 64,588 0.2236 0.0772 2.1906 9.7272 0.1417 0.2030 0.3619 Deep OTM Call 19,430 0.3209 0.1572 2.6977 12.3670 0.1782 0.2730 0.6096 Panel B: By time to maturity Short, τ ≤ 60 days 85,461 0.2606 0.1401 3.4229 19.6807 0.1410 0.2231 0.5112 Medium, 61 ≤ τ ≤ 180 days 71,701 0.2134 0.0672 1.4925 4.9278 0.1302 0.2003 0.3356 Long, τ > 180 days 49,399 0.2027 0.0561 0.6609 0.6770 0.1258 0.1941 0.3019 All 206,561 0.2304 0.1053 3.9990 30.9768 0.1331 0.2067 0.3992  
+
+> Note: P5 and P95 denote the 5th and 95th percentiles. Skewness and kurtosis are computed using pooled observations within each moneyness or maturity regime.
+
+14 Table 1 reports summary statistics of daily implied volatility across moneyness and maturity regimes. The sample displays strong positive skewness and high kurto-sis, especially in short maturity and deep out-of-the-money regions. These patterns indicate that the conditional distribution of future IVS states is far from Gaussian and may exhibit pronounced tail behavior. This motivates the use of a probabilistic scenario generation model rather than a purely point predictor.  
+
+> Fig. 4 Temporal persistence of static no-arbitrage residual violations in CSI 300 index options based on raw daily observations.
+
+Figure 4 shows that static no-arbitrage residual violations are not merely isolated outliers. Calendar spread deviations remain relatively limited, while butterfly spread deviations are more pronounced and persistent over time. The butterfly spread resid-ual is particularly important because it reflects strike wise convexity and is linked to the admissibility of the implied risk neutral density. Together with the distributional evidence in Table 1, these results show that the data contain both stochastic complex-ity and static no-arbitrage violations. This motivates the decoupled empirical design: Stage I models conditional IVS scenarios on the fixed grid, while Stage II refines a representative forecast surface to improve fit to market observations and reduce static no-arbitrage violations. 
+
+5.1.2 Forecasting Protocols, Baselines, and Implementation 
+
+We evaluate the proposed framework under two forecasting protocols: 15 • Daily forecasting. A rolling window of H = 22 trading days is used to predict the next-day fixed-grid IVS state, with HD 
+
+> eval
+
+= {1}. The daily sample is split chronologically into 80% training and 20% testing observations. 
+
+• Minute Level forecasting. The previous 60 minutes of IVS states are used to fore-cast the next five minute-level horizons, with HI 
+
+> eval
+
+= {1, . . . , 5}. The minute level sample is divided into 70% training, 10% validation, and 20% testing observations. In what follows, Heval denotes the relevant evaluation horizon set under the daily or minute level protocol. For Stage I, the conditional diffusion model is compared numerically with LSTM-Direct on the fixed grid D0, where LSTM-Direct serves as the main recurrent benchmark. LSTM-VAE (Zhang et al. 2022) is included as a latent variable benchmark in the graphical analysis, since its sampled output is not based on the same evaluation protocol. For each test origin, the diffusion model generates B = 100 scenarios. The full ensemble is used for probabilistic evaluation, while the pointwise median bΣmed 
+
+> t+r
+
+serves as a representative surface for comparison and Stage-II refinement. For Stage II, we compare Spatial Separation SAAM and Volatility Fusion SAAM with MLP based refinement pipelines (Ackerer et al. 2020; Zheng et al. 2021; Zhang et al. 2022). The MLP baselines follow recurrent forecasting pipelines and use point-wise refinement mappings, whereas the two SAAM variants refine the diffusion median within the proposed framework. All final refined surfaces are evaluated at the same market observation coordinates and on the same static no-arbitrage diag-nostic grid. Therefore, the comparison is conducted at the pipeline level under a common evaluation protocol, rather than as an input controlled ablation of refinement operators. The main implementation settings are as follows. The diffusion model uses a Trans-former based score network with 64 channels, 8 attention heads, and 4 residual blocks. SAAM uses latent dimension d = 64, with 4 cross attention heads for Volatility Fusion SAAM and 3 for Spatial Separation SAAM. All models are implemented in PyTorch and trained with the Adam optimizer on a single NVIDIA RTX 4090 GPU. Penalty weights are selected by grid search, with sensitivity results reported in Appendix C. A direct numerical comparison with VolGAN (Vuleti´ c and Cont 2025) is not included, because VolGAN is designed for joint scenario simulation of the underlying asset and the implied volatility surface and handles static no-arbitrage considerations through ex-post scenario reweighting. This reweighting changes the probability weights over generated scenarios rather than directly modifying a given surface. Our evalua-tion focuses instead on conditional IVS forecasting and surface level refinement with static no arbitrage residual control. 
+
+5.1.3 Evaluation Metrics 
+
+We evaluate the framework from three perspectives: forecasting accuracy, fit to market observations, and finite grid static no-arbitrage residual diagnostics. Let Ttest denote the set of out-of-sample forecast origins and Heval the evaluation horizon set under the daily or minute-level protocol. For any scalar x, write [ x]+ = max( x, 0). 16 For Stage I, accuracy is evaluated on the fixed grid D0. For a forecasting method 
+
+M , let bΣMt+r denote its unrefined representative forecast surface at horizon r. For the diffusion model, bΣMt+r is the pointwise ensemble median in Eq. (21). We report RMSE grid (M ) = 
+
+ 1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+|D 0|
+
+X 
+
+> (m,τ )∈D 0
+
+bΣMt+r(m, τ ) − ¯Σt+r(m, τ )
+
+2
+
+
+
+> 1/2
+
+,
+
+(39) MAE grid (M ) = 1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+|D 0|
+
+X 
+
+> (m,τ )∈D 0
+
+bΣMt+r(m, τ ) − ¯Σt+r(m, τ ) .
+
+(40) For the diffusion model, distributional forecast quality is additionally measured by the Continuous Ranked Probability Score (CRPS), averaged over forecast origins, horizons, and grid points. For Stage II, fitting accuracy is evaluated at the observed market locations in Γ t+r.For a refinement method M , let bΣM 
+
+> ref ,t +r
+
+denote the refined surface at horizon r. We report RMSE obs (M ) = 
+
+"
+
+1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+nt+rnt+r
+
+X
+
+> i=1
+
+bΣM
+
+> ref ,t +r
+
+(mi, τ i) − Σt+r(mi, τ i)
+
+2
+
+#1/2
+
+,
+
+(41) MAPE obs (M ) = 1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+nt+rnt+r
+
+X
+
+> i=1
+
+bΣM
+
+> ref ,t +r
+
+(mi, τ i) − Σt+r (mi, τ i)Σt+r(mi, τ i) ,
+
+(42) where ( mi, τ i, Σt+r (mi, τ i)) ∈ Γt+r.Static no arbitrage residual violations are assessed using the average negative parts of the calendar spread and butterfly spread residuals on the dense evaluation grid. For a refined surface produced by method M , define 
+
+ϕM
+
+> ref ,t +r
+
+(m, τ ) = 
+
+bΣM
+
+> ref ,t +r
+
+(m, τ )
+
+2
+
+τ. 
+
+Substituting ϕ = ϕM 
+
+> ref ,t +r
+
+into the calendar and butterfly residual operators gives 
+
+ℓM 
+
+> cal ,t +r
+
+and ℓM
+
+> but ,t +r
+
+. We compute 
+
+L−
+
+> cal
+
+(M ) = 1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+|I eval |
+
+X 
+
+> (m,τ )∈I eval
+
+−ℓM 
+
+> cal ,t +r
+
+(m, τ ) 
+
+> +
+
+, (43) 
+
+L−
+
+> but
+
+(M ) = 1
+
+|T test ||H eval |
+
+X
+
+> t∈T test
+
+X
+
+> r∈H eval
+
+1
+
+|I eval |
+
+X 
+
+> (m,τ )∈I eval
+
+−ℓM
+
+> but ,t +r
+
+(m, τ ) 
+
+> +
+
+. (44) 17 The grid Ieval is identical to the synthetic collocation grid Isyn used in the refinement loss. A zero value of L−
+
+> cal
+
+(M ) or L−
+
+> but
+
+(M ) indicates that no corresponding violation is detected on this finite evaluation grid. 
+
+5.2 Stage-I Forecasting Performance 
+
+We first evaluate the conditional diffusion stage. The evaluation is conducted on the D0
+
+and considers both the representative point forecast, given by the pointwise median of the predictive ensemble, and the distributional information contained in the generated scenarios.                                         
+
+> Table 2 Out-of-sample Stage-I forecasting performance. RMSE and MAE are computed from representative point forecasts; CRPS is reported only for the diffusion ensemble. Results are mean ±standard deviation over five independent runs. Metric Daily Forecasting Minute Level Forecasting Conditional Diffusion LSTM-Direct Conditional Diffusion LSTM-Direct RMSE 0.0263 ±0.0006 0.0288 ±0.0007 0.0114 ±0.0004 0.0178 ±0.0001 MAE 0.0129 ±0.0002 0.0176 ±0.0008 0.0017 ±0.0001 0.0110 ±0.0001 CRPS 0.0350 ±0.0018 N/A 0.0078 ±0.0005 N/A
+
+Table 2 shows that the diffusion median improves point-forecast accuracy relative to LSTM-Direct. The RMSE reduction is approximately 8.7% in the daily experiment and 36.0% in the minute level experiment. The larger gain at the minute level fre-quency suggests that the diffusion model is particularly effective when the IVS evolves with high-frequency noise and short-term local fluctuations. The CRPS values fur-ther indicate that the generated ensemble provides useful distributional information beyond its median forecast. Figure 5 provides qualitative evidence consistent with the numerical results. At the ATM coordinates (Panel a), the diffusion median follows the implied volatility trajec-tory across maturities, while the predictive interval expands during periods of larger implied volatility movements. In the deep OTM regions (Panel b), the trajectories are more irregular and the diffusion intervals are wider, reflecting greater uncertainty in sparse and tail-sensitive parts of the surface. By contrast, the LSTM-VAE tra-jectories are nearly time-invariant in both panels, indicating that the latent-variable reconstruction tends to smooth away short-term surface dynamics. Figure 6 shows the same pattern in the minute-level experiment. The diffusion forecasts remain responsive to short-term movements and provide uncertainty bands around the observed IV trajectory. The LSTM-Direct forecasts exhibit larger displace-ment in several horizons, while the LSTM-VAE forecasts again remain close to a flat trajectory. This behavior is consistent with the latent bottleneck of VAE-type sequence models, which can suppress local variation when reconstructing high-frequency IVS dynamics. Overall, the Stage I results show that conditional diffusion is effective for IVS scenario generation. It improves forecast accuracy relative to recurrent baselines and 18 0.10 
+
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Implied Volatility
+
+Log-Forward Moneyness=0.00, Maturity=30 Days 
+
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Implied Volatility
+
+Log-Forward Moneyness=0.00, Maturity=60 Days 
+
+> 2023-12
+> 2024-01
+> 2024-02
+> 2024-03
+> 2024-04
+> 2024-05
+> 2024-06
+> 2024-07
+> 2024-08
+> 2024-09
+> 2024-10
+
+Date (2024) 
+
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> Implied Volatility
+
+Log-Forward Moneyness=0.00, Maturity=91 Days 
+
+Diffusion 95% C.I. Diffusion Median LSTM LSTM-VAE Ground Truth (a) At-the-money coordinates across maturities. 0.2 
+
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Implied Volatility
+
+Log-Forward Moneyness=-0.22, Maturity=10 Days 
+
+> 2023-12
+> 2024-01
+> 2024-02
+> 2024-03
+> 2024-04
+> 2024-05
+> 2024-06
+> 2024-07
+> 2024-08
+> 2024-09
+> 2024-10
+
+Date (2024) 
+
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Implied Volatility
+
+Log-Forward Moneyness=0.26, Maturity=10 Days 
+
+Diffusion 95% C.I. Diffusion Median LSTM LSTM-VAE Ground Truth 
+
+(b) Short-maturity deep out-of-the-money coordinates. 
+
+Fig. 5 Out-of-sample daily forecasting trajectories at representative IVS coordinates. Panel (a) reports at-the-money trajectories for maturities of 30, 60, and 91 days. Panel (b) reports short-maturity deep out-of-the-money trajectories for m = −0.22 and m = 0 .26, with τ = 10 days. The shaded region denotes the 95% predictive interval of the conditional diffusion ensemble. 
+
+19 (a) Typical high-frequency fluctuations.  
+
+> (b) Abrupt market regime shifts.
+> Fig. 6 Minute-level forecasting trajectories. Red markers denote observed IV values; the green line and shaded band denote the diffusion median and predictive interval; purple and blue markers denote LSTM-Direct and LSTM-VAE forecasts, respectively.
+
+produces predictive intervals that reflect heterogeneous dispersion across moneyness, maturity, and sampling frequency. These results support the scenario generation stage of the proposed framework. However, predictive accuracy and distributional flexibility do not by themselves control static no-arbitrage residual violations, which motivates the Stage II surface refinement step. 
+
+5.3 Stage-II Refinement and Static No-Arbitrage Diagnostics 
+
+We next evaluate the Stage II refinement module. It takes the robust representative diffusion median as input and refines it into a surface that better fits market observa-tions while improving static no-arbitrage residual control. We compare the two SAAM variants with MLP refinement baselines under both daily and minute level settings. 
+
+5.3.1 Fitting Accuracy and Residual Violations 
+
+Table 3 reports the numerical performance of the refinement stage. RMSE and MAPE evaluate fitting accuracy at observed market locations, while L− 
+
+> cal
+
+and L− 
+
+> but
+
+measure the average negative parts of the calendar-spread and butterfly-spread residuals on the synthetic evaluation grid. These two residual metrics diagnose violations of term-structure monotonicity and strike-convexity admissibility, respectively. In the daily setting, all methods exhibit no detected calendar spread or butterfly spread violations on the evaluation grid. The main distinction lies in fit to market observations. Volatility Fusion SAAM achieves the lowest RMSE, while Spatial Sepa-ration SAAM achieves the lowest MAPE. Both SAAM variants outperform the MLP refiners, suggesting that cross-sectional attention improves fitting accuracy without weakening static no-arbitrage diagnostics. The minute level regime is more demanding. The MLP refiners report zero butterfly-spread residuals on the inspected grid, but this comes with substantially larger RMSE and MAPE. This indicates that eliminating residual violations on a finite 20 Table 3 Numerical evaluation of the Stage-II refinement module. Values are reported as mean ±    
+
+> standard deviation over five independent runs. RMSE and MAPE evaluate fitting accuracy against market observations, while L−
+> cal and L−
+> but measure average residual violations on the synthetic evaluation grid.
+
+Model Fusion SAAM Separation SAAM MLP-Direct MLP-VAE Panel A: Daily regime RMSE 0.0190 ± 0.0009 0.0217 ± 0.0014 0.0290 ± 0.0026 0.0341 ± 0.0012 MAPE 8.47% ± 0.40% 8.43 % ± 0.59 % 10 .16% ± 1.02% 13 .99% ± 0.96% 
+
+L− 
+
+> cal
+
+0.000 0.0000 0.0000 0.0000 
+
+L− 
+
+> but
+
+0.000 0.0000 0.0000 0.0000 Panel B: Minute Level regime RMSE 0.0215 ± 0.0009 0.0329 ± 0.0081 0.0830 ± 0.0008 0.1015 ± 0.0007 MAPE 9.54 % ± 0.95 % 12 .47% ± 1.32% 17 .87% ± 0.23% 19 .37% ± 0.12% 
+
+L− 
+
+> cal
+
+0.0000 0.0000 0.0000 0.0000 
+
+L− 
+
+> but
+
+0.0002 ± 0.0001 0.0006 ± 0.0002 0.0000 0.0000 grid is not sufficient if the resulting surface loses too much agreement with observed market locations. By contrast, Fusion SAAM achieves the best minute level RMSE and MAPE while keeping L− 
+
+> but
+
+close to zero. The penalty-weight sensitivity reported in Appendix C provides additional context: stronger geometric penalization can reduce residual violations but may also degrade fitting accuracy. The results in Table 3 show that SAAM attains a more favorable fidelity–regularity trade-off than the pointwise MLP refiners. Overall, the quantitative evidence supports the decoupled design. Stage I captures stochastic fixed grid IVS dynamics, while Stage II refines the representative forecast surface to improve fit to market observations and strengthen static no-arbitrage resid-ual control. The advantage of SAAM is particularly clear in the minute level setting, where local noise and sparse observations make pointwise correction less stable. 
+
+5.3.2 Visualization of Refined Implied Volatility Surfaces 
+
+Figure 7 illustrates how the refinement module changes the representative diffusion surface. The unrefined diffusion outputs capture the broad cross-sectional shape of the IVS, but they may contain localized violation regions on the diagnostic grid, especially in less regular parts of the moneyness–maturity domain. This confirms that accurate fixed grid forecasting alone does not necessarily produce a surface satisfying the no-arbitrage diagnostics. The two SAAM variants reduce these localized violations through different refinement patterns. Volatility Fusion SAAM produces smoother and more globally coordinated adjustments, consistent with its use of a volatility level conditioning sig-nal. Spatial Separation SAAM makes more localized geometric corrections and tends to preserve more of the original skew and surface heterogeneity. These visual patterns are consistent with the quantitative results: SAAM does not merely apply uniform 21 −0.4 
+
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.14
+> 0.16
+> 0.18
+> 0.20
+> 0.22
+> 0.24
+> 0.26
+> Implied Volatility
+
+Sample 1 
+
+Raw Diffusion Output 
+
+(Generative Baseline) 
+
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> Implied Volatility
+
+Fusion SAAM 
+
+(Global Regime Refinement) 
+
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.16
+> 0.18
+> 0.20
+> 0.22
+> 0.24
+> 0.26
+> Implied Volatility
+
+Separation SAAM 
+
+(Local Geometric Refinement) 
+
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> Implied Volatility
+
+Sample 2 
+
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Implied Volatility
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.175
+> 0.200
+> 0.225
+> 0.250
+> 0.275
+> 0.300
+> 0.325
+> 0.350
+> 0.375
+> Implied Volatility
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Implied Volatility
+
+Sample 3 
+
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Implied Volatility
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+
+Log-Moneyness ( m) 0.00 
+
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+
+Time to Maturity ( τ)
+
+> 0.200
+> 0.225
+> 0.250
+> 0.275
+> 0.300
+> 0.325
+> 0.350
+> 0.375
+> Implied Volatility
+
+Fig. 7 Visual comparison of Stage II surface refinement on representative daily samples. The first column shows unrefined diffusion outputs, where red regions indicate localized static no arbitrage residual violations on the diagnostic grid. The second column reports Volatility Fusion SAAM, and the third column reports Spatial Separation SAAM. 
+
+smoothing, but uses cross-sectional attention to refine the representative forecast sur-face while maintaining a favorable balance between fit to market observations and static no-arbitrage residual control. 
+
+5.4 Cross-Sectional Information Allocation in SAAM Refinement 
+
+We finally examine the cross-sectional attention weights learned by SAAM. This analy-sis is diagnostic rather than causal. It illustrates how the refinement operator allocates reference information across the implied volatility surface when adjusting a repre-sentative forecast. The main text focuses on ATM target coordinates, while the full attention matrices across additional moneyness regimes are reported in Appendix B. For a target coordinate xi = ( mi, τ i), SAAM assigns attention weights over the reference grid D0. For a reference value field v, the resulting non-local aggregation can 22 be written as 
+
+Av(xi) = 
+
+NX
+
+j=1 
+
+α(xi, xj )v(xj ), (45) where v(xj ) denotes the unrefined volatility value at reference coordinate xj , and 
+
+α(xi, xj ) is the normalized attention weight from xi to xj . Since the heatmaps are scaled to their local maxima, they should be interpreted as relative routing patterns within each target configuration rather than as absolute magnitudes that can be compared directly across panels. −0.4 −0.2 0.0 0.2 0.4                      
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time to Maturity ( τ)
+> 30 Days
+> (τ≈ 0.08 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 60 Days
+> (τ≈ 0.25 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 90 Days
+> (τ≈ 0.42 )
+> −0.4 −0.2 0.0 0.2 0.4
+> ATM
+> (m ≈ 0.00 )
+> 120 Days
+> (τ≈ 0.75 )
+> 0.00 0.20 0.40 0.60 0.80 1.00
+> Relative Attention Intensity (Scaled to Local Maximum)
+
+(a) Spatial Separation SAAM under the daily regime. −0.4 −0.2 0.0 0.2 0.4                      
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time to Maturity ( τ)
+> 30 Days
+> (τ≈ 0.08 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 60 Days
+> (τ≈ 0.25 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 90 Days
+> (τ≈ 0.42 )
+> −0.4 −0.2 0.0 0.2 0.4
+> ATM
+> (m ≈ 0.00 )
+> 120 Days
+> (τ≈ 0.75 )
+> 0.00 0.20 0.40 0.60 0.80 1.00
+> Relative Attention Intensity (Scaled to Local Maximum)
+
+(b) Spatial Separation SAAM under the minute-level regime. 
+
+Fig. 8 Cross-attention weight heatmaps for Spatial Separation SAAM at ATM target coordinates. The star marks the target coordinate. Colors represent relative attention intensity scaled to the local maximum within each panel. 
+
+Figure 8 reports the attention patterns of Spatial Separation SAAM. Since this variant uses only moneyness and maturity coordinates for attention routing, the heatmaps mainly reflect geometry-based information allocation. In the daily regime, attention is concentrated around the ATM region across maturities, with a particularly narrow focus at short maturities and a slightly wider range at longer maturities. This pattern is consistent with the role of maturity-wise information in the term structure of total implied variance and in calendar-spread diagnostics. The minute-level pattern is more selective. The map becomes sparse and high-contrast: most interior regions receive little relative attention, while a small number of ATM, wing, and boundary coordinates are emphasized. This pattern is better inter-preted as concentrated geometric routing rather than broad information dispersion. It suggests that coordinate-only routing becomes more selective at the minute frequency, 23 relying on a limited set of reference locations when local high-frequency observations are less stable. −0.4 −0.2 0.0 0.2 0.4                      
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time to Maturity ( τ)
+> 30 Days
+> (τ≈ 0.08 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 60 Days
+> (τ≈ 0.25 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 90 Days
+> (τ≈ 0.42 )
+> −0.4 −0.2 0.0 0.2 0.4
+> ATM
+> (m ≈ 0.00 )
+> 120 Days
+> (τ≈ 0.75 )
+> 0.00 0.20 0.40 0.60 0.80 1.00
+> Relative Attention Intensity (Scaled to Local Maximum)
+
+(a) Volatility Fusion SAAM under the daily regime. −0.4 −0.2 0.0 0.2 0.4                      
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Time to Maturity ( τ)
+> 30 Days
+> (τ≈ 0.08 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 60 Days
+> (τ≈ 0.25 )
+> −0.4 −0.2 0.0 0.2 0.4
+> 90 Days
+> (τ≈ 0.42 )
+> −0.4 −0.2 0.0 0.2 0.4
+> ATM
+> (m ≈ 0.00 )
+> 120 Days
+> (τ≈ 0.75 )
+> 0.00 0.20 0.40 0.60 0.80 1.00
+> Relative Attention Intensity (Scaled to Local Maximum)
+
+(b) Volatility Fusion SAAM under the minute-level regime. 
+
+Fig. 9 Cross-attention weight heatmaps for Volatility Fusion SAAM at ATM target coordinates. The star marks the target coordinate. Colors represent relative attention intensity scaled to the local maximum within each panel. 
+
+Figure 9 shows the corresponding patterns for Volatility Fusion SAAM. This vari-ant augments spatial coordinates with a volatility level proxy, so its routing can depend on both surface geometry and the prevailing volatility state. In the daily regime, the strongest attention is located in the short maturity left wing region, forming a distinctly left-skewed pattern. This region is economically informative because short-dated downside options are closely related to skew, tail risk demand, and stress-sensitive repricing. The pattern suggests that Volatility Fusion SAAM uses downside-sensitive regions as important references when coordinating the refinement of the ATM target. At the minute-level, the high-intensity region expands toward both wings and boundary areas, producing a more balanced boundary emphasis than in the daily regime. Compared with Spatial Separation SAAM, the Fusion maps also retain a more visible low-intensity background across the surface. This difference indicates that the volatility level proxy does not simply select a few geometric anchors, but provides a broader state-dependent reference channel. Thus, Volatility Fusion SAAM combines boundary anchoring with a more diffuse cross-sectional context. Taken together, Figures 8 and 9 indicate that the two SAAM variants use cross-sectional information in different ways. Spatial Separation SAAM produces sharper 24 geometry-based routing, especially at the minute-level, where attention is concen-trated on selected reference locations. Volatility Fusion SAAM exhibits a more state-conditioned pattern, combining prominent wing or boundary anchors with a vis-ible low-intensity background over the surface. These patterns are consistent with the quantitative results in Section 5.3: cross-sectional attention helps the refinement stage use non-local information from economically relevant regions of the IVS, improving the balance between fitting accuracy against market observations and finite-grid static no-arbitrage diagnostics. 
+
+## 6 Conclusion 
+
+This paper studies implied volatility surface forecasting as a risk surface modeling problem that requires both stochastic prediction and static no-arbitrage control. We propose a decoupled generative refinement framework. The diffusion stage learns the conditional distribution of future IVS states on a fixed grid of log-forward money-ness and maturity, while SAAM refines a representative forecast surface using market observations and static no-arbitrage residual diagnostics. Empirical results on CSI 300 index options show that the conditional diffusion model improves forecasting accuracy over recurrent baselines and provides predictive intervals that capture heterogeneous uncertainty across moneyness, maturity, and sam-pling frequency. These advantages are particularly evident in the minute level setting, where surface movements are more irregular. The refinement results show that SAAM improves fitting accuracy at observed con-tract locations and reduces calendar spread and butterfly spread residual violations on the dense diagnostic grid. Compared with MLP refiners, the attention based refin-ers achieve a better balance between market observation fit and static no-arbitrage residual control. The attention diagnostics further suggest that Spatial Separation SAAM mainly captures geometry driven routing, whereas Volatility Fusion SAAM incorporates volatility level information into cross sectional information allocation. Overall, the results support the use of a decoupled risk surface modeling pipeline for IVS forecasting. The diffusion stage provides distributional forecasts of future surface states, while the refinement stage improves the usability of the representative surface by balancing fit to market observations and static no-arbitrage residual control. This decomposition is relevant for practical option risk management, where probabilistic scenario information and stable representative pricing surfaces are both needed. 
+
+## Appendix A Minute-Level Static No-Arbitrage Residual Violations in Raw Market Data 
+
+This appendix complements the daily evidence in Section 5.1.1 by reporting static no-arbitrage residual violations at the minute level. Compared with daily snapshots, minute-level observations are more affected by asynchronous trading, fragmented liquidity, and microstructure noise, which mainly appear as local convexity-related irregularities in the raw IVS states. 25 Table A1 reports summary statistics for minute-level residual violation rates in the raw CSI 300 data. These statistics quantify calendar spread, butterfly spread, and tail asymptotic irregularities observed prior to Stage II refinement.  
+
+> Table A1 Summary of minute-level static no-arbitrage residual violation rates in the raw CSI 300 dataset.
+
+Diagnostic Mean Median Std Min Max Calendar spread (C4) 0.0006 0.0000 0.0016 0.0000 0.0134 Butterfly (C5) 0.1099 0.1070 0.0403 0.0214 0.2841 Tail asymptotics (C6) 0.0326 0.0310 0.0160 0.0000 0.1023  
+
+> Fig. A1 Empirical distributions of minute-level static no-arbitrage residual violation rates in the raw CSI 300 data.
+
+Table A1 and Figure A1 show that calendar spread violations remain concentrated near zero even at the minute level. In contrast, butterfly spread violations are much more pronounced, with a mean violation rate of about 11% and a median of 10.7%. Tail asymptotic violations are less pervasive but remain visible in the minute-level sample. This pattern suggests that minute-level market frictions mainly affect strike-wise convexity rather than term structure monotonicity. These diagnostics provide context for the minute-level Stage II refinement results in Section 5.3. They show that minute-level IVS forecasting should not be treated merely as scattered point fitting. A surface refinement mechanism is needed to reduce localized residual violations, especially those affecting strike-wise convexity and the implied risk-neutral density. 
+
+## Appendix B Comprehensive Visualization of Cross Sectional Attention 
+
+Section 5.4 examines attention routing at ATM target coordinates. This appendix extends the diagnostic view to 3 ×4 attention matrices across three moneyness regimes and four maturity horizons. The rows correspond to left wing, ATM, and right wing 26 target coordinates, while the columns correspond to increasing maturities. These figures show how the routing patterns vary when the target coordinate moves across the implied volatility surface. 
+
+B.1 Spatial Separation SAAM 
+
+Figure B2 reports the full attention matrices for Spatial Separation SAAM. Since this variant uses only moneyness and maturity coordinates for attention routing, the heatmaps mainly reflect geometry based information allocation. In the daily regime, the routing pattern varies with the target location. For ATM targets, attention is concentrated around maturity wise reference regions, which is consistent with the role of the term structure of total implied variance in calendar spread diagnostics. For wing targets, the reference pattern shifts with the target mon-eyness and maturity. This behavior is consistent with the design of Spatial Separation SAAM, where routing is governed mainly by coordinate geometry rather than by a common volatility level signal. At the minute level frequency, the pattern becomes sharper. Across different target moneyness levels, most interior regions receive low relative attention, while selected boundary or wing regions become more prominent. This complements the ATM based observation in Section 5.4. For Spatial Separation SAAM, minute level routing is better described as selective boundary anchoring than as diffuse global information aggregation. 
+
+B.2 Volatility Fusion SAAM 
+
+Figure B3 reports the corresponding full attention matrices for Volatility Fusion SAAM. This variant augments the spatial coordinates with a volatility level proxy, allowing the routing weights to depend on both target geometry and the volatility state of the representative surface. In the daily regime, the Fusion maps vary with the target coordinate but retain visible attention to wing and boundary regions. This complements the main text ATM result, where the short maturity left wing is an important reference region. The pattern is consistent with the design of the Fusion variant, in which the volatility level proxy introduces a surface level conditioning signal in addition to coordinate geometry. At the minute level frequency, the Fusion maps also place strong attention on boundary or wing regions. Compared with Spatial Separation SAAM, however, they retain a more visible low intensity background across the grid. This suggests that the volatility level proxy provides a broader state conditioned reference channel, while still allowing the operator to use specific boundary regions as anchors when refining high frequency surfaces. Overall, the comprehensive matrices complement the ATM based analysis in Section 5.4. They show that the distinction between the two SAAM variants remains visible across moneyness and maturity levels. Spatial Separation SAAM mainly reflects geometry based routing, with target dependent reference patterns and selective bound-ary anchoring at the minute level frequency. Volatility Fusion SAAM combines wing or 27 0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+30 Days 
+
+(τ ≈ 0.08 )
+
+60 Days 
+
+(τ ≈ 0.25 )
+
+90 Days 
+
+(τ ≈ 0.42 )
+
+> Deep OTM Put
+> (m ≈ − 0.22 )
+
+120 Days 
+
+(τ ≈ 0.75 )
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+> ATM
+> (m ≈ 0.00 )
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+> Deep OTM Call
+> (m ≈ 0.26 )
+
+0.00 0.20 0.40 0.60 0.80 1.00 
+
+Relative Attention Intensity (Scaled to Local Maximum) (a) Daily regime. 0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+30 Days 
+
+(τ ≈ 0.08 )
+
+60 Days 
+
+(τ ≈ 0.25 )
+
+90 Days 
+
+(τ ≈ 0.42 )
+
+> Deep OTM Put
+> (m ≈ − 0.22 )
+
+120 Days 
+
+(τ ≈ 0.75 )
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+> ATM
+> (m ≈ 0.00 )
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+> Deep OTM Call
+> (m ≈ 0.26 )
+
+0.00 0.20 0.40 0.60 0.80 1.00 
+
+Relative Attention Intensity (Scaled to Local Maximum) 
+
+(b) Minute Level regime. 
+
+Fig. B2 Comprehensive 3 × 4 attention heatmaps for Spatial Separation SAAM. Rows correspond to left wing, ATM, and right wing target coordinates; columns correspond to increasing maturities. The star marks the target coordinate in each panel. 
+
+28 0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+30 Days 
+
+(τ ≈ 0.08 )
+
+60 Days 
+
+(τ ≈ 0.25 )
+
+90 Days 
+
+(τ ≈ 0.42 )
+
+> Deep OTM Put
+> (m ≈ − 0.22 )
+
+120 Days 
+
+(τ ≈ 0.75 )
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+> ATM
+> (m ≈ 0.00 )
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+> Deep OTM Call
+> (m ≈ 0.26 )
+
+0.00 0.20 0.40 0.60 0.80 1.00 
+
+Relative Attention Intensity (Scaled to Local Maximum) (a) Daily regime. 0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+30 Days 
+
+(τ ≈ 0.08 )
+
+60 Days 
+
+(τ ≈ 0.25 )
+
+90 Days 
+
+(τ ≈ 0.42 )
+
+> Deep OTM Put
+> (m ≈ − 0.22 )
+
+120 Days 
+
+(τ ≈ 0.75 )
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+> ATM
+> (m ≈ 0.00 )
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Time to Maturity ( τ)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+−0.4 −0.2 0.0 0.2 0.4 
+
+Log-Moneyness ( m)
+
+> Deep OTM Call
+> (m ≈ 0.26 )
+
+0.00 0.20 0.40 0.60 0.80 1.00 
+
+Relative Attention Intensity (Scaled to Local Maximum) 
+
+(b) Minute Level regime. 
+
+Fig. B3 Comprehensive 3 × 4 attention heatmaps for Volatility Fusion SAAM. Rows correspond to left wing, ATM, and right wing target coordinates; columns correspond to increasing maturities. The star marks the target coordinate in each panel. 
+
+29 boundary anchors with a more diffuse volatility conditioned background. These pat-terns support the interpretation of SAAM as a data adaptive cross sectional refinement rule rather than a fixed local smoothing filter. 
+
+## Appendix C Penalty Weight Sensitivity 
+
+To contextualize the hyperparameter configurations used in Table 3, Figure C4 pro-vides a representative illustration of the tradeoff between reconstruction accuracy and static no-arbitrage residual control during model development. 0.001 0.005 0.01 0.05 0.1 0.2 0.5 1.0          
+
+> Penalty Weight λ(Log Scale)
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> Reconstruction RMSE (Solid Lines)
+> (a) Intraday Regime
+> 0.01 0.05 0.1 0.2 0.5 1.0
+> Penalty Weight λ(Log Scale)
+> 0.020
+> 0.025
+> 0.030
+> 0.035
+> 0.040
+> 0.045
+> Reconstruction RMSE (Solid Lines)
+> (b) Daily Regime
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> Total Constraint Violation (Dashed Lines)
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> Total Constraint Violation (Dashed Lines)
+> Fusion (RMSE)
+> Separation (RMSE)
+> MLP-Direct (RMSE)
+> MLP-VAE (RMSE)
+> Fusion (Violation)
+> Separation (Violation)
+> MLP-Direct (Violation)
+> MLP-VAE (Violation)
+
+Fig. C4 Representative sensitivity of reconstruction RMSE and total residual violations to the penalty weight λ. Solid lines report RMSE, while dashed lines report total residual violations. 
+
+The selected operating points reported in Table 3 correspond to the final configu-rations adopted for formal evaluation. Table C2 summarizes the penalty weights used in these configurations. 
+
+Table C2 Penalty weights used in the Stage II refinement experiments. 
+
+Method Minute-level Daily Volatility Fusion SAAM 0.01 0.20 Spatial Separation SAAM 0.01 0.20 MLP Direct 1.00 0.20 MLP VAE 1.00 0.10 
+
+As illustrated in the minute-level setting in Figure C4(a), the deterministic base-lines require substantially larger penalty weights to reduce static no-arbitrage residual violations. At lower penalty magnitudes, residual violations remain comparatively large, indicating weak residual control under severe microstructure noise. For the MLP refiners, the selected penalty weight is λ = 1 .0, which reduces residual violations but 30 also increases reconstruction RMSE, suggesting that pointwise refinement becomes less stable under strong residual penalization. The SAAM variants exhibit a more favorable tradeoff at the minute-level. Smaller penalty weights yield slightly lower reconstruction errors but leave nonnegligible residual violations. Increasing the penalty to the selected operating point, λ =0.01, substantially reduces residual violations while preserving strong reconstruc-tion accuracy. This pattern is consistent with the role of cross-sectional attention in incorporating surface-level context during refinement. A similar but milder tradeoff is observed in the daily setting in Figure C4(b). In this smoother regime, λ = 0 .20 is sufficient for the SAAM variants and the MLP Direct baseline, while MLP VAE uses λ = 0 .10. The key difference lies in reconstruction accuracy. Although the MLP baselines can reduce residual violations at these selected penalty weights, they incur larger RMSE values. By contrast, the SAAM variants maintain lower RMSE for example, 0 .0190 for Volatility Fusion SAAM, while keeping residual violations small. Overall, Figure C4 serves as a representative sensitivity analysis rather than an exhaustive hyperparameter study. It shows that the penalty weight directly controls the balance between reconstruction accuracy and finite-grid static no-arbitrage resid-ual control. The comparison also supports the use of attention-based refiners, which achieve a more favorable balance in both daily and minute-level settings. 
+
+Statements and Declarations. 
+
+• Funding: This work was supported by the National Key R&D Program of China (No. 2023YFA1008701) and the Key Project of the National Natural Science Foundation of China (No. 12431017). 
+
+• Competing interests: The authors declare that they have no competing interests. 
+
+• Data availability: The CSI 300 index option data used in this study were obtained from RiceQuant (https://www.ricequant.com/). The raw data are subject to the licensing terms of the data provider and cannot be publicly redistributed by the authors. Researchers may obtain access to the same data source through RiceQuant, subject to the provider’s subscription and licensing conditions. 
+
+• Code availability: The code used for model training and empirical analysis is available from the corresponding author upon reasonable request. 
+
+• Author contributions: Lifeng Hao: Conceptualization, methodology, software, validation, formal analysis, investigation, data curation, writing original draft, and visualization. Shaolin Ji: Conceptualization, methodology, resources, writing review and editing, supervision, project administration, and funding acquisition. Both authors contributed equally to this work, read and approved the final manuscript. 
+
+## References 
+
+Audrino, F., Colangelo, D.: Semi-parametric forecasts of the implied volatility surface using regression trees. Statistics and Computing 20 (4), 421–434 (2010) https://doi. org/10.1007/s11222-009-9134-y 31 Almeida, C., Fan, J., Freire, G., Tang, F.: Can a machine correct option pric-ing models? Journal of Business & Economic Statistics 41 (3), 995–1009 (2023) https://doi.org/10.1080/07350015.2022.2099871 Avrahami, O., Lischinski, D., Fried, O.: Blended diffusion for text-driven editing of natural images. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), pp. 18208–18218 (2022) A¨ ıt-Sahalia, Y., Li, C., Li, C.X.: Implied stochastic volatility models. The Review of Financial Studies 34 (1), 394–450 (2021) https://doi.org/10.1093/rfs/hhaa041 Azzone, M., Torricelli, L.: On the implied volatility skew outside the at-the-money point. QUANTITATIVE FINANCE 25 (1), 51–61 (2025) https://doi.org/10.1080/ 14697688.2024.2357727 Ackerer, D., Tagasovska, N., Vatter, T.: Deep smoothing of the implied volatility surface. In: Larochelle, H., Ranzato, M., Had-sell, R., Balcan, M.F., Lin, H. (eds.) Advances in Neural Infor-mation Processing Systems, vol. 33, pp. 11552–11563 (2020). 
+
+https://proceedings.neurips.cc/paper files/paper/2020/file/858e47701162578e5e627cd93ab0938a-Paper.pdf 
+
+Cont, R., Fonseca, J.: Dynamics of implied volatility surfaces. Quantitative Finance 
+
+2(1), 45–60 (2002) https://doi.org/10.1088/1469-7688/2/1/304 Cont, R., Vuleti´ c, M.: Simulation of arbitrage-free implied volatility surfaces. Applied Mathematical Finance 30 (2), 94–121 (2023) Dupire, B., et al. : Pricing with a smile. Risk 7(1), 18–20 (1994) Dumas, B., Fleming, J., Whaley, R.E.: Implied volatility functions: Empirical tests. The Journal of Finance 53 (6), 2059–2106 (1998) https://doi.org/10. 1111/0022-1082.00083 https://onlinelibrary.wiley.com/doi/pdf/10.1111/0022-1082.00083 Dewynne, J.N., Howison, S.D., Wilmott, P., Sch¨ onbucher, P.J.: A market model for stochastic implied volatility. Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering Sciences 357 (1758), 2071–2092 (1999) https://doi.org/10.1098/rsta.1999.0418 Dhariwal, P., Nichol, A.: Diffusion models beat gans on image synthesis. In: Ran-zato, M., Beygelzimer, A., Dauphin, Y., Liang, P.S., Vaughan, J.W. (eds.) Advances in Neural Information Processing Systems, vol. 34, pp. 8780–8794 (2021). 
+
+https://proceedings.neurips.cc/paper files/paper/2021/file/49ad23d1ec9fa4bd8d77d02681df5cfa-Paper.pdf 
+
+32 Durrleman, V.: From implied to spot volatilities. Finance and Stochastics 14 (2), 157– 177 (2010) https://doi.org/10.1007/s00780-009-0112-1 Franks, J., Schwartz, E.: The stochastic-behavior of market variance implied in the prices of index options. ECONOMIC JOURNAL 101 (409), 1460–1475 (1991) https: //doi.org/10.2307/2234896 . CONF ON OPTIONS AND FUTURES, WARWICK, ENGLAND, 1989 Gatheral, J.: The Volatility Surface: A Practitioner’s Guide. Wiley Finance. John Wiley & Sons, Hoboken, NJ (2006) Gatheral, J., Jacquier, A.: Arbitrage-free svi volatility surfaces. Quantitative Finance 
+
+14 (1), 59–71 (2014) https://doi.org/10.1080/14697688.2013.819986 Heston, S.L.: A closed-form solution for options with stochastic volatility with appli-cations to bond and currency options. The review of financial studies 6(2), 327–343 (1993) Ho, J., Jain, A., Abbeel, P.: Denoising diffusion probabilistic models. In: Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M.F., Lin, H. (eds.) Advances in Neural Information Processing Systems, vol. 33, pp. 6840–6851 (2020). 
+
+https://proceedings.neurips.cc/paper/2020/file/4c5bcfec8584af0d967f1ab10179ca4b-Paper.pdf 
+
+Heynen, R., Kemna, A., Vorst, T.: Analysis of the term structure of implied volatili-ties. JOURNAL OF FINANCIAL AND QUANTITATIVE ANALYSIS 29 (1), 31–56 (1994) https://doi.org/10.2307/2331189 Harvey, W., Naderiparizi, S., Masrani, V., Weilbach, C., Wood, F.: Flexible diffusion modeling of long videos. In: Proceedings of the 36th International Conference on Neural Information Processing Systems. NIPS ’22. Curran Associates Inc., Red Hook, NY, USA (2022) Ho, J., Salimans, T., Gritsenko, A., Chan, W., Norouzi, M., Fleet, D.J.: Video diffusion models. In: Proceedings of the 36th International Conference on Neural Information Processing Systems. NIPS ’22. Curran Associates Inc., Red Hook, NY, USA (2022) H¨ ardle, W.: Applied Nonparametric Regression. Econometric Society Monographs, (1990) Jabbar, A., Li, X., Omar, B.: A survey on generative adversarial networks: Variants, applications, and training. ACM Comput. Surv. 54 (8) (2021) https://doi.org/10. 1145/3463475 Lee, R.W.: The moment formula for implied volatility at extreme strikes. Mathematical Finance 14 (3), 469–480 (2004) https://doi.org/10.1111/j.0960-1627.2004.00200.x 33 MA, K.L.X.X.K.-L.: Deep learning for time series forecasting: a survey of recent advances. Frontiers of Computer Science 20 , 2011359 (2026) https://doi.org/10. 1007/s11704-025-50947-3 Medvedev, N., Wang, Z.: Multistep forecast of the implied volatility surface using deep learning. Journal of Futures Markets 42 (4), 645–667 (2022) https://doi.org/ 10.1002/fut.22302 Olsen, A., Djupsk˚ as, G., Lange, P.E., al.: Forecasting implied volatilities of currency options with machine learning techniques and econometrics models. International Journal of Data Science and Analysis 20 , 1329–1347 (2025) Roper, M.: Arbitrage Free Implied Volatility Surfaces (2010). https://talus.maths. usyd.edu.au/u/pubs/publist/preprints/2010/roper-9.pdf Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S., Poole, B.: Score-based generative modeling through stochastic differential equations. In: International Conference on Learning Representations (2021). 
+
+https://openreview.net/forum?id=PxTIG12RRHS 
+
+Shao, H., Zhou, B., Gong, S.: Prediction of the implied volatility surface-an empirical analysis of the sse 50etf option based on cnns. FINANCE RESEARCH LETTERS 
+
+77 (2025) https://doi.org/10.1016/j.frl.2025.107119 Tashiro, Y., Song, J., Song, Y., Ermon, S.: Csdi: Conditional score-based dif-fusion models for probabilistic time series imputation. In: Ranzato, M., Beygelzimer, A., Dauphin, Y., Liang, P.S., Vaughan, J.W. (eds.) Advances in Neural Information Processing Systems, vol. 34, pp. 24804–24816 (2021). 
+
+https://proceedings.neurips.cc/paper files/paper/2021/file/cfe8504bda37b575c70ee1a8276f3486-Paper.pdf 
+
+Thanh-Tung, H., Tran, T.: Catastrophic forgetting and mode collapse in gans. In: 2020 International Joint Conference on Neural Networks (IJCNN), pp. 1–10 (2020). https://doi.org/10.1109/IJCNN48605.2020.9207181 Vuleti´ c, M., Cont, R.: Volgan:: A generative model for arbitrage-free implied volatility surfaces. Applied Mathematical Finance 0(0), 1–36 (2025) https://doi.org/10.1080/ 1350486X.2025.2471317 https://doi.org/10.1080/1350486X.2025.2471317 Yang, L., Zhang, Z., Song, Y., Hong, S., Xu, R., Zhao, Y., Zhang, W., Cui, B., Yang, M.-H.: Diffusion models: A comprehensive survey of methods and applications. ACM Comput. Surv. 56 (4) (2023) https://doi.org/10.1145/3626235 Zhang, W., Li, L., Zhang, G.: A two-step framework for arbitrage-free prediction of the implied volatility surface. Quantitative Finance 23 (1), 21–34 (2022) https: //doi.org/10.1080/14697688.2022.2135454 34 Zaugg, N.F., Perotti, L., Grzelak, L.A.: Volatility parametrizations with random coef-ficients: Analytic flexibility for implied volatility surfaces. SIAM JOURNAL ON FINANCIAL MATHEMATICS 16 (4), 1374–1411 (2025) https://doi.org/10.1137/ 24M1713107 Zheng, Y., Yang, Y., Chen, B.: Incorporating prior financial domain knowledge into neural networks for implied volatility surface prediction. In: Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’21), Singapore, pp. 3968–3975 (2021). https://doi.org/10.1145/3447548.3467115 35
