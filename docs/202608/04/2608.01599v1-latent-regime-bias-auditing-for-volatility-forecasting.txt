@@ -1,0 +1,435 @@
+Title: Latent-Regime Bias Auditing for Volatility Forecasting
+
+URL Source: https://arxiv.org/pdf/2608.01599v1
+
+Published Time: Tue, 04 Aug 2026 01:42:37 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Latent-Regime Bias Auditing for Volatility Forecasting 
+
+Arthur Chagas, Pedro Bento, Yan Aquino, Arthur Buzelin, Wagner Meira Jr., Cristiano Arbex Valle 
+
+Department of Computer Science Universidade Federal de Minas Gerais – UFMG 
+
+Belo Horizonte, Brazil 
+
+{arthurchagas, pedro.bento, yanaquino, arthurbuzelin, meira, arbex }@dcc.ufmg.br 
+
+Abstract —Volatility forecasts are commonly evaluated with aggregate accuracy metrics such as RMSE and MAE, but these metrics can hide conditional failures that matter for risk management. This paper proposes a model-agnostic audit framework for evaluating whether volatility forecasts remain reliable across latent market regimes. We learn time-series representations of market-state windows, cluster them into regimes using only training information, assign regimes out of sample, and compare ag-gregate forecast behavior with regime-conditional bias, tail-underprediction, and underprediction-sensitive economic losses. Applied to daily volatility forecasting across cryp-tocurrency and ETF assets, the audit shows that models with competitive aggregate accuracy can still exhibit sub-stantial regime-specific bias and severe tail underprediction. The results suggest that volatility forecasting should be evaluated not only by average error, but also by where and how forecasts become unreliable. Our framework shifts forecast evaluation from asking which model is most accurate on average to identifying the market regimes in which apparently accurate forecasts fail conditionally. Reproducibility: https://github.com/arthurchagas1/Latent-Regime-Bias-Auditing-for-Volatility-Forecasting 
+
+Index Terms —volatility forecasting, latent market regimes, forecast reliability, regime-conditional bias, finan-cial machine learning, time-series representation learning 
+
+I. I NTRODUCTION 
+
+Volatility forecasts are most valuable precisely when market conditions become unstable. Risk limits, hedging decisions, volatility targeting, and portfolio allocation all depend on forecasts that remain reliable not only on average, but also in stressed market states. Yet volatility-forecasting models are still commonly evaluated through aggregate metrics such as RMSE and MAE. These metrics are necessary, but they compress away where errors occur. A forecast can look accurate overall while becoming systematically biased in the regimes where reliability matters most. This paper argues that volatility forecasting should be evaluated as a conditional reliability problem. The relevant question is not only whether a model has low average error, but whether its errors remain stable across economically meaningful states [1]. In risk-management settings, a model that underpredicts volatility during stress and compensates elsewhere is not merely noisy; it is conditionally unreliable [2]. Standard aggregate evalu-ation can therefore obscure failures that are economically important. We propose a model-agnostic audit framework for detecting such failures. The method learns time-series representations of market-state windows, reduces persis-tent asset identity through asset-normalization and ad-versarial representation learning, constructs within-asset latent regimes, and aligns these regimes by an economic stress score. The resulting regimes are not treated as universal market states or as forecasting targets. They are asset-relative audit partitions used to ask where an apparently accurate forecast becomes unreliable. Empirically, we apply the framework to daily realized-volatility forecasts for cryptocurrency and ETF assets, auditing historical, HAR/IV, linear, tree-based, neural, and Transformer-style models. Results show that rank-ings differ across aggregate accuracy, conditional relia-bility, and underprediction-sensitive loss: strong average forecasters can still exhibit hidden regime bias, and more complex architectures do not necessarily improve tail reliability. Our contributions are as follows: 1) We frame volatility forecasting as an asset-relative, regime-conditional reliability auditing problem. 2) We introduce model-agnostic diagnostics for hidden regime bias, tail underprediction, and underprediction-sensitive loss. 3) We construct asset-relative regimes using nor-malized time-series embeddings, adversarial asset-invariance, within-asset clustering, and stress-score alignment. 4) We audit a broad set of volatility forecasters, including HAR/IV, linear, tree-based, recurrent, convolutional, and Transformer-style models. 5) We show that RMSE, conditional reliability, and economic-loss criteria can rank models differently. arXiv:2608.01599v1 [cs.LG] 3 Aug 2026 TABLE I POSITIONING RELATIVE TO ADJACENT EVALUATION PARADIGMS .               
+
+> Approach Groups/regimes Used for prediction? Main question Regime switching [3] Model-implied Yes Which regime generated returns? CPA tests [4] Observed information sets No Does accuracy vary conditionally? Subgroup auditing [5] Predefined groups No Is performance fair/reliable by group?
+> Ours Learned time-series states No Where does forecast reliability fail?
+
+II. R ELATED WORK 
+
+Volatility forecasting has a long econometric tradi-tion, including ARCH/GARCH models [6], [7], realized-volatility models, and HAR-RV specifications [8]–[10]. A related literature studies the predictive content of implied and option-implied volatility [11]–[13]. These approaches provide the main foundations for volatility prediction, but forecast evaluation is usually dominated by aggregate accuracy metrics. Our work differs by treating volatility forecasting as a conditional reliability problem: we ask whether models that look accurate on average remain reliable across latent market states. Machine learning has expanded the volatility-forecasting toolkit through LSTM models [14], intra-day commonality features [15], GARCH-informed neu-ral networks [16], and language-model-based predictors such as Vola-BERT [17]. Recent reviews also document the broader use of AI for realized and implied volatility prediction [18]. Most of this work focuses on improving predictive accuracy or proposing new architectures. In contrast, we do not introduce another forecaster. We audit existing forecasters and test whether their errors be-come biased or tail-unreliable in specific market regimes. Our regime construction is related to market-regime modeling and time-series representation learning. Clas-sical work includes Markov-switching models [3], while recent representation methods include TS2Vec [19], PatchTST [20], iTransformer [21], and DLinear-style baselines [22]. In finance, related studies examine re-curring financial patterns [23] and contrastive asset em-beddings [24]. These methods typically use regimes or representations to improve forecasting. Our use is different: regimes are not forecasting targets or model components, but asset-relative audit partitions used to locate conditional forecast failures. This paper also connects to forecast comparison, con-ditional predictive ability, and reliability auditing. Stan-dard forecast evaluation emphasizes global predictive accuracy [25]–[27], while conditional predictive ability tests ask whether performance varies with observed information sets [4]. In machine learning, calibration and subgroup reliability motivate evaluation beyond average performance [5]. We bring this perspective to volatility forecasting by defining latent-regime diagnostics for worst-regime bias, RBA stable  
+
+> m
+
+, RCRG norm  
+
+> m
+
+, tail under-prediction, and underprediction-sensitive economic loss. Prior work improves average volatility forecasts using volatility features, machine learning, or regime structure. In contrast, we propose a model-agnostic audit that evaluates where accurate aggregate forecasts fail across regimes. III. M ETHODOLOGY 
+
+We propose a model-agnostic audit that compares aggregate and regime-conditional volatility forecast reli-ability using asset-relative latent regimes. 
+
+A. Information Set and Forecasting Target 
+
+Let i index assets and t time. For each asset-time pair, we observe xi,t = ffeat (Di,t ), where Di,t contains only information available at time t. Features include returns, range-based volatility, lagged realized volatil-ity, implied volatility, volume, drawdown, and stress variables. For window length L, the information set is 
+
+X(L) 
+
+> i,t
+
+= ( xi,t −L+1 , . . . , xi,t ). All embeddings, regimes, and forecasts are constructed from training-fitted trans-formations and assigned out of sample. The target is future realized volatility over horizon h: yi,t +h =
+
+RV (h) 
+
+> i,t
+
+=
+
+qPhj=1 r2 
+
+> i,t +j
+
+, where ri,t is the log return. 
+
+B. Asset-Normalized Representation Learning 
+
+To reduce persistent asset-scale effects, each feature is normalized within asset using training-period robust statistics: 
+
+exi,t,j = xi,t,j − median s∈T train  
+
+> i
+
+xi,s,j 
+
+IQR s∈T train  
+
+> i
+
+xi,s,j + ϵ .
+
+We then learn window embeddings with a TS2Vec-style contrastive encoder [19]: zi,t = ϕθ
+
+ fX(L)
+
+> i,t
+
+
+
+∈ Rd. The encoder is trained to align temporally overlapping views and separate nonmatching windows. The embeddings are used only to define audit partitions, not as the main forecasting model. To further reduce asset identity, we add an adver-sarial asset classifier with gradient reversal [28]. The classifier predicts the asset from zi,t , while the encoder is trained to make this prediction difficult, preserving dynamic market-state information while discouraging asset-identifying structure. −5         
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> UMAP-1
+> −5 05
+> 10
+> 15
+> UMAP-2
+> −5
+> 0
+> 5
+> 10
+> 15
+> UMAP-3
+> Asset-relative aligned regimes
+> Calm
+> Intermediate
+> Stress
+> −5
+> 0
+> 5
+> 10
+> 15
+> 20
+> UMAP-1
+> −5 05
+> 10
+> 15
+> UMAP-2
+> −5
+> 0
+> 5
+> 10
+> 15
+> UMAP-3
+> Asset structure in latent space
+> BTC
+> ETH
+> GLD
+> IWM
+> QQQ
+> SPY
+> USO
+> −5
+> 0
+> 5
+> 10
+> 15
+> 20
+> UMAP-1
+> −5 0510 15
+> UMAP-2
+> −5
+> 0
+> 5
+> 10
+> 15
+> UMAP-3
+> Economic stress gradient
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Stress proxy
+
+Fig. 1. Asset-relative latent geometry after adversarial representation learning. The left panel shows the economically aligned asset-relative regimes, the middle panel colors the same latent space by asset, and the right panel shows the continuous stress score used to align within-asset regimes. The figure illustrates that the proposed representation no longer treats pooled clusters as universal market regimes; instead, it defines relative audit states that preserve market-state structure while explicitly exposing residual asset organization. 
+
+C. Asset-Relative Aligned Regimes 
+
+Regimes are constructed within each asset. For as-set i, we fit K-means on training embeddings and assign held-out windows to the nearest training cen-troid: ai,t ∈ {1, . . . , K }. Because cluster labels are arbitrary across assets, we align them by a training-period stress score combining volatility, drawdown, ab-solute return, and stress-proxy information. Clusters are ordered by average stress score and labeled as 
+
+ci,t ∈ {calm , intermediate , stress }. Thus, regimes are asset-relative audit states: they need not be geometrically identical across assets, but they represent comparable within-asset stress levels. This avoids pooled clusters that mainly encode asset identity. 
+
+D. Forecasting Models and Errors 
+
+Let M be the set of forecasting models. Each model 
+
+m ∈ M produces bym,i,t +h = Fm(ui,t ), where ui,t con-tains only information available at time t, such as market features, realized-volatility lags, implied-volatility vari-ables, embeddings, or asset indicators. The forecast error is em,i,t +h = bym,i,t +h − yi,t +h. Positive errors denote overprediction and negative errors denote underpredic-tion. We report RMSE, MAE, and signed bias following standard forecast evaluation [4], [25]. 
+
+E. Regime-Conditional Reliability Audit 
+
+For aligned regime k, define Ik = {(i, t ) ∈I : ci,t = k}. The regime-conditional bias is 
+
+dBias m,k = 1 
+
+> |I k|
+
+P 
+
+> (i,t )∈I k
+
+em,i,t +h. We also compute regime-specific RMSE, MAE, underprediction rates, and tail-underprediction rates, following conditional reliabil-ity evaluation [4], [5]. Let Bmax  
+
+> m
+
+= max k∈K valid | dBias m,k |, where Kvalid ex-cludes regimes with insufficient test support. We define 
+
+RCRG norm  
+
+> m
+
+= Bmax  
+
+> m
+
+− | dBias m|
+
+RMSE m +ϵ ,
+
+and 
+
+RBA stable  
+
+> m
+
+= Bmax 
+
+> m
+
+| dBias m| + λstab RMSE m +ϵ .
+
+These statistics quantify how much aggregate bias un-derstates the largest asset-relative regime bias. 
+
+F. Tail and Economic-Loss Evaluation 
+
+Because volatility underprediction is costly for risk management, we use the asymmetric squared loss 
+
+ℓλ(e) = λe 21{e < 0} + e21{e ≥ 0}, λ > 1. We also report a tail-weighted version for top-decile realized-volatility outcomes, plus mean shortfall and tail mean shortfall. 
+
+G. Statistical Inference 
+
+We use block-bootstrap confidence intervals for regime-conditional bias, preserving local serial depen-dence in forecast errors. A regime is considered signif-icantly biased when the interval for dBias m,k excludes zero. Bootstrap settings, seeds, and hyperparameters are provided in the repository. IV. E XPERIMENTS 
+
+This section describes the empirical design used to test whether volatility forecasting models remain reliable across asset-relative latent market states. A. Protocol 
+
+We evaluate whether volatility forecasts that are ac-curate on average remain reliable across asset-relative market states. The pipeline consists of five steps: con-structing daily rolling windows from market, realized-volatility, implied-volatility, volume, drawdown, and stress-related features; normalizing features within each asset using training-period statistics; learning adver-sarial TS2Vec-style embeddings; obtaining within-asset latent regimes and aligning them by a training-period stress score; and evaluating held-out forecasts using aggregate accuracy, regime-conditional reliability, tail-underprediction, and underprediction-sensitive economic losses. The analysis is conducted at daily frequency for horizons h ∈ { 1, 5, 10 , 21 }, with h = 5 used as the main reporting horizon. We compare historical baselines, finance-native HAR/IV specifications, regularized linear models, tree-based and gradient-boosting models, recur-rent and convolutional models, and Transformer-style baselines. The goal is not only to rank models by RMSE or MAE, but to test whether their errors remain stable across calm, intermediate, and stress regimes. For each model, we report RMSE, MAE, signed bias, tail-underprediction, and economic-loss metrics, both in aggregate and within each aligned regime. Hidden con-ditional failures are summarized using RCRG norm  
+
+> m
+
+and 
+
+RBA stable  
+
+> m
+
+. Statistical uncertainty is assessed through block-bootstrap confidence intervals for regime-specific bias, and robustness checks vary the forecasting horizon and the regime-construction method. 
+
+B. Data and Reproducibility Details 
+
+We use daily data for BTC, ETH, SPY, QQQ, IWM, GLD, and USO from 2021-05-25 to 2026-03-07. OHLCV data come from [29], [30], and implied-volatility inputs from [31], [32]. Intraday records, when present, are aggregated to daily OHLCV using first open, maximum high, minimum low, last close, summed volume, and last available implied-volatility value. Each asset is split chronologically into train/validation/test periods using a 70% /15% /15% split. The main specification uses L = 64 -day windows, embedding dimension d = 64 , and K = 3 within-asset K-means regimes. Clusters are fit only on training embeddings, assigned out of sample by nearest centroid, and aligned as calm, intermediate, and stress using the average training percentile rank of realized volatility, absolute returns, high–low range, drawdown, and stress-proxy variables. Regime metrics are reported only when support is sufficient: nmin = 30 and at least 2% of the evaluation subset. Inference uses B = 500 block-bootstrap replications with 10-day blocks and 95% con-fidence intervals.                              
+
+> TABLE II MAIN EXPERIMENTAL SPECIFICATION .
+> Item Specification Assets BTC, ETH, SPY, QQQ, IWM, GLD, USO Period / frequency 2021-05-25–2026-03-07, daily Sources OHLCV: [29], [30]; IV: [31], [32] Split Chronological 70% /15% /15% per asset Target / horizons Future realized volatility, h∈ { 1,5,10 ,21 };main h= 5
+> Representation L= 64 ,d= 64 , TS2Vec-style encoder with asset adversary Regimes K= 3 , within-asset K-means, stress-score alignment Support / inference nmin = 30 ,2% subset minimum; B= 500 ,10-day block bootstrap Seeds / tail set 42, 43, 44; top decile of realized-volatility outcomes
+
+C. Research Questions 
+
+The experiments are organized around the following research questions. 
+
+a) RQ1: Do asset-relative regimes define economi-cally usable audit states?: We test whether the aligned regimes differ in interpretable market variables, in-cluding realized volatility, implied volatility, implied-to-realized spreads, drawdowns, volume, stress proxies, tail-event shares, and asset composition. This evaluates whether the regimes are useful audit partitions rather than only geometric clusters. 
+
+b) RQ2: Do aggregate metrics hide asset-relative regime bias?: We compare aggregate signed bias with the largest aligned-regime bias using RCRG norm  
+
+> m
+
+and 
+
+RBA stable  
+
+> m
+
+. This tests whether models that appear reli-able on average still exhibit systematic overprediction or underprediction in calm, intermediate, or stress states. 
+
+c) RQ3: Are reliability diagnostics distinct from aggregate accuracy?: We examine whether regime-conditional reliability diagnostics provide information beyond RMSE and MAE. The goal is not to show that reliability is unrelated to accuracy, but to test whether models with similar aggregate accuracy can differ in conditional bias, tail-underprediction, and economic-loss exposure. 
+
+d) RQ4: Do model rankings change under economic-loss criteria?: We evaluate whether the best models under aggregate RMSE remain preferable under underprediction-sensitive losses. This addresses whether volatility forecasts should be selected using a single average-error metric or evaluated jointly by accuracy, conditional reliability, and economic risk. 
+
+e) RQ5: Are the findings robust to horizon and representation choices?: We test whether the main conclusions persist across forecasting horizons and alternative regime constructions, including plain asset-normalized embeddings, adversarial embeddings, and asset-residualized representations. This evaluates whether the observed conditional reliability gaps are RMSE rank Reliability rank    
+
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> 16
+> Rank, lower is better
+> LSTM
+> LSTM
+> GRU
+> GRU
+> HAR-IV-S
+> HAR-IV-S HAR-IV-AS
+> HAR-IV-AS
+> HAR-IV
+> HAR-IV
+> ElasticNet
+> ElasticNet
+> IV-Only
+> IV-Only
+> HAR-RV
+> HAR-RV
+> HAR-AS HAR-AS
+> Ridge
+> Ridge
+> ET
+> ET
+> RF
+> RF
+> CurrentHistRV
+> CurrentHistRV
+> TCN TCN
+> iTransformer
+> iTransformer
+> PatchTST PatchTST
+
+Accuracy vs. conditional reliability      
+
+> RMSE rank Economic-loss rank
+> LSTM
+> LSTM
+> GRU
+> GRU
+> HAR-IV-S
+> HAR-IV-S
+> HAR-IV-AS
+> HAR-IV-AS
+> HAR-IV
+> HAR-IV
+> ElasticNet ElasticNet
+> IV-Only
+> IV-Only
+> HAR-RV
+> HAR-RV
+> HAR-AS
+> HAR-AS
+> Ridge
+> Ridge
+> ET
+> ET
+> RF RF
+> CurrentHistRV
+> CurrentHistRV
+> TCN
+> TCN
+> iTransformer iTransformer
+> PatchTST PatchTST
+
+Accuracy vs. economic loss    
+
+> Model family
+> finance-native
+> neural
+> transformer tree linear baseline
+
+Fig. 2. Metric-dependent model rankings. The left panel compares each model’s aggregate RMSE rank with its conditional-reliability rank, computed from RBA stable . The right panel compares RMSE rank with the rank induced by tail-weighted asymmetric loss. Lower ranks are better. The rank shifts show that aggregate accuracy, regime-conditional reliability, and economic-risk criteria can lead to different assessments of the same volatility forecasting models. HAR-IV-S denotes HAR-RV with implied volatility and stress features; HAR-IV-AS denotes the asset-specific HAR-RV with implied volatility; ET denotes ExtraTrees; RF denotes RandomForest. 
+
+stable features of the forecasting problem rather than artifacts of one specification. V. R ESULTS 
+
+This section presents the empirical evidence for the asset-relative latent-regime audit using daily volatility, adversarial TS2Vec embeddings, asset-relative aligned regimes, and out-of-sample forecasts from diverse fore-casting models. Figure 1 provides the latent-space overview, while the remaining tables and figures report the quantitative results. 
+
+A. RQ1: Do Asset-Relative Regimes Define Economi-cally Usable Audit States? 
+
+Figure 1 depicts the asset-relative latent audit space. The panels show the aligned calm, intermediate, and stress regimes, residual asset structure after adversarial learning, and the stress gradient used for alignment. The figure illustrates the construction: regimes are eco-nomically ordered, asset-relative audit states rather than pooled universal market regimes. Table III shows that the aligned regimes differ along interpretable financial dimensions. Calm periods have lower realized and implied volatility, smaller drawdowns, and no tail-event concentration. Intermediate and stress regimes exhibit higher volatility and larger tail-event shares, with the stress regime showing the largest draw-
+
+TABLE III ECONOMIC CHARACTERIZATION OF THE ASSET -RELATIVE ALIGNED REGIMES IN THE HELD -OUT PERIOD . T HE REGIMES ARE ORDERED BY THE TRAINING -PERIOD STRESS SCORE USED FOR ALIGNMENT . T AIL SHARE DENOTES THE SHARE OF TOP -DECILE FIVE -DAY REALIZED -VOLATILITY OUTCOMES .Regime n Crypto RV IV Drawdown Tail Share Calm 209 0.081 0.0255 25.25 -0.016 0.000 Intermediate 644 0.657 0.0492 44.73 -0.055 0.121 Stress 242 0.434 0.0473 44.09 -0.114 0.116 
+
+down. These patterns support the regimes as economi-cally meaningful audit partitions. Table IV shows that adversarial learning reduces lin-early recoverable asset identity. Asset-prediction bal-anced accuracy falls from the plain embedding to the ad-versarial embedding and reaches chance level after resid-ualization. This does not imply that asset information is fully removed, but it shows that the regime construction explicitly controls the asset-identity confound. Overall, RQ1 is supported in the intended sense: the regimes are not universal market states, but economi-cally ordered and statistically usable asset-relative audit partitions. TABLE IV ASSET -IDENTITY PREDICTABILITY FROM ALTERNATIVE EMBEDDINGS . L OWER BALANCED ACCURACY INDICATES LESS LINEARLY RECOVERABLE ASSET IDENTITY .Embedding Accuracy Balanced Acc. Chance Plain 0.395 0.377 0.143 Adversarial 0.317 0.291 0.143 Adversarial + residualized 0.247 0.142 0.143 TABLE V MAIN ASSET -RELATIVE FORECASTING AND RELIABILITY RESULTS AT h = 5 , RANKED BY AGGREGATE RMSE. T AIL ASYM . IS THE TAIL -WEIGHTED ASYMMETRIC LOSS . L ARGER RBA stable 
+
+> INDICATES STRONGER HIDDEN CONDITIONAL BIAS
+
+.Model RMSE MAE Bias RBA stable Tail Asym. LSTM 0.025 0.016 -0.003 1.374 0.012 GRU 0.025 0.017 -0.002 1.249 0.012 HAR-IV-S 0.025 0.016 -0.003 1.131 0.013 HAR-IV-AS 0.025 0.016 -0.001 1.351 0.014 HAR-IV 0.026 0.016 -0.003 1.109 0.014 ElasticNet 0.026 0.017 -0.002 0.734 0.013 IV-Only 0.026 0.016 -0.003 1.199 0.014 HAR-RV 0.026 0.017 0.001 1.136 0.012 HAR-AS 0.026 0.018 0.001 1.292 0.012 Ridge 0.026 0.018 -0.002 0.763 0.013 ExtraTrees 0.027 0.018 0.001 1.327 0.013 RandomForest 0.027 0.017 -0.001 1.241 0.014 CurrentHistRV 0.032 0.022 -0.001 2.420 0.012 TCN 0.033 0.024 0.001 1.968 0.014 iTransformer 0.034 0.024 -0.005 1.362 0.020 PatchTST 0.036 0.026 -0.000 3.490 0.021 
+
+B. RQ2: Do Aggregate Metrics Hide Asset-Relative Regime Bias? 
+
+Table V reports the main results at the five-day horizon. The best aggregate forecasters include recur-rent models and finance-native HAR/IV benchmarks, confirming that the audit is evaluated against com-petitive baselines. However, low RMSE does not im-ply conditional reliability: several accurate models still exhibit regime-bias amplification and non-negligible underprediction-sensitive losses. The Transformer-style baselines are informative. In this daily setting, PatchTST and iTransformer do not dominate the strongest recurrent or finance-native mod-els, and their larger tail-sensitive losses suggest weaker responsiveness to volatility extremes. This reinforces the main point: architectural complexity alone does not ensure conditional reliability. Figure 3 decomposes aggregate and regime-conditional bias. The gray segment shows absolute aggregate bias, while the blue segment shows the additional gap between aggregate bias and the largest asset-relative regime bias. The full bar therefore represents the worst conditional bias detected by the audit. 0.000 0.001 0.002 0.003 0.004 0.005  
+
+> Absolute forecast bias
+> LSTM
+> GRU
+> HAR-IV-S
+> HAR-IV-AS
+> HAR-IV
+> ElasticNet
+> IV_Only
+> HAR_RV
+> HAR-AS
+> Ridge
+> ET
+> RF Aggregate |bias|
+> Hidden regime gap
+
+Fig. 3. Hidden bias under asset-relative aligned regimes. Gray bars show absolute aggregate bias, while blue bars show the additional gap to the largest asset-relative regime bias. The full bar represents the worst conditional bias revealed by the audit. 
+
+Table VI provides bootstrap evidence that these effects are not only point-estimate artifacts. Several models exhibit confidence intervals excluding zero in at least one aligned regime, indicating statistically supported conditional bias. Overall, the results support RQ2: aggregate metrics can mask systematic forecast errors across calm, inter-mediate, and stress regimes. This is especially impor-tant for volatility forecasting, where underprediction in high-risk states is more costly than average error alone suggests. 
+
+C. RQ3: Are Reliability Diagnostics Distinct from Ag-gregate Accuracy? 
+
+The left panel of Figure 2 compares each model’s RMSE rank with its conditional-reliability rank. If ag-gregate accuracy and regime-conditional reliability were equivalent, the rank lines would remain nearly horizon-tal. Instead, several models shift substantially. Recurrent models rank best by RMSE but fall under the reliability criterion, while some linear and finance-native models become more favorable under conditional reliability. This supports RQ3. The proposed diagnostics do not replace RMSE; they answer a different question. RMSE measures average error, whereas the asset-relative audit asks whether the error profile remains stable across economically aligned within-asset states. The results show that a model can be accurate on average while still displaying nontrivial conditional bias. 
+
+D. RQ4: Do Model Rankings Change Under Economic-Loss Criteria? 
+
+The right panel of Figure 2 compares RMSE rank with the rank induced by tail-weighted asymmetric loss. The ranking changes again. Some models that are strong by TABLE VI BLOCK -BOOTSTRAP EVIDENCE FOR ASSET -RELATIVE CONDITIONAL BIAS AT h = 5 . F OR EACH MODEL , THE TABLE REPORTS THE ALIGNED REGIME WITH THE LARGEST ABSOLUTE CONDITIONAL BIAS , ITS BIAS , BLOCK -BOOTSTRAP CONFIDENCE INTERVAL , EXCLUSION OF ZERO , AND THE NUMBER OF BOOTSTRAP -SUPPORTED NONZERO -BIAS ALIGNED REGIMES .                                                                                
+
+> Model Worst Reg. Bias 95% CI Worst Sig. Sig. Reg. LSTM Intermediate -0.006 [-0.010, -0.001] Yes 1GRU Intermediate -0.004 [-0.009, 0.000] No 0HAR-IV-S Intermediate -0.004 [-0.009, 0.001] No 1HAR-IV-AS Calm 0.004 [0.002, 0.005] Yes 1HAR-IV Intermediate -0.004 [-0.009, 0.001] No 1ElasticNet Intermediate -0.002 [-0.008, 0.003] No 0IV-Only Intermediate -0.005 [-0.010, 0.000] No 1HAR-RV Stress 0.002 [-0.004, 0.006] No 0HAR-AS Stress 0.003 [-0.003, 0.007] No 0Ridge Intermediate -0.002 [-0.008, 0.003] No 0ExtraTrees Calm 0.003 [0.000, 0.005] Yes 1RandomForest Calm 0.003 [0.000, 0.005] Yes 1TCN Intermediate 0.003 [-0.004, 0.011] No 1iTransformer Calm 0.014 [0.010, 0.018] Yes 2PatchTST Calm 0.014 [0.006, 0.024] Yes 1
+
+aggregate RMSE become less attractive when the eval-uation penalizes underprediction in high-volatility out-comes. Conversely, HAR-RV and asset-specific HAR-RV move upward under economic-loss ranking, indicat-ing that simple finance-native benchmarks can remain competitive under risk-sensitive criteria. Transformer-style baselines perform poorly under this criterion. This does not weaken the audit; rather, it illustrates why model selection should not be based on model class or architectural complexity alone. In this setting, the Transformer-style models are less responsive to volatility extremes and therefore less attractive under tail-sensitive loss. These results support RQ4. Aggregate accuracy, con-ditional reliability, and economic risk do not collapse into a single ordering. Model selection for volatility forecasting should therefore consider not only RMSE, but also conditional bias and the economic cost of underprediction. 
+
+E. RQ5: Are the Findings Robust to Representation Choices? 
+
+Table VII compares the main asset-relative adversarial construction with alternative regime constructions. The asset-relative adversarial variant reduces asset-regime dependence relative to the plain asset-normalized variant while preserving a clear reliability signal. The global residualized alternative also produces a reliability sig-nal, but the main specification is preferable because it combines within-asset regime construction with explicit economic alignment. The robustness evidence supports the interpretation that conditional reliability gaps are not artifacts of a single clustering choice. At the same time, the asset-dependence diagnostics show why the paper does not claim to discover universal market regimes. The 
+
+TABLE VII ROBUSTNESS ACROSS REGIME -CONSTRUCTION VARIANTS . T HE MAIN SPECIFICATION IS ASSET -RELATIVE ADVERSARIAL . NMI  
+
+> AND
+
+CRAMER ’S V MEASURE ASSET –REGIME DEPENDENCE ; 
+
+> MEDIAN
+
+RBA AND MEDIAN RCRG SUMMARIZE THE RELIABILITY SIGNAL ACROSS MODELS AT THE MAIN HORIZON .                       
+
+> Variant NMI Cramer’s VMed. RBA Med. RCRG Min. n
+> Asset-relative adv. 0.305 0.644 2.123 0.075 206 Asset-relative plain 0.348 0.695 2.095 0.090 307 Global residual. adv. 0.270 0.629 2.063 0.102 226
+
+more defensible conclusion is that asset-relative, eco-nomically aligned partitions provide useful audit states for detecting conditional forecast fragility. 
+
+F. Summary 
+
+Across the five research questions, the results support the central diagnostic claim of the paper: volatility fore-casting models can appear competitive under aggregate metrics while remaining unreliable in specific asset-relative market states. The proposed audit complements standard forecast evaluation by identifying hidden con-ditional bias, tail underprediction, and economic-loss exposure that aggregate RMSE alone can obscure. VI. C ONCLUSION 
+
+This paper introduces an asset-relative latent-regime audit for volatility forecasting, evaluating whether accu-rate average forecasts remain reliable across econom-ically aligned within-asset regimes. The results show that aggregate accuracy can mask substantial regime-dependent failures. The study has limitations. The regimes are sample-dependent audit partitions, not universal market states, and the empirical analysis is limited to daily realized-volatility targets in a modest cross-asset panel. Broader option data, longer samples, intraday targets, and alter-native volatility measures may reveal further reliability failures. Future work can use these audits to design calibration and forecasting methods that directly reduce conditional bias in high-risk regimes. ACKNOWLEDGEMENTS 
+
+This work was partially funded by CNPq, Capes, Fapemig, IAIA-INCT on AI, INCT-TILDIAR, and the Brazilian Center on Algorithm Transparency and Reli-able AI REFERENCES [1] P. F. Christoffersen, “Evaluating interval forecasts,” International Economic Review , vol. 39, no. 4, pp. 841–862, 1998. [Online]. Available: http://www.jstor.org/stable/2527341 [2] G. Elliott, I. Komunjer, and A. Timmermann, “Estimation and testing of forecast rationality under flexible loss,” The Review of Economic Studies , vol. 72, no. 4, pp. 1107–1125, 2005. [Online]. Available: http://www.jstor.org/stable/3700702 [3] J. D. Hamilton, “A new approach to the economic analysis of nonstationary time series and the business cycle,” Econometrica ,vol. 57, no. 2, pp. 357–384, 1989. [Online]. Available: http://www.jstor.org/stable/1912559 [4] R. Giacomini and H. White, “Tests of conditional predictive ability,” Econometrica , vol. 74, no. 6, pp. 1545–1578, 2006. [Online]. Available: http://www.jstor.org/stable/4123083 [5] U. Hebert-Johnson, M. Kim, O. Reingold, and G. Rothblum, “Multicalibration: Calibration for the (Computationally-identifiable) masses,” in Proceedings of the 35th International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, J. Dy and A. Krause, Eds., vol. 80. PMLR, 10–15 Jul 2018, pp. 1939–1948. [Online]. Available: https://proceedings.mlr.press/v80/hebert-johnson18a.html [6] R. F. Engle, “Autoregressive conditional heteroscedasticity with estimates of the variance of united kingdom inflation,” 
+
+Econometrica , vol. 50, no. 4, pp. 987–1007, 1982. [Online]. Available: http://www.jstor.org/stable/1912773 [7] T. Bollerslev, “Generalized autoregressive conditional heteroskedasticity,” Journal of Econometrics , vol. 31, no. 3, pp. 307–327, 1986. [Online]. Available: https: //www.sciencedirect.com/science/article/pii/0304407686900631 [8] T. G. Andersen, T. Bollerslev, F. X. Diebold, and P. Labys, “Modeling and forecasting realized volatility,” Econometrica ,vol. 71, no. 2, pp. 579–625, 2003. [Online]. Available: http://www.jstor.org/stable/3082068 [9] T. G. Andersen, T. Bollerslev, and F. X. Diebold, “Roughing it up: Including jump components in the measurement, modeling, and forecasting of return volatility,” The Review of Economics and Statistics , vol. 89, no. 4, pp. 701–720, 2007. [Online]. Available: http://www.jstor.org/stable/40043095 [10] F. Corsi, “A simple approximate long-memory model of realized volatility,” Journal of Financial Econometrics , vol. 7, no. 2, pp. 174–196, 03 2009. [Online]. Available: https: //doi.org/10.1093/jjfinec/nbp001 [11] B. Christensen and N. Prabhala, “The relation between implied and realized volatility,” Journal of Financial Economics , vol. 50, no. 2, pp. 125–150, 1998. [Online]. Available: https://www. sciencedirect.com/science/article/pii/S0304405X98000348 [12] T. Busch, B. Christensen, and M. Nielsen, “The role of implied volatility in forecasting future realized volatility and jumps in foreign exchange, stock, and bond markets,” 01 2007. [13] A. J. Patton, “Volatility forecast comparison using imperfect volatility proxies,” Journal of Econometrics , vol. 160, no. 1, pp. 246–256, 2011, realized Volatility. [Online]. Available: https:// www.sciencedirect.com/science/article/pii/S030440761000076X [14] Y. Liu, “Novel volatility forecasting using deep learning–long short term memory recurrent neural networks,” Expert Syst. Appl. , vol. 132, no. C, p. 99–109, Oct. 2019. [Online]. Available: https://doi.org/10.1016/j.eswa.2019.04.038 [15] C. Zhang, Y. Zhang, M. Cucuringu, and Z. Qian, “Volatility forecasting with machine learning and intraday commonality*,” 
+
+Journal of Financial Econometrics , vol. 22, no. 2, pp. 492–530, 06 2024. [Online]. Available: https://doi.org/10.1093/jjfinec/ nbad005 [16] Z. Xu, J. Liechty, S. Benthall, N. Skar-Gislinge, and C. McComb, “Garch-informed neural networks for volatility prediction in financial markets,” in Proceedings of the 5th ACM International Conference on AI in Finance , ser. ICAIF ’24. New York, NY, USA: Association for Computing Machinery, 2024, p. 600–607. [Online]. Available: https://doi.org/10.1145/3677052.3698600 [17] Q. A. Nguyen, C. Guo, and W. Luk, “Repurposing language models for fx volatility forecasting: A data-efficient and context-aware approach,” in Proceedings of the 6th ACM International Conference on AI in Finance , ser. ICAIF ’25. New York, NY, USA: Association for Computing Machinery, 2025, p. 465–473. [Online]. Available: https://doi.org/10.1145/3768292.3770386 [18] E. S. Gunnarsson, H. R. Isern, A. Kaloudis, M. Risstad, B. Vigdel, and S. Westgaard, “Prediction of realized volatility and implied volatility indices using ai and machine learning: A review,” International Review of Financial Analysis , vol. 93, p. 103221, 2024. [Online]. Available: https://www.sciencedirect. com/science/article/pii/S1057521924001534 [19] Z. Yue, Y. Wang, J. Duan, T. Yang, C. Huang, Y. Tong, and B. Xu, “Ts2vec: Towards universal representation of time series,” in AAAI Conference on Artificial Intelligence , 2021. [Online]. Available: https://api.semanticscholar.org/CorpusID:237497421 [20] Y. Nie, N. H. Nguyen, P. Sinthong, and J. Kalagnanam, “A time series is worth 64 words: Long-term forecasting with transformers,” in The Eleventh International Conference on Learning Representations , 2023. [Online]. Available: https: //openreview.net/forum?id=Jbdc0vTOcol [21] Y. Liu, T. Hu, H. Zhang, H. Wu, S. Wang, L. Ma, and M. Long, “itransformer: Inverted transformers are effective for time series forecasting,” in The Twelfth International Conference on Learning Representations , 2024. [Online]. Available: https://openreview.net/forum?id=JePfAI8fah [22] A. Zeng, M. Chen, L. Zhang, and Q. Xu, “Are transformers effective for time series forecasting?” in 
+
+Proceedings of the Thirty-Seventh AAAI Conference on Artificial Intelligence and Thirty-Fifth Conference on Innovative Applications of Artificial Intelligence and Thirteenth Symposium on Educational Advances in Artificial Intelligence , ser. AAAI’23/IAAI’23/EAAI’23. AAAI Press, 2023. [Online]. Available: https://doi.org/10.1609/aaai.v37i9.26317 [23] A. Ibrain, V. Hern´ andez, and L. Peinado, “Unveiling recurring financial patterns: Novel unsupervised filtering algorithms for enhanced forecasting,” in Proceedings of the 5th ACM International Conference on AI in Finance , ser. ICAIF ’24. New York, NY, USA: Association for Computing Machinery, 2024, p. 406–418. [Online]. Available: https: //doi.org/10.1145/3677052.3698596 [24] R. Dolphin, B. Smyth, and R. Dong, “Stock embeddings: Learn-ing distributed representations for financial assets,” arXiv preprint arXiv:2202.08968 , 2022. [25] F. X. Diebold and R. S. Mariano, “Comparing predictive accuracy,” Journal of Business & Economic Statistics , vol. 13, no. 3, pp. 253–263, 1995. [Online]. Available: http://www.jstor. org/stable/1392185 [26] H. White, “A reality check for data snooping,” Econometrica ,vol. 68, no. 5, pp. 1097–1126, 2000. [Online]. Available: http://www.jstor.org/stable/2999444 [27] P. R. Hansen, “A test for superior predictive ability,” Journal of Business & Economic Statistics , vol. 23, no. 4, pp. 365–380, 2005. [Online]. Available: http://www.jstor.org/stable/27638834 [28] Y. Gani, E. Ustinova, H. Ajakan, P. Germain, H. Larochelle, F. Laviolette, M. Marchand, and V. Lempitsky, “Domain-adversarial training of neural networks,” Journal of Machine Learning Research , 05 2015. [29] Binance, “Spot API Documentation: Kline/Candlestick Data,” https://developers.binance.com/docs/binance-spot-api-docs/ rest-api/market-data-endpoints, 2026, accessed: 2026-05-10. [30] R. Aroussi, “yfinance: Download Market Data from Yahoo! Finance’s API,” https://ranaroussi.github.io/yfinance/, 2026, ac-cessed: 2026-05-10. [31] Deribit, “Deribit API Documentation: pub-lic/get volatility index data,” https://docs.deribit.com/ api-reference/market-data/public-get volatility index data, 2026, accessed: 2026-05-10. [32] Chicago Board Options Exchange, “CBOE Volatility Index,” Retrieved from FRED, Federal Reserve Bank of St. Louis, 2026, accessed: 2026-05-10. [Online]. Available: https://fred. stlouisfed.org/

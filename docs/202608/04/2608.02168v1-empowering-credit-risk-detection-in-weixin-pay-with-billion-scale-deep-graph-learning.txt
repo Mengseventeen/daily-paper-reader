@@ -1,0 +1,802 @@
+Title: Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning
+
+URL Source: https://arxiv.org/pdf/2608.02168v1
+
+Published Time: Tue, 04 Aug 2026 02:22:30 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning 
+
+# Xin Liu 
+
+2432042@tongji.edu.cn Tongji University Shanghai, China 
+
+# Xiyuan Chen 
+
+xiyuanchen@tencent.com Tencent Inc. Shenzhen, China 
+
+# Chenglong Wu 
+
+leonclwu@tencent.com Tencent Inc. Shenzhen, China 
+
+# Xuan Zong 
+
+jasonzong@tencent.com Tencent Inc. Shenzhen, China 
+
+# Jun Zhou 
+
+anderszhou@tencent.com Tencent Inc. Shenzhen, China 
+
+# Dawei Cheng ∗
+
+dcheng@tongji.edu.cn Tongji University Shanghai, China 
+
+## Abstract 
+
+Credit risk detection, particularly mitigating individual fraud, is crucial for maintaining the stability of digital financial ecosystems. Accurately identifying credit fraud among billions of users is critical for minimizing financial losses and safeguarding the sustainability of inclusive financial services. Given that credit fraud risks are often concealed within heterogeneous user-risk graphs, Graph Neural Networks (GNNs) have emerged as an effective tool for risk mining by capturing complex dependencies. To address the scalability bot-tleneck of industrial GNNs, distributed training based on subgraphs is indispensable. However, existing strategies often compromise topological integrity for load balancing. This can be catastrophic for risk detection, as it indiscriminately severs the long-tail evidence chains essential for risk propagation. Overlapping subgraphs can restore severed risk contexts but inevitably introduce redundancy and noise, while overlooking the representation alignment across different local subgraphs. In this paper, we propose a risk-aware overlapping subgraph learning framework for large-scale credit risk detection. We first construct base partitions to ensure load bal-ance. Then, we perform budget-constrained sampling that selects informative long-tail nodes, thereby preserving critical risk diffu-sion patterns while filtering out noise. To mitigate representation inconsistency, we design a cross-subgraph consistency alignment mechanism. By enforcing alignment constraints on the overlap-ping nodes, we harmonize the local representations into a globally consistent latent space. Extensive experiments on Weixin Pay’s production dataset demonstrate that our model significantly out-performs existing strategies for risk detection, offering a scalable and effective solution for industrial graph learning. 
+
+## CCS Concepts 
+
+• Computing methodologies → Machine learning ; • Applied computing ; • Information systems → Data mining ; 
+
+> ∗Corresponding Author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> KDD ’26, Jeju Island, Republic of Korea
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2259-2/2026/08 https://doi.org/10.1145/3770855.3818397
+
+## Keywords 
+
+Credit Risk Detection, Graph Fraud Detection, Large-scale Graph 
+
+ACM Reference Format: 
+
+Xin Liu, Xiyuan Chen, Chenglong Wu, Xuan Zong, Jun Zhou, and Dawei Cheng. 2026. Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning. In Proceedings of the 32nd ACM SIGKDD Confer-ence on Knowledge Discovery and Data Mining V.2 (KDD ’26), August 09–13, 2026, Jeju Island, Republic of Korea. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/3770855.3818397 
+
+## 1 Introduction 
+
+Credit serves as a fundamental engine for economic growth by facilitating the intertemporal allocation of resources [ 5 , 6 ]. Fraud-sters maliciously obtaining credit facilities not only causes direct losses to financial institutions but also threatens overall financial stability, especially when credit demand exceeds available financial resources [ 7, 9, 47 ]. Consequently, financial institutions and enter-prises must adopt precise risk assessment methodologies [ 12 , 20 ]. Effectively allocating credit while rigorously mitigating fraud risks can safeguard the resilience and economic sustainability of the entire financial infrastructure. Existing risk detection has relied on expert rules and machine learning models driven by statistical feature engineering [ 23 , 43 , 45 ]. These approaches fail to capture non-linear characteristics and adapt to evolving risk patterns. Effective risk detection must tran-scend the evaluation of isolated user profiles, which requires mining the intrinsic correlations between user behaviors and risk events to uncover latent high-risk users. Recently, Graph Neural Networks (GNNs) have emerged as a dominant paradigm in financial fraud detection owing to their ability to capture potential dependen-cies [ 18 , 52 , 57 ]. As shown in Figure 1, a heterogeneous graph comprising nodes of user and risk events can depict the credit risk landscape [ 55 ]. For instance, a risk event such as an adverse credit record is modeled as a specific risk node connected to the users involved. Through the modeling paradigm, explicit semantic information is propagated to user nodes via a message-passing mechanism. This facilitates end-to-end learning of risk attribution and complex propagation patterns, allowing the model to identify the sources and pathways of potential fraud risk. Despite their effectiveness, deploying GNNs in an industrial setting faces a severe scalability bottleneck. Real-world graphs typ-ically scale to billions of nodes and edges. To address this efficiency arXiv:2608.02168v1 [cs.LG] 3 Aug 2026 KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. User Behavior            
+
+> Logs
+> User -Risk
+> Heterogeneous Graph
+> Log: #10001
+> User: ua8b7c6
+> Time:2024 -01 -01 11:51
+> Event: multi -platform
+> fraud
+> access frequency: 12
+> ……
+> Worker 1
+> Worker 2
+> Worker 3
+> …
+> Disjoint Subgraphs
+> Overlapping Subgraphs
+> Distributed
+> Training
+> (Weight Shared )
+> Reference
+> high /low -risk /unlabeled users
+> risk events overlapping
+
+Figure 1: Comparison of subgraph-based strategies. User be-haviors are modeled as a heterogeneous graph. Unlike dis-joint partitioning, the overlapping subgraphs preserve criti-cal risk diffusion paths to guarantee accurate risk prediction. 
+
+challenge, extensive research has been conducted [ 39 , 54 , 62 ]. One branch focuses on decoupling feature propagation and transforma-tion [ 11 , 51 ]. For example, HopGNN [ 10 ] simplifies GNNs into MLP-like architectures via pre-computed propagation. NodeFormer [ 53 ]utilizes linearized attention to bypass recursive message passing. However, these methods rely on fixed propagation schemes that lack the adaptive sensitivity required for risk detection. Consequently, sampling-based strategies [ 58 ] remain the dominant paradigm for industrial applications due to their compatibility with inductive learning. While node-wise methods like GraphSAGE [ 29 ] control the receptive field by sampling fixed neighbors, they suffer from the neighbor explosion problem. To mitigate this, subgraph-based methods [ 19 , 59 ] and learnable pooling strategies [ 25 ] decompose the graph into manageable subgraphs to enable parallel training. Some subgraph-based strategies prioritize computational load bal-ance by partitioning the graph into disjoint subgraphs. As Figure 1 shows, these methods can be catastrophic for risk patterns char-acterized by subtle long-tail dependencies. They indiscriminately break vulnerable evidence chains essential for risk propagation, leading to suboptimal detection accuracy. In this context, overlap-ping subgraphs can be beneficial, enabling distinct subgraphs to share risk contexts via overlapping nodes. Nevertheless, effective selection is critical: (1) how to selectively preserve informative risk patterns for keeping detection accuracy while filtering out redundancy and noise to ensure efficiency; (2) how to maintain representation consistency across distributed subgraphs. To bridge the gap between industrial scalability and high-precision risk detection, we propose a Risk-Aware Overlapping Subgraph Learning framework (RAOS). We acknowledge that maintaining complete risk diffusion paths requires the replication of essential nodes. Crucially, risk patterns often propagate through long-tail users, which are vulnerable to graph partitioning. Therefore, we first initialize subgraphs to guarantee full node coverage with bal-anced computation. To restore the severed contexts, we introduce a budget-constrained overlapping sampling strategy that selec-tively replicates informative long-tail nodes while filtering out noise, thereby preserving critical risk diffusion patterns and avoid-ing redundancy. We apply a dynamic heterogeneous graph encoder to capture the evolving user-risk interactions within each subgraph and derive spatio-temporal representations. Furthermore, we design a cross-subgraph consistency alignment mechanism. We harmonize diverse local representations into a globally consistent latent space via alignment constraints on overlapping nodes. In the offline and online evaluation of a billion-scale industrial credit dataset from Weixin Pay, our RAOS significantly excels in identifying risk users, providing a scalable solution for billion-scale deep graph learning. Our contributions are summarized as follows: 
+
+• To the best of our knowledge, this is the first work to bridge the gap between performance and industrial scalability for GNNs deployment in credit risk detection by proposing an overlapping subgraph learning framework designed for billion-scale real-world graphs. 
+
+• We integrate budget-constrained risk context reservation with consistency alignment, which selectively preserves in-formative long-tail risk patterns to ensure efficiency and aligns overlapping representations to maintain consistency. 
+
+• Extensive offline and online experiments demonstrate our model’s superior performance in identifying risky users. It successfully empowers credit risk detection in Weixin Pay that safeguards the integrity of digital financial services and establishes a billion-scale deep graph learning paradigm. 
+
+## 2 Preliminary 2.1 Background 
+
+The ability to effectively detect credit fraud risk and distinguish between high-quality users and risky users is the cornerstone of credit security. Financial institutions can formulate differentiated risk control measures for users of different risk levels. Specifically, the objectives of credit risk detection include: detecting users ex-hibiting established risk patterns to facilitate targeted measures; and identifying latent risk users whose risks have not yet fully man-ifested to mitigate severe financial loss in advance. Consequently, we leverage records of triggered risk events such as multi-platform fraud and suspicious cash-out to construct comprehensive user profiles. In this way, we can excavate explicit risk behaviors and map the correlations between users and specific risk events. To capture the complex interactions between users and risk events, we construct a dynamic heterogeneous graph. The graph is composed of two distinct types of nodes: user , representing the massive user base, and risk event , representing specific risk behav-iors (such as abnormal account activities). An edge is established between a user and a risk event when the user triggers the specific risk. Crucially, edges are weighted to quantify risk level and are time-sensitive. Edges can be added, deleted, or updated over time. The model needs to capture the temporal evolution of risk. While graph structure provides a granular depiction of risk diffusion, its deployment in an industrial setting faces a severe scalability bottle-neck. The Weixin Pay credit graph comprises billions of nodes and edges with daily updates. Training the entire graph structure and features in a worker is computationally intractable. This necessi-tates a distributed GNNs learning paradigm. In this paper, we focus on paradigms based on pre-partitioned subgraphs for parallel com-putation as mini-batch strategies struggle with high cross-worker communication overhead and I/O latency [39]. Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea ℒ!"# = #𝐻 !,ℬ − #𝐻 &,ℬ '
+
+> (
+
+Worker 1
+
+Worker 2
+
+Worker 3
+
+…
+
+…
+
+…
+
+DHGNN 
+
+DHGNN 
+
+DHGNN     
+
+> high /low -risk /unlabeled users
+> risk events weight shared
+
+Mutual 
+
+Attention 
+
+Mutual 
+
+Attention 
+
+> Mutual
+> Attention
+
+Mutual 
+
+Attention 
+
+Mutual 
+
+Attention       
+
+> Message
+> Passing
+> 𝛼 (𝑖 ,𝑒 ,𝑗 )
+> 𝑚 (𝑖 ,𝑒 ,𝑗 )
+> AGG ℎ(0)GRU
+> !𝐻 !"#
+> !𝐻 !"#
+> !𝐻 !"#
+
+(2) Dynamic Heterogeneous Graph Learning 
+
+> h-index
+> Tail
+> Candidates
+> Base
+> Partitions
+> '𝐻 1
+
+(1) Risk -Aware Subgraph Construction  
+
+> Overlapping
+> Subgraphs
+> Distributed GNNs Training
+
+(3) Cross -Subgraph 
+
+Consistency Alignment                
+
+> ℒ234 =#𝐻 !,ℬ
+> 5#𝐻 !,ℬ−I'
+> (
+> +#𝐻 6,ℬ
+> 5#𝐻 6,ℬ−I'
+> (
+> ℒ778 =ℒ!"# +𝜆 "ℒ9:;
+
+𝐻 1      
+
+> ℒ1<1=0 =ℒ>7? +𝜆 778 ℒ778
+> Classifier Risk Probs
+> '𝐻 1
+
+Input:       
+
+> User -Risk Graphs
+> 𝒢 ={𝐺 #,𝐺 $,…,𝐺 %}
+
+…
+
+Figure 2: The overall architecture of the proposed RAOS framework. It proceeds in three stages: (1) Risk-Aware Subgraph Construction generates overlapping subgraphs by augmenting base partitions with long-tail risk nodes; (2) Distributed Learning utilizes a Dynamic Heterogeneous GNN to model user-risk evolution; (3) Cross-Subgraph Consistency Alignment harmonizes the representations of overlapping nodes, optimizing the model with a joint prediction and alignment objective. 
+
+## 2.2 Problem Formulation 
+
+Formally, we define a sequence of dynamic user-risk heterogeneous graphs G = {𝐺 1, 𝐺 2, . . . , 𝐺 𝑇 }, where 𝑇 is the number of time steps. Each snapshot 𝐺 𝑡 = (V 𝑡 , E𝑡 ) is a heterogeneous graph containing nodes and edges associated with specific types. In addition, each snapshot can be represented by its 𝑑 -dimensional node attributes 
+
+𝑋 𝑡 ∈ R𝑁 ×𝑑 and the corresponding adjacency matrix 𝐴 𝑡 , where 
+
+𝑁 is the number of nodes. We define the mapping function 𝜏 (𝑣 ) :
+
+V𝑡 → A and 𝜙 (𝑒 ) : E𝑡 → R for each node 𝑣 ∈ V 𝑡 and each edge 
+
+𝑒 ∈ E 𝑡 respectively. In credit risk detection, the node type set A =
+
+{𝜏 𝑢 , 𝜏 𝑟 } comprises two distinct entities: 𝜏 𝑢 representing user nodes and 𝜏 𝑟 representing risk event nodes. For an edge 𝑒 = (𝑖, 𝑗 ) with weight 𝑤 𝑡 𝑖 𝑗 linked from a source node 𝑖 to a target node 𝑗 , the meta relation [ 48 , 49 ] is formally denoted as a triplet ⟨𝜏 (𝑖 ), 𝜙 (𝑒 ), 𝜏 ( 𝑗 )⟩ .
+
+𝜙 (𝑒 )−1 represents the inverse of 𝜙 (𝑒 ). As time evolves, the sets of users and edges are non-static. We aim to learn a mapping function 
+
+𝑓 𝜃 capable of capturing complex spatio-temporal dependencies. Specifically, given the graph snapshots and initial node attributes, 
+
+𝑓 𝜃 predicts the credit risk score ˆ𝑦 𝑡 for users: 
+
+ˆ𝑦 𝑡 = 𝑓 𝜃 
+
+ 𝐺 𝑡 , 𝑋 𝑡 , 𝐻 𝑡 −1  (1) where ˆ𝑦 𝑡 ∈ R is the predicted risk probability. 𝐻 𝑡 −1 represents the latent historical representations. The objective is to minimize the prediction error L( ˆ𝑦, 𝑦 ) on the labeled training nodes. 
+
+## 3 Methodology 
+
+To address the scalability challenges in industrial credit risk de-tection, we propose a Risk-Aware Overlapping Subgraph Learning framework. We adopt a distributed training paradigm based on the subgraphs that can be parallelized across distributed workers. As illustrated in Figure 2, the framework pipeline consists of three components: (1) Risk-Aware Subgraph Construction : We first decompose the full graph into balanced base partitions to ensure computational load balance. Then we selectively expand the local subgraphs with informative long-tail nodes, ensuring that the sub-tle but critical risk diffusion paths are preserved within a single worker while structural noise is filtered. (2) Dynamic Heteroge-neous Graph Learning : for each subgraph, we employ Dynamic Heterogeneous GNNs to aggregate spatial-temporal information and evolve historical states, deriving comprehensive node repre-sentations. (3) Cross-Subgraph Consistency Alignment : We introduce a cross-subgraph alignment module to address the rep-resentation inconsistency arising from overlaps. Leveraging the Canonical Correlation Analysis (CCA) [ 2 ] objective, we force the model to harmonize diverse local representations into a globally consistent latent space. The final risk probability is derived based on the aligned node representations. 
+
+## 3.1 Risk-Aware Subgraph Construction 
+
+For a billion-scale graph, training on the full adjacency matrix 𝐴 is computationally intractable. Therefore, we propose a risk-aware overlapping subgraph construction strategy for two key purposes: (1) it amplifies the risk propagation signals originating from long-tail entities, and (2) it preserves the structural integrity of risk diffusion paths via overlapping nodes, effectively mitigating the information loss induced by edge cuts. 
+
+Graph Partition. To ensure computational load balance across 
+
+𝐾 distributed workers, we first decompose the entire graph into disjoint base partitions. Here, we employ a random hash partition-ing strategy [ 24 ] for its efficiency on billion-scale graphs. Note that the partitioning strategy is flexible to network characteristics and specific task requirements. Formally, the node set is divided into KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. 
+
+𝐾 disjoint subgraphs V = [V 1, · · · , V𝐾 ], and the feature matrix 𝑋 
+
+is divided into [𝑋 1, · · · , 𝑋 𝐾 ]. Accordingly, the entire graph can be represented as a collection of subgraphs: 
+
+¯G = [𝐺 1, . . . , 𝐺 𝐾 ] = [{V 1, 𝐴 1, 𝑋 1 }, . . . , {V 𝐾 , 𝐴 𝐾 , 𝑋 𝐾 }] (2) The adjacency matrix 𝐴 is partitioned into 𝐾 2 submatrices as: 
+
+𝐴 =
+
+
+
+𝐴 11 · · · 𝐴 1𝐾 
+
+... . . . ...𝐴 𝐾 1 · · · 𝐴 𝐾𝐾 
+
+
+
+(3) where each diagonal block 𝐴 𝑖𝑖 represents the intra-partition links within 𝐺 𝑖 , which are preserved in the base partition. The off-diagonal blocks A𝑖 𝑗 (𝑖 ≠ 𝑗 ) contain the inter-partition links between 𝐺 𝑖 and 
+
+𝐺 𝑗 . In a disjoint distributed training setting, off-diagonal blocks A𝑖 𝑗 
+
+are typically treated as zero matrices. 
+
+Budget-constrained Overlapping Sampling. To address the issue of severed connections, we perform a budget-constrained sampling approach. We aim to selectively recover the critical struc-tures in off-diagonal blocks A𝑖 𝑗 . For a subgraph 𝐺 𝑖 , we identify the structurally associated nodes 𝑣 ∈ V 𝑗 ( 𝑗 ≠ 𝑖 ) in other partitions. The associated nodes form the expansion candidate set C𝑖 :
+
+C𝑖 = {𝑣 ∈ V \ V 𝑖 | ∃ 𝑢 ∈ V 𝑖 , 𝐴 𝑣𝑢 ≠ 0} (4) Practically, including all structural associates indiscriminately would introduce memory redundancy and irrelevant noise. More-over, blindly selecting high-degree nodes can incorporate structural noise rather than valid risk signals. Instead, we hypothesize that critical risk signals often propagate through long-tail nodes [ 31 , 61 ]and they are vulnerable to partition-induced disconnection. We em-ploy h-index [ 32 ] to quantify the structural influence of a node. We prioritize the tail nodes to augment the local subgraph. Specifically, we first filter candidates with lower h-index scores (h-index ≤ 𝜃 )and sample 𝑏 nodes to obtain the final expansion set C𝑖,𝑀 , where 
+
+𝑀 is the predefined expansion budget that modulates the overlap ratio between subgraphs. An appropriate configuration ensures the preservation of non-redundant contexts while preventing structural noise. In this way, we selectively retain the informative long-tail contexts while filtering out noise. The final overlapping subgraph is constructed as the union of the base and expanded nodes: 
+
+˜V𝑖 = V𝑖 ∪ C 𝑖,𝑀 (5) It creates overlaps between subgraphs (i.e., ˜V𝑖 ∩ ˜V𝑗 ≠ ∅). Accord-ingly, we obtain an augmented adjacency matrix ˜A𝑖 that includes intra-subgraph links in A𝑖𝑖 and selected inter-subgraph links in A𝑖 𝑗 .In this way, we can reserve risk diffusion paths via informative overlapping nodes. Based on augmented ˜V𝑖 and ˜A𝑖 , we generate a sequence of graph snapshots {𝐺 1 
+
+> 𝑖
+
+, . . . , 𝐺 𝑇 𝑖 } by filtering nodes and edges based on timestamps, which serves as input for the subse-quent graph learning module. 
+
+## 3.2 Dynamic Heterogeneous Graph Learning 
+
+For each subgraph, we propose a Dynamic Heterogeneous Graph Encoder (DHGNN) as the backbone 𝑓 𝜃 . It utilizes a Heterogeneous Graph Transformer (HGT) [ 33 ] to capture spatial patterns, then incorporates an attention mechanism and GRU [ 22 ] to model tem-poral dynamics. For simplicity, we omit the subscript 𝑖 of 𝐺 𝑖 in this section and describe the learning process for a specific subgraph. 
+
+Heterogeneous Graph Transformer. Let ℎ(𝑙 ) be the 𝑙 -th latent representation at the current timestamp. Consider a target node 
+
+𝑗 and its neighbor 𝑖 ∈ N ( 𝑗 ) connected by an edge 𝑒 = (𝑖, 𝑗 ). We parameterize the message passing process based on specific node and edge types. For a meta relation triplet ⟨𝜏 (𝑖 ), 𝜙 (𝑒 ), 𝜏 ( 𝑗 )⟩ , we calculate the multi-head mutual attention score to estimate the importance of the source node 𝑖 to the target node 𝑗 :Att-head 𝑠 (𝑖, 𝑒, 𝑗 ) =
+
+
+
+𝐾 𝑠 (𝑖 )𝑊 Att   
+
+> 𝜙 (𝑒 )
+
+𝑄 𝑠 ( 𝑗 )⊤ 
+
+· 𝜇 ⟨𝜏 (𝑖 ), 𝜙 (𝑒 ), 𝜏 ( 𝑗 )⟩ √︁ 
+
+𝑑 /𝑆 (6) where 𝑠 denotes the index of attention heads, with 𝑆 being the total number of heads. 𝑑 represents the hidden dimension of the node rep-resentations. 𝐾 𝑠 (𝑖 ) = Linear 𝑠 𝜏 (𝑖 ) (ℎ(𝑙 −1) 
+
+> 𝑖
+
+) is the Key vector projected from the source node 𝑖 ’s feature. 𝑄 𝑠 ( 𝑗 ) = Linear 𝑠 𝜏 ( 𝑗 ) (ℎ(𝑙 −1) 
+
+> 𝑗
+
+) is the Query vector projected from the target node 𝑗 .𝑊 Att    
+
+> 𝜙 (𝑒 )
+
+is the trainable edge-based weight matrix. 𝜇 is a learned scalar prior that adaptively scales the attention weight for each meta relation. Simultaneously, we compute the multi-head message by: Msg-head 𝑠 (𝑖, 𝑒, 𝑗 ) = Linear 𝑠 𝜏 (𝑖 ) (ℎ(𝑙 −1) 
+
+> 𝑖
+
+)𝑊 𝑀𝑠𝑔 𝜙 (𝑒 ) (7) where 𝑊 𝑀𝑠𝑔 𝜙 (𝑒 ) is the edge-based message projection matrix. Finally, we normalize attention scores across neighbors and concatenate weighted messages. We get the updated vector through aggregation: 
+
+𝛼 (𝑖, 𝑒, 𝑗 ) = Softmax     
+
+> 𝑖 ∈ N ( 𝑗 )
+
+∥  
+
+> 𝑠 ∈ [ 1,𝑆 ]
+
+Att-head 𝑠 (𝑖, 𝑒, 𝑗 )
+
+!
+
+(8) 
+
+𝑚 (𝑖, 𝑒, 𝑗 ) = ∥  
+
+> 𝑠 ∈ [ 1,𝑆 ]
+
+Msg-head 𝑠 (𝑖, 𝑒, 𝑗 ) (9) 
+
+˜ℎ(𝑙 ) 
+
+> 𝑗
+
+= ⊕   
+
+> 𝑖 ∈ N ( 𝑗 )
+
+(𝛼 (𝑖, 𝑒, 𝑗 ) · 𝑚 (𝑖, 𝑒, 𝑗 )) (10) where ⊕, ∥ denote the aggregation and concatenation operation respectively. The final representation is updated via a linear projec-tion followed by a non-linear activation and a residual connection: 
+
+ℎ(𝑙 ) 
+
+> 𝑗
+
+= 𝜎 
+
+
+
+Linear 𝐴𝑔𝑔 𝜏 ( 𝑗 ) ˜ℎ𝑙 𝑗 
+
+
+
++ ℎ(𝑙 −1) 
+
+> 𝑗
+
+(11) 
+
+Temporal Graph Learning. In dynamic user-risk graphs, node representations need to maintain structural proximity and cap-ture temporal evolution [ 41 ]. Therefore, after obtaining the spatial embedding ℎ𝑡 , we integrate temporal information to generate a comprehensive risk probability of users. We incorporate a tempo-ral attention mechanism and a GRU to learn informative histor-ical states before performing the sequential update [ 21 , 40 ]. Let 
+
+𝐶 = [𝐻 𝑡 −𝑤 ; 𝐻 𝑡 −𝑤 +1; ... ; 𝐻 𝑡 −1] be the context matrix consisting of recent 𝑤 hidden states. We normalize attention weights using a softmax function after a fully connected layer and tanh activation: 
+
+𝑎 = softmax (𝑟 ⊤ tanh  𝑄𝐶 ⊤ ) (12) where 𝑟 ∈ R𝑑 , 𝑄 ∈ R𝑑 ×𝑑 are the weight vector and matrix for attention, 𝑑 is the dimension of the hidden states. The weighted historical representation can be expressed as ˜𝐻 𝑡 −1 = (𝑎𝐶 ⊤).We update the hidden states using the recurrence equation. Here, we adopt GRU and the final spatio-temporal node representation 
+
+𝐻 𝑡 can be expressed as: 
+
+𝐻 𝑡 = GRU 
+
+
+
+ℎ𝑡 , ˜𝐻 𝑡 −1 
+
+(13) Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+## 3.3 Cross-Subgraph Consistency Alignment 
+
+As overlapping nodes are replicated across multiple subgraphs, a single user 𝑢 may possess distinct representations 𝐻 𝑖,𝑢 and 𝐻 𝑗,𝑢 de-rived from different subgraphs 𝐺 𝑖 and 𝐺 𝑗 . These divergences arise because each subgraph aggregates a unique local neighborhood and temporal context. To resolve representation inconsistency, we introduce a cross-subgraph consistency alignment module. This module harmonizes local views into a globally consistent latent space. Let B = V𝑖 ∩ V 𝑗 be the batch of overlapping nodes shared between subgraphs 𝐺 𝑖 and 𝐺 𝑗 . The node embeddings obtained through the graph learning modules in the two subgraphs are de-noted as 𝐻 𝑖, B ∈ R| B | × 𝑑 and 𝐻 𝑗, B ∈ R| B | × 𝑑 . Directly minimizing the Euclidean distance between views often leads to dimensional col-lapse. To prevent this and eliminate redundancy in risk features, we adopt the node-level Canonical Correlation Analysis (CCA) [ 2 , 36 ]. We aim to maximize the consistency between the 𝐻 𝑖, B and 𝐻 𝑗, B
+
+with the invariance term, while minimizing irrelevant information with the decorrelation term. First, we normalize the node embeddings along the batch dimen-sion, ensuring that each feature dimension follows a distribution with a 0-mean and a 1/√︁ |B| -standard deviation: 
+
+ˆ𝐻 = 𝐻 − 𝜇 (𝐻 )
+
+𝜎 (𝐻 ) × √︁ |B| (14) where 𝜇 (·) , 𝜎 (·) denote mean value and standard deviation for each feature dimension respectively. Next, we use the normalized ˆ𝐻 𝑖, B ,
+
+ˆ𝐻 𝑗, B to construct the CCA loss, which consists of an invariance term and a decorrelation term. The invariance term forces the repre-sentations of the same user from different subgraphs to be identical, ensuring the consistency of risk prediction. The decorrelation term minimizes the redundancy between different feature dimensions. 
+
+Linv = ∥ ˆ𝐻 𝑖, B − ˆ𝐻 𝑗, B ∥2 
+
+> 𝐹
+
+(15) 
+
+Ldec = ˆ𝐻 ⊤ 
+
+> 𝑖, B
+
+ˆ𝐻 𝑖, B − 𝐼 2 
+
+> 𝐹
+
++ ˆ𝐻 ⊤ 
+
+> 𝑗, B
+
+ˆ𝐻 𝑗, B − 𝐼 2 
+
+> 𝐹
+
+(16) 
+
+LCCA = Linv + 𝜆 𝑛 Ldec (17) where 𝐼 represents identity matrix, 𝜆 𝑛 denotes a non-negative weight, ∥ · ∥ 2 
+
+> 𝐹
+
+indicates the squared Frobenius norm. Through this objective, the model is explicitly guided to solve representation inconsistencies caused by context divergence, yielding aligned em-beddings across all subgraphs. 
+
+## 3.4 Prediction and Optimization 
+
+During the inference phase, to obtain the final risk probability for the entire graph, we aggregate the learned representations of all distributed workers. For overlapping nodes in multiple subgraphs, we compute their final embedding 𝐻 𝑡 by averaging the aligned representations. Then, we can employ a Multi-Layer Perceptron (MLP) [ 44 ] to predict credit risk. A two-layer MLP is expressed as: 
+
+ˆ𝑦 𝑡 = MLP (𝐻 𝑡 ) = 𝑊 2 · 𝜎 (𝑊 1𝐻 𝑡 + 𝑏 1) + 𝑏 2 (18) where 𝑊 1, 𝑊 2 and 𝑏 1, 𝑏 2 are trainable weights and biases. Instead of discarding unlabeled data, we adopt a semi-supervised learning paradigm [ 63 ]. The user attributes and risk signals are propagated among labeled and unlabeled users, which allows the model to capture hidden risk patterns from the structural context of neighbors. To achieve this, we filter the predictions to retain only 
+
+Algorithm 1 RAOS Training Algorithm 
+
+Require: Global Graph G = (V , E, 𝑋 ), Labels 𝑌 , Partitions 𝐾 ,Budget 𝑀 , Threshold 𝜃 , Hyper-params 𝜆 𝐶𝐶𝐴 , 𝜆 𝑛 .
+
+Ensure: Optimized Model Parameters Θ∗. 
+
+> 1:
+
+{V 1, . . . , V𝐾 } ← Partition (V , 𝐾 ) 
+
+> 2:
+
+for 𝑘 = 1 to 𝐾 in parallel do  
+
+> 3:
+
+C𝑘 ← { 𝑣 ∈ V \ V 𝑘 | ∃ 𝑢 ∈ V 𝑘 , 𝐴 𝑣𝑢 ≠ 0} 
+
+> 4:
+
+C′ 
+
+> 𝑘
+
+← { 𝑣 ∈ C 𝑘 | h-index (𝑣 ) ≤ 𝜃 } 
+
+> 5:
+
+C𝑘,𝑀 ← TopM (C ′ 
+
+> 𝑘
+
+) 
+
+> 6:
+
+˜V𝑘 ← V 𝑘 ∪ C 𝑘,𝑀 ; ˜G𝑘 ← G [ ˜V𝑘 ] 
+
+> 7:
+
+end for  
+
+> 8:
+
+Initialize parameters Θ 
+
+> 9:
+
+while not converged do  
+
+> 10:
+
+H𝑡 ← ∅  
+
+> 11:
+
+for 𝑘 = 1 to 𝐾 in parallel do  
+
+> 12:
+
+𝐻 𝑡 𝑘 ← DHGNN ( ˜G𝑘 , 𝑋 𝑡 , Θ) 
+
+> 13:
+
+end for  
+
+> 14:
+
+𝐻 𝑡 ← MeanAgg ({ 𝐻 𝑡 𝑘 }𝐾 𝑘 =1) 
+
+> 15:
+
+ˆ𝑦 ← MLP (𝐻 𝑡 , Θ) 
+
+> 16:
+
+Compute L𝐵𝐶𝐸 via Eq.(19)  
+
+> 17:
+
+Compute L𝐶𝐶𝐴 via Eq.(15 - 17)  
+
+> 18:
+
+L𝑡𝑜𝑡𝑎𝑙 ← L 𝐵𝐶𝐸 + 𝜆 𝐶𝐶𝐴 L𝐶𝐶𝐴  
+
+> 19:
+
+Θ∗ ← Adam (∇ Θ L𝑡𝑜𝑡𝑎𝑙 ) 
+
+> 20:
+
+end while  
+
+> 21:
+
+return Θ∗
+
+those corresponding to the labeled users. Let ˆ𝑦 𝑡 𝑚 denote the masked predicted probabilities for the labeled subset, and 𝑦 𝑡 𝑚 denote the corresponding ground-truth labels. We optimize the model by min-imizing binary cross-entropy loss between the masked predictions and labels, which can be defined as: 
+
+L𝐵𝐶𝐸 = − 1
+
+𝑁 𝑚 𝑁 𝑚 ∑︁ 
+
+> 𝑖 =1
+
+𝑦 𝑡 𝑚,𝑖 · log ( ˆ𝑦 𝑡 𝑚,𝑖 ) + ( 1 − 𝑦 𝑡 𝑚,𝑖 ) · log (1 − ˆ𝑦 𝑡 𝑚,𝑖 )
+
+(19) where 𝑁 𝑚 is the number of labeled samples. Finally, the total objec-tive function is defined as: 
+
+Ltotal = L𝐵𝐶𝐸 + 𝜆 𝐶𝐶𝐴 LCCA (20) where 𝜆 𝐶𝐶𝐴 is the hyper-parameter. The overall training process is summarized in Algorithm 1. At each iteration, every worker per-forms forward propagation on its assigned subgraph in parallel and produces local gradients. Gradients are synchronized via AllReduce to update the shared model parameters. The model can be optimized through standard stochastic gradient descent-based methods. We use a default Adam optimizer [ 35 ] with the learning rate of 10 −3
+
+and the weight decay of 10 −5 to execute the optimization process. 
+
+## 4 Experiments 
+
+We conduct experiments to answer the following research questions: (1) RQ1 : How is the overall performance of RAOS compared with baselines on billion-scale credit risk detection? (2) RQ2 : What is the contribution of various components within RAOS to its overall performance? (3) RQ3 : How do hyper-parameter configurations affect the performance of RAOS? (4) RQ4 : What real-world value does RAOS deliver when deployed in production? KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. 
+
+Table 1: Performance comparison on WeCreditFraud dataset across two snapshots. For each snapshot, we evaluate current ( 𝑇 )and forward ( 𝑇 + 90 ) credit risk probability of users. The best and second best are highlighted in bold and underlined. 
+
+Category Method 
+
+𝑇 1 (2024-12-31) 𝑇 2 (2025-03-31) Current( 𝑇 1) Forward ( 𝑇 1 + 90 ) Current( 𝑇 1) Forward ( 𝑇 1 + 90 )KS AUC KS AUC KS AUC KS AUC 
+
+Non-Graph 
+
+XGBoost 48 .12 ±0.04 80 .85 ±0.02 23 .72 ±1.00 66 .14 ±0.56 44 .87 ±0.04 80 .99 ±0.50 21 .90 ±1.00 65 .04 ±0.56 
+
+MLP 41 .78 ±0.16 78 .30 ±0.28 16 .68 ±0.91 61 .00 ±0.16 40 .47 ±0.50 77 .32 ±0.15 17 .57 ±0.05 60 .72 ±0.36 
+
+PrefixSpan 51 .34 ±0.01 75 .67 ±0.03 16 .02 ±0.02 58 .01 ±0.01 40 .23 ±0.01 70 .12 ±0.01 15 .47 ±0.52 57 .73 ±0.26 
+
+Graph 
+
+DHGNN 51 .96 ±0.03 81 .02 ±0.04 25 .13 ±0.58 65 .93 ±0.42 51 .59 ±0.19 80 .58 ±0.02 24 .11 ±0.51 65 .17 ±0.31 
+
+-Random Hash 42 .46 ±0.78 76 .51 ±0.14 20 .61 ±0.30 63 .23 ±0.21 41 .27 ±0.23 75 .93 ±0.08 20 .38 ±0.45 63 .00 ±0.82 
+
+-Rule-based 49 .49 ±0.60 78 .41 ±0.23 21 .02 ±1.65 62 .49 ±1.07 49 .01 ±1.05 78 .72 ±0.34 20 .25 ±0.68 62 .09 ±0.29 
+
+-METIS 51 .73 ±1.01 79 .97 ±0.65 22 .18 ±0.07 62 .67 ±0.23 50 .67 ±0.07 79 .78 ±0.19 22 .30 ±0.70 63 .41 ±0.04 
+
+-COPRA 52 .60 ±0.97 79 .12 ±1.60 21 .51 ±1.90 60 .30 ±0.91 51 .46 ±1.27 78 .72 ±2.15 21 .84 ±0.29 61 .11 ±1.22 
+
+-RAOS (Ours) 52 .96 ±0.06 81 .57 ±0.01 26 .47 ±0.16 65 .72 ±0.30 52 .27 ±0.38 81 .41 ±0.24 25 .43 ±0.68 65 .55 ±0.49 
+
+## 4.1 Experimental Setup 
+
+4.1.1 Datasets. We conduct comprehensive experiments on a large-scale real-world dataset WeCreditFraud provided by Tencent, sourced from the Weixin Pay platform. Data collection and utilization are strictly in compliance with security and privacy policies. The dataset spans a period from January 1, 2024, to March 31, 2025, and contains over 845M user behavior records involving approximately 498M unique users and covering over 60 distinct types of risk events. Based on the records, we construct dynamic user-risk heteroge-neous graphs to picture correlations between users and diverse risk events. We derive a comprehensive risk score for each user by integrating multi-dimensional risk metrics, including severity and frequency of associated risk events. Notably, 88.3% of users remain unlabeled due to insufficient credit records. 
+
+4.1.2 Evaluations. The primary objective of our framework is dy-namic credit risk prediction. Given a sequence of 𝑇 graph snapshots, we aim to learn the spatio-temporal representations of users and output a scalar probability ˆ𝑦 𝑇 𝑢 ∈ [ 0, 1] at the final timestamp. To comprehensively assess the model’s capability in both identifying existing fraudulent users and predicting latent risks, we conduct evaluations under two distinct settings based on different ground-truth label definitions: (1) Current Risk ( 𝑇 ): The labels are deter-mined by the user’s credit fraud records strictly at the observation date 𝑇 . This setting evaluates the model’s precision in detecting users who have already exhibited risky behaviors. (2) Forward Risk ( 𝑇 + 90 ): The labels are derived from the users’ performance over a 90-day forward observation window [𝑇 ,𝑇 + 90 ]. Users are labeled as positive if they appear normal at 𝑇 but become fraudulent within the next 90 days according to the business definition. This setting tests the model’s early-warning ability to uncover hidden risks before they materialize. To comprehensively evaluate performance, we adopt two widely used metrics: KS (Kolmogorov-Smirnov) [ 42 ] and AUC (Area Under the ROC Curve). The KS value quantifies the maximum distance between the empirical cumulative distribution functions of the predicted risk probability for users. A higher KS value indicates a superior capability to rank users based on risk. AUC evaluates the model’s ability to discriminate between low-risk and high-risk users across various threshold settings. 
+
+4.1.3 Baselines. To comprehensively evaluate the effectiveness of our framework, we compare it with non-graph methods, including MLP [ 44 ], XGBoost [ 13 ], and PrefixSpan [ 30 ]. For distributed GNNs training, we compared it with several graph partitioning algorithms, including Random Hash [ 24 ], Rule-based partitioning, METIS [ 34 ], and COPRA [ 27 ]. More details can be seen in Appendix B.1. Notably, we employ a unified dynamic heterogeneous graph backbone for graph-based comparisons. It ensures that any performance diver-gence is attributed to different subgraph partitioning strategies for distributed GNNs training. To establish an evaluation benchmark with complete topological information, we trained the DHGNN backbone on the entire graph structure via a mini-batch training paradigm with global neighbor sampling [ 29 ]. More detailed analy-sis with other backbones is reported in Appendix B.2. 
+
+4.1.4 Implementation Details. For the backbone, we configure the Dynamic Heterogeneous Graph Neural Network with a hidden dimension of 𝑑 = 64 . The HGT module utilizes 4 attention heads and 𝐿 = 2 layers to aggregate spatial information. For the temporal module, we set the window size 𝑤 = 3 to capture the evolution over the past three months. The overlap ratio is set to 0.3 and the h-index threshold is 2. We set the non-negative weight 𝜆 𝑛 in LCCA 
+
+to 0.0002 and the contrastive loss weight 𝜆 𝐶𝐶𝐴 in the joint loss to 0.1. We implement the distributed training framework on a server with 8 NVIDIA Tesla H20 GPUs. Our method is implemented using PyTorch 1.12.1 with CUDA 12.1 and Python 3.9 as the backend. The subgraphs are processed in parallel across the GPUs using PyTorch distributed data parallel framework. 
+
+## 4.2 Credit Risk Detection Performance 
+
+Table 1 summarizes the performance on the WeCreditFraud dataset across two temporal snapshots ( 𝑇 1 and 𝑇 2). We report the mean and standard deviation of KS and AUC metrics over five runs. Our pro-posed RAOS consistently achieves superior performance compared to all baselines for credit risk detection. Specifically, for immediate risk detection, RAOS significantly outperforms standard distributed strategies. Compared to Random Hash, which severs risk paths, RAOS achieves a KS improvement of over 10.5%. This demonstrates that our overlapping strategy effectively restores the local struc-tural context required to identify existing fraudsters. The advantage Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Table 2: Ablation study of RAOS on WeCreditFraud ( 𝑇 1), com-paring the overlapping strategy with varying sampling strate-gies and the consistency alignment module. 
+
+Variant Current ( 𝑇 1) Forward ( 𝑇 1 + 90 )KS AUC KS AUC Random Hash 42.46 76.51 20.61 63.23 + Overlap (Random) 51.57 80.65 24.35 65.01 + Overlap (high h-index) 48.33 79.09 24.45 65.07 + Overlap (low h-index) 52.90 81.27 25.14 65.09 + Align ( =RAOS ) 52.96 81.57 26.47 65.72 
+
+is even more pronounced in the forward risk assessment. While graph-based methods like COPRA achieve decent scores in cur-rent risk detection, their forward KS drops sharply. This indicates that COPRA’s community-based expansion introduces excessive redundancy, which can mask subtle signals of latent risk and lead to overfitting on immediate risk patterns. In contrast, RAOS exhibits superior generalization capabilities. The model maintains a high forward KS by focusing on long-tail connectivity and successfully captures latent risk diffusion. RAOS identifies users who appear normal currently but are structurally connected to risk sources via subtle propagation paths, thus enabling effective early warning. Remarkably, our framework outperforms the full-graph training backbone. Intuitively, the full-graph setting is expected to serve as the theoretical performance upper bound as it preserves complete topological information, whereas distributed methods inevitably incur information loss due to partitioning. However, real-world financial networks suffer from structural noise, where sparse risk signals are often overshadowed by redundant connections. We at-tribute our superior performance to the structural denoising effect of the long-tail overlapping strategy. By selectively sampling in-formative long-tail nodes while filtering out noise, our strategy enhances the representations of long-tail nodes. Consequently, this yields node embeddings that are more robust and discriminative compared to those derived from the noisy full graph. 
+
+## 4.3 Ablation Study 
+
+To verify the contribution of each component in our framework, we conduct an incremental ablation study on WeCreditFraud ( 𝑇 1). We start with the Random Hash baseline and sequentially incorporate the overlapping strategy, varying overlapping sampling mecha-nisms, and consistency alignment. The results are summarized in Table 2, validating the following conclusions: (1) The overlapping strategy is essential. We observe a substantial performance leap upon introducing the overlapping mechanism. This confirms that disjoint partitioning severely disrupts risk propagation. Even a random overlapping sampling strategy effectively recovers a sig-nificant portion of the lost structural context, yielding improve-ments of 9.11% and 3.74% in current and forward KS, respectively. (2) Valid risk patterns are concealed in long-tail entities. We com-pare the three sampling strategies that sample random, high h-index, and low h-index nodes. The variant prioritizing high h-index nodes performs worse than the random strategy, with current AUC dropping by 1.56%. This indicates that indiscriminate expansion of 30 40 50 60       
+
+> Overlap Ratio (%)
+> 20
+> 30
+> 40
+> 50
+> KS
+> T1
+> 30 40 50 60
+> Overlap Ratio (%)
+> T2
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> AUC
+> Current KS Current AUC Forward KS Forward AUC
+
+Figure 3: Impact of varying overlap ratio. Current KS     
+
+> Current AUC
+> Forward KS
+> Forward AUC
+> high risk
+> low risk
+> 0.29%
+> 1.10%
+> 2.28%
+> 0.30%
+> 1.08%
+> 2.13%
+> 123
+> h-index threshold
+> 20
+> 30
+> 40
+> 50
+> KS
+> T1
+> 123
+> h-index threshold
+> T2
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> AUC
+
+Figure 4: Impact of varying 𝜃 . The line charts report the detection performance, while stacked bars show volume and risk composition of candidate nodes (h-index ≤ 𝜃 ). 
+
+high-degree hubs introduces structural noise and redundancy. Con-versely, prioritizing long-tail nodes preserves critical risk context and amplifies valid risk signals, thereby yielding optimal results. (3) Representation consistency is critical. Comparing the model with and without the alignment module, we observe that the per-formance gains, especially the forward KS shows a 1.33% increase. This demonstrates that the alignment module effectively projects local views into a globally consistent latent space, which is crucial for model generalization and forward risk prediction. 
+
+## 4.4 Parameter Sensitivity Experiment 
+
+We further discuss the important hyperparameters of varying over-lap ratios and h-index thresholds. We conduct the parameter sensi-tivity analysis on WeCreditFraud ( 𝑇 1 and 𝑇 2). 
+
+Impact of varying overlap ratio. The overlap ratio defined as 𝑀 /| 𝑉 𝑖 |, represents the number of overlapping nodes 𝑀 relative to the size of the base subgraph 𝑉 𝑖 . As illustrated in Figure 3, our RAOS exhibits a relatively stable performance as the ratio varies from 30% to 50%. It suggests that a controlled expansion budget is sufficient to effectively incorporate informative long-tail nodes and restore cross-subgraph connectivity, without introducing excessive redundancy. However, when the ratio keeps increasing, we observe a slight performance degradation. This indicates that an overly aggressive expansion strategy inevitably incorporates structural noise that dilutes the valid risk signals. Therefore, an appropri-ate selection of the overlap ratio represents an optimal trade-off, ensuring that the model enhances long-tail representation while maintaining a high signal-to-noise ratio. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. Risk Model Manager                    
+
+> Feature Selector
+> Aggregate Features
+> Select Key Matrix
+> Unified Model Manager
+> Final Risk Score
+> Task
+> Request
+> Input
+> Basic Feature Loader
+> Trade
+> Feedback for Model Update
+> User Risk Ranking
+> User Behavior
+> Social
+> Trigger Event
+> User -Risk Graph
+> Risk Context
+
+Figure 5: Overview of the online inference pipeline. Basic features and graph-based features are fused by a selector and utilized by a unified model manager to generate final risk scores and user rankings. A feedback loop continuously refines the model with online inference outcomes. Impact of varying h-index threshold. The h-index threshold 
+
+𝜃 determines the selection scope for overlapping nodes. As illus-trated in Figure 4, the background stacked bars visualize the volume and risk composition of the candidate nodes satisfying h-index ≤ 𝜃 .We observe a clear positive correlation between h-index and the risk ratio. As 𝜃 increases to include higher h-index nodes, the proportion of high-risk nodes rises to 2.28%, validating the h-index as an effec-tive indicator of risk density. However, this higher risk density does not translate into better generalization. While the current metrics show a marginal rise as the threshold increases, forward metrics suffer a notable decline. This suggests that high h-index nodes, de-spite being risk-dense, introduce excessive structural redundancy and noise that obscure subtle propagation paths. In contrast, low h-index nodes have sparse connectivity. They are more vulnerable to partitioning as the risk signals around them are easily extin-guished. Therefore, limiting selection to low h-index nodes forces the model to focus on informative long-tail nodes. These nodes provide unique structural context that enhances robustness, pre-venting the model from overfitting to immediate high-risk signals and thereby preserving its capability to detect hidden risks. 
+
+## 5 System Deployment 5.1 Training and Inference 
+
+Distributed GNNs Training. Deploying a graph learning frame-work within Weixin Pay faces computational and storage chal-lenges. We implemented a training system based on the distributed data parallel [38] paradigm. Leveraging the overlapping subgraph strategy, we transform the global graph into self-contained train-ing samples. This allows us to replicate the model across 𝐾 GPU workers and each worker performs forward propagation on its assigned subgraph in parallel. During back-propagation, gradients are synchronized globally using the Ring-AllReduce algorithm [ 26 ], ensuring linear scalability. In production, RAOS trains on WeCred-itFraud on 8 H20 GPUs in 16 hours, with peak memory 66.6 GB per worker, communication and I/O overhead at 5.5% and 0.75% per epoch, and inference latency of 2.78 s for 1M users. These incremen-tal costs remain within the production budget. More analysis about the communication overhead and training time scaling with the number of workers and overlap ratios is provided in Appendix B.3. 
+
+Table 3: Online A/B tests comparing with existing models on Weixin Pay platform in terms of User-level KS (User) and Amount-weighted KS (Amt) across different user segments. 
+
+Model Overall Active Inactive User Amt User Amt User Amt Baseline-v1 62.11 50.48 53.90 50.22 25.60 24.58 Baseline-v2 62.86 52.37 55.59 52.24 24.31 20.64 
+
+RAOS 63.16 52.70 55.09 52.52 28.37 26.05 
+
+Regarding operational efficiency, we integrated the training work-flow into Tencent’s tidal resource system. By leveraging the elastic GPU resource pool during off-peak hours, we optimize hardware utilization and significantly reduce deployment expenses without compromising model update frequency. 
+
+Online Inference. For the online serving phase, we designed an inference pipeline as illustrated in Figure 5. When a risk assess-ment task is triggered, a parallel processing mechanism is activated. On one track, the basic feature loader retrieves multidimensional behavioral data, including trade history, WeChat usage, and so-cial interactions. Simultaneously, the risk model manager executes graph-based inference, leveraging the user-risk graph and overlap-ping subgraph structures derived from distributed training. These heterogeneous signals converge at the feature selector, where the system performs feature aggregation, core index counting, and key matrix selection to optimize the input representation. Subsequently, the unified model manager processes the fused features to gener-ate both a final risk score and a user risk ranking for credit risk detection. The risk score and ranking are subsequently consumed by downstream risk-control modules. High-confidence risk users trigger immediate intervention measures, while medium-risk users enter a watchlist. Finally, the system employs a feedback loop from business experts, transmitting inference outcomes and subsequently observed ground-truth labels back to the training environment to continuously update and refine the models. 
+
+## 5.2 Online A/B Tests 
+
+To thoroughly validate the real-world effectiveness and business impact of our framework, we deployed RAOS in the production environment of Weixin Pay and conducted a comparative analysis against existing incumbent models (referred to as Baseline-v1/v2). The A/B tests ran for 30 days with a 50/50 traffic split between the baselines and RAOS. Unlike offline experiments, online evaluation requires a multidimensional perspective to balance user discrimina-tion accuracy and financial asset safety. Therefore, we monitored two distinct indicators: user-level KS and amount-weighted KS . User-level KS measures the model’s ability to distinguish between high-risk and normal users. It reflects the general discriminatory power over the population. Amount-weighted KS calculates the KS value based on the amount involved in each user’s payment behavior. In financial credit risk control, a fraudulent case with a large amount causes significantly more damage than a small one. We partition the users into two complementary segments based on their pay-ment activities. Active users’ frequent payment behaviors provide rich behavioral signals to the system, while Inactive users’ remain Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Table 4: Online A/B test results stratified by predicted risk probability. Δ denotes the relative improvement of RAOS over the baseline-v2 in risk user recall and risk amount recall. 
+
+Risk Probability Top 1% (1%-5%] (5%-20%] (20%, 100%] 
+
+Δ User Recall +2.6% +0.7% +4.9% +3.9% 
+
+Δ Amount Recall +3.3% +3.5% +4.8% +7.5% sparse, leaving existing models with limited individual evidence for risk assessment. As presented in table 3, RAOS demonstrates comprehensive superiority. The most significant breakthrough is ob-served in the inactive segment. Compared with Baseline-v2, RAOS achieves a remarkable performance leap, increasing the user-level KS by 4.06% and the amount-weighted KS by 5.41% on inactive user risk detection. By preserving cross-subgraph risk context, our RAOS effectively captures the subtle risk signals of inactive users. We further quantified the economic impact of RAOS on asset preservation. We compared both user recall and amount recall stratified by risk probability in table 4. The two metrics measure the proportion of fraudulent users captured and the proportion of monetary loss prevented, respectively. We aligned the risk scores from both models and computed these recalls within the Top 1%, 5%, and 20% risk score intervals. RAOS improves both metrics across all risk segments, with all gains being statistically significant ( 𝑝 < 0.01 ). Specifically, the largest improvements concentrate in the Top (5%-20%] and (20%, 100%] segments, where risk user recall increases by 4.9% and 3.9% respectively compared to baseline-v2. The results validate RAOS’s strength in mining concealed fraudulent users. Meanwhile, the gains in risk amount recall demonstrate that the framework’s predictive precision effectively translates into tangible financial gains. These gains validate the model’s ability to mine forward fraud risks, thereby preventing economic losses. 
+
+## 6 Related Work 6.1 Credit Risk Detection 
+
+Credit risk detection is necessary to maintain the stability of finan-cial ecosystems and minimize financial loss. Existing risk detection methods have transitioned from rule-based systems to machine learning [ 8, 14 ]. Methods like XGBoost have been widely adopted to asses users’ financial risk by integrating detailed attributes [ 1 , 3]. However, these methods heavily rely on feature engineering. Re-cently, graph-based methods have been proposed for risk detection to model the intricate topological structures of user-risk interac-tions [ 17 , 28 , 37 , 56 ]. A heterogeneous graph comprising user and risk event nodes can be constructed to represent the risk landscape. GNNs can aggregate neighborhood information to uncover latent risk patterns. For example, HetGNN [ 60 ] samples heterogeneous neighbors via random walk. H2-FDetector [ 46 ] uncovers hidden ma-licious entities by explicitly separating homophilic and heterophilic connections. Some researches have incorporated temporal dimen-sions to capture evolving user behaviors and sequential risk depen-dencies within dynamic graphs [ 15 , 16 ]. However, the industrial deployment of GNNs faces a fundamental bottleneck: scalability. Since real-world graphs typically contain billions of nodes, they must be partitioned into subgraphs for distributed training. 
+
+## 6.2 Scalable Deep Graph Learning 
+
+Scalability remains a critical bottleneck for deploying GNNs on billion-scale industrial graphs. Existing solutions primarily fall into two categories: (1) decoupling feature propagation from transfor-mation to reduce computational complexity [ 39 , 54 , 62 ]. SGC [ 51 ], HopGNN [ 10 ] simplifies GNNs via pre-computed propagation. Node-Former [ 53 ] utilizes linearized attention mechanisms to bypass re-cursive message passing. In risk detection scenarios, such simplified mechanics often lack the adaptive sensitivity required to capture subtle non-linear risk patterns. (2) Sampling-based strategies have become the dominant paradigm for industrial applications [ 58 ]. GraphSAGE [ 29 ] samples a fixed number of neighbors per layer to constrain the receptive field, but suffers from the neighbor explo-sion problem. To mitigate this, subgraph-based methods including ClusterGCN [ 19 ], GraphSAINT [ 59 ], Ripple walks [ 4], and learn-able pooling strategies [ 25 ] decompose the graph into manageable subgraphs or grid-like structures for parallel training. Those based on disjoint subgraphs often sacrifice structural integrity. This can be catastrophic for risk patterns characterized by subtle long-tail dependencies, as it indiscriminately severs the fragile evidence chains required for detection. While others consider overlapping subgraphs can restore risk contexts, the inclusion of overlapping nodes can introduce redundancy and noise. Furthermore, existing approaches lack a mechanism to align cross-subgraph representa-tions of overlapping nodes, leading to semantic inconsistency. 
+
+## 7 Conclusion 
+
+In this paper, we present RAOS, a scalable graph learning frame-work designed for billion-scale credit risk detection. To achieve both industrial scalability and high-precision detection, we devise a risk-aware overlapping subgraph learning framework. It effectively retains critical risk contexts, yet strictly controls the boundary expansion to mitigate noise and redundancy. Simultaneously, the framework can capture subtle risk patterns for long-tail users. Ex-tensive offline evaluations and online deployment on billion-scale graphs demonstrate the effectiveness of RAOS as a scalable instru-ment for credit risk detection. It helps minimize financial losses and prevent the propagation of credit fraud risks, contributing to a stable financial ecosystem. Technically, our work can provide a reference for the industrial deployment of large-scale GNNs. 
+
+## 8 Ethics Statement 
+
+This work strictly adheres to data privacy regulations and the inter-nal data governance policies of Weixin Pay. All experiments were conducted on Weixin Pay’s internal infrastructure. No raw user identifiers, message contents, or personally identifiable informa-tion were accessed by the authors at any stage of the pipeline. The graph encodes processed aggregated features (e.g., transfer counts between encrypted IDs), so that individual behaviors are neither exposed nor reconstructible. 
+
+## Acknowledgments 
+
+This work was supported by the National Science Foundation of China (Grant no. 62522213 and 62472317) and the Fundamental Research Funds for the Central Universities. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. 
+
+## References 
+
+[1] Abdussalam Aljadani, Bshair Alharthi, Mohammed A Farsi, Hossam Magdy Bal-aha, Mahmoud Badawy, and Mostafa A Elhosseini. 2023. Mathematical modeling and analysis of credit scoring using the lime explainer: a comprehensive approach. 
+
+Mathematics 11, 19 (2023), 4055. [2] Galen Andrew, Raman Arora, Jeff Bilmes, and Karen Livescu. 2013. Deep canonical correlation analysis. In International conference on machine learning . PMLR, 1247– 1255. [3] Nisha Arora and Pankaj Deep Kaur. 2020. A Bolasso based consistent feature selection enabled random forest classification algorithm: An application to credit risk assessment. Applied Soft Computing 86 (2020), 105936. [4] Jiyang Bai, Yuxiang Ren, and Jiawei Zhang. 2021. Ripple walk training: A subgraph-based training framework for large and deep graph neural network. In 
+
+2021 International Joint Conference on Neural Networks (IJCNN) . IEEE, 1–8. [5] Ben S Bernanke et al . 1993. Credit in the Macroeconomy. Quarterly Review-Federal Reserve Bank of New York 18 (1993), 50–50. [6] Ben S Bernanke and Alan S Blinder. 1988. Credit, money, and aggregate demand. [7] Ken Brown and Peter Moles. 2014. Credit risk management. K. Brown & P. Moles, Credit Risk Management 16 (2014). [8] Cem Bulut and Emel Arslan. 2024. Comparison of the impact of dimension-ality reduction and data splitting on classification performance in credit risk assessment. Artificial Intelligence Review 57, 9 (2024), 252. [9] John B Caouette, Edward I Altman, and Paul Narayanan. 1998. Managing credit risk: the next great financial challenge. (1998). [10] Jie Chen, Zilong Li, Yin Zhu, Junping Zhang, and Jian Pu. 2023. From node inter-action to hop interaction: New effective and scalable graph learning paradigm. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .7876–7885. [11] Ming Chen, Zhewei Wei, Bolin Ding, Yaliang Li, Ye Yuan, Xiaoyong Du, and Ji-Rong Wen. 2020. Scalable graph neural networks via bidirectional propagation. 
+
+Advances in neural information processing systems 33 (2020), 14556–14566. [12] Ning Chen, Bernardete Ribeiro, and An Chen. 2016. Financial credit risk assess-ment: a recent review. Artificial Intelligence Review 45, 1 (2016), 1–23. [13] Tianqi Chen and Carlos Guestrin. 2016. XGBoost: A Scalable Tree Boosting System. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , Vol. 13. ACM, 785–794. [14] Dawei Cheng, Zhibin Niu, Yi Tu, and Liqing Zhang. 2018. Prediction defaults for networked-guarantee loans. In 2018 24th International Conference on Pattern Recognition (ICPR) . IEEE, 361–366. [15] Dawei Cheng, Xiaoyang Wang, Ying Zhang, and Liqing Zhang. 2020. Graph neu-ral network for fraud detection via spatial-temporal attention. IEEE Transactions on Knowledge and Data Engineering 34, 8 (2020), 3800–3813. [16] Dawei Cheng, Sheng Xiang, Chencheng Shang, Yiyi Zhang, Fangzhou Yang, and Liqing Zhang. 2020. Spatio-temporal attention-based neural network for credit card fraud detection. In Proceedings of the AAAI conference on artificial intelligence , Vol. 34. 362–369. [17] Dawei Cheng, Yujia Ye, Sheng Xiang, Zhenwei Ma, Ying Zhang, and Changjun Jiang. 2023. Anti-money laundering by group-aware deep graph learning. IEEE Transactions on Knowledge and Data Engineering 35, 12 (2023), 12444–12457. [18] Dawei Cheng, Yao Zou, Sheng Xiang, and Changjun Jiang. 2025. Graph neural networks for financial fraud detection: a review. Frontiers of Computer Science 19, 9 (2025), 199609. [19] Wei-Lin Chiang, Xuanqing Liu, Si Si, Yang Li, Samy Bengio, and Cho-Jui Hsieh. 2019. Cluster-gcn: An efficient algorithm for training deep and large graph convolutional networks. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining . 257–266. [20] Michel Crouhy, Dan Galai, and Robert Mark. 2000. A comparative analysis of current credit risk models. Journal of Banking & Finance 24, 1-2 (2000), 59–117. [21] Qiang Cui, Shu Wu, Yan Huang, and Liang Wang. 2019. A hierarchical contextual attention-based network for sequential recommendation. Neurocomputing 358 (2019), 141–149. [22] Rahul Dey and Fathi M Salem. 2017. Gate-variants of gated recurrent unit (GRU) neural networks. In 60th international midwest symposium on circuits and systems (MWSCAS) . IEEE, 1597–1600. [23] Kang Fu, Dawei Cheng, Yi Tu, and Liqing Zhang. 2016. Credit card fraud de-tection using convolutional neural networks. In Neural Information Processing: 23rd International Conference, ICONIP 2016, Kyoto, Japan, October 16–21, 2016, Proceedings, Part III 23 . Springer, 483–490. [24] Swapnil Gandhi and Anand Padmanabha Iyer. 2021. P3: Distributed deep graph learning at scale. In 15th USENIX Symposium on Operating Systems Design and Implementation OSDI 21) . 551–568. [25] Hongyang Gao, Zhengyang Wang, and Shuiwang Ji. 2018. Large-scale learn-able graph convolutional networks. In Proceedings of the 24th ACM SIGKDD international conference on knowledge discovery & data mining . 1416–1424. [26] Andrew Gibiansky. 2017. Bringing HPC techniques to deep learning. Baidu Research, Tech. Rep. (2017). [27] Steve Gregory. 2010. Finding overlapping communities in networks by label propagation. New journal of Physics 12, 10 (2010), 103018. [28] Minjian Guang, Rui Zhang, Dawei Cheng, Xiaoyang Wang, Xin Liu, Jie Yang, Yi Ouyang, Xian Wu, and Yefeng Zheng. 2025. Homophily Edge Augment Graph Neural Network for High-Class Homophily Variance Learning. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025). [29] Will Hamilton, Zhitao Ying, and Jure Leskovec. 2017. Inductive representation learning on large graphs. Advances in neural information processing systems 30 (2017). [30] Jiawei Han, Jian Pei, Behzad Mortazavi-Asl, Helen Pinto, Qiming Chen, Umesh-war Dayal, and Meichun Hsu. 2001. Prefixspan: Mining sequential patterns efficiently by prefix-projected pattern growth. In proceedings of the 17th interna-tional conference on data engineering . IEEE Piscataway, NJ, USA, 215–224. [31] Li Han, Longxun Wang, Ziyang Cheng, Bo Wang, Guang Yang, Dawei Cheng, and Xuemin Lin. 2025. Mitigating the tail effect in fraud detection by community enhanced multi-relation graph neural networks. IEEE Transactions on Knowledge and Data Engineering 37, 4 (2025), 2029–2041. [32] Jorge E Hirsch. 2005. An index to quantify an individual’s scientific research output. Proceedings of the National academy of Sciences 102, 46 (2005), 16569– 16572. [33] Ziniu Hu, Yuxiao Dong, Kuansan Wang, and Yizhou Sun. 2020. Heterogeneous graph transformer. In Proceedings of the web conference 2020 . 2704–2710. [34] George Karypis and Vipin Kumar. 1997. METIS: A software package for parti-tioning unstructured graphs, partitioning meshes, and computing fill-reducing orderings of sparse matrices. (1997). [35] Diederik P Kingma and Jimmy Ba. 2015. Adam: A method for stochastic opti-mization. In International Conference on Learning Representations .[36] Fan Li, Xiaoyang Wang, Dawei Cheng, Wenjie Zhang, Ying Zhang, and Xuemin Lin. 2024. Hypergraph self-supervised learning with sampling-efficient signals. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence . 4398–4406. [37] Fan Li, Zhiyu Xu, Dawei Cheng, and Xiaoyang Wang. 2024. Adarisk: risk-adaptive deep reinforcement learning for vulnerable nodes detection. IEEE Transactions on Knowledge and Data Engineering 36, 11 (2024), 5576–5590. [38] Shen Li, Yanli Zhao, Rohan Varma, Omkar Salpekar, Pieter Noordhuis, Teng Li, Adam Paszke, Jeff Smith, Brian Vaughan, Pritam Damania, et al . 2020. PyTorch Distributed: Experiences on Accelerating Data Parallel Training. Proceedings of the VLDB Endowment 13, 12 (2020). [39] Haiyang Lin, Mingyu Yan, Xiaochun Ye, Dongrui Fan, Shirui Pan, Wenguang Chen, and Yuan Xie. 2023. A comprehensive survey on distributed training of graph neural networks. Proc. IEEE 111, 12 (2023), 1572–1606. [40] Jun Liu, Gang Wang, Ping Hu, Ling-Yu Duan, and Alex C Kot. 2017. Global context-aware attention lstm networks for 3d action recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition . 1647–1656. [41] Xin Liu, Yuanhang Yu, Peng Zhu, Dawei Cheng, and Changjun Jiang. 2026. Role Perceptual Augmented Temporal Graph Network for Related-party Transaction Detection. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 40. 38943–38951. [42] Frank J Massey Jr. 1951. The Kolmogorov-Smirnov test for goodness of fit. Journal of the American statistical Association 46, 253 (1951), 68–78. [43] Zhibin Niu, Dawei Cheng, Liqing Zhang, and Jiawan Zhang. 2018. Visual an-alytics for networked-guarantee loans risk management. In 2018 IEEE Pacific Visualization Symposium (PacificVis) . IEEE, 160–169. [44] Frank Rosenblatt. 1958. The perceptron: a probabilistic model for information storage and organization in the brain. Psychological review 65, 6 (1958), 386. [45] KR Seeja and Masoumeh Zareapoor. 2014. Fraudminer: A novel credit card fraud detection model based on frequent itemset mining. The Scientific World Journal 
+
+2014, 1 (2014), 252797. [46] Fengzhao Shi, Yanan Cao, Yanmin Shang, Yuchen Zhou, Chuan Zhou, and Jia Wu. 2022. H2-fdetector: A gnn-based fraud detector with homophilic and heterophilic connections. In Proceedings of the ACM web conference 2022 . 1486–1494. [47] René M Stulz. 2010. Credit default swaps and the credit crisis. Journal of Economic Perspectives 24, 1 (2010), 73–92. [48] Yizhou Sun and Jiawei Han. 2012. Mining heterogeneous information networks: principles and methodologies . Morgan & Claypool Publishers. [49] Yizhou Sun, Jiawei Han, Xifeng Yan, Philip S Yu, and Tianyi Wu. 2011. Pathsim: Meta path-based top-k similarity search in heterogeneous information networks. 
+
+Proceedings of the VLDB Endowment 4, 11 (2011), 992–1003. [50] Petar Veličković, Guillem Cucurull, Arantxa Casanova, Adriana Romero, Pietro Lio, and Yoshua Bengio. 2017. Graph attention networks. arXiv preprint arXiv:1710.10903 (2017). [51] Felix Wu, Amauri Souza, Tianyi Zhang, Christopher Fifty, Tao Yu, and Kilian Weinberger. 2019. Simplifying graph convolutional networks. In International conference on machine learning . Pmlr, 6861–6871. [52] Jiasheng Wu, Xincheng Wang, Jie Yang, Dawei Cheng, Guang Yang, and Bo Wang. 2025. Defending Attacks on Anti-Fraud Model With Generative Graph Representations. IEEE Transactions on Knowledge and Data Engineering 38, 2 (2025), 969–982. Empowering Credit Risk Detection in Weixin Pay with Billion-Scale Deep Graph Learning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea                              
+
+> [53] Qitian Wu, Wentao Zhao, Zenan Li, David P Wipf, and Junchi Yan. 2022. Node-former: A scalable graph structure learning transformer for node classification.
+> Advances in Neural Information Processing Systems 35 (2022), 27387–27401. [54] Yidi Wu, Kaihao Ma, Zhenkun Cai, Tatiana Jin, Boyang Li, Chenguang Zheng, James Cheng, and Fan Yu. 2021. Seastar: vertex-centric programming for graph neural networks. In Proceedings of the sixteenth european conference on computer systems . 359–375. [55] Sheng Xiang, Dawei Cheng, Chencheng Shang, Ying Zhang, and Yuqi Liang. 2022. Temporal and heterogeneous graph neural network for financial time series prediction. In Proceedings of the 31st ACM international conference on information & knowledge management . 3584–3593. [56] Sheng Xiang, Guibin Zhang, Dawei Cheng, and Ying Zhang. 2025. Enhancing attribute-driven fraud detection with risk-aware graph representation. IEEE Transactions on Knowledge and Data Engineering (2025). [57] Sheng Xiang, Mingzhi Zhu, Dawei Cheng, Enxia Li, Ruihui Zhao, Yi Ouyang, Ling Chen, and Yefeng Zheng. 2023. Semi-supervised credit card fraud detection via attribute-driven graph representation. In Proceedings of the AAAI conference on artificial intelligence , Vol. 37. 14557–14565. [58] Hanqing Zeng, Muhan Zhang, Yinglong Xia, Ajitesh Srivastava, Andrey Malevich, Rajgopal Kannan, Viktor Prasanna, Long Jin, and Ren Chen. 2021. Decoupling the depth and scope of graph neural networks. Advances in neural information processing systems 34 (2021), 19665–19679. [59] Hanqing Zeng, Hongkuan Zhou, Ajitesh Srivastava, Rajgopal Kannan, and Viktor Prasanna. 2020. GraphSAINT: Graph Sampling Based Inductive Learning Method. In International Conference on Learning Representations .[60] Chuxu Zhang, Dongjin Song, Chao Huang, Ananthram Swami, and Nitesh V Chawla. 2019. Heterogeneous graph neural network. In Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining .[61] Yifan Zhang, Bingyi Kang, Bryan Hooi, Shuicheng Yan, and Jiashi Feng. 2023. Deep long-tailed learning: A survey. IEEE transactions on pattern analysis and machine intelligence 45, 9 (2023), 10795–10816. [62] Yangjie Zhou, Jingwen Leng, Yaoxu Song, Shuwen Lu, Mian Wang, Chao Li, Minyi Guo, Wenting Shen, Yong Li, Wei Lin, et al .2023. ugrapher: High-performance graph operator computation via unified abstraction for graph neural networks. In Proceedings of the 28th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2 . 878–891. [63] Peng Zhu, Dawei Cheng, Siqiang Luo, Ruyao Xu, Yuqi Liang, and Yifeng Luo. 2022. Leveraging enterprise knowledge graph to infer web events’ influences via self-supervised learning. Journal of Web Semantics 74 (2022), 100722.
+
+## A Detailed Descriptions of Baselines 
+
+To evaluate the proposed framework, we compare it against a di-verse set of baselines, ranging from widely deployed industrial non-graph models to various scalable graph learning strategies. 
+
+Non-Graph Methods. These methods treat users as indepen-dent and identically distributed instances, relying on statistical aggregations or sequential patterns. We feed them with aggregated user profiles and manual statistical features. 
+
+• XGBoost [13 ]: An optimized distributed gradient boosting library that implements machine learning algorithms under the Gradient Boosting framework for efficient and accurate classification. 
+
+• MLP [ 44 ]: A standard feedforward neural network with fully connected layers, capable of learning non-linear features. 
+
+• PrefixSpan [30 ]: An efficient sequential pattern mining al-gorithm that explores prefix-projection to discover the com-plete set of frequent patterns. 
+
+Graph-based Methods. We evaluate RAOS against methods for scalable GNN training under our production setup. (1) We inves-tigate the impact of different subgraph partitioning strategies on detection performance in distributed GNNs training. We employ a unified Dynamic Heterogeneous Graph Neural Network (DHGNN) backbone across all the following methods. The only variable is the partitioning algorithm used to distribute the graph across workers. (2) We compare with subgraph sampling training baselines adapted to distributed training. As the training cost of these paradigms ex-ceeds 24 hours on the full production graph, we report their results on a sampled subgraph in the Appendix B.1. 
+
+• Random Hash Partitioning [ 24 ]: A strategy that distributes nodes across partitions based on a hash function applied to node identifiers, ensuring uniform load balancing. 
+
+• Rule-based Partitioning : A heuristic approach that groups nodes into partitions based on specific attribute values or predefined business logic. In our experiment, we partition users based on their business performance (e.g., transaction frequency, transaction volume, etc.) 
+
+• METIS [34 ]: A multilevel strategy consisting of three phases: graph coarsening to reduce size, initial partitioning on the coarsest graph, and uncoarsening with refinement to project and optimize the partition on the original graph. 
+
+• COPRA [ 27 ]: An efficient algorithm that extends label prop-agation to detect overlapping community structures in large networks by allowing nodes to propagate and retain mem-bership in multiple communities simultaneously. 
+
+• GraphSAINT [ 59 ]: A subgraph-sampling paradigm where each worker independently samples a subgraph at every iteration via random walks, with per-edge normalization coefficients to correct estimator bias. 
+
+• ClusterGCN [ 19 ]: A clustering-based paradigm that pre-partitions the graph into densely connected clusters using METIS, then forms training mini-batches by merging multi-ple clusters at each step. 
+
+## B Additional Offline Experiments 
+
+The supplementary analysis is performed on a representative sub-graph by sampling at timestamp 𝑇 1 (2024-12-31), containing about 2M users and 30M edges. 
+
+## B.1 Comparison with Subgraph Sampling Baselines 
+
+We report detection accuracy together with system metrics, includ-ing training time per epoch, I/O overhead, communication over-head, peak GPU memory, and inference latency. As shown in table 5, RAOS consistently outperforms all baselines and remains efficient in system metrics. GraphSAINT suffers from accuracy degradation and a massive runtime I/O bottleneck because its online sampling tends to introduce redundant nodes and noise. ClusterGCN incurs a high communication cost for cross-worker cluster merging. In contrast, our RAOS avoids both bottlenecks via overlapping sub-graphs, where cross-subgraph risk diffusion paths are preserved at a minimal runtime cost. 
+
+## B.2 Generalization to Different GNN Backbones 
+
+While Table 1 adopts DHGNN as the graph learning backbone, we further replace DHGNN with two widely used GNN backbones GAT [ 50 ] and GraphSAGE [ 29 ], adapted to handle the heteroge-neous user-risk graph. We compare disjoint random hash partition-ing with RAOS partitioning under identical training settings. As shown in table 6, RAOS consistently improves all metrics across both backbones, yielding 1.01%, 0.78% improvements on current KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xin Liu et al. 
+
+Table 5: Comparisons on WeCreditFraud subgraph ( 𝑇 1) in terms of detection accuracy and system metrics including per-epoch training time, I/O overhead, communication overhead, peak GPU memory, and inference latency. 
+
+Method Current ( 𝑇 1) Forward ( 𝑇 1 + 90 ) Train (s) I/O (ms) Comm (s) GPU (GB) Infer (ms) KS AUC KS AUC GraphSAINT 72.34 92.97 38.92 76.00 54.00 413.27 0.54 21.12 135.70 ClusterGCN 70.70 92.42 41.31 76.51 46.00 2.84 2.75 39.65 334.26 DHGNN 72.29 92.87 42.08 76.74 4.78 0.01 0.01 39.42 223.25 -Random Hash 72.70 92.44 40.24 76.58 3.92 1.29 0.28 20.43 242.08 -RAOS (Ours) 72.99 93.56 42.23 77.60 4.74 2.77 0.43 26.13 192.12 
+
+Table 6: Analysis of backbone generalization. 
+
+Backbone Method Current ( 𝑇 1) Forward ( 𝑇 1 + 90 )KS AUC KS AUC GAT Random Hash 74.21 93.87 37.78 74.19 RAOS (Ours) 75.22 94.31 38.55 75.86 
+
+GraphSAGE Random Hash 70.82 92.78 41.62 76.40 RAOS (Ours) 71.60 93.06 42.32 77.30 1 2 4 8    
+
+> #workers
+> 0
+> 5
+> 10
+> 15
+> 20
+> Overhead (ms)  0% (Disjoint)
+> 10% Overlap
+> 30% Overlap
+> (a) Communication overhead per epoch 1248
+> #workers
+> 3.5
+> 4.0
+> 4.5
+> Training time (s)
+> 0% (Disjoint)
+> 10% Overlap
+> 30% Overlap (b) Training time per epoch
+
+Figure 6: Scalability of RAOS across varying numbers of GPU workers and overlap ratios. 
+
+KS and 0.77%, 0.70% improvements on forward KS for GAT and GraphSAGE respectively. The results validate the effectiveness and generalizability of our proposed RAOS on diverse backbones. The effectiveness of RAOS is rooted in structure preservation rather than in coupling with a particular GNN architecture, supporting its applicability to a wide range of large-scale graph learning systems. 
+
+## B.3 Communication Overhead Analysis 
+
+We analyze the communication overhead of RAOS. Theoretically, the communication cost of RAOS arises from two sources: (1) gra-dient synchronization across workers via Ring-AllReduce and (2) representation alignment of overlapping nodes, which grows with the overlap ratio. Figure 6 reports the communication overhead and total training time per epoch under varying numbers of GPU workers and overlap ratios. The communication overhead grows approximately linearly with the overlap ratio but remains a small fraction of the total training time. The training time per epoch of our RAOS scales near-linearly with the number of GPUs. Under disjoint partitioning, 8 workers achieve a 1.46 × speedup over single-GPU training. The communication overhead increases with higher overlap ratios due to the additional cost of more overlapping nodes.

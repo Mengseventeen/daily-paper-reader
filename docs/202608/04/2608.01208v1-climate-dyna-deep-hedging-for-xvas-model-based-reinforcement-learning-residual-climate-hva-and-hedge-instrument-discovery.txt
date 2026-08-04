@@ -1,0 +1,794 @@
+Title: Climate-Dyna Deep Hedging for XVAs: Model-Based Reinforcement Learning, Residual Climate HVA, and Hedge-Instrument Discovery
+
+URL Source: https://arxiv.org/pdf/2608.01208v1
+
+Published Time: Tue, 04 Aug 2026 01:19:55 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Climate-Dyna Deep Hedging for XVAs: Model-Based Reinforcement Learning, Residual Climate HVA, and Hedge-Instrument Discovery 
+
+Xiaozhen Wang 
+
+CEREMADE Université Paris Dauphine–PSL, France 
+
+xiaozhen.wang@dauphine.psl.eu 
+
+Francois Buet-Golfouse 
+
+AIML Global Markets Barclays, United Kingdom 
+
+francois.buetgolfouse@barclays.com 
+
+Abstract 
+
+For a trading desk, residual climate hedging valuation adjustment (HVA) is the climate cost left after its inherited hedge and any admissible overlay have been taken into account; it therefore cannot be inferred from a stand-alone stress loss. We obtain this residual by comparing paired climate-on and baseline worlds and reoptimizing the overlay for each hedge universe, which also turns hedge-instrument discovery into a valuation problem: an instrument is useful to the extent that it lowers the optimized residual cost. The linear-Gaussian case has an exact finite-horizon Riccati solution; Climate-Dyna starts from that hedge and learns the remaining nonlinear cor-rection from paired world-model rollouts, with an independent gate deciding whether to deploy the update. In a public-data-calibrated semi-synthetic EU ETS study, crediting the inherited hedge lowers the mean climate charge from 1.517 to 0.906 , and the learned overlay lowers it to 
+
+0.831 against a 0.821 exact floor; residual Dyna cuts regret by 93% relative to replay with one quarter as many trajectories, while adaptation from only 25 target transitions retains 60 .7% of the exact-assisted gain. 
+
+Keywords: Climate risk, XVA, Deep hedging, Model-based Reinforcement learning, Risk-sensitive control 
+
+# 1 Introduction 
+
+Climate XVA should be framed as a hedging problem. A climate transition can move carbon prices, counterparty default probabilities, sector values, credit spreads, rates, funding, and liquidity [1, 2, 3]. The desk therefore needs more than a climate-stressed value: it must determine what its existing hedge already covers, which additional instruments reduce the residual, and what remains unhedgeable after trading costs and market-access constraints. Existing climate adjustments price important channels [4, 5], but do not make the residual exposure of a particular inherited hedge book the primary valuation object. An ordinary credit hedge covers only a special case. Climate also creates carbon-equivalent (XCE) cash flows, carbon-price pass-through, sector and macro repricing, physical losses, stressed liquidity, and model-regime uncertainty. Carbon allowances, credit default swaps (CDS), sector equities, inflation instruments, and weather or catastrophe contracts span different parts of this liability, often with missing maturities and material basis risk [6, 7, 8, 9]. The general framework therefore allows carbon, credit, sector, macro, physical, liquidity, and model channels. Our numerical study deliberately instantiates only the carbon, credit, sector-market, and liquidity subset. 1arXiv:2608.01208v1 [q-fin.MF] 2 Aug 2026 Figure 1: End-to-end framework: paired valuation isolates gross climate loss; inherited-hedge credit and overlay optimization yield residual climate HVA and instrument values; Riccati-anchored Climate-Dyna computes and independently certifies the overlay. The financial construction proceeds from desk value to residual cost. Constant absolute risk aversion (CARA) utility under the physical measure gives a cash-additive certainty equivalent and an entropic Bellman equation; subtracting clean price defines hedge-set-dependent XVA. Paired climate-on and baseline worlds then isolate incremental climate liability using common shocks. Let 
+
+Cclim  
+
+> n+1
+
+be the gross pre-hedge climate-on minus baseline loss. For inherited inventory I0
+
+> n+1
+
+, let ∆H0,inc 
+
+> n+1
+
+be its climate-on/off incremental P&L and let ∆Γ 0 
+
+> n+1
+
+be the corresponding change in execution, funding, margin, and liquidation costs. The liability passed to the climate overlay is 
+
+bCclim  
+
+> n+1
+
+= Cclim  
+
+> n+1
+
+− (I0
+
+> n+1
+
+)⊤∆H0,inc  
+
+> n+1
+
++ ∆Γ 0
+
+> n+1
+
+. (1) Equation (1) assigns the overlay only the residual liability: it credits the inherited hedge exactly once and does not ask the new policy to hedge the entire portfolio or the raw climate loss. Let Π be the class of admissible overlay policies. If π ∈ Π produces total residual loss EπN , the residual climate HVA is 
+
+HVA res clim := inf 
+
+> π∈Π
+
+1
+
+γ log E[exp( γE πN )] . (2) Here γ > 0 measures risk aversion, and EπN includes trading, inventory, basis, and liquidation costs. The first formula states what the overlay hedges; the second states what the desk charges. Figure 1 summarizes this construction. The resulting control problem is data-poor in precisely the long-horizon regimes that matter. Historical observations do not identify repeated future policy transitions, carbon-market comple-tion, climate-driven default cycles, or stressed hedge liquidity; supervisory practice consequently uses forward-looking scenarios [10, 11]. Pure model-free learning is not credible in this setting, while a fixed closed-form model is too rigid for high-dimensional incomplete markets. Climate-Dyna combines the two. An exact finite-horizon Riccati controller solves the local linear-Gaussian problem; a constrained structural-residual world-model ensemble generates plausible paired futures; prioritized Dyna rollouts target hedge failures; and a risk-sensitive residual policy learns only the nonlinear correction [12, 13, 14]. 2The experiments are a controlled instantiation rather than a claim to have empirically com-pleted the general framework. They test residual accounting, Riccati recovery, model-based sample efficiency, robust policy improvement, and hedge-set attribution in a public-data-calibrated semi-synthetic carbon-credit-sector environment. This division is deliberate: the financial framework specifies the broader object to be priced, whereas the experiment provides a first computational test of selected channels. The paper makes three contributions. First, it develops a unified residual climate-XVA frame-work that connects clean value, certainty-equivalent desk XVA, the inherited hedge, optimal climate overlays, residual climate HVA, and instrument value. Second, it derives an exact finite-horizon Ric-cati overlay and uses it as both a benchmark and an analytical prior for nonlinear deep hedging. Third, it introduces Climate-Dyna, which combines constrained structural-residual world modeling, importance-corrected planning, risk-sensitive policy learning, ensemble robustness, and independent deployment certification. The reduced study supplies proof-of-concept evidence for this solution ar-chitecture without claiming empirical validation of every climate transmission channel. 
+
+# 2 Related Work 
+
+Climate-finance research traces policy and sector shocks through asset prices and credit markets. Climate value-at-risk (climate VaR) and network stress tests quantify these transmission channels [1, 2, 3]. Climate change valuation adjustment (CCVA) and environmental credit valuation adjust-ment (environmental CVA) focus more narrowly on derivatives. They allow climate scenarios to affect counterparty default, funding, and the dependence between default and exposure, known as wrong-way risk [5, 15]. Dual Monte Carlo methods provide upper and lower checks for controlled CVA calculations under model uncertainty [16]. Other papers ask which traded assets can hedge these losses. They construct portfolios from low-carbon indices, climate news, carbon premia, and emissions networks [6, 7, 8, 9]. We combine these two views, then measure what remains after the desk’s existing rate and credit hedge has been credited. Reinforcement learning (RL) has also been used to price and hedge derivatives. The Q-Learner in the Black–Scholes(–Merton) Worlds (QLBS) learns the option value and hedge within the same risk-adjusted Q-learning problem [17]. Deep hedging replaces the linear control rule with a neural-network trading strategy and can include convex risk measures and trading frictions [18]. Market impact may make a partial hedge preferable to a full delta hedge [19]. Robust and adversarial variants account for uncertainty in market dynamics [20, 21]. Separate work on multivariate time-series forecasting develops efficient neural architectures such as Kernel-U-Net [22]; such models can support transition estimation but do not themselves solve the hedging problem. The hedging methods above generally train the whole trading strategy. We change only the climate overlay and leave the inherited hedge fixed, so the learned policy prices only the residual climate adjustment. Long climate transitions are rarely observed, which makes model-based reinforcement learning useful here. Sutton’s Dyna learns from observed transitions and from additional transitions sampled from a model [12]. Probabilistic ensembles indicate where that model is uncertain, while short rollouts limit how far its errors propagate [13, 14]. Climate-Dyna starts simulated paths from observed states, reweights them for distribution shift, and uses a separately fitted entropic critic to screen policy updates. Robust multi-objective reinforcement learning changes a policy when the preference vector changes [23]. Our risk preference is fixed; diagnostic signals only decide which simulated samples receive more attention. 33 Residual Climate-XVA Framework 
+
+The inherited desk hedge is taken as given. We define the climate liability passed to an incremental overlay and the charge left after optimizing over the instruments available to that overlay. This separates the gross climate loss, the part already offset by the inherited hedge, and the residual left after all admissible climate instruments are traded. 
+
+3.1 Climate liabilities, instruments, and paired worlds 
+
+We work on a discrete trading grid 0 = t0 < · · · < t N = T . At each date tn, the desk observes the 
+
+Fn-measurable state 
+
+Yn = ( Mn, χ n, D n, L n, Θ) , (3) and realized desk wealth is evaluated under the physical measure P. Here Mn collects traded market and counterparty-credit factors, χn contains climate-policy and physical states, Dn is the absorbing default indicator, Ln records liquidity and instrument availability, and Θ contains contract and counterparty descriptors. These state variables determine the one-period incremental climate liability, which we decompose as 
+
+Cclim  
+
+> n+1
+
+= CXn+1 + Ccredit  
+
+> n+1
+
++ Csector  
+
+> n+1
+
++ Cmacro  
+
+> n+1
+
++ Cphysical  
+
+> n+1
+
++ Cliq  
+
+> n+1
+
++ Cmodel  
+
+> n+1
+
+. (4) The terms cover carbon or carbon-equivalent (XCE) cost, credit deterioration, sector transition, macro transmission, physical damage, stressed liquidity, and model or regime ambiguity. Natural hedges include carbon futures, allowances, and XCE forwards; CDS and credit indices; sector equities and commodities; rates and inflation instruments; and weather, catastrophe, and insurance-linked contracts. Maturity mismatch, basis risk, and market closure leave some exposure in every block. Let H0 be the inherited rate, credit, and ordinary-XVA hedge book, Hc a candidate climate-overlay universe, and Hmax ⊆ H 0 ∪ H c the largest available universe after maturity, liquidity, and inventory restrictions. Positions in H0 remain fixed; Hc is traded only against the liability in (1). Couple the climate and baseline branches on the same one-period shock. Conditional on the pre-trade state Yn, let ξ collect the structural climate–financial parameters: scenario probabilities, pass-through and damage coefficients, credit sensitivities, and liquidity dynamics. Both branches use εn+1 ∼ P(· | F n) for uncertainty not known at tn:
+
+Y bn+1 = F bξ,n (Yn, ε n+1 ), b ∈ { 0, 1}, (5) where b = 1 follows the climate-on economy and b = 0 freezes documented climate drifts, pass-through, credit and liquidity loadings, and regime probabilities. Re-anchoring the baseline at ob-served Yn makes the branches differ only through these mechanisms. If Lpre  
+
+> n+1
+
+is economic loss before hedge P&L, define Cclim  
+
+> n+1
+
+:= Lpre 
+
+> n+1
+
+(Yn, Y 1
+
+> n+1
+
+) − L pre 
+
+> n+1
+
+(Yn, Y 0
+
+> n+1
+
+). Holding the shock fixed removes ordinary market variation from this gross pre-hedge increment, the first term in (1). The theory retains all channels in (4); Section 5 activates carbon, credit, sector-market, and liquidity. 
+
+3.2 Certainty-equivalent XVA and residual accounting 
+
+We derive the desk objective from constant absolute risk aversion (CARA) utility U (w) = −e−γw 
+
+for terminal desk wealth w. For a terminal-unit payoff Z, the cash-additive conditional certainty equivalent is CE γ,n (Z) := −γ−1 log E[e−γZ | F n], where γ > 0 is risk aversion. For hedge universe 4H, inventory i, and one-period terminal-unit wealth increment RH
+
+> n+1
+
+, let AH 
+
+> n
+
+(y, i ) be the feasible trade set. The desk value satisfies 
+
+vH 
+
+> n
+
+(y, i ) = sup  
+
+> a∈A H
+> n(y,i )
+
+CE γ,n 
+
+RH 
+
+> n+1
+
++ vH
+
+> n+1
+
+(Yn+1 , i + a) . (6) The action a maximizes current wealth plus continuation value under P. Let wn(y) be the clean price under Q0, excluding counterparty loss, funding, climate cash flows, and hedge frictions. Write 
+
+eΠclean  
+
+> n+1
+
+for the next clean contractual cash flow and EQ0 
+
+> n
+
+for conditional expectation under Q0:
+
+wn(y) = EQ0
+
+> n
+
+heΠclean  
+
+> n+1
+
++ wn+1 (Yn+1 )
+
+i
+
+,uH 
+
+> n
+
+(y, i ) = vH 
+
+> n
+
+(y, i ) − wn(y) (7) Thus uH 
+
+> n
+
+is the adjustment from clean to desk value. With 0 and clim denoting the baseline and climate-on economies, the positive climate cost is CH 
+
+> clim
+
+= vH,00 − vH,clim 0 .The desk enters the overlay problem with the inherited book H0. Let I0 
+
+> n+1
+
+be its post-trade inventory, chosen before the paired intervention. Its incremental climate return is 
+
+∆H0,inc  
+
+> n+1
+
+= ∆ H0
+
+> n+1
+
+(Y 1
+
+> n+1
+
+) − ∆H0
+
+> n+1
+
+(Y 0
+
+> n+1
+
+). (8) If ∆Γ 0 
+
+> n+1
+
+is the climate-on minus climate-off change in its execution, funding, margin, and liquidation costs, the loss handed to the overlay is exactly bCclim  
+
+> n+1
+
+in (1). The inherited hedge and its incremental costs are therefore counted once, before overlay optimization. 
+
+3.3 Optimal climate overlay and instrument value 
+
+This subsection maps the residual liability bCclim  
+
+> n+1
+
+to three outputs: an optimal overlay, the charge left after hedging, and the value of a candidate instrument. Since the inherited book is already credited in (1), only the overlay is optimized. 
+
+Dynamic overlay and residual loss. Let Jn and ∆Hcn+1 denote the overlay inventory and executable return. An adapted policy chooses an = πn(Yn, J n) in the feasible set An(Yn, J n) and carries Jn+1 = Jn + an to tn+1 . The feasible set and the convex costs Γn and Φn encode liquidity, execution, and inventory constraints. Its total loss is 
+
+Eπ, H 
+
+> N
+
+= 
+
+> N−1
+
+X
+
+> n=0
+
+ bCclim  
+
+> n+1
+
+− J⊤
+
+> n+1
+
+∆Hcn+1 + Γ n(an; Yn)+ Φ n(Jn+1 ; Yn) + Eterm  
+
+> T
+
+. (9) Thus the overlay P&L is subtracted from the residual liability, while trading, inventory, and terminal-closeout costs are added. 
+
+Residual climate charge. For hedge universe H, the desk minimizes the entropic risk of this loss over its admissible policies Π( H):
+
+CH 
+
+> clim
+
+= inf  
+
+> π∈Π( H)
+
+ργ (Eπ, H 
+
+> N
+
+), ργ (E) = 1
+
+γ log E[eγE ]. (10) The minimizer gives the overlay and the minimum gives its residual charge. Because the inherited book is already credited, CH0 
+
+> clim
+
+is the no-overlay benchmark. Expanding to Hmax separates the hedgeable improvement CH0 
+
+> clim
+
+− CHmax  
+
+> clim
+
+from the final residual CHmax  
+
+> clim
+
+= HVA res clim in (2), which retains unhedgeable basis, transaction, and market-access losses. 5Instrument value and span. Candidate instrument j is valued by reoptimizing with and without it: 
+
+∆net  
+
+> j
+
+(H) = CH 
+
+> clim
+
+− CH∪{ j} 
+
+> clim
+
+− Cost impl  
+
+> j
+
+. (11) Positive value means that its optimized cost reduction exceeds its fixed onboarding cost. Reopti-mization captures substitution, liquidity, and trading costs. For a local span diagnostic, center inherited and candidate returns R0 
+
+> n+1
+
+and Rcn+1 and define 
+
+Rc, ⊥ 
+
+> n+1
+
+= Rcn+1 − Σc0 
+
+> n
+
+(Σ 00  
+
+> n
+
+)−1R0
+
+> n+1
+
+, (12) where Σ00  
+
+> n
+
+= Var n(R0
+
+> n+1
+
+) and Σc0 
+
+> n
+
+= Cov n(Rcn+1 , R 0
+
+> n+1
+
+). This measures span beyond the inherited book; it neither replaces reoptimization nor changes the executed return Rc.
+
+# 4 Climate-Dyna Method 
+
+The method uses the residual liability and entropic objective from Section 3. It freezes the inherited hedge and computes (1). The local Gaussian Riccati action anchors control; paired structural-model paths train nonlinear corrections. The world model supplies plausible climate–financial transitions, while reinforcement learning estimates only the conditional incremental trade map. Independent rollouts decide whether a correction replaces its parent. 
+
+4.1 Local projection and Riccati anchor 
+
+Write the overlay problem as a risk-sensitive Markov decision process (MDP): 
+
+Zn = ( n, Y n, J n, h n), an ∈ A n(Yn, J n), rRL  
+
+> n+1
+
+= −en+1 , (13) where hn summarizes omitted path information when Yn is not Markov and en+1 is the summand in (9); its negative rRL  
+
+> n+1
+
+is the reinforcement-learning reward. Before solving the dynamic problem, a one-period projection measures the incremental span of the hedge instruments. For executable return Rn+1 = ∆ Hcn+1 , or Rn+1 = Rc, ⊥ 
+
+> n+1
+
+for attribution, set 
+
+Σn = Var n(Rn+1 ), cn = Cov n(Rn+1 , bCclim  
+
+> n+1
+
+). (14) Suppressing expected return and costs, the minimum-variance inventory and remaining conditional variance are 
+
+Jproj  
+
+> n+1
+
+= Σ −1 
+
+> n
+
+cn, σ2res ,n = Var n( bCclim  
+
+> n+1
+
+) − c⊤ 
+
+> n
+
+Σ−1 
+
+> n
+
+cn. (15) Here Jproj  
+
+> n+1
+
+is the frictionless one-period target and σ2res ,n is the variance left outside that span. These are diagnostics, not the executed dynamic strategy. The inverse is understood on the identifiable span. For singular or nearly collinear returns, we use the Moore–Penrose pseudoinverse, or the prespecified ridge inverse (Σ n + ϵI )−1 with ϵ > 0, in both quantities. The dynamic anchor adds trading impact, inventory costs, and continuation value. The exact anchor assumes deterministic time-dependent coefficients, action-independent Gaussian increments, quadratic costs, and a quadratic terminal residual. Let bCclim  
+
+> n+1
+
+and ∆Hcn+1 be jointly Gaussian with means (¯ cn, μ n) and covariance terms (Σ n, c n). Use the costs 12 a⊤Λna for trading and 12 x⊤Qnx for post-trade inventory, and let (KN , k N , k 0 
+
+> N
+
+) encode the quadratic terminal residual. For post-trade inventory x, write Vn+1 (x) = 12 x⊤Kn+1 x + k⊤
+
+> n+1
+
+x + k0
+
+> n+1
+
+, where Kn+1 , k n+1 , k 0 
+
+> n+1
+
+are its quadratic, linear, and constant coefficients, and define 
+
+An = Λ n + Kn+1 + Qn + γΣn, dn = μn + γc n − kn+1 . (16) 6The Gaussian log moment-generating function and quadratic costs give 
+
+JR,⋆ n+1 (Jn) = A−1 
+
+> n
+
+(Λ nJn + dn), (17) 
+
+Kn = Λ n − ΛnA−1 
+
+> n
+
+Λn, kn = −ΛnA−1 
+
+> n
+
+dn,k0 
+
+> n
+
+= ¯ cn + γ
+
+2 Var n( bCclim  
+
+> n+1
+
+) + k0 
+
+> n+1
+
+− 12 d⊤ 
+
+> n
+
+A−1 
+
+> n
+
+dn. (18) If the joint covariance is positive semidefinite, An ≻ 0 at every date, and the action set is uncon-strained, or equivalently the feasibility constraints are inactive, backward induction and completion of squares show that the value function remains quadratic and (17) is the unique optimal post-trade inventory in this anchor. Define aRn (Yn, J n) := JR,⋆ n+1 (Jn) − Jn, with state dependence through the conditional moments and costs. When constraints bind, we project this action onto An(Yn, J n) and use it as a local parent rather than claim exact optimality. The superscript R denotes Riccati. The scalar constant-coefficient case also has an exact finite-horizon closed form. Let q = Q+γσ 2 
+
+> H
+
+,where σ2 
+
+> H
+
+is hedge-return variance, and take KN = 0 . The recursion is the Möbius iteration 
+
+Kn = F (Kn+1 ) with F (k) = Λ( k + q)/(Λ + k + q). For q > 0, define 
+
+κ± = −q ± pq2 + 4Λ q
+
+2 , ρ = Λ − κ+
+
+Λ − κ−
+
+,Kn = κ+ − rmκ−
+
+1 − rm
+
+, rm = ρm κ+
+
+κ−
+
+, m = N − n. 
+
+(19) If q = 0 , then Kn = 0 . Thus the solution is exact on the trading grid: q fixes the long-run target curvature, while Λ governs the speed of adjustment toward it. The one-period frictionless limit separates hedging from speculative demand. If Λn = Kn+1 =
+
+Qn = kn+1 = 0 , then 
+
+JR,⋆ n+1 = Σ −1 
+
+> n
+
+cn + γ−1Σ−1 
+
+> n
+
+μn. (20) The first term is the regression hedge for the residual climate liability; the second is risk-premium demand. A pure climate-overlay mandate sets μn = 0 , or projects expected return out before estimation. Trading impact, inventory costs, and continuation value turn this static decomposition into (17). Deterministic carry terms can be added to k0
+
+> n
+
+; they change desk value but not the optimal action. 
+
+4.2 Paired world model and Dyna planning 
+
+Historical data identify current markets and short-run dependence, but not future climate-policy or physical regimes. We therefore keep the paired structural transition and learn only corrections around it. Let T map constrained continuous state coordinates to an unconstrained representation. For ensemble member k and branch b ∈ { 0, 1}, set 
+
+Xb,k n+1 = F str ,b ξk ,n (Yn, ε n+1 ) + Bsh  
+
+> n
+
+Gsh  
+
+> ψk,n
+
+(Yn, ε n+1 )+ bB cl  
+
+> n
+
+Gcl  
+
+> ψk,n
+
+(Yn, ε n+1 ), Y b,k n+1 = T −1(Xb,k n+1 ). (21) Here X is the unconstrained next state and F str  
+
+> ξk
+
+is the structural transition. Gsh  
+
+> ψk
+
+corrects errors shared by both branches, whereas Gcl  
+
+> ψk
+
+corrects only the climate mechanism; Bsh  
+
+> n
+
+and Bcl  
+
+> n
+
+select the affected coordinates. The factor b removes the climate correction from the baseline branch. Masked-softmax regime rows, nonnegative intensities, and absorbing default enforce the state constraints. At update r, the ensemble Mr = {(ξk, ψ k)}Kens  
+
+> k=1
+
+represents uncertainty in both the structural and correction parameters. 7At each update, the model is fitted without discarding this structure. Each member uses ob-served market, disclosure, liquidity, and desk transitions, together with paired scenario anchors: 
+
+L(k)wm = L(k)obs + λpair L(k)pair + λcon R(k)con + λres R(k)res . (22) 
+
+L(k)obs fits observed transitions and L(k)pair fits the paired anchors. R(k)con penalizes state-constraint vio-lations, no-arbitrage failures in traded prices, and inconsistencies with XCE term-sheet accounting; 
+
+R(k)res keeps corrections small. All weights are nonnegative. Data may correct the structural model, but cannot override its financial constraints. The resulting training set still contains no historical labels for optimal climate trades. Ob-served desk segments identify current markets, short-run dependence, liquidity, execution costs, and realized P&L, but cannot label hedges for policy transitions or physical regimes that have not occurred. At update r, new observations first refit Mr. Hybrid rollouts extend observed desk segments; synthetic rollouts cover longer-horizon regimes. The policy is trained on both. Every rollout freezes the inherited hedge, constructs (1), and changes only the climate overlay. Large residual losses show where further planning is useful. Uniform rollouts mostly revisit states in which the hedge already works. For a candidate tra-jectory τ drawn under the unprioritized law p0,k , we instead sample from 
+
+qβ,k (τ ) ∝ p0,k (τ ) exp( βRSR + βU SU + βB SB + βLSL) , (23) Here βR, β U , β B , β L ≥ 0 are priority weights for residual loss SR, model disagreement SU , basis risk 
+
+SB , and liquidity stress SL.This prioritization changes the sampling law, not the target objective. For policy πϕ, let Em,π ϕ,k N
+
+be (9) on path τm under member k. Importance weights return the prioritized sample to the original law: 
+
+Lplan ,k (ϕ) = 1
+
+γ log 
+
+P 
+
+> m
+
+wm,k exp {γE m,π ϕ,k N }
+
+P 
+
+> m
+
+wm,k 
+
+, wm,k = p0,k (τm)
+
+qβ,k (τm) . (24) With common support and a finite exponential moment, this is consistent for the objective under 
+
+p0,k . If the weights are omitted, the result is a different, deliberately stress-tilted objective. 
+
+4.3 Residual policy, robustness, and selection 
+
+Let ∆aϕ be the neural correction to the Riccati action. The executable policy is 
+
+πϕ(n, Y n, J n, h n) = Proj An
+
+aRn (Yn, J n) + ∆ aϕ(n, Y n, J n, h n) . (25) Here Proj An enforces feasible actions. The residual network learns effects left outside the local Gaussian model. Its output is partitioned into the carbon/XCE, credit, sector, macro, and physical instrument groups of Section 3.3; availability masks set closed or missing instruments to zero. Group regularization aids interpretation but does not replace bid–ask, impact, margin, roll, maturity, or inventory costs already charged in (9). There are two complementary policy updates. When rollouts are differentiable, the actor is trained directly. For model member k and M simulated paths, the residual policy minimizes 
+
+bLk(ϕ) = 1
+
+γ log 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+exp {γE m,π ϕ,k N }
+
+!
+
+,
+
+∇ϕ bLk = X
+
+> m
+
+ωm∇ϕEm,π ϕ,k N . (26) 8where ωm = exp {γE m,π ϕ,k N }/ PMm′=1 exp {γE m′,π ϕ,k N }. The tilted gradient emphasizes paths with large residual loss. A critic-based update is used when target-market data are too sparse for stable whole-path gradients. Let f index a held-out fold, s a sample with weight ws, y the current state, J current inventory, and x post-trade inventory. The continuation estimate bV k,f excludes fold f ; gn(y, J, x ) is current cost; and bCs,k , ∆Hc,s,k are the sampled residual liability and hedge return, with Y sn+1 their next state: 
+
+ℓs,k n+1 (x) = bCs,k n+1 − x⊤∆Hc,s,k n+1 + bV k,f n+1 (Y sn+1 , x ),
+
+bQk,f n (y, J, x ) = gn(y, J, x ) + 1
+
+γ log 
+
+P 
+
+> s
+
+ws exp {γℓ s,k n+1 (x)}
+
+P 
+
+> s
+
+ws
+
+. (27) Here ℓs,k is loss plus continuation and bQk,f its entropic fold value. For a nonempty compact feasible set, the critic proposes the post-trade inventory 
+
+x⋆,k,f n (y, J ) ∈ arg min 
+
+> x
+
+bQk,f n (y, J, x ),
+
+subject to x − J ∈ A n(y, J ),a⋆,k,f n = x⋆,k,f n − J. 
+
+(28) The residual actor distills a⋆,k,f n − aRn (y, J ) rather than relearning the entire hedge. Because fold f
+
+is excluded from the continuation fit, its targets provide an out-of-fold policy-improvement signal. Thus (26) is the direct pathwise route, whereas (27)–(28) give the critic-based route used for scarce-data adaptation. Let Lobs ,k (ϕ) be the observed-seeded loss and Lplan ,k (ϕ) the corrected loss in (24). For α ∈ [0 , 1] ,set Lk(ϕ) = αLobs ,k (ϕ) + (1 − α)Lplan ,k (ϕ) and ¯L(ϕ) = K−1ens 
+
+P 
+
+> k
+
+Lk(ϕ). The end-to-end objective is 
+
+min 
+
+> ϕ
+
+¯L(ϕ) + ηM SD k(Lk(ϕ)) + λdup Rdup (ϕ) + λgrp Rgrp (ϕ). (29) Here SD k is ensemble standard deviation; the three coefficients are nonnegative weights; Rdup 
+
+penalizes exposure spanned by H0; and Rgrp imposes instrument-group sparsity. Setting ηM = 0 
+
+gives scenario-mixture training; increasing it penalizes sensitivity to the world-model member and approximates a more conservative hedge. Policy fitting and deployment are separate. On independent whole-policy rollouts, define the gate difference Dgate = Lcand − L parent . A candidate replaces its parent only if the upper confidence bound for E[Dgate ] is nonpositive under both the reference model and the stressed-liquidity model. Common-path reoptimization with and without instrument j estimates ∆net  
+
+> j
+
+in (11). To account for substitution between instruments, we also use the Shapley attribution Sh j = Eσ[CSσ (j)clim − CSσ (j)∪{ j} 
+
+> clim
+
+],where σ is a random instrument ordering and Sσ(j) contains the instruments preceding j. Reports include the overlay by instrument and date, the residual climate HVA and its distribution, uncer-tainty bands, and net instrument values. The learned policy therefore does not estimate a causal climate law. It learns which incremental trades best reduce the residual liability under the stated world-model ensemble and which exposure remains unspanned. 
+
+# 5 Empirical Evaluation 
+
+5.1 Data, Paired Environment, and Protocol 
+
+Scope and data. We evaluate the carbon, credit, sector-market, and liquidity channels in (4). The tests cover residual accounting, the Riccati benchmark, Dyna training, adaptation, and instrument 9Table 1: Adaptation after 25 target-market transitions on 20 unused seeds. Reported regrets are exact evaluation outcomes (lower is better). ∆R is posterior-Riccati regret minus gated-critic regret; material harm means deterioration greater than 0.001 . Cross-fit is ungated, and exact-assisted is a mechanism reference.                                    
+
+> Mean exact target-policy regret ↓Gated deployment Target regime Riccati Pessimistic FQI Cross-fit Gated critic Exact-assisted ∆R↑Accept Material harm Stable 0.01297 0.13378 0.00543 0.00836 0.00596 0.00461 55% 0% Moderate 0.03101 0.20482 0.01343 0.01723 0.00628 0.01379 70% 0% Severe 0.03489 0.10798 0.01358 0.01631 0.00628 0.01858 85% 10%
+
+attribution. We do not claim evidence for XCE term sheets, physical-risk hedges, or live-desk use. The environment is a weekly semi-synthetic EU Emissions Trading System (EU ETS) model calibrated to public data from 2012–2025. European Energy Exchange (EEX) auctions provide allowance prices and liquidity observations [24]. Volume-weighted price calibrates P Xn ; inverse cover, bid volume, and participation enter Ln. We also use the EXH9 utilities ETF, the ECB three-month spot rate, the bond component of CISS, EU Transaction Log emissions, and EBA PD/LGD ranges [25, 26, 27, 28, 29]. Because auction prices are not futures quotes, we add basis and roll noise to the tradable carbon return. 
+
+Paired environment. Only the climate-on transition is observed, so the climate-off branch is constructed rather than estimated. It starts from the same state and uses the same innovations, but freezes climate drift, pass-through, credit and liquidity loadings, and regime probabilities at pre-Market Stability Reserve estimates. The chronological split is 2012–2018 for training, 2019– 2020 for validation, and 2021–2025 for out-of-distribution testing. Each episode lasts 26 weeks and uses a balanced, carbon-heavy, or credit-heavy book. Inherited rate and CDS positions are fitted on the training period and held fixed thereafter. 
+
+Validation and comparison. Before comparing policies, we run three implementation checks. A stable vector autoregression is fitted to pre-Market Stability Reserve innovations and used in both branches. The Riccati recursion is checked against an independent quadratic program under spread and inventory stresses. We also verify every liability and overlay identity path by path. Exact dynamic programming is an evaluation oracle, not a training input. The component study uses 20 held-out datasets with 250 observed transitions and adds ensemble fitting, Riccati residualization, observed seeding, priority, importance correction, and robustness in turn. Under a matched bud-get, we compare replay, model-based scratch, residual Dyna, and robust Dyna after 15/30/60/120 updates, with 200 gradient paths and 500 candidate paths per update. 
+
+Adaptation and certification. For adaptation, we give a source-market policy only 25 transitions from a stable, moderate, or severe target law. We compare a cross-fitted critic and its independent Monte Carlo gate with posterior Riccati, pessimistic fitted Q-iteration (FQI), and an exact-assisted reference. The scalable version uses eight folds, four world models, and 128 samples per row. Exact critic and policy values remain hidden until all decisions are fixed. The deployable gate uses only candidate-minus-parent upper confidence bounds on independent reference and stressed-liquidity rollouts (Section 4.3). Exact regret, improvement over Riccati and FQI, retained exact-assisted gain, and deteriorations above 0.001 are post-selection outcomes on 20 unused seeds, not gate inputs; uncertainty uses 20,000 paired bootstrap resamples. Finally, we reoptimize with no overlay, EUA only, utilities only, and both instruments to obtain the instrument attribution. 10 Gross climate                      
+
+> charge
+> After inherited
+> hedge
+> After climate
+> overlay
+> Exact floor
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> Entropic climate charge
+> 1.517
+> 0.906 0.831 0.821
+> -0.611
+> existing hedge
+> -0.075
+> overlay -0.010
+> oracle gap
+> APrice only the risk that remains
+> 0.00 0.01 0.02 0.03 0.04 0.05
+> Exact target-policy regret (lower is better)
+> Stable
+> Moderate
+> Severe
+> -0.005 0.006
+> 0.008 0.013
+> gate 55% |harm 0%
+> -0.014 0.006
+> 0.017 0.031
+> gate 70% |harm 0%
+> -0.019 0.006
+> 0.016 0.035
+> gate 85% |harm 10%
+> Across shifted worlds: 60.7% of the exact-assisted gain is retained
+> BRegret after 25 target transitions
+> Exact-assisted reference Gated sampled critic Posterior Riccati
+
+Figure 2: Financial and control residuals. (A) The inherited hedge is credited before the climate overlay is valued. (B) Posterior Riccati, the gated sampled critic, and the exact-assisted reference are compared after 25 target transitions; movement to the left means lower regret. The panels use different numerical scales. 
+
+5.2 Model Validation and Numerical Checks 
+
+Before comparing policies, we check the observed transition model, pathwise XVA accounting, and Riccati implementation separately. The one-step model is adequate for the four variables that directly drive the overlay. During the 2021–2025 OOD period, its nominal 90% intervals cover 91 .5% –97 .6% of observations for carbon returns, sector returns, financial stress, and liquidity. The short rate is retained as an auxiliary market state, not as one of the climate channels evaluated here; we make no empirical validation claim for its equation. A stable VAR correction reduces the largest lag-one residual autocorrelation from 0.280 to 0.036 , but does not improve OOD fit. Its only role is to stop one-step errors from repeating; structural equations determine the scenario difference. Public data validate only the observed climate-on branch; they do not identify a climate-off history. The baseline therefore remains the documented pre-MSR scenario in Section 5.1. Starting from each observed state, the two branches receive the same innovations and differ only in climate-sensitive transition terms. The results are conditional on this construction, not estimates of the MSR’s historical or causal effect. We next test the implementation rather than its predictive fit. On common bootstrap paths, the gross liability, inherited hedge, residual liability, overlay, funding, and terminal closeout satisfy their accounting identities path by path. The inherited inventory is fixed before intervention and is the same in both branches, so its incremental climate P&L is credited once before overlay optimization. Every reported policy respects the trading constraints. Finally, we test the solver where an exact answer is available. In the Gaussian quadratic case, the backward Riccati recursion matches an independently assembled full-horizon quadratic program: the maximum inventory gap is 3.33 ×10 −16 and the objective gap is zero. Nonquadratic proportional spreads raise the maximum inventory-path gap to 0.0265 ; inventory bounds give 0.0161 . Regime switching, default jumps, path dependence, and nonlinear liquidity move the full problem further from the benchmark. Riccati is therefore exact only for the stated Gaussian quadratic case; elsewhere it is the parent policy, not the final solution. 11 5.3 Residual Climate-XVA and Hedging Performance 
+
+The gross charge is not the optimization target for a new climate mandate. For the carbon-heavy book it is 1.517 , but the frozen rate and CDS positions already reduce the amount passed to the overlay to 0.906 . Starting from this residual, the certified policy reaches 0.831 , only 0.010 above the exact finite-MDP floor of 0.821 . It captures 88 .4% of the value still available after the inherited hedge has been credited. Figure 2A shows this sequence. The reduction comes from carbon exposure rather than from adding instruments indiscrimi-nately. Reoptimizing with no overlay, EUA only, utilities only, and both instruments gives charges of 0.906 , 0.821 , 0.906 , and 0.821 . The full 0.085 Shapley value is therefore assigned to EUA, while utilities are never held on reachable oracle states. This finding belongs to the stated book and transaction costs; it is not a general ranking of climate hedges. We then ask whether the control gain comes from the residual construction or merely from sim-ulated data. Exact regret is the entropic objective of a fixed policy minus the finite-environment optimum. Residual Dyna reaches mean regret 0.00757 after 30 updates and 6,000 gradient trajec-tories; observed replay remains at 0.10863 after 120 updates and 24,000 trajectories. The paired difference is 0.10107 , with a 95% interval of [0 .06391 , 0.14219] . Residual Dyna uses one quarter of the trajectories and lowers regret by 93% .Simulation alone does not explain the result. Model-based training from scratch at 120 updates is still worse than residual Dyna at 30 updates by 0.03822 ([0 .01674 , 0.06164] ). The Riccati parent supplies the ordinary hedge direction; Dyna learns the remaining effects of regime, basis, liquidity, and constraints. 
+
+5.4 Component Analysis and Adaptation 
+
+The ablation first asks what makes the RL policy learn efficiently. Across 20 fresh datasets, learning the whole policy from scratch is the baseline. Writing the actor as a correction to Riccati reduces regret by 0.03752 with interval [0 .01776 , 0.05934] , the largest resolved component effect. The robust objective adds 0.000795 , with interval [0 .000145 , 0.001732] . At this budget, the effects of observed seeding and importance correction are not resolved, while priority without importance correction increases regret by 0.000884 , with interval [0 .000051 , 0.001991] . Residual parameterization produces the main gain: RL learns the error left by the analytical policy instead of relearning its hedge. We next give the residual learner only 25 transitions after a stable, moderate, or severe market shift. An exact-assisted reference establishes whether adaptation is useful at all. Under moderate and severe shifts, its gated update removes 78 .7% and 87 .9% of posterior-Riccati regret. With 250 transitions, posterior Riccati is already close to the exact optimum and the gate accepts no update. This reference measures the available adaptation gain and is not used for deployment. The deployable test removes exact values from critic fitting, actor distillation, selection, and gating. The critic is cross-fitted over eight folds and four independently fitted world models; the minimum importance effective sample size is 0.499 . Exact target values remain hidden until all policies have been fixed on 20 unused seeds. Figure 2B separates model updating from RL adaptation. The navy square is posterior Riccati after observing 25 target transitions; the green circle adds the gated RL correction. Since lower regret is better, their leftward distance is the value learned beyond the updated model. Regret falls from 0.01297 to 0.00836 in the stable environment, from 0.03101 to 0.01723 under moderate shift, and from 0.03489 to 0.01631 under severe shift. The larger gains under shift occur where posterior Riccati remains misspecified. The orange diamond is an exact-assisted reference, not a deployable policy. Across the moderate and severe shifts, the gated critic improves Riccati by 12 0.01618 on average, has a paired 95% bootstrap lower bound of 0.00992 , and retains 60 .7% of the exact-assisted gain. Table 1 shows why the residual form matters with only 25 transitions. It also reports an ungated cross-fitted critic and pessimistic FQI. The gated critic improves on FQI by 0.13963 on average. FQI must fit a sparsely covered state–inventory grid; the residual critic learns around the Riccati action. The final gate decides whether that learned correction may replace its parent. In Figure 2B, “Gate” is the share of candidate updates accepted on 20 evaluation seeds, and “harm” is the share for which the final policy is worse than Riccati by more than 0.001 . Acceptance is 55% , 70% , and 
+
+85% under stable, moderate, and severe conditions; material harm is 0% , 0% , and 10% . With zero tolerance, five severe-shift seeds deteriorate, but three changes are below 0.001 . The gate controls material deterioration at the stated tolerance; individual seeds may still worsen. 
+
+# 6 Conclusion and Limitations 
+
+Climate-Dyna formulates deep hedging for XVAs as a residual control problem. The inherited XVA hedge is credited first, and model-based RL trades only an incremental climate overlay against the liability that remains. The optimized cost under the largest feasible hedge universe is residual climate HVA. Repeating the same optimization as instruments are added gives the hedge-instrument discovery criterion. A finite-horizon Riccati policy anchors the overlay; paired world-model Dyna learns its nonlinear correction, and independent rollouts gate deployment. The numerical evidence is a proof of concept, not a complete empirical realization of the frame-work. Within the semi-synthetic EU ETS environment, the experiments verify the pathwise ac-counting, recover the quadratic benchmark, reduce control error, and test gated adaptation. The environment instantiates transition, credit, sector-market, and liquidity channels, but the climate-off law is scenario-defined and the short-rate OOD diagnostic is weak. Exact regret is used only for evaluation, and the instrument attribution is specific to the chosen book and costs. Physical risk, XCE term-sheet calibration, richer and continuous hedge books, additional instrument groups, causal policy estimation, and live-desk validation remain open. 
+
+# References 
+
+[1] Simon Dietz, Alex Bowen, Charlie Dixon, and Philip Gradwell. Climate value at risk of global financial assets. Nature Climate Change , 6:676–679, 2016. [2] Stefano Battiston, Antoine Mandel, Irene Monasterolo, Franziska Schütze, and Gabriele Visentin. A climate stress-test of the financial system. Nature Climate Change , 7:283–288, 2017. [3] Giusy Capasso, Gianfranco Gianfrate, and Marco Spinelli. Climate change and credit risk. 
+
+Journal of Cleaner Production , 266:121634, 2020. [4] Claudio Albanese, Simone Caenazzo, and Stéphane Crépey. Credit, funding, margin, and capital valuation adjustments for bilateral portfolios. Probability, Uncertainty and Quantitative Risk , 2(1):1–26, 2017. [5] Chris Kenyon and Mourad Berrahoui. Climate change valuation adjustment (CCVA) using parameterized climate change impacts, 2021. 13 [6] Mats Andersson, Patrick Bolton, and Frédéric Samama. Hedging climate risk. Financial Analysts Journal , 72(3):13–32, 2016. [7] Robert F. Engle, Stefano Giglio, Bryan Kelly, Heebum Lee, and Johannes Stroebel. Hedging climate change news. The Review of Financial Studies , 33(3):1184–1216, 2020. [8] Patrick Bolton and Marcin Kacperczyk. Do investors care about carbon risk? Journal of Financial Economics , 142(2):517–549, 2021. [9] Michele Azzone, Maria Chiara Pocelli, and Davide Stocco. Hedging carbon risk with a network approach. Physica A: Statistical Mechanics and its Applications , 676:130858, 2025. [10] Network for Greening the Financial System. NGFS climate scenarios for central banks and supervisors. Technical report, Network for Greening the Financial System, September 2022. [11] Basel Committee on Banking Supervision. Climate-related financial risks: Measurement methodologies. Technical report, Bank for International Settlements, April 2021. [12] Richard S. Sutton. Dyna, an integrated architecture for learning, planning, and reacting. ACM SIGART Bulletin , 2(4):160–163, 1991. [13] Kurtland Chua, Roberto Calandra, Rowan McAllister, and Sergey Levine. Deep reinforce-ment learning in a handful of trials using probabilistic dynamics models. Advances in Neural Information Processing Systems , 31:4759–4770, 2018. [14] Michael Janner, Justin Fu, Marvin Zhang, and Sergey Levine. When to trust your model: Model-based policy optimization. Advances in Neural Information Processing Systems ,32:12498–12509, 2019. [15] Takayuki Sakuma. Environmental CVA with KL-robust wrong-way risk, 2026. [16] Pierre Henry-Labordère, Christian Litterer, and Zhenjie Ren. A dual algorithm for stochastic control problems: Applications to uncertain volatility models and CVA. SIAM Journal on Financial Mathematics , 7(1):159–182, 2016. [17] Igor Halperin. QLBS: Q-learner in the Black–Scholes(–Merton) worlds. The Journal of Deriva-tives , 28(1):99–122, 2020. [18] Hans Buehler, Lukas Gonon, Josef Teichmann, and Ben Wood. Deep hedging. Quantitative Finance , 19(8):1271–1291, 2019. [19] Francois Buet-Golfouse and Alex S. L. Tse. Optimal option market making under market impact. SSRN working paper, 2025. [20] Eva Lütkebohmert, Thorsten Schmidt, and Julian Sester. Robust deep hedging, 2021. [21] Masanori Hirano, Kentaro Minami, and Kentaro Imajo. Adversarial deep hedging: Learning to hedge without price process modeling, 2023. [22] Jiang You, Arben Cela, René Natowicz, Jacob Ouanounou, and Patrick Siarry. Kernel-u-net: Multivariate time series forecasting using custom kernels. In 2024 International Conference on INnovations in Intelligent SysTems and Applications (INISTA) , pages 1–8, 2024. 14 [23] Francois Buet-Golfouse and Parth Pahwa. Robust multi-objective reinforcement learning with dynamic preferences. Proceedings of Machine Learning Research , 189:96–111, 2023. [24] European Energy Exchange. EU ETS auctions and primary market auction reports. Online data archive, 2026. Accessed 2026-07-19. [25] BlackRock. iShares STOXX Europe 600 Utilities UCITS ETF (DE). Fund documentation and NAV total-return data, 2026. Accessed 2026-07-19. [26] European Central Bank. All euro area yield curve: Three-month spot rate. ECB Data Portal, series YC.B.U2.EUR.4F.G_N_C.SV_C_YM.SR_3M, 2026. Accessed 2026-07-19. [27] European Central Bank. Composite indicator of systemic stress. ECB Data Portal, CISS dataset, 2026. Accessed 2026-07-19. [28] European Environment Agency. EU Emissions Trading System Data Viewer. Data from the European Commission Union Registry, 2026. Accessed 2026-07-19. [29] European Banking Authority. Risk dashboard and risk-parameter annexes. Online data archive, 2026. Accessed 2026-07-19. 15
