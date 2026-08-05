@@ -1,0 +1,428 @@
+Title: Neural Networks with Local Converging Inputs for Efficient Options Pricing Models
+
+URL Source: https://arxiv.org/pdf/2608.02778v1
+
+Published Time: Wed, 05 Aug 2026 00:06:35 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Neural Networks with Local Converging Inputs for Efficient Options Pricing Models 
+
+## Harris Cobb ∗
+
+## , Wenbo Hao ∗
+
+## , and Yingjie Liu ∗
+
+Abstract 
+
+We present a novel application of Neural Networks with Local Converging Inputs (NNLCI) to improve the efficiency of existing numerical methods for pricing multi-asset options. The most concise input format for NNLCI has been introduced, offering substantial convenience and efficiency. NNLCI uses a neural network to locally correct solutions from a coarse mesh and a refined mesh (relative to the coarse one), requiring only a minimal amount of high-fidelity training data. We demonstrate this approach on cash-or-nothing options under the Black–Scholes equation in one, two, and three spatial dimensions, and on single-asset down-and-out barrier call options under the Heston stochastic-volatility model (whose pricing PDE is two-dimensional in the spot price S
+
+and the instantaneous variance v). In each case, NNLCI reduces the root-mean-square error (RMSE) of the refined-mesh numerical solution by a factor of approximately 4–12 on test sets, even when the neural network is trained on only a small subset of parameter combinations. These results demonstrate that NNLCI significantly reduces computational requirements for high-dimensional problems in real-time options trading and risk management, offering low training costs and strong generalization ability. 
+
+# 1 Introduction and Motivation 
+
+Numerical methods for partial differential equations (PDEs) play a central role in option pricing. An option is a financial derivative that grants its holder the right, but not the obligation, to buy or sell an asset at a predetermined strike price K at or before a specified 
+
+maturity time T . Fast and accurate option pricing is crucial in practice: traders require near-instantaneous pricing in response to changing market conditions, especially for multi-asset options where numerical complexity grows exponentially in the number of underlying assets. Traditional finite-difference or finite-element solvers can be computationally expen-sive for high-dimensional PDEs, limiting their practical use in real-time trading and risk management. We apply Neural Networks with Local Converging Inputs (NNLCI) to accelerate numer-ical PDE solvers for option pricing. NNLCI was originally developed to accurately predict solutions involving shocks, contacts and their interactions for hyperbolic PDEs by locally 
+
+> 1
+
+School of Mathematics, Georgia Institute of Technology, Atlanta, GA 30332 ( hcobb7@gatech.edu, whao36@gatech.edu, yingjie@math.gatech.edu ). 
+
+1arXiv:2608.02778v1 [cs.LG] 3 Aug 2026 combining coarse- and refined-mesh data within a neural network [1, 2]. Since then, it has been extended to electromagnetic waves scattered by complex perfect electric conductors [3], to unstructured grids [4], and to elliptic systems defined on multiple subdomains [5]. Although NNLCI has demonstrated the potential to significantly increase accuracy on many PDEs, it does not perform equally well for all problems; for example, it is not effective for systems exhibiting chaotic behavior [6]. Here, we adapt NNLCI to parabolic PDEs arising in finance: the Black–Scholes equation for European-style cash-or-nothing call options and the Heston stochastic-volatility model for down-and-out barrier call options . A cash-or-nothing call option pays a fixed cash amount if the underlying asset price ST at maturity exceeds the strike K, and pays zero otherwise. A down-and-out barrier call option pays max {ST − K, 0}
+
+if the underlying asset price has remained above a barrier B throughout [0 , T ]; if the asset ever touches or crosses B before maturity, the option expires worthless. The motivation for using NNLCI in option pricing is twofold. First, multi-asset op-tions (with 2 or more correlated underlyings) lead to high-dimensional PDEs, making high-resolution solvers extremely expensive. NNLCI uses only a small set of high-fidelity (reference-mesh) solutions as training data; once trained, the network can quickly map a coarse-mesh solution together with a solution on a mesh refined relative to that coarse grid to an approx-imation whose accuracy is substantially higher than that of the coarse solution, at far lower cost than computing a reference-mesh solution at inference time. Second, NNLCI exhibits strong generalization: a trained network can transfer across different PDE parameters, ge-ometries, and initial and boundary conditions [6], because it focuses on local dynamics rather than modeling the entire PDE solution operator end-to-end. As a result, one can achieve dra-matic accuracy improvements with minimal training data and a simple feed-forward network architecture. We organize this paper as follows. Section 2 outlines related work. Section 3 reviews the NNLCI methodology. Section 4 presents numerical experiments on cash-or-nothing options (1D, 2D, 3D) and on down-and-out barrier calls under the Heston model. Section 5 concludes and discusses future directions. 
+
+# 2 Related Work 
+
+## 2.1 Classical PDE and Monte Carlo Methods 
+
+Option prices can be obtained by solving an associated pricing PDE. Numerical meth-ods for solving PDEs are already well-developed and span a broad spectrum, including finite-difference (e.g. Crank–Nicolson), finite-element, finite-volume, spectral methods, and optimization-based iterative solvers [7, 8, 9, 10, 11]. Accuracy and stability for interface and advection-dominated problems have been improved using level set methods and back-and-forth error compensation and correction (BFECC), applied in contexts such as Maxwell’s equations, semi-Lagrangian schemes, and multiphase flows [12, 13, 14, 15, 16]. For high-dimensional problems, sparse grids [17] and domain decomposition [18] offer partial relief from the curse of dimensionality on PDE grids. One can also bypass the PDE and estimate the risk-neutral expectation directly by Monte Carlo path sampling—including quasi-MC and multilevel MC—whose cost grows far more mildly with dimension and is especially 2attractive for multi-asset and path-dependent payoffs [19, 20]. 
+
+## 2.2 Neural PDE Solvers 
+
+Feed-forward networks have learned option prices from simulated data [21]. Neural net-works that enforce PDE residuals (e.g., Dissanayake and Phan-Thien [22], physics-informed neural networks (PINNs) [23]) often fail to capture steep payoff features without dense sam-pling and typically incur high computational complexity. Operator-learning models—Chen and Chen [24], DeepONet [25] and Fourier Neural Operator (FNO) [26]—approximate the parameter-to-solution map, though they typically require extensive high-fidelity data [27, 28]. Gradient information has since been incorporated to alleviate this data burden [29, 30]. Variants such as Physics-Informed Neural Operators (PINO) [31] further embed physical constraints to enhance generalization and computational efficiency. 
+
+## 2.3 NNLCI Developments 
+
+Neural Networks with Local Converging Inputs were introduced for one-dimensional hyper-bolic conservation laws to predict reference-quality solutions using two nested approximations on small stencils [1]. Extensions to two-dimensional Euler flows [2], electromagnetic scatter-ing [3], and unstructured-mesh supersonic flows [4] demonstrated NNLCI’s versatility. Lee et al. adapted NNLCI to a 1D Poisson–Nernst–Planck ion-channel system with interfaces, achieving substantial speedups over fine-mesh FEM by learning interfacial jumps implicitly [5]. Cobb further extended NNLCI to quantum many-body problems [6]. NNLCI’s highly localized input reduces both network size and training data requirements, enabling stronger generalization. 
+
+## 2.4 Neural Network Methods for Financial PDEs 
+
+Although PINNs and operator nets have been applied to Black–Scholes and Heston equations [27, 32], no prior work employs NNLCI’s nested-grid, local-patch paradigm for option pricing. Our approach fills this gap by integrating coarse- and refined-mesh finite-difference/finite-element approximations into a local neural correction, achieving high accuracy with minimal high-fidelity samples in multi-asset and barrier settings. 
+
+# 3 Neural Networks with Local Converging Inputs 
+
+NNLCI is designed to enhance traditional numerical solvers for PDEs by learning a local correction from coarse- and refined-mesh solutions toward a reference (highest-resolution) mesh solution. The key ideas are: 
+
+• Construct three meshes of different resolutions: a coarse mesh used to crop the first neural-network input, a refined mesh (obtained by doubling the resolution of the coarse mesh and used to crop the second input), and a reference mesh (the highest-resolution mesh) serving as the ground-truth target for the network’s output. 3• At each spatio-temporal location of interest (a collocation point ), gather the computed PDE solutions on both coarse and refined meshes at grid points captured by a local patch centered at the collocation point. 
+
+• Feed this pair of local-patch values to a neural network, which outputs a corrected solution at the center of the patch that aims to match the reference-mesh solution. Importantly, the neural network does not receive as inputs (i) the spatio-temporal coor-dinates, (ii) PDE hyperparameters (e.g., volatility σ, interest rate r, mean-reversion κ, etc.), or (iii) boundary/initial-condition metadata because the information of these parameters is contained in the local, converging inputs of PDE solutions. By contrast, many existing neu-ral PDE solvers treat these parameters explicitly, which leads to more complex architectures, greater training data demands, and reduced generalization capability. NNLCI instead treats these quantities implicitly by focusing on the local dynamics of the solutions. Formally, let P denote a local patch centered at ( ti, x i) on the coarse mesh and the same patch on the refined mesh. Let 
+
+uC 
+
+> P
+
+= {uC (tj , x k) (tj , x k) ∈ P} , uF 
+
+> P
+
+= {uF (tj , x k) (tj , x k) ∈ P} 
+
+denote the sets of computed solutions on coarse (C) and refined (F) meshes, respectively, restricted to P. The neural network 
+
+N  uC 
+
+> P
+
+, u F
+
+> P
+
+ ≈ uR(ti, x i) ,
+
+is trained to predict the reference-mesh value uR(ti, x i). The number of input nodes to N is determined by the local-patch size, whose choice we discuss after the following subsection. 
+
+## 3.1 Handling Parameter Implicitness 
+
+Because NNLCI omits direct encoding of spatiotemporal coordinates, PDE coefficients, and boundary/initial data, there is no theoretical guarantee that a local coarse solution patch uniquely determines the reference solution; distinct global solutions may share identical local coarse solution patterns (a manifestation of non-injectivity), though using local, converging patches of coarse solutions substantially reduces this risk. This issue is acute in chaotic systems, where small differences in global state lead to large deviations locally. Indeed, experiments in [6] show that NNLCI may not be effective for the double pendulum and three-body problems: NNLCI failed to converge beyond a short time horizon owing to sen-sitive dependence on initial conditions. We therefore restrict our focus to non-chaotic PDEs (e.g., parabolic equations for diffusion, convection–diffusion, and option pricing), where local solution patterns more reliably encode the relevant global information. In exchange for forgoing global uniqueness, NNLCI benefits from: 
+
+• Data efficiency. Only a small amount of high-fidelity training data is required, which is important because data generation is often one of the most time-consuming stages for other machine-learning PDE models such as neural operators. 4• Architectural simplicity. Because the network learns a local correction map rather than a global solution operator, the target map is comparatively easy to learn; the low-dimensional local inputs also keep the number of trainable parameters small, making the network highly memory-friendly. 
+
+• Reuse without retraining. Once trained, the same network can be applied under moderate changes in PDE parameters, spatial locations, boundary conditions, and geometry without retraining; retraining is needed primarily when the underlying PDE itself changes. 
+
+## 3.2 Choice of Local Patch Size 
+
+The local-patch size is an important hyperparameter: including more points tends to improve accuracy, but also increases the complexity of the learned map and thereby the training-data requirement and training difficulty. The size that best balances cost and accuracy depends on the PDE type and mesh structure. For hyperbolic equations (e.g., Euler and Maxwell’s equations), patches are typically cho-sen from the local domain of dependence (e.g., in 1D: {(ti, x i), (ti−1, x i−1), (ti−1, x i), (ti−1, x i+1 )}
+
+on both coarse and refined meshes, for a total of 8 inputs). In two spatial dimensions, a 3 × 3 spatial patch (18 inputs total) sufficed for time-reversible Maxwell’s equation [3]. On unstructured meshes, a local mesh-size parameter h was appended as an additional input [4]. For the parabolic option-pricing PDEs considered here, a singleton patch consisting of only the collocation point—on each of the coarse and refined meshes—already yields a sub-stantial improvement over the refined-mesh solution, because solutions are generally mono-tonic in each spatial variable (i.e., asset price). In particular: 
+
+• Structured uniform grid: For cash-or-nothing options under Black–Scholes, using only the values {uC (ti, x i), u F (ti, x i)} at the same collocation point ( ti, x i) (2 inputs) provides substantial improvement. 
+
+• Non-uniform/unstructured grid: For the Heston model on a non-uniform mesh, one adds a local grid-size metric of the coarse mesh 
+
+hlocal =
+
+q
+
+(hleft + hright ) ( hup + hdown )as the third input, so that {uC (ti, x i), u F (ti, x i), h local } are fed to the network. Here 
+
+hleft , h right , h up and hdown denote the adjacent mesh spacings in the four coordinate directions. In future work, we plan to test larger local patches to explore how the accuracy improves with the patch size; see Section 5 for further discussion. 
+
+# 4 Numerical Experiments 
+
+We test NNLCI on two classes of options: 51. Multi-asset cash-or-nothing call options under the Black–Scholes PDE (spatial dimen-sion N = 1 , 2, 3). 2. Down-and-out barrier call options under the Heston stochastic-volatility model (two spatial dimensions: asset price S and variance v). 
+
+## 4.1 Cash-Or-Nothing Call Options under Black–Scholes 
+
+4.1.1 Model Formulation 
+
+Under the N -asset Black–Scholes framework, let S = ( S(1) , . . . , S (N )) be the vector of un-derlying asset prices. The PDE for a European-style cash-or-nothing call option that pays a fixed cash amount C if min 1≤j≤N S(j) 
+
+> T
+
+> K and zero otherwise satisfies 
+
+∂u ∂t +
+
+> N
+
+X
+
+> j=1
+
+r S (j) ∂u ∂S (j) + 12
+
+> N
+
+X
+
+> j=1
+
+σ2 
+
+> j
+
+(S(j))2 ∂2u∂(S(j))2 + X
+
+> 1≤i<j ≤N
+
+ρij σi σj S(i)S(j) ∂2u∂S (i)∂S (j) − r u = 0 ,
+
+for ( t, S) ∈ [0 , T ) × [0 , S max ]N , with terminal condition 
+
+u(T, S) = 
+
+(
+
+C, if min 1≤j≤N S(j) > K, 
+
+0, otherwise .
+
+Here: 
+
+• r is the risk-free interest rate. 
+
+• σj is the volatility of S(j).
+
+• ρij is the correlation between the Brownian motions driving S(i) and S(j).
+
+• K = 100 is the strike price and C = 100 is the cash payout (both fixed throughout our experiments). 
+
+• We truncate the spatial domain at Smax = 300, so that each S(j) ∈ [0 , S max ]. 
+
+• On the faces S(j) = 0 and S(j) = Smax , we impose Dirichlet boundary conditions con-sistent with the cash-or-nothing payoff (in particular, u = 0 whenever any coordinate vanishes, and the far-field value follows from the closed-form asymptotics). The N -dimensional Black–Scholes PDE for a cash-or-nothing call admits a closed-form solution for any positive integer N . Rather than computing a numerical reference solution on a fine grid, we directly use this exact formula to serve as our benchmark. This approach not only saves computational effort but also yields a precise measure of relative accuracy when comparing to more complex option-pricing models. 64.1.2 Numerical Setup 
+
+We discretize [0 , T ] × [0 , S max ]N with an alternating-direction implicit (ADI) finite-difference scheme of first-order accuracy in both time and space. The nested meshes below are used for all spatial dimensions N = 1 , 2, 3; parameter sampling and network details for N = 1 , 2follow, while the N = 3 sampling protocol is given later. 
+
+• Time to maturity: T = 1. 
+
+• Coarse mesh: 21 uniform nodes in each spatial direction and 21 time steps (so the spatial interior has 19 nodes per direction; for N = 3 the spatial grid is 21 × 21 × 21). 
+
+• Refined mesh: 41 uniform nodes in each spatial direction and 41 time steps (for 
+
+N = 3, 41 × 41 × 41), nested so that every coarse node coincides with a refined node. 
+
+• Collocation points: For each parameter tuple, collocation points are the coarse time– space nodes with interior spatial location (19 N spatial sites). At each collocation point (ti, Si) the two network inputs are the coincident-node values {uC (ti, Si), u F (ti, Si)};no interpolation from the refined mesh is used. 
+
+• Neural network ( N = 1 , 2): Two hidden layers of 15 neurons ( N = 1) or 20 neurons (N = 2), ReLU, Adam with learning rate 1 × 10 −3; 1500 epochs for N = 1 and 2000 for N = 2. 
+
+• Parameter grid ( N = 1 ): Discretize σ1 ∈ [0 .10 , 0.50] and r ∈ [0 , 0.05] into 2 4 = 16 equal subintervals each, yielding (2 4 + 1) 2 = 17 2 = 289 pairs ( σ1, r ). 
+
+• Parameter grid (N = 2): Discretize ρ12 ∈ [−0.99 , 0.93], r ∈ [0 , 0.05], σ1 ∈
+
+[0 .10 , 0.50], and σ2 ∈ [0 .10 , 0.50] into 2 3 = 8 equal subintervals each, yielding (2 3 +1) 4 = 9 4 = 6561 tuples ( ρ12 , r, σ 1, σ 2). For N = 1 , 2, after the full parameter grid is fixed, we form training and testing sets by a training gap g. Concretely, if a parameter axis has been discretized into the ordered nodes 
+
+θ0, θ 1, . . . , θ M , a gap of g keeps only the subsampled nodes θ0, θ g, θ 2g, . . . , θ M on that axis; the training set is then the Cartesian product of these subsampled axes, and all remaining full-grid tuples are held out for testing. Thus larger g means a sparser training set and a stricter test of generalization. For example, in 1D each of σ1 and r has M + 1 = 17 nodes; with g = 2 one keeps 9 nodes per axis, hence 9 2 = 81 training pairs and 289 − 81 = 208 testing pairs. The same rule yields 5 2 = 25, 3 2 = 9, and 2 2 = 4 training pairs for g = 4 , 8, 16, respectively. We use g ∈ { 2, 4, 8, 16 } for N = 1; and g ∈ { 2, 4, 8} for N = 2. Throughout the cash-or-nothing experiments, errors are measured against the closed-form solution. For a set of parameter tuples (train or test), we report 
+
+• RMSE refined : root-mean-square error between the refined-mesh solution and the exact solution, aggregated over all collocation points and all parameter tuples in that set; 
+
+• RMSE NNLCI : the same RMSE for the NNLCI output. Subscripts “train” and “test” indicate which parameter set is used. 74.1.3 1D Cash-Or-Nothing Experiments Results For each training gap g ∈ { 2, 4, 8, 16 }, we report RMSE refined and RMSE NNLCI on the training and testing parameter sets. Table 1: 1D Cash-Or-Nothing: Training RMSEs 
+
+Training Gap Refined RMSE (Train) NNLCI RMSE (Train) 
+
+2 2.119305 × 10 0 4.563925 × 10 −1
+
+4 2.186143 × 10 0 4.599067 × 10 −1
+
+8 2.433833 × 10 0 5.400022 × 10 −1
+
+16 2.907363 × 10 0 5.908855 × 10 −1
+
+Table 2: 1D Cash-Or-Nothing: Testing RMSEs 
+
+Training Gap Refined RMSE (Test) NNLCI RMSE (Test) 
+
+2 1.999632 × 10 0 7.994198 × 10 −1
+
+4 2.019259 × 10 0 6.231656 × 10 −1
+
+8 2.022012 × 10 0 6.685388 × 10 −1
+
+16 2.024100 × 10 0 6.801901 × 10 −1
+
+Discussion: On the test sets, NNLCI reduces RMSE by a factor of roughly 2 .5–3 .2 relative to the refined-mesh solver (e.g., 2 .02 /0.62 ≈ 3.2 when g = 4). The relative improvement remains stable as the training gap increases, indicating that only a small fraction of the parameter grid is needed for robust gains. 
+
+4.1.4 2D Cash-Or-Nothing Experiments Results We vary the training gap g ∈ { 2, 4, 8} and report the same refined-mesh and NNLCI RMSEs on the training and testing parameter sets. Table 3: 2D Cash-Or-Nothing: Training RMSEs 
+
+Training Gap Refined RMSE (Train) NNLCI RMSE (Train) 
+
+2 9.551897 × 10 0 2.059705 × 10 0
+
+4 1.013214 × 10 1 2.963919 × 10 0
+
+8 1.100761 × 10 1 3.051525 × 10 0
+
+Discussion: On the test sets, NNLCI reduces RMSE by a factor of about 4–5 (e.g., 9 .21 /1.94 ≈
+
+4.8 when g = 2). The gain is nearly independent of the training gap; even for g = 8, only 24 = 16 of the 6561 parameter tuples ( ≈ 0.24%) are used for training. 8Table 4: 2D Cash-Or-Nothing: Testing RMSEs 
+
+Training Gap Refined RMSE (Test) NNLCI RMSE (Test) 
+
+2 9.206242 × 10 0 1.937728 × 10 0
+
+4 9.228365 × 10 0 2.516097 × 10 0
+
+8 9.236010 × 10 0 2.311679 × 10 0
+
+4.1.5 3D Cash-Or-Nothing Experiments Results In three dimensions ( N = 3), we retain the same nested meshes as above (21 nodes per spatial direction on the coarse grid and 41 on the refined grid, with coincident-node inputs). The full parameter grid would be prohibitively large if a uniform discretization were used. Instead, we: 
+
+• Choose reasonable continuous intervals for each parameter (e.g., σ1, σ 2, σ 3 ∈ [0 .10 , 0.50], 
+
+r ∈ [0 , 0.05], ρ12 , ρ 13 , ρ 23 ∈ [−0.99 , 0.99]), ensuring coverage of practically relevant regimes. 
+
+• Generate 20 random parameter tuples uniformly from these intervals (each tuple defines (σ1, σ 2, σ 3, r, ρ 12 , ρ 13 , ρ 23 )). 
+
+• Use m ∈ { 2, 4, 6, 8, 10 , 12 , 14 , 16 , 18 } of these 20 examples for training, and the remaining 20 − m for testing. 
+
+• Neural network: 2 hidden layers of 20 neurons each (ReLU), Adam optimizer ( α =10 −3), 2000 epochs. For each m, we report the same refined-mesh and NNLCI RMSEs on the training and testing parameter sets. Table 5: 3D Cash-Or-Nothing: Training RMSEs 
+
+# Training Examples Refined RMSE (Train) NNLCI RMSE (Train) 
+
+2 1.110603 × 10 1 2.910601 × 10 0
+
+4 1.042734 × 10 1 2.537622 × 10 0
+
+6 1.008995 × 10 1 2.430484 × 10 0
+
+8 1.024061 × 10 1 2.915610 × 10 0
+
+10 1.039161 × 10 1 2.330441 × 10 0
+
+12 1.038717 × 10 1 2.263164 × 10 0
+
+14 1.057045 × 10 1 2.364175 × 10 0
+
+16 1.068657 × 10 1 2.876244 × 10 0
+
+18 1.071019 × 10 1 2.541825 × 10 0
+
+Discussion: Across all choices of m, NNLCI reduces test RMSE from about 10–11 for the refined-mesh solver to about 2 .3–3 .4. Using as few as 2 training examples already yields a 9Table 6: 3D Cash-Or-Nothing: Testing RMSEs 
+
+# Training Examples Refined RMSE (Test) NNLCI RMSE (Test) 
+
+2 1.069643 × 10 1 2.322681 × 10 0
+
+4 1.086713 × 10 1 2.435790 × 10 0
+
+6 1.110237 × 10 1 2.924178 × 10 0
+
+8 1.116501 × 10 1 3.414783 × 10 0
+
+10 1.119138 × 10 1 2.623442 × 10 0
+
+12 1.141710 × 10 1 2.863554 × 10 0
+
+14 1.130530 × 10 1 2.560474 × 10 0
+
+16 1.115970 × 10 1 2.907183 × 10 0
+
+18 1.164521 × 10 1 2.612379 × 10 0
+
+strong improvement; because the held-out test set then contains 18 random tuples, individual 
+
+m-comparisons should be read with that variability in mind. Overall, the results indicate that NNLCI remains data-efficient in three spatial dimensions. 
+
+## 4.2 Down-and-Out Barrier Call Options under the Heston Model 
+
+4.2.1 Model Formulation 
+
+Under the Heston stochastic-volatility model, the PDE for a down-and-out barrier call option on a single asset with price S and instantaneous variance v is: 
+
+∂u ∂t + 12 v S 2 ∂2u∂S 2 + ρ σ v S ∂2u∂S ∂v + 12 σ2 v ∂2u∂v 2 + rd S ∂u ∂S + κ(η − v) ∂u ∂v − rd u = 0 ,
+
+for ( t, S, v ) ∈ [0 , T ) × [B, S max ] × [0 , v max ]. The terminal payoff is 
+
+u(T, S, v ) = 
+
+(
+
+max {S − K, 0}, if S(t) > B ∀ t ∈ [0 , T ],
+
+0, if S(t) ≤ B for some t < T, 
+
+where: 
+
+• K = 100 is the strike price. 
+
+• B ∈ [80 , 95] is the barrier level: if S ever drops to B before maturity, the option is knocked out (pays zero). 
+
+• κ ∈ [0 .5, 5] is the mean-reversion rate of variance. 
+
+• η ∈ [0 .01 , 0.2] is the long-run variance. 
+
+• σ ∈ [0 .1, 1] is the volatility of variance. 
+
+• ρ ∈ [−0.9, 0.9] is the correlation between the Brownian motions for S and v.
+
+• rd ∈ [0 , 0.10] is the domestic risk-free interest rate. 
+
+• We take maturity T = 1, spatial truncation Smax = 8 K = 800, and vmax = 5. 10 4.2.2 Numerical Setup 
+
+We discretize the Heston PDE with a Modified Craig–Sneyd ADI scheme on nested non-uniform rectangular grids in ( S, v ), following the grid construction of in ’t Hout and Foulon [33]. The non-uniform meshes concentrate points near the strike and near v = 0, using clustering parameters c = K/ 5 in the S-direction and d = vmax /500 in the v-direction. Denoting by 
+
+m1 and m2 the numbers of mesh intervals in S and v (hence m1 + 1 and m2 + 1 nodes), we use 
+
+• coarse mesh: ( m1, m 2) = (50 , 25); 
+
+• refined mesh: ( m1, m 2) = (100 , 50) (double resolution in each direction, so every coarse node coincides with a refined node); 
+
+• reference mesh: ( m1, m 2) = (200 , 100), used only to generate training/testing labels. Time is discretized with N = 20 steps of size ∆ t = T /N . On S = B we impose the knock-out condition u = 0; the remaining boundary treatments follow the barrier-adapted conditions in [33]. Because the spatial mesh is non-uniform, each NNLCI input appends a local mesh-size metric 
+
+hlocal =
+
+q hleft + hright 
+
+   hup + hdown 
+
+ ,
+
+where hleft , h right are the distances from the collocation point to its immediate neighbors in the S-direction, and hup , h down are the corresponding distances in the v-direction. Colloca-tion points lie on the coarse mesh; at each such point ( ti, S i, v i) the network input is 
+
+ uC (ti, S i, v i), u F (ti, S i, v i), h local (Si, v i) ,
+
+where uF (ti, S i, v i) is taken at the coincident refined-mesh node. Parameter values used in the experiments: 
+
+• Barrier levels: B ∈ { 80 , 85 , 90 , 95 }.
+
+• Mean-reversion: κ ∈ { 0.5, 1.75 , 3.0, 4.25 , 5.0}.
+
+• Long-run variance: η ∈ { 0.01 , 0.06 , 0.11 , 0.16 , 0.20 }.
+
+• Volatility of variance: σ ∈ { 0.10 , 0.325 , 0.55 , 0.775 , 1.00 }.
+
+• Correlation: ρ ∈ {− 0.9, −0.45 , 0.0, 0.45 , 0.9}.
+
+• Domestic rate: rd ∈ { 0, 0.025 , 0.05 , 0.075 , 0.10 }.The five parameters κ, η, σ, ρ, r d are each sampled at 5 uniformly spaced nodes (endpoints plus three interior points), while B takes the 4 listed values. The full Cartesian product therefore contains 4 × 55 = 12 ,500 11 parameter tuples. Using the same training-gap convention as above—subsample every g-th node on each ordered parameter axis, then take the Cartesian product as the training set—we consider g ∈ { 2, 4}. This gives 
+
+g = 2 : 2 × 35 = 486 training tuples , g = 4 : 1 × 25 = 32 training tuples, with all remaining tuples used for testing. The network has two hidden layers of 32 neurons (ReLU), input dimension 3, and is trained with Adam ( α = 10 −3) for 2000 epochs. 
+
+4.2.3 Results 
+
+Because no closed form is available, errors are measured against the reference-mesh solution. As in the cash-or-nothing tests, RMSE refined and RMSE NNLCI are aggregated over collocation points and over the training or testing parameter tuples. Table 7: Heston Model (Barrier Call): Training RMSEs 
+
+Training Gap Refined RMSE (Train) NNLCI RMSE (Train) 
+
+2 1.141193 × 10 −2 5.083415 × 10 −4
+
+4 1.861085 × 10 −2 3.867079 × 10 −4
+
+Table 8: Heston Model (Barrier Call): Testing RMSEs 
+
+Training Gap Refined RMSE (Test) NNLCI RMSE (Test) 
+
+2 7.434591 × 10 −3 6.283897 × 10 −4
+
+4 7.588650 × 10 −3 5.513930 × 10 −4
+
+Discussion: On the test sets, NNLCI reduces RMSE by about 12 × when g = 2 (7 .43 × 10 −3
+
+to 6 .28 × 10 −4) and by about 14 × when g = 4. Even with the sparser training set, the method substantially improves upon the refined-mesh solver. 
+
+# 5 Conclusion and Future Work 
+
+We have demonstrated that NNLCI can substantially reduce the numerical error of coarse-grid solutions in PDE-based option-pricing models with minimal training data. In both cash-or-nothing and barrier-call scenarios, NNLCI achieves a 4 ×–12 × RMSE reduction on test sets, even when the network is trained on only a small fraction of parameter combinations. In high-dimensional PDEs (e.g., 3-asset cash-or-nothing), training on as few as 2 examples out of 20 yielded the best performance, illustrating the method’s data efficiency. Possible research directions include: 12 • Testing larger local patches as NNLCI inputs—for example, 3 collocated points in 1D, 3 × 3 patches in 2D, and 3 × 3 × 3 patches in 3D—rather than the single-point (per mesh) inputs used in the present experiments. Because single-point inputs already per-form well for this time-irreversible equation, enlarging the local patch may yield more substantial accuracy gains; multi-point local patches of this type have been employed for time-evolution equations such as the time-reversible Maxwell’s equations [3]. 
+
+• Extending NNLCI to American-style options (early exercise features), which require free-boundary solvers. 
+
+• Investigating multi-asset barrier options under correlated stochastic-volatility models. 
+
+• Exploring reinforcement-learning schemes that adaptively sample parameter space for maximal accuracy gain. 
+
+• Analyzing the theoretical properties of NNLCI in parabolic PDEs, particularly error bounds as a function of local patch size. 
+
+# References 
+
+[1] Haoxiang Huang, Vigor Yang, and Yingjie Liu. Neural Networks with Local Converging Inputs (NNLCI) for Solving Conservation Laws, Part I: 1D Problems. Communications in Computational Physics , 34(2):290–317, 2023. [2] Haoxiang Huang, Vigor Yang, and Yingjie Liu. Neural Networks with Local Converging Inputs (NNLCI) for Solving Conservation Laws, Part II: 2D Problems. Communications in Computational Physics , 34(4):907–933, 2023. [3] Harris Cobb, Hwi Lee, and Yingjie Liu. Solving Maxwell’s Equation in 2D with Neural Networks with Local Converging Inputs. arXiv preprint arXiv:2302.02860 , February 2023. [4] Weiming Ding, Haoxiang Huang, Tzu-Jung Lee, Yingjie Liu, and Vigor Yang. Neural network with local converging input for unstructured-grid computational fluid dynamics. 
+
+AIAA Journal , 62(8):3155–3166, August 2024. [5] Hwi Lee, Zhen Chao, Harris Cobb, Yingjie Liu, and Dexuan Xie. A PNP ion channel deep learning solver with local neural network and finite element input data. Machine Learning: Science and Technology , 5(4):045001, 2024. [6] Harris Cobb. Applications of Neural Networks with Local Converging Inputs (NNLCI) for Classical and Quantum PDE Solvers . Ph.D. dissertation, Georgia Institute of Tech-nology, August 2025. School of Mathematics. [7] Paul Wilmott. Paul Wilmott on Quantitative Finance . John Wiley & Sons, 1998. 13 [8] Seppo Ikonen and Juha Toivanen. Operator splitting methods for american options under stochastic volatility. Journal of Computational Finance , 12(1):1–35, 2008. [9] Randall J. LeVeque. Numerical Methods for Conservation Laws . Birkh¨ auser, Basel, 2 edition, 1992. [10] John P. Boyd. Chebyshev and Fourier Spectral Methods . Dover Publications, Mineola, NY, 2 edition, 2001. [11] Tingwei Meng, Wenbo Hao, Siting Liu, Stanley J. Osher, and Wuchen Li. Primal– dual hybrid gradient algorithms for computing time-implicit hamilton–jacobi equations. 
+
+Research in the Mathematical Sciences , 12(1):37, May 2025. [12] Todd F. Dupont and Yingjie Liu. Back and forth error compensation and correction methods for removing errors induced by uneven gradients of the level set function. 
+
+Journal of Computational Physics , 190(1):311–324, 2003. [13] Todd Dupont and Yingjie Liu. Back and forth error compensation and correction meth-ods for semi-lagrangian schemes with application to level set interface computations. 
+
+Mathematics of Computation , 76(258):647–668, 2007. [14] ByungMoon Kim, Yingjie Liu, Ignacio Llamas, and Jarek Rossignac. Flowfixer: Using bfecc for fluid simulation. In Proceedings of the Symposium on Point-Based Graphics (NPH) , pages 51–56, 2005. [15] Xin Wang and Yingjie Liu. Back and forth error compensation and correction method for linear hyperbolic systems with application to maxwell’s equations. Journal of Com-putational Physics: X , 1:100014, 2019. [16] Weinan Guo and Yingjie Liu. A simple finite difference method for time-domain maxwell’s equations with pec using ghost values and bfecc. Journal of Computational Physics , 469:111531, 2022. [17] Siwei Zhu and Xiaoming Zhuang. Sparse grid methods for multi-dimensional pdes in finance. Journal of Computational Finance , 5(2):23–48, 2002. [18] Russel E. Caflisch, William Morokoff, and Art B. Owen. Valuation of mortgage-backed securities using brownian bridges to reduce effective dimension. Journal of Computa-tional Finance , 1(1):27–46, 2000. [19] Paul Glasserman. Monte Carlo Methods in Financial Engineering . Springer, 2003. [20] Michael B. Giles. Multilevel monte carlo path simulation. Operations Research ,56(3):607–617, 2008. [21] J. Hutchinson, Andrew W. Lo, and Tomaso Poggio. A nonparametric approach to pricing and hedging derivative securities via learning networks. Journal of Finance ,49(3):851–889, 1994. 14 [22] M. W. M. G. Dissanayake and N. Phan-Thien. Neural-networkbased approximations for solving partial differential equations. Communications in Numerical Methods in Engineering , 10(3):195–201, 1994. [23] Maziar Raissi, Paris Perdikaris, and George Em Karniadakis. Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics , 378:686–707, 2019. [24] T. Chen and H. Chen. Universal approximation to nonlinear operators by neural net-works with arbitrary activation functions and its application to dynamical systems. 
+
+IEEE Transaction on Neural Networks , 6(4):911–917, 1995. [25] Lu Lu, Pan Jin, Guofei Pang, Zichao Zhang, and George Em Karniadakis. Learn-ing nonlinear operators via deeponet based on the universal approximation theorem of operators. Journal of Computational Physics , 429:109926, 2021. [26] Zongyi Li, Nikola Kovachki, Kaveh Azizzadenesheli, Burigede Liu, Kaushik Bhat-tacharya, Andrew Stuart, and Animashree Anandkumar. Fourier neural operator for parametric partial differential equations. In International Conference on Learning Rep-resentations (ICLR) , 2020. [27] Xian Jin, Dong Zhang, and Xiaoliang Li. Operator-learning neural networks for option pricing. Quantitative Finance , 21(6):999–1015, 2021. [28] Adrien Fournier, Xiyang Wang, and George Em Karniadakis. Operator network ap-proaches for option pricing under market imperfections. Journal of Computational Fi-nance , 25(4):1–30, 2022. [29] Yuan Qiu, Nolan Bridges, and Peng Chen. Derivative-enhanced deep operator network. In Advances in Neural Information Processing Systems , volume 37, pages 20945–20981, 2024. [30] Thomas O’Leary-Roseberry, Umberto Villa, Peng Chen, and Omar Ghattas. Derivative-informed neural operator: An efficient framework for high-dimensional parametric derivative learning. Journal of Computational Physics , 496:112555, 2024. [31] Zongyi Li, Hongkai Zheng, Nikola Kovachki, David Jin, Haoxuan Chen, Burigede Liu, Kamyar Azizzadenesheli, and Anima Anandkumar. Physics-informed neural operator for learning partial differential equations. ACM/IMS Journal of Data Science , 1(3):1– 27, 2024. [32] Justin Sirignano and Konstantinos Spiliopoulos. Dgm: A deep learning algorithm for solving partial differential equations. Journal of Computational Physics , 375:1339–1364, 2018. [33] K. J. in ’t Hout and S. Foulon. Adi finite difference schemes for option pricing in the heston model with correlation, 2011. 15
