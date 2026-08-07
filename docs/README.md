@@ -6,43 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-05
-- 运行时间：2026-08-05 21:05:42 UTC
+- 最新运行日期：2026-08-07
+- 运行时间：2026-08-07 01:56:07 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：5
-- 速读区：2
+- 本次总论文数：5
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读5篇、速读2篇，聚焦组合模拟神经策略与隐含波动率生成两大前沿方向。  
-最值得关注的是《Simulation-Based Neural Policies for Portfolio Choice》（9.0分）的架构与可解释性，以及《Latent Flow Matching for Arbitrage-Aware Implied Volatility》（8.0分）的套利感知建模。  
-普通读者可先浏览AI治理与高维交互固定效应双机器学习两篇速读，快速了解金融AI落地的制度与稳健性挑战。
-- 详情：[/202608/05/README](/202608/05/README)
+今日5篇论文聚焦金融AI，覆盖情感分类、报告生成、代理评测与时间序列预测。最值得关注的是QLoRA金融情感分类基准（10分）与FinReportBench机构级报告生成（9分），均指向大模型在收益预测与专业报告中的落地潜力。普通读者可优先跟踪这两项高评分技术对金融决策自动化的实际影响。
+- 详情：[/202608/07/README](/202608/07/README)
 
 ### 精读区论文标签
-1. [Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability](/202608/05/2608.03933v1-simulation-based-neural-policies-for-portfolio-choice-architecture-training-and-interpretability)  
+1. [From Financial Sentiment Classification to Return Predictability: A QLoRA Benchmark of Large Language Models](/202608/07/2608.04200v1-from-financial-sentiment-classification-to-return-predictability-a-qlora-benchmark-of-large-language-models)  
+   标签：评分：10.0/10、query:ai-finance
+   evidence：用大语言模型（QLoRA）进行金融情感分类并检验收益可预测性
+2. [FinReportBench: Measuring and Improving Institution-Grade Financial Report Generation](/202608/07/2608.04374v1-finreportbench-measuring-and-improving-institution-grade-financial-report-generation)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：神经网络策略用于动态投资组合选择
-2. [Latent Flow Matching for Arbitrage-Aware Implied Volatility Surface Generation](/202608/05/2608.00616v2-latent-flow-matching-for-arbitrage-aware-implied-volatility-surface-generation)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：深度学习生成隐含波动率曲面
-3. [ShiJianBench: From Dialogue to Decision for Long-Horizon Evaluation of Investment Advisors](/202608/05/2608.01204v1-shijianbench-from-dialogue-to-decision-for-long-horizon-evaluation-of-investment-advisors)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向对话式投资顾问的评估框架
-4. [Neural Networks with Local Converging Inputs for Efficient Options Pricing Models](/202608/05/2608.02778v1-neural-networks-with-local-converging-inputs-for-efficient-options-pricing-models)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：神经网络用于期权定价
-5. [FinVerse: Financial Time-Series Benchmark](/202608/05/2608.03259v1-finverse-financial-time-series-benchmark)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向金融与股票预测的时间序列预测基准
+   evidence：面向机构级财务报告生成的大模型专家基准
 
 ### 速读区论文标签
-1. [AI Governance for Institutional Readiness in Finance](/202608/05/2608.02311v1-ai-governance-for-institutional-readiness-in-finance)  
+1. [FinProBench: Evaluating Financial AI Agents with Role-Grounded Rubrics Derived from Professional Deliverables](/202608/07/2608.04077v1-finprobench-evaluating-financial-ai-agents-with-role-grounded-rubrics-derived-from-professional-deliverables)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：用于机构金融的AI治理框架
-2. [Double Machine Learning with High-dimensional Interactive Fixed Effects](/202608/05/2608.01137v1-double-machine-learning-with-high-dimensional-interactive-fixed-effects)  
+   evidence：金融AI智能体评测基准
+2. [FinPerMA: A Theory-Informed, Event-Grounded Personalized-Memory Benchmark for LLM Agents](/202608/07/2608.04095v1-finperma-a-theory-informed-event-grounded-personalized-memory-benchmark-for-llm-agents)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：面向金融咨询的LLM智能体个性化记忆基准
+3. [POEM: Phase-Aware $\mathrm{SO}(2)$ Feature Rotation for Time Series Forecasting Under Periodicity Drift](/202608/07/2608.03630v1-poem-phase-aware-mathrmso2-feature-rotation-for-time-series-forecasting-under-periodicity-drift)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：双机器学习用于实证金融面板数据
+   evidence：面向周期漂移时序预测的深度学习方法，可迁移至股票市场分析
 
 
 <div class="dpr-home-promo-card">
