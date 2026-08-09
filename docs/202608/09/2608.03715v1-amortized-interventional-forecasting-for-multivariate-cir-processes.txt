@@ -1,0 +1,402 @@
+Title: Amortized Interventional Forecasting for Multivariate CIR Processes
+
+URL Source: https://arxiv.org/pdf/2608.03715v1
+
+Published Time: Wed, 05 Aug 2026 01:09:40 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Amortized Interventional Forecasting for Multivariate CIR Processes 
+
+# Andreas Sauter ∗✉
+
+Vrije Universiteit Amsterdam Amsterdam, Netherlands andreas@sauter.at 
+
+# Sumit Sourabh 
+
+ING Amsterdam, Netherlands 
+
+# Drona Kandhai 
+
+University of Amsterdam / ING Amsterdam, Netherlands 
+
+# Erman Acar 
+
+University of Amsterdam Amsterdam, Netherlands 
+
+## Abstract 
+
+Mean-reverting dynamics are pervasive in finance, and the Cox– Ingersoll–Ross (CIR) process is a standard model for the time series they produce, from short rates to credit default swap (CDS) spreads. Yet CIR models capture only correlated co-movement, not causal 
+
+influence between series, so they cannot answer the system’s re-sponse when one series is externally shocked, which observational conditionals confound with historical co-movement. We make two contributions. First, an amortized model for distributional causal effect estimation that frames trajectories as time-stamped obser-vations and predicts the calibrated multi-horizon shock response without retraining per scenario. Second, a causal multivariate CIR data-generating process that supplies the paired observational and interventional ground truth that real markets cannot. We instan-tiate and calibrate the framework on CDS spreads as a testbed. CIR-ACTIVA’s validity is established on synthetic ground truth, independent of how well the simulator matches reality, while prac-tical grounding is assessed by backtesting the generated traces against real CDS data. Against observational and amortized causal-inference baselines, CIR-ACTIVA leads on both causal selectivity in the joint distribution and horizon-resolved calibration, retaining its selectivity once the interventional law varies over the horizon, with gains concentrating at short horizons. This opens up a class of what-if queries on coupled spread systems, CDS stress testing among them, that observational forecasters cannot answer. 
+
+## CCS Concepts 
+
+• Computing methodologies → Neural networks ; Simulation evaluation ; • Mathematics of computing → Causal networks ; • 
+
+Applied computing → Forecasting .
+
+## Keywords 
+
+causal inference, amortized inference, interventional forecasting, CIR process, credit default swaps, stress testing 
+
+## 1 Introduction 
+
+Many financial time series like short rates, default intensities, and stochastic volatility are strictly positive and mean-reverting, and the CIR model is their standard modelling tool [4, 8, 20]. Its multi-variate extensions reproduce co-movement across series [5, 12], but 
+
+> ∗Work partly carried out during an internship at ING.
+
+only through correlation, with no notion of one series causally influ-encing another. Many decisions about such systems are nonetheless causal: they ask how the rest of the system responds when one se-ries is externally shocked, a causal question that correlation among historical paths cannot answer. We study this interventional problem for multivariate CIR pro-cesses. The target is an interventional distribution, the response of the remaining series when one series’ dynamics are externally mod-ulated, rather than a conditional forecast of future values among historical paths in which that series happened to take a given level. The two coincide only under restrictive assumptions, be-cause a high value may be a symptom of shared stress rather than its cause. We instantiate the problem on credit default swap (CDS) spreads [15, 23], where spread forecasting is well studied but framed non-causally [27, 29, 33, 46]. There, the intervention is a stress test that forces one name’s spread to a stressed level and asks how the others respond. The distinction is operational: a model that answers the conditional query instead assigns a response to names the shock cannot causally reach, so a stress test built on it books losses and sizes hedges against exposures that do not exist. Recent causal foundation models create a new opportunity for this problem by providing amortized estimators of interventional distributions [2, 10, 41]. At the same time, recent tabular foundation-model approaches suggest that time series can be represented as time-stamped tabular prediction problems [21], bridging time-series forecasting and tabular causal inference. We build on this perspec-tive to develop CIR-ACTIVA, a causal forecasting model for multi-variate CIR shock scenarios. Our model consumes only CIR-type trajectories, so it is not specific to CDS; credit spreads are simply the mean-reverting series we calibrate and evaluate. Evaluation is the central obstacle: ground-truth interventional distributions are unobserved in real CDS data. We therefore introduce a causal mul-tivariate CIR data-generating process that preserves key properties of credit-spread series while allowing directed causal links between components, supplying the paired observational and interventional samples that are needed for amortized causal inference. This paper makes two contributions: 1) CIR-ACTIVA model (Section 5). We develop a model for amortized distributional causal effect estimation that treats spread trajectories as time-stamped 
+
+> 1arXiv:2608.03715v1 [cs.LG] 4 Aug 2026 Sauter et al.
+
+observations and uses a horizon-bucketed decoder, while lever-aging implicit model averaging. 2) Causal CIR simulator (Sec-tion 4). To train and evaluate it, we introduce a causal multi-variate CIR data-generating process that produces paired obser-vational and interventional samples, providing a benchmark for interventional forecasting. Empirically (Section 7), CIR-ACTIVA leads every baseline on both causal selectivity in the joint distribu-tion, shielding non-affected series from phantom shock effects, and horizon-resolved calibration, with gains concentrated at the short horizons which are most relevant for stress testing. Code for the model, the causal CIR simulator, and the experiments is available at https://github.com/sa-and/cir-activa. 
+
+## 2 Background and Notation 
+
+In this section, we introduce the theoretical foundations of our approach along with the notation. We first review structural causal models and soft interventions, then describe amortized causal effect estimation, and summarize the CIR process and its role in financial time-series modeling. 
+
+## 2.1 Causal Models 
+
+A Structural Causal Model (SCM) [38] over endogenous variables 
+
+𝑽 = {𝑉 1, . . . , 𝑉 𝑑 }, and exogenous variables 𝑼 = {𝑈 1, . . . , 𝑈 𝑚 } as-signs to each variable 𝑉 𝑖 a structural equation 𝑉 𝑖 ← 𝑓 𝑖 (𝑃𝑎 𝑉 𝑖 , 𝐸𝑥𝑜 𝑉 𝑖 ),expressing it as a deterministic function of its causal parents 𝑃𝑎 𝑉 𝑖 
+
+(the variables that directly influence 𝑉 𝑖 ) and independent exogenous noise terms 𝐸𝑥𝑜 𝑉 𝑖 ⊆ 𝑼 , with 𝑈 𝑖 ⊥⊥ 𝑈 𝑗 for 𝑖 ≠ 𝑗 . Running the SCM without external manipulation yields observational data . We employ 
+
+soft interventions [13], which replace the mechanism 𝑓 𝑖 of the target with a modified mechanism. Concretely, 𝑑𝑜 (𝑉 𝑖 :=(1 + 𝛿 )𝑓 𝑖 ) rescales the target’s own dynamics by a magnitude 𝛿 while retaining its dependence on 𝑃𝑎 𝑉 𝑖 , so the intervened variable still responds to its causes. We write 𝑑𝑜 (𝑉 𝑖 ) for this soft intervention throughout, with the magnitude 𝛿 carried by the representation 𝒊 .Given observational data 𝑫 M𝑜 sampled from the observational distribution 𝑝 M𝑜 (𝑽 ) of the (unknown) generating model M𝑜 and an intervention query 𝑑𝑜 (𝑉 𝑖 ), causal effect estimation seeks the post-interventional distribution 𝑝 (𝑽 | 𝑫 M𝑜 , 𝑑𝑜 (𝑉 𝑖 )) . A fundamen-tal complication is observational equivalence : many causal models can generate the same observational distribution while implying different interventional distributions. Rather than committing to a single model, a principled approach is to represent this ambiguity as a mixture over all observationally equivalent models [41]: 
+
+𝑝 
+
+
+
+𝑽 | 𝑫 M𝑜 , 𝑑𝑜 (𝑉 𝑖 )
+
+
+
+=
+
+∫
+
+𝑝 M (𝑽 | 𝑑𝑜 (𝑉 𝑖 )) 𝑝 
+
+
+
+M | 𝑫 M𝑜 
+
+
+
+𝑑 M (1) 
+
+## 2.2 Amortized Causal Effect Estimation 
+
+Classical estimators solve causal effect estimation from scratch for every dataset. Amortized approaches instead cast it as a distribution over tasks : a simulator draws a causal model M ∼ 𝑝 tr (M) from a 
+
+training distribution over SCMs and emits a task consisting of an observational context, an intervention query, and paired interven-tional data. A single model is trained across many such tasks to map context and query to the interventional distribution, with the inter-ventional samples supervising training but withheld at inference. Test-time estimation on a new task is then a single forward pass with no per-dataset re-training, valid under the assumption that test tasks are drawn from the same 𝑝 tr (M) . Because the simulator can produce many observationally equivalent SCMs with differing interventional behaviour, this regime also biases the model toward the model-averaging mixture in Eq. (1), representing causal ambi-guity in its predictions rather than collapsing to a point estimate. ACTIVA [41] and MACE-TNP [10] instantiate this paradigm. 
+
+## 2.3 CIR Model in Finance 
+
+The CIR model [8] is a non-negative, mean-reverting stochastic process as 𝑑𝑥 𝑡 = 𝜅 (𝑏 − 𝑥 𝑡 ) 𝑑𝑡 + 𝜎 √𝑥 𝑡 𝑑𝑊 𝑡 , where 𝜅 > 0 is the mean-reversion speed, 𝑏 > 0 the long-run mean, 𝜎 > 0 the volatility, and 
+
+𝑊 𝑡 a standard Brownian motion. The CIR process is used across finance for short rates, default intensities, and stochastic volatil-ity [8, 12, 20], and is a standard tool for modeling CDS spreads [4]. Multivariate extensions stack several CIR factors so that each spread 𝑥 (𝑖 ) 
+
+> 𝑡
+
+is driven by a combination of shared and idiosyncratic square-root factors [5, 12]. In the canonical formulation each spread follows its own mean-reverting equation, and co-movement be-tween series arises through the common factors. This reproduces empirical co-movement in spread panels but only through correla-tion, with no representation of causal influence between spreads. 
+
+## 3 Causal CIR model 
+
+Entities in a multivariate CIR model do not merely co-move; they can interact causally through concrete financial mechanisms. A prominent example is sector contagion : an idiosyncratic credit event at one automotive manufacturer propagates to its sector peers, raising their spreads even absent any common macro factor [25]. Ignoring this causal structure can lead to mispriced hedges and spurious intervention predictions. We formalize these interactions by extending the single-series CIR model of Section 2 to a multivariate causal CIR model defined as an SCM over 𝑑 variables. Each variable 𝑖 evolves according to a structural equation analogous to the CIR dynamics: 
+
+𝑉 𝑡 +1 
+
+> 𝑖
+
+= 𝑉 𝑡 𝑖 + ( 1 − 𝑒 −𝜅 𝑖 )  𝑏 𝑡 +1 
+
+> 𝑖
+
+− 𝑉 𝑡 𝑖 
+
+ + 𝑠 𝑡 𝑖 𝜀 𝑡 𝑖 , (2) where 𝜀 𝑡 𝑖 is a noise term based on exogenous variables {𝑈 𝑡 𝑗 }𝑗 ∈
+
+𝐸𝑥𝑜 𝑉 𝑖 with 𝑈 𝑡 𝑗 
+
+> iid
+
+∼ N ( 0, 1), rescaled to unit variance. Both coeffi-cients come from the one-step solution of the continuous-time dynamics: the drift closes the exact fraction 1 − 𝑒 −𝜅 𝑖 of the gap to 𝑏 𝑡 +1 
+
+> 𝑖
+
+, and (𝑠 𝑡 𝑖 )2 = 𝜎 2 
+
+> 𝑖
+
+𝑉 𝑡 𝑖 (1 − 𝑒 −2𝜅 𝑖 )/( 2𝜅 𝑖 ) integrates the diffusion over the step with its state dependence held at 𝑉 𝑡 𝑖 , coinciding with the exact CIR conditional variance when 𝑉 𝑡 𝑖 = 𝑏 𝑡 +1 
+
+> 𝑖
+
+.The key structural distinction from a multivariate CIR model is the causal long-run mean 𝑏 𝑡 +1 
+
+> 𝑖
+
+, which is not a fixed scalar but combines the contemporaneous values of variable 𝑖 ’s causal parents 
+
+𝑃𝑎 𝑉 𝑖 with an explicit time modulation 𝑐 𝑖 (𝑡 ):
+
+𝑏 𝑡 +1 
+
+> 𝑖
+
+= 𝑐 𝑖 (𝑡 ) ©«∑︁ 𝑗 ∈ 𝑃𝑎 𝑉 𝑖 
+
+𝑤 𝑖,𝑗 𝑉 𝑡 +1 
+
+> 𝑗
+
++ 𝑤 𝑖, 0 ¯𝑏 𝑖 ª®¬
+
+, (3) where weights 𝒘 𝑖 = softmax (𝒔 𝑖 ) with 𝒔 𝑖 ∼ Uniform (0.3, 3)|𝑃𝑎 𝑉 𝑖 |+ 1
+
+are normalized so that the target mean remains anchored near the baseline ¯𝑏 𝑖 while allowing causal parents to shift the equilibrium level, and 𝑐 𝑖 (𝑡 ) > 0 is a per-variable time-modulation factor applied 
+
+> 2Amortized Interventional Forecasting for Multivariate CIR Processes
+
+multiplicatively to the long-run target. Parents enter contempora-neously, so a directed cycle forms a simultaneous system within a step. When 𝑃𝑎 𝑉 𝑖 = ∅ and 𝑐 𝑖 (𝑡 ) = 1, the model reduces to a standard univariate CIR process with 𝑏 𝑡 +1 
+
+> 𝑖
+
+= ¯𝑏 𝑖 .
+
+## 4 Data generation 
+
+In this section we describe how we construct the simulator dis-tribution 𝑝 tr (M) over CDS spreads via our causal CIR model and evaluate its match to real data. 
+
+## 4.1 Calibration and Sampling of CIR Parameters 
+
+To obtain realistic parameters for our data generator, we calibrate on a corpus of 661 single-name 5Y CDS series (daily, 2015–2021), split into quarter-length chunks. We observe each CDS series at unit time intervals and calibrate its CIR parameters (𝜅, 𝑏, 𝜎 ) by maximum likelihood from the closed-form noncentral chi-square one-step transition density [8, 37]. After series-wise MLE, we model a distribution over the esti-mated parameters and the observed initial spread level 𝑥 0 by a Gaussian mixture for 𝝍 =   log 𝜅, log 𝑏, log 𝜎, log 𝑥 0 , estimated by Expectation–Maximization [9]. The log-space fit enforces positivity, the mixture captures multi-modality, and jointly fitting 𝑥 0 starts trajectories from realistic levels. For generation, CIR parameters for each variable are drawn independently from the fitted Gauss-ian 𝑝 (𝝍 ). Because the calibrated ¯𝑏 𝑖 is no longer a self-contained long-run mean in the causal model, some parameter draws produce non-reverting, diverging trajectories. To exclude these from the training set, any simulation where at least one spread leaves the interval [− 0.1, 10 ] or ¯𝑏 𝑖 > 5 is discarded. 
+
+## 4.2 Data Generation Procedure 
+
+We generate each SCM, using the CausalPlayground library [42], over 𝑑 = 3 spread variables with probability of each causal relation of 50%; directed cycles are permitted and resolved by unrolling the cycle into a fixed number of acyclic layers. Confounding is enabled: each exogenous noise variable can affect multiple endogenous vari-ables, inducing correlated residuals across variables without an explicit causal arc. A dataset consists of an observational run of 
+
+𝑇 obs = 200 steps recorded after a warm-up of 100 discarded steps. At the end of the observational run, a single variable 𝑖 is chosen uniformly at random as the intervention target. We apply a soft 
+
+intervention as defined in Section 2.1 with 𝛿 ∼ N ( 0.20 , 0.05 2) amultiplicative shift drawn once per dataset and held fixed, mirror-ing how credit stress scenarios are posed in practice [16]. From the last observational state, 𝐾 int = 5 independent interventional trajectories of length 𝑇 int = 100 steps are then simulated under this intervention as samples of the interventional distribution. For per-instance temporal variation and efficiency, we save only a uniformly random subsample of 𝑆 obs = 50 observational and 
+
+𝑆 int = 30 interventional steps per trajectory. The resulting triple is (𝑫 M , 𝑫 M𝑑𝑜 (𝑉 𝑖 ) , 𝒊 ), where 𝑫 M = {𝒗 M 
+
+> 𝑛
+
+}𝑆 obs  
+
+> 𝑛 =1
+
+∼ 𝑝 M (𝑽 ) are the obser-vational samples, 𝑫 M𝑑𝑜 (𝑉 𝑖 ) = {𝒗 M𝑑𝑜 (𝑉 𝑖 ) 
+
+> 𝑛
+
+}5×𝑆 int  
+
+> 𝑛 =1
+
+∼ 𝑝 M (𝑽 | 𝑑𝑜 (𝑉 𝑖 )) 
+
+the interventional samples, and 𝒊 ∈ R𝑑 holds 𝛿 at the intervened dimension and 0 elsewhere. This triple constitutes a single amorti-zation task , induced by an SCM M ∼ 𝑝 tr (M) .Five datasets are drawn from each distinct SCM before a new SCM is sampled, yielding structural diversity. The full corpus of 5000 datasets is split 70 / 15 / 15 into training, validation, and test sets. The split is over instances, not SCM identity, so a given SCM’s five datasets may fall across multiple splits; this matches the same-distribution generalization claimed above. 
+
+## 4.3 Time-Modulation Variants 
+
+We study two instantiations of the time-modulation factor 𝑐 𝑖 (𝑡 ).In the non-cyclical variant the modulation is switched off, 𝑐 𝑖 (𝑡 ) =
+
+1, so the long-run target is driven purely by the causal parents and is stationary in time. In the cyclical variant we use a sinu-soidal modulation 𝑐 𝑖 (𝑡 ) = 1 + 𝐴 𝑖 sin (𝜔 𝑖 𝑡 + 𝜙 𝑖 ), where the ampli-tude 𝐴 𝑖 ∼ Uniform (0.2, 0.5), the frequency 𝜔 𝑖 = 2𝜋𝑛 cyc /𝑇 int with 
+
+𝑛 cyc ∼ Uniform (0, 3) full cycles over the interventional window 
+
+𝑇 int , and the phase 𝜙 𝑖 ∼ Uniform (0, 2𝜋 ) are all sampled indepen-dently per variable. The modulation is mean-preserving across the task distribution: the uniform phase gives E[𝑐 𝑖 (𝑡 )] = 1 at every 𝑡 
+
+and for every 𝜔 𝑖 , so the marginal long-run level remains anchored. The cyclical variant stress-tests whether a model can track a chang-ing mean across the interventional horizon, a capability that goes beyond capturing time-varying variance alone. 
+
+## 4.4 Distance to the Real Market Data 
+
+We assess how far the simulated traces reproduce real CDS data, following standard validation for synthetic financial data [1, 7]. The reference is our calibration corpus. We subsample the reference on the same time stamps as our generated data. We report the lag-1 autocorrelation of spread levels, expressed as the implied half-life of a level shock, and the frequency of large log-returns. The comparison is necessarily on the per-name marginals: real data does not reveal which names are causally linked, so the simulator’s dependence structure has no multivariate counterpart. We find that generated levels lie in the empirical range (median 49–52 against 64 bp), and a shock decays with a half-life of 8 .9days in the cyclical variant and 2 .5 days without mean modulation, against 21 days in the panel, while a 3 𝜎 log-return appears in 36% of generated windows against 77% of real ones. Thinner tails are expected of a pure diffusion, as reproducing the fat tails seen in real spreads requires a jump component [35], a documented driver of CDS spreads [48]. The faster mean reversion is instead an artifact of the parameter prior: the autoregressive coefficient is downward-biased on the quarter-length windows we fit [26], so the prior is centred on faster reversion than the panel exhibits. Absent an interventional market counterpart, post-intervention traces are compared with real windows of matched length. Both variants behave as they do observationally, the cyclical one closer to the panel and the non-cyclical one reverting faster and with fewer large moves, so intervening introduces no discrepancy beyond the two already noted. In both variants the response shifts the target’s level by a median of +62% without mean modulation and +70% with it, exceeding 90% of 100-day moves in the panel. Importantly, neither of the two gaps described above concern our estimator, which is amortized over whatever simulator provides its training tasks, so closing them means retraining, not redesign. 
+
+> 3Sauter et al.
+
+Both gaps make the task easier than reality, since shorter mem-ory reduces confounding history, and thinner tails reduce extreme moves, so the model evaluation best read as an optimistic bound on the real data. 
+
+## 5 CIR-ACTIVA Model Description 
+
+This section describes our approach to amortized interventional distribution estimation for multivariate CIR time series. We adopt ACTIVA [41] as our generative backbone and keep its amortized es-timator unchanged. ACTIVA’s amortized inference over the training distribution 𝑝 tr (M) and its implicit model averaging over observa-tionally equivalent SCMs are properties of that estimator and its training distribution, not of any particular architecture or output likelihood; our modifications change only the latter two, so both properties carry over unchanged. Our two main modifications are a time-series framing that pro-motes time to a variable of the model and a horizon-bucketed decoder 
+
+whose predicted interventional law varies with forecast distance. Together with the inherited guarantees above, these form the core of CIR-ACTIVA. Three supporting choices (a conditional normalizing-flow prior, per-variable multi-channel latent codes, and a √· output transform for non-negative spreads) round out the model. 
+
+## 5.1 Base model (ACTIVA) 
+
+Following ACTIVA [41], we model amortized causal effect estima-tion as a 𝛽 -CVAE with generative process 
+
+𝑝 𝜃 (𝑽 , 𝒛 | 𝑫 M, 𝒊 ) = 𝑝 𝛾 (𝑽 | 𝒛 ) 𝑝 𝜂 (𝒛 | 𝑫 M, 𝒊 ), (4) conditioning on an observational context 𝑫 M and an intervention 
+
+𝑑𝑜 (𝑉 𝑖 ), represented by 𝒊 , the model produces a latent code 𝒛 via the learned prior 𝑝 𝜂 trained jointly with a variational posterior 𝑞 𝜙 .Both are parameterized by transformer encoders: the prior encoder processes only the observational data and intervention query; the posterior encoder additionally processes the interventional sam-ples. A transformer decoder maps sampled 𝒛 to a GMM over the interventional distribution. 
+
+## 5.2 Time-Series Framing 
+
+Existing methods treat an observational context as an unordered set of i.i.d. samples from a single SCM, with no notion of time [10, 41]. We keep this exchangeable sample view and accommodate time series through a minimal change of perspective: time is promoted to a variable of the model. Concretely, we let 𝑽 = (𝒀 ,𝑇 ), where 𝒀 
+
+collects the 𝑑 series variables and 𝑇 is the time stamp. The observa-tional context 𝑫 M has exactly these columns; each row is therefore a single timestamped snapshot (𝒚 , 𝑡 ). Because every row carries its own timestamp, the rows remain exchangeable: permuting them leaves the model’s prediction unchanged. Conditional on the la-tent 𝒛 and the timestamp, the rows are then independent up to a within-trajectory residual that decays with the sampling gap. The framing is information-preserving: timestamps make each observation’s temporal position explicit, so no temporal position information is lost by presenting the observations as an unordered set. It mirrors a line of recent work that casts forecasting as tabular prediction with time as an input feature, most directly TabPFN-TS [21]. This framing lets us draw on causal-inference results not previously accessible for time-series problems. The trade-off is that temporal structure is no longer imposed by the architecture but must be learned . The full burden of discovering how the spread variables depend on 𝑇 falls on the model itself. 
+
+## 5.3 Encoding Architecture 
+
+Each input row carries variable values, its time index, and an inter-vention channel; in every projection the value and time dimensions pass through separate MLPs, so the model treats temporal position and spread magnitude as distinct signals. Two weight-identical equivariant transformer encoders [31, 41] embed the two input paths (the observational context 𝑫 M and, during training only, the interventional samples 𝑫 M𝑑𝑜 (𝑉 𝑖 ) ) both receiving the masked intervention values 𝒊 , and mean-pool over the sample axis to give per-variable embeddings that are invariant to sample order and equivariant under variable permutations. Concatenating the two embeddings and passing them through a conditioning transformer yields the posterior 𝑞 𝜙 (𝒛 | 𝑫 M𝑑𝑜 (𝑉 𝑖 ) , 𝑫 M, 𝒊 ), a diagonal Gaussian over a per-variable latent 𝒛 ∈ R𝑑 ×𝐿 with 𝐿 channels per variable, enough for the decoder to express a per-variable time-shape rather than only a level. The prior 𝑝 𝜂 (𝒛 | 𝑫 M, 𝒊 ) consumes the same ob-servational embedding, and hence the same intervention query, and is a conditional continuous normalizing flow [6, 19]: it trans-ports a standard normal through a velocity field parameterized by the same equivariant transformer, integrated with a fixed-step Runge–Kutta scheme, with log-density from the instantaneous change-of-variables formula. The flow lets the prior represent a multimodal 𝑝 (𝒛 | 𝑫 M, 𝒊 ) without a fixed number of components while preserving variable-permutation equivariance; the ablation replaces it with a conditional diagonal Gaussian-mixture prior. 
+
+## 5.4 Decoder 
+
+Our transformer decoder maps the sampled latent 𝒛 to the parame-ters of a joint distribution 𝑝 𝛾 (𝑽 | 𝒛 ) over the full (𝑑 +1)-dimensional output 𝑽 = (𝒀 ,𝑇 ) of CIR variables and time. The decoder partitions the forecast horizon [𝑡 min , 𝑡 max ] into 𝐾 equal-width time buckets and emits, per bucket 𝑘 , a full-covariance Gaussian over the spread variables together with a linear-in-time mean shift, which serves as the data-conditional factor of the joint: 
+
+𝑝 𝛾 (𝒀 | 𝑡, 𝒛 ) = N  𝒀 ; 𝜇 𝑘 (𝒛 ) + 𝐴 𝑘 (𝒛 ) ( 𝑡 − 𝜏 𝑘 ), Σ𝑘 (𝒛 ), (5) where 𝑘 = ⌊( 𝑡 − 𝑡 min )/ Δ⌋ indexes the bucket of width Δ centered at 𝜏 𝑘 ; the mean 𝜇 𝑘 (𝒛 ) ∈ R𝑑 , the time-slope 𝐴 𝑘 (𝒛 ) ∈ R𝑑 , and the full covariance Σ𝑘 (𝒛 ) ∈ R𝑑 ×𝑑 are emitted by the decoder and are equivariant under variable permutations. With the time marginal 
+
+𝑝 (𝑡 ) fixed uniform on [𝑡 min , 𝑡 max ], the displayed Gaussian is the conditional factor of a joint density 𝑝 𝛾 (𝑽 | 𝒛 ) = 𝑝 𝛾 (𝒀 | 𝑡, 𝒛 ) 𝑝 (𝑡 )
+
+that the model maximizes over (𝒀 ,𝑇 ), not over the conditional alone. Fixing 𝑝 (𝑡 ) rather than learning it is a deliberate design choice to provide an inductive bias about known dynamics of time. This horizon bucketing is the decoder’s core temporal adaptation: it represents how the interventional law changes with forecast distance, and conditioning on any query horizon stays closed-form. The only CIR-specific component is the output transform: the Gaussians are placed over the square root of the spreads (time is not transformed) and mapped back through the change of variables, 
+
+> 4Amortized Interventional Forecasting for Multivariate CIR Processes
+
+with all likelihoods reported in raw units. For CIR-type diffusions the √· variance-stabilizes the conditional noise while squaring back enforces positivity. 
+
+## 5.5 Training and Hyperparameters 
+
+The model is trained by maximizing the 𝛽 -CVAE objective, the KL-weighted ELBO: 
+
+L = E𝑞 𝜙 
+
+h
+
+log 𝑝 𝛾 (𝒗 M𝑑𝑜 (𝑉 𝑖 ) | 𝒛 )
+
+i
+
+− 𝛽 KL  𝑞 𝜙 ∥ 𝑝 𝜂 
+
+ , (6) with the KL normalized by the number of time steps and given a deliberately large weight 𝛽 . The motivation is the inference-time path: an interventional query draws 𝒛 from the conditional prior, never the posterior, so predictive information hidden in trajectory-specific latent codes is unavailable exactly when needed; a large 𝛽 
+
+makes such storage costly and forces predictive structure into the conditioning path of observational context and intervention. To pre-vent latent collapse we floor the KL at a small free-bits budget per sample and ramp 𝛽 over an initial warmup phase. For model selec-tion we retain the checkpoint with the lowest prior-path predictive NLL on the held-out validation set. For our network architecture, we use a hidden width of 128 throughout, per-variable embedding dimension 28, 4 attention heads, 4 encoder and 4 decoder layers, dropout 0 .1, 𝐿 = 8 latent channels per variable, 𝐾 = 8 time buckets (decoder mixture compo-nents), a 2-layer flow velocity field integrated with 8 Runge–Kutta steps for the prior, KL weight 𝛽 = 25 with a 0 .5-nat free-bits floor, and AdamW (learning rate 10 −3, cosine decay with linear warmup, global gradient clipping at norm 1 .0) for 5 ,000 epochs at batch size 128 with a sigmoid 𝛽 -warmup over the first 4 ,500 epochs. The latent-scale guardrails are a smooth ceiling of 3 .0 on the posterior standard deviation and of 5 .0 on the flow-field velocity magnitude, and all computation is carried out in bfloat16 precision. 
+
+## 6 Experimental Setup 
+
+Datasets and Baselines. We evaluate on the held-out test splits of the two causal CIR datasets of Section 4: the non-cyclical variant and the cyclical variant. We compare our CIR-ACTIVA against four baselines: the original ACTIVA model, a multi-variable variant of MACE-TNP, a Gaussian Mixture Regression (GMR) baseline, and an oracle performance floor. MACE-TNP is the transformer neural-process estimator introduced by [10], used here in its joint mixture-of-Gaussians variant [41]. Like our model, it amortizes across SCMs and uses intervention-magnitude conditioning, but it lacks any time-series-specific structure. We are not aware of a prior application of it to interventional forecasting of a temporal process, so we apply it here ourselves. Sharing our amortized causal framework and differing mainly in temporal structure, it is the most informative comparison in our study. The GMR baseline is non-causal: for each instance it fits a full-covariance Gaussian mixture (𝐾 = 8 components) to the observational context, then answers an interventional query by conditioning every component analytically on the intervened variable taking its intervention value and samples from the resulting conditional mixture. Because it conditions rather than intervenes, it propagates observational associations to every correlated variable regardless of causal role; it is included as a strong non-causal reference, not as a valid interventional estimator. The 
+
+Oracle reference is a leave-one-out empirical floor: each ground-truth point is scored against the remaining points of the same instance, so the scoring ensemble and its target are draws from one law, where every proper score is at its expected minimum. The floor is strict because that law is the instance’s known SCM, which the context identifies only partially, so no model conditioned on context and intervention alone attains it. For the conditional scores the ensemble is restricted to the same 𝑡 . Because the floor is subtracted from every method within a bin, it shifts all curves equally and leaves method-to-method differences and ranking unchanged. 
+
+Metrics. Each metric probes a different aspect of the predictive distribution; all scores are sample-based, i.e. we compare samples from the predicted distribution with the ground-truth samples; and lower is better throughout. We evaluate the joint over variables. Furthermore, we score the exact-time conditional 𝑝 (𝒀 | 𝑡 ) by conditioning the predicted joint on each recorded 𝑡 analytically, aggregating into 5 equal-width horizon bins. This isolates temporal calibration , complementary to the joint scores, which instead test how mass is allocated across 
+
+horizons. Every joint metric is additionally reported for all variables (full ), causal descendants of the intervened variable ( desc ), and non-descendants ( nondesc ), testing whether effects reach descendants while sparing the rest. The Energy score [17] summarizes distributional spread and bias, the Variogram score [43] is sensitive to the cross-variable/cross-time dependence structure, and the CRPS [17] is the familiar per-variable marginal score that the two multivariate scores generalize (being univariate, it carries no dependence information, so we re-port it pooled over variables rather than decomposed by causal role). Energy and Variogram are standardized per dimension, and the scores are calculated comparing samples from the predicted distribution to the respective ground-truth samples. All reported intervals are marginal 95% confidence intervals over test instances. 
+
+## 7 Results 
+
+We assess each method on two axes that an interventional model must satisfy simultaneously: the whole-horizon joint (does it repro-duce the correct joint over variables and time, respecting causal structure?) and temporal calibration (resolved by horizon, does it match the per-horizon conditional 𝑝 (𝒀 | horizon )?). 
+
+## 7.1 Whole-Horizon Effect Propagation 
+
+Figure 1 reports the whole-horizon joint scores: the Energy and Variogram Scores decomposed by the causal role of each variable relative to the intervention target alongside the per-variable CRPS (time excluded) as a marginal summary. A faithful interventional model should propagate the effect to descendants while leaving non-descendants close to their observational behaviour. On the pooled joint our method leads MACE-TNP on both datasets: Energy 0 .33 against 0 .51 and Variogram 0 .44 against 0 .80 on the non-cyclical data, and 0 .37 against 0 .49 and 0 .52 against 0 .71 on the cyclical data. ACTIVA is the weakest method on the pooled joint of both datasets, and the non-causal GMR baseline trails ours throughout. The margin is widest on the Variogram, the score most sensitive to cross-variable and cross-time dependence.               
+
+> 5Sauter et al. 0.00 0.25 0.50 0.75 1.00
+> Energy Variogram CRPS
+> Oracle floor
+> non-cyclical
+> 0.0 0.2 0.4 0.6 0.8
+> Oracle floor
+> cyclical
+> excess over Oracle floor (lower = better)
+> Ours MACE-TNP ACTIVA GMR non-descendant descendant all vars / joint
+
+Figure 1: Whole-horizon scores as excess over the Oracle floor 
+
+(dashed line at 0) for the non-cyclical (left) and cyclical-mean (right) CIR datasets, in Energy, Variogram and CRPS blocks. In the Energy and Variogram blocks each method’s connected markers trace non-descendants (open circle), descendants (filled circle) and all variables ( joint , diamond); CRPS (time excluded) is a single per-method marginal. 
+
+Where the conditioning baseline fails qualitatively is the decom-position by causal role. Non-descendants are causally shielded from the intervention by definition, so their correct interventional target is their observational marginal 𝑝 M (𝑉 𝑖 ), a distribution the model has effectively seen in context, making them an intrinsically easier target than descendants; a correct causal model should therefore improve from desc to nondesc. The informative quantity is the 
+
+proportional reduction. Our model reduces its Energy excess by 51% from descendants to non-descendants on the non-cyclical data (0 .16 to 0 .08), and by 56% on the cyclical data. ACTIVA and GMR never achieve this: their excess falls by at most 9%, and on three of the four dataset-method pairs it is larger on names the shock cannot reach than on descendants. The MACE-TNP contrast iso-lates the mechanism: sharing the amortized causal framework and differing mainly in temporal structure, it exceeds our reduction on the non-cyclical data (64% against 51%) but retains only under half of it once the dynamics vary (28% against 56%). Selectivity is therefore reproducible across amortized causal estimators rather than an artifact of our decoder, but retaining it once the interven-tional law varies over the horizon requires the temporal structure. For GMR this is by construction, since it predicts the observational 
+
+conditional 𝑝 M (𝑉 𝑖 | 𝑉 𝑗 ) rather than the marginal and so assigns phantom effects to causally shielded names. We call this property 
+
+causal selectivity .Practically, this excess is the spurious response a stress test inherits. On shielded names the correct answer is the observational marginal, so excess over the Oracle floor there is not intrinsic difficulty but risk attributed to exposures the shock cannot reach. On the cyclical data, for example, GMR carries 0 .59 Energy of such excess against 0 .07 for ours. 0.0 0.5 1.0 1.5          
+
+> non-cyclical
+> Oracle floor
+> Conditional Energy Score
+> 0.0 0.5 1.0
+> Conditional Variogram
+> 0.0 0.1 0.2 0.3
+> Conditional CRPS
+> 25 50 75 forecast horizon 0.0 0.5 1.0 1.5
+> cyclical
+> Oracle floor
+> 25 50 75 forecast horizon 0.0 0.5 1.0
+> 25 50 75 forecast horizon 0.0 0.1 0.2 0.3
+> excess over Oracle (lower = better)
+> Ours MACE-TNP ACTIVA GMR
+
+Figure 2: Horizon-resolved skill. Exact-time conditional En-ergy Score (left), Variogram Score (middle) and per-variable CRPS (right) versus forecast horizon, for the non-cyclical (top) and cyclical-mean (bottom) CIR datasets. Curves are 
+
+excess over the Oracle floor (dashed line at 0); lower is better; bands are 95% confidence intervals. 
+
+## 7.2 Horizon-resolved Predictive Quality 
+
+Having established the whole-horizon joint picture, we now resolve performance by forecast horizon to probe temporal calibration. Figure 2 reports the exact-time conditional scores of Section 6, resolved by horizon, on both datasets, again as excess over the Oracle floor . This exposes how each method’s distributional fidelity evolves rather than collapsing temporal behaviour into a single number. Reading the curves across all three scores reveals where the methods separate. At short horizons our method has the smallest Oracle gap on both datasets: on the cyclical data its near-horizon Energy excess is 0 .46, below MACE-TNP, ACTIVA, and GMR, and on the non-cyclical data it is 0 .21 against 0 .33 for MACE-TNP, with GMR and ACTIVA more than four times higher. GMR is weakest here, relative to its own longer-horizon predictions, because the ini-tial phase of the intervened CIR is where the mean transitions from the observational to the intervened value, a shift it cannot capture by design since it is fitted to stable observational trajectories. As the horizon grows the field converges: in the longest non-cyclical bin GMR becomes indistinguishable from our model within the plotted intervals, while ACTIVA remains far above throughout. Our model leads MACE-TNP in every bin on all three scores on both datasets, with the Energy and Variogram margins separated at the plotted intervals in every non-cyclical bin and in the near-horizon Variogram of the cyclical data, and stays ahead of GMR on Energy and CRPS in every bin of both datasets, up to the long-horizon Variogram, where GMR falls below us on both. Taken together, the two axes separate the methods cleanly. The horizon-resolved view places our largest relative gains where tem-poral calibration is decisive, near the observed context, while the lead over MACE-TNP holds in every bin on both datasets, with the margin widest in the final bin. No baseline is strong on both axes across both datasets: GMR fails the causal selectivity of the joint, 
+
+> 6Amortized Interventional Forecasting for Multivariate CIR Processes
+
+Table 1: Ablation Results. Joint and near-horizon ( ℎ ∈ [ 0, 20 ),exact-𝑡 conditional) Energy (ES), Variogram (VS), and CRPS; subscripts are 95% CI half-widths; lower is better.                                                       
+
+> Joint Near
+> ES VS CRPS ES VS CRPS
+> Non-cyclical data
+> Full 1.325 ±.06 1.170 ±.09 0.269 0.588 ±.02 0.218 ±.01 0.156
+> −expr. 1.418 ±.06 1.288 ±.08 0.300 0.694 ±.02 0.288 ±.01 0.184
+> −bucket 1.325 ±.07 1.208 ±.09 0.267 0.660 ±.02 0.284 ±.02 0.172 base 1.419 ±.07 1.307 ±.09 0.298 0.772 ±.03 0.341 ±.03 0.203
+> Cyclical data
+> Full 1.503 ±.06 1.419 ±.06 0.320 0.822 ±.05 0.384 ±.03 0.212
+> −expr. 1.532 ±.05 1.473 ±.05 0.328 0.899 ±.05 0.455 ±.03 0.231
+> −bucket 1.525 ±.06 1.449 ±.07 0.325 0.872 ±.05 0.438 ±.03 0.223 base 1.525 ±.06 1.442 ±.05 0.327 0.894 ±.05 0.445 ±.03 0.230
+
+ACTIVA fails temporal calibration, and MACE-TNP, trails on both axes and retains under half its causal selectivity once the dynamics are time-varying. GMR’s long-horizon strength on the conditional scores does not contradict this, since those scores ignore both cross-horizon mass allocation and causal selectivity. CIR-ACTIVA leads on both axes and both datasets. 
+
+## 7.3 Ablation Study 
+
+We validate our two core temporal design choices via an ablation (Table 1): the expressive latent (per-variable 𝐿 =8 code with flow prior; −expr reverts to 𝐿 =1 with a diagonal GMM prior) and the 
+
+bucketed decoder (horizon-partitioned mixture; −bucket replaces it with a plain joint GMM over (𝒀 , 𝑡 ), conditioned analytically at the query time); base compounds both. Firstly, we observe that the two components together drive a clear near-horizon gain on both datasets: against base the full model lowers the near-horizon Variogram from 0 .341 to 0 .218 on non-cyclical data and from 0 .445 to 0 .384 on cyclical data, with the non-cyclical near-horizon Energy and Variogram contrasts separated at the reported intervals. Second, −expr is consistently more costly than −bucket on both datasets. On the non-cyclical data removing both components costs more than removing either alone on every metric but the joint CRPS. Removing the expressive latent hurts the joint and near-horizon scores alike; removing the bucketed decoder hurts only at the near horizon, leaving the joint indistinguishable and its CRPS 0 .002 lower. On the cyclical data the three ablated variants are mutually unresolved at the reported intervals, so only their common gap to the full model is informative there. The full model is best or tied on eleven of the twelve entries and is thus the right operating point when horizon-specific calibration is the goal. 
+
+## 8 Related Work 
+
+Time-series causal discovery spans Granger-style predictability tests [18], non-Gaussian identifiability [24, 39], constraint-based discovery under autocorrelation and non-stationarity [22, 40], amor-tized graph recovery and foundation-model pretraining for dis-covery [32, 44]. In all cases the output is a graph or disentangled representation, not the interventional distribution of future tra-jectories. Closer to our goal, recent amortized methods shift from graph recovery to direct effect estimation: Lorch et al. [31] amortize causal structure inference via variational inference over graphs, while CausalPFN [2], our base model ACTIVA [41], and our base-line MACE-TNP [10] amortize causal effect estimation itself, via in-context learning over a prior of SCMs, a 𝛽 -CVAE, and the Trans-former Neural Process framework [36], respectively. None builds in a time-series-specific inductive bias, the gap our time-indexed distributional forecasting fills: CIR-ACTIVA extends the ACTIVA 𝛽 -CVAE with temporal structure, while CausalPFN, moreover, targets non-temporal tabular effects. A distinct literature targets causal effect estimation from longi-tudinal observational data, either by learning balanced temporal representations for counterfactual outcome prediction under time-varying treatment [3, 34], or by embedding causal semantics into diffusion or VAE generators for interventional density modeling and data synthesis [30, 45, 47]. Across this strand, methods either require the causal graph at test time, retrain per dataset, or produce synthetic data rather than amortized distributional effect estimates. Probabilistic generative forecasters like flow matching [14] and coupled diffusion-VAE models [28] learn conditional future trajec-tory distributions but answer predictive, not interventional, queries and retrain per dataset. Foundation-style models push zero-shot predictive performance via large-scale pretraining [11, 21]; none answer interventional queries or jointly model time as a random variable alongside the target series. Within the financial domain, credit-spread and CDS forecasting spans Markov-switching autoregressions and SVMs [46], Merton-model-augmented LSTMs [33], MacroVAE [27], and attention-based recurrent networks [29]. All estimate the historical joint 𝑝 (𝑽 | past ),not the interventional distribution 𝑝 (𝑽 | 𝑑𝑜 (𝑉 𝑗 = 𝑥 )) demanded by causal forecasting. Across all these strands, no prior work combines amortized meta-learning over a distribution of SCMs with time-series-specific inductive bias and distributional interventional forecasting for mul-tivariate financial time series; this is the gap our approach fills. 
+
+## 9 Conclusion 
+
+We presented CIR-ACTIVA, a model for amortized interventional forecasting in multivariate CIR systems, together with a causal multivariate CIR process that supplies the interventional ground truth real markets cannot. Given observed trajectories and an inter-vention that stresses one series, it forecasts calibrated distributions of the system’s causal response at multiple horizons. It leads every baseline in our evaluation on both causal selectivity and horizon-resolved calibration, with the largest gains at the short horizons where the causal response is most pronounced. Relying on synthetic ground truth is both a strength and a limi-tation. It is a strength because our method’s ability to recover the data-generating interventional distribution, is established on the simulated samples and holds regardless of how closely the simulator resembles any real market. Because the model itself consumes only CIR-type trajectories, agnostic to what the calibrated parameters 
+
+> 7
+
+Sauter et al. 
+
+represent, that validity extends beyond CDS to the other mean-reverting series CIR describes, such as short rates, default intensi-ties, and stochastic volatility, and to interventional tasks beyond stress testing. The limitation is that synthetic ground truth alone says little about real spread behavior. Backtesting narrows this gap: our simulated traces match real spread levels but understate shock persistence and the frequency of large moves. Both deficits make the synthetic task the easier one, so all our scores bound real-data performance from above. The experiments cover systems of three names; scaling to portfolio-sized panels, where self-attention over variables becomes expensive, is a separate question. More broadly, our results show that observational forecasting ac-curacy is not a proxy for interventional correctness in coupled finan-cial systems, where the error takes the concrete form of phantom shock responses on names the shock cannot reach. CIR-ACTIVA addresses this by amortizing over a distribution of causal CIR tasks, delivering interventional predictions without retraining for each scenario. Beyond the model, the causal CIR simulator contributes a controlled benchmark for distributional causal effect estimation against which future causal forecasters can be measured. 
+
+## Acknowledgments 
+
+This research was partially funded by the Hybrid Intelligence Cen-ter, a 10-year programme funded by the Dutch Ministry of Educa-tion, Culture and Science through the Netherlands Organisation for Scientific Research, https://hybrid-intelligence-centre.nl, grant number 024.004.022. 
+
+## References 
+
+[1] Samuel A. Assefa, Danial Dervovic, Mahmoud Mahfouz, Robert E. Tillman, Prashant Reddy, and Manuela Veloso. 2020. Generating synthetic data in finance: opportunities, challenges and pitfalls. In Proceedings of the First ACM International Conference on AI in Finance (ICAIF) . ACM. doi:10.1145/3383455.3422554 [2] Vahid Balazadeh, Hamidreza Kamkari, Valentin Thomas, Benson Li, Junwei Ma, Jesse C Cresswell, and Rahul G Krishnan. 2025. CausalPFN: Amortized Causal Effect Estimation via In-Context Learning. (2025). [3] Ioana Bica, Ahmed M. Alaa, James Jordon, and Mihaela van der Schaar. 2020. Estimating counterfactual treatment outcomes over time through adversarially balanced representations. In International Conference on Learning Representa-tions .[4] Damiano Brigo and Fabio Mercurio. 2006. Interest Rate Models — Theory and Practice . Springer Berlin Heidelberg, Berlin, Heidelberg. doi:10.1007/978-3-540-34604-3 [5] Ren-Raw Chen and Louis Scott. 1993. Maximum Likelihood Estimation for a Multifactor Equilibrium Model of the Term Structure of Interest Rates. The Journal of Fixed Income 3, 3 (1993), 14–31. doi:10.3905/jfi.1993.408090 [6] Ricky T. Q. Chen, Yulia Rubanova, Jesse Bettencourt, and David K. Duvenaud. 2018. Neural Ordinary Differential Equations. In Advances in Neural Information Processing Systems (NeurIPS) .[7] Rama Cont. 2001. Empirical properties of asset returns: stylized facts and statis-tical issues. Quantitative Finance 1, 2 (2001), 223–236. [8] John C. Cox, Jonathan E. Ingersoll, and Stephen A. Ross. 1985. A Theory of the Term Structure of Interest Rates. Econometrica 53, 2 (3 1985), 385–407. doi:10.2307/1911242 [9] A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977. Maximum Likelihood from Incomplete Data Via the EM Algorithm. Journal of the Royal Statistical Society Series B: Statistical Methodology 39, 1 (9 1977), 1–22. doi:10.1111/J.2517-6161. 1977.TB01600.X [10] Anish Dhir, Cristiana Diaconu, Valentinian Mihai Lungu, James Requeima, Richard E Turner, and Mark Van Der Wilk. 2025. Estimating Interventional Distributions with Uncertain Causal Graphs through Meta-Learning. Advances in Neural Information Processing Systems 38 (4 2025), 140060–140096. [11] Samuel Dooley, Gurnoor Singh Khurana, Chirag Mohapatra, Siddartha Naidu, and Colin White. 2023. ForecastPFN: Synthetically-Trained Zero-Shot Forecast-ing. In Advances in Neural Information Processing Systems , Vol. 36. [12] Darrell Duffie and Nicolae Gârleanu. 2001. Risk and Valuation of Collateralized Debt Obligations. Financial Analysts Journal 57, 1 (2001), 41–59. doi:10.2469/faj. v57.n1.2418 [13] Frederick Eberhardt and Richard Scheines. 2007. Interventions and Causal Inference. Philosophy of Science 74, 5 (2007), 981–995. [14] Ahmed El-Gazzar and Marcel van Gerven. 2025. Probabilistic Forecasting via Autoregressive Flow Matching. (3 2025). [15] Stefano Giglio. 2012. Credit Default Swap Spreads and Systemic Financial Risk. https://papers.ssrn.com/abstract=2145986 [16] Paul Glasserman, Chulmin Kang, and Wanmo Kang. 2015. Stress scenario selec-tion by empirical likelihood. Quantitative Finance 15, 1 (2015), 25–41. [17] Tilmann Gneiting and Adrian E. Raftery. 2007. Strictly Proper Scoring Rules, Prediction, and Estimation. J. Amer. Statist. Assoc. 102, 477 (2007), 359–378. doi:10.1198/016214506000001437 [18] C. W. J. Granger. 1969. Investigating Causal Relations by Econometric Models and Cross-spectral Methods. Econometrica 37 (8 1969), 424–438. doi:10.2307/1912791 [19] Will Grathwohl, Ricky T. Q. Chen, Jesse Bettencourt, Ilya Sutskever, and David Duvenaud. 2019. FFJORD: Free-Form Continuous Dynamics for Scalable Re-versible Generative Models. In International Conference on Learning Representa-tions (ICLR) .[20] Steven L. Heston. 1993. A Closed-Form Solution for Options with Stochastic Volatility with Applications to Bond and Currency Options. The Review of Financial Studies 6, 2 (1993), 327–343. doi:10.1093/rfs/6.2.327 [21] Shi Bin Hoo, Samuel Müller, David Salinas, and Frank Hutter. 2025. The Tabular Foundation Model TabPFN Outperforms Specialized Time Series Forecasting Models Based on Simple Features. (1 2025). [22] Biwei Huang, Kun Zhang, Jiji Zhang, Joseph Ramsey, Ruben Sanchez-Romero, Clark Glymour, and Bernhard Schölkopf. 2020. Causal Discovery from Heteroge-neous/Nonstationary Data. Journal of Machine Learning Research 21, 89 (2020), 1–53. [23] John C. Hull and Alan White. 2000. Valuing credit default Swaps I: No counter-party default risk. Journal of Derivatives 8, 1 (9 2000), 29–40. doi:10.3905/JOD. 2000.319115 [24] Aapo Hyvärinen, Kun Zhang, Shohei Shimizu, and Patrik O. Hoyer. 2010. Es-timation of a Structural Vector Autoregression Model Using Non-Gaussianity. 
+
+Journal of Machine Learning Research 11 (2010), 1709–1731. [25] Philippe Jorion and Gaiyan Zhang. 2007. Good and bad credit contagion: Evidence from credit default swaps. Journal of Financial Economics 84, 3 (2007), 860–883. doi:10.1016/j.jfineco.2006.06.001 [26] Maurice G. Kendall. 1954. Note on bias in the estimation of autocorrelation. 
+
+Biometrika 41, 3–4 (1954), 403–404. [27] Szymon Kubiak, Tillman Weyde, Oleksandr Galkin, Daniel Philps, and Ram Gopal. 2025. MacroVAE: Counterfactual Financial Scenario Generation via Macroeco-nomic Conditioning. ICAIF 2025 - 6th ACM International Conference on AI in Finance 1 (11 2025), 797–805. doi:10.1145/3768292.3770360 [28] Yan Li, Xinjiang Lu, Yaqing Wang, and Dejing Dou. 2022. Generative Time Series Forecasting with Diffusion, Denoise, and Disentanglement. In Advances in Neural Information Processing Systems , Vol. 35. [29] Xiao Liu, Rongxi Zhou, Daifeng Qi, and Yahui Xiong. 2022. A Novel Methodology for Credit Spread Prediction: Depth-Gated Recurrent Neural Network with Self-Attention Mechanism. Mathematical Problems in Engineering 2022, 1 (1 2022), 2557865. doi:10.1155/2022/2557865 [30] Lars Lorch, Andreas Krause, and Bernhard Schölkopf. 2024. Causal Modeling with Stationary Diffusions. In Proceedings of The 27th International Conference on Artificial Intelligence and Statistics (Proceedings of Machine Learning Research, Vol. 238) . PMLR, 1927–1935. [31] Lars Lorch, Scott Sussex, Jonas Rothfuss, Andreas Krause, and Bernhard Schölkopf. 2022. Amortized Inference for Causal Structure Learning. In Advances in Neural Information Processing Systems , S Koyejo, S Mohamed, A Agarwal, D Belgrave, K Cho, and A Oh (Eds.), Vol. 35. Curran Associates, Inc., 13104– 13118. [32] Sindy Löwe, David Madras, Richard Zemel, and Max Welling. 2022. Amortized Causal Discovery: Learning to Infer Causal Graphs from Time-Series Data. In 
+
+Proceedings of the First Conference on Causal Learning and Reasoning (Proceedings of Machine Learning Research, Vol. 177) , Bernhard Schölkopf, Caroline Uhler, and Kun Zhang (Eds.). PMLR, 509–525. [33] Weifang Mao, Huiming Zhu, Hao Wu, Yijie Lu, and Haidong Wang. 2023. Fore-casting and trading credit default swap indices using a deep learning model integrating Merton and LSTMs. Expert Systems with Applications 213 (3 2023), 119012. doi:10.1016/J.ESWA.2022.119012 [34] Valentyn Melnychuk, Dennis Frauen, and Stefan Feuerriegel. 2022. Causal transformer for estimating counterfactual outcomes. In International conference on machine learning . PMLR, 15293–15329. [35] Robert C. Merton. 1976. Option pricing when underlying stock returns are discontinuous. Journal of Financial Economics 3, 1–2 (1976), 125–144. [36] Tung Nguyen and Aditya Grover. 2022. Transformer Neural Processes: Uncertainty-Aware Meta Learning Via Sequence Modeling. 16569–16594 pages. [37] Ludger Overbeck and Tobias Rydén. 1997. Estimation in the Cox–Ingersoll–Ross model. Econometric Theory 13, 3 (1997), 430–461. 8Amortized Interventional Forecasting for Multivariate CIR Processes 
+
+[38] Judea Pearl. 2009. Causality: Models, Reasoning, and Inference (2 ed.). Cambridge University Press, Cambridge. [39] Jonas Peters, Dominik Janzing, and Bernhard Schölkopf. 2013. Causal Inference on Time Series using Restricted Structural Equation Models. In Advances in Neural Information Processing Systems , Vol. 26. 154–162. [40] Jakob Runge, Peer Nowack, Marlene Kretschmer, Seth Flaxman, and Dino Sejdi-novic. 2019. Detecting and quantifying causal associations in large nonlinear time series datasets. Science Advances 5 (11 2019). doi:10.1126/sciadv.aau4996 [41] Andreas Sauter, Saber Salehkaleybar, Aske Plaat, and Erman Acar. 2025. ACTIVA: Amortized Causal Effect Estimation without Graphs via Transformer-based Variational Autoencoder. (3 2025). [42] Andreas W M Sauter, Erman Acar, and Aske Plaat. 2024. CausalPlayground: Addressing Data-Generation Requirements in Cutting-Edge Causality Research. [43] Michael Scheuerer and Thomas M. Hamill. 2015. Variogram-Based Proper Scoring Rules for Probabilistic Forecasts of Multivariate Quantities. Monthly Weather Review 143, 4 (2015), 1321–1334. doi:10.1175/MWR-D-14-00269.1 [44] Gideon Stein, Maha Shadaydeh, and Joachim Denzler. 2024. Embracing the black box: Heading towards foundation models for causal discovery from time series data. (2 2024). [45] Dennis Thumm and Luis Ontaneda Mijares. 2025. Towards Causal Market Simulators. 6th ACM International Conference on AI in Finance (ICAIF ’25): Workshop on Rethinking Financial Time Series 1 (11 2025). doi:10.48550/ARXIV. 2511.04469 [46] Darko B. Vukovic, Kirill Romanyuk, Sergey Ivashchenko, and Elena M. Grig-orieva. 2022. Are CDS spreads predictable during the Covid-19 pandemic? Forecasting based on SVM, GMDH, LSTM and Markov switching autoregression. 
+
+Expert Systems with Applications 194 (5 2022), 116553. doi:10.1016/J.ESWA.2022. 116553 [47] Yutong Xia, Chang Xu, Yuxuan Liang, Li Zhao, Qingsong Wen, Roger Zimmer-mann, and Jiang Bian. 2025. Causal Time Series Generation via Diffusion Models. (9 2025). [48] Benjamin Yibin Zhang, Hao Zhou, and Haibin Zhu. 2009. Explaining credit default swap spreads with the equity volatility and jump risks of individual firms. 
+
+The Review of Financial Studies 22, 12 (2009), 5099–5131. 9

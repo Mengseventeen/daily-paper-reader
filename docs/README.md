@@ -6,29 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-08
-- 运行时间：2026-08-08 19:31:54 UTC
+- 最新运行日期：2026-08-09
+- 运行时间：2026-08-09 20:22:56 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：2
-- 速读区：1
+- 本次总论文数：4
+- 精读区：0
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读聚焦金融风控与市场监控：两篇8分论文分别提出分数阶Kelly仓位新框架与期权操纵的“速度-制度”可解释检测法。建议优先关注前者将置信区间校准与仓位配置结合的创新思路，后者则对日内异常交易归因更有实战价值。若求落地，可从期权操纵检测的可解释特征入手验证数据可得性，再逐步扩展至仓位策略的实证回测。
-- 详情：[/202608/08/README](/202608/08/README)
+今日速读4篇论文，暂无精读，整体关注时间序列预测与强化学习方向。最值得看的是基于干预式预测的多元CIR过程方法，以及用表格基础模型做时间序列分类的两篇7分工作。建议读者从这两篇入手，后续可再深入精读其中一篇。
+- 详情：[/202608/09/README](/202608/09/README)
 
 ### 精读区论文标签
-1. [Conformal Kelly: Conformal Prediction Intervals as the Scale in Fractional Kelly Position Sizing](/202608/08/2608.01494v1-conformal-kelly-conformal-prediction-intervals-as-the-scale-in-fractional-kelly-position-sizing)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：保形预测用于投资组合仓位管理
-2. [Velocity- and Regime-Aware Detection of Intraday Options Market Manipulation, with Explainable Attribution](/202608/08/2608.05373v1-velocity--and-regime-aware-detection-of-intraday-options-market-manipulation-with-explainable-attribution)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于人工智能的市场操纵检测与可解释归因
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Renewable high-dimensional expected shortfall regression](/202608/08/2608.01115v1-renewable-high-dimensional-expected-shortfall-regression)  
+1. [Amortized Interventional Forecasting for Multivariate CIR Processes](/202608/09/2608.03715v1-amortized-interventional-forecasting-for-multivariate-cir-processes)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：金融高维期望损失回归的可再生机器学习框架
+   evidence：面向金融多元CIR过程的摊销干预预测
+2. [TS2TabPFN: Time Series Classification and Extrinsic Regression through Feature Extraction and a Tabular Foundation Model](/202608/09/2608.04174v1-ts2tabpfn-time-series-classification-and-extrinsic-regression-through-feature-extraction-and-a-tabular-foundation-model)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：时序分类与回归框架，可迁移用于股票市场分析
+3. [Revisiting TD Target Aggregation under Uncertainty in Q-Learning](/202608/09/2608.03069v1-revisiting-td-target-aggregation-under-uncertainty-in-q-learning)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：改进Q学习目标聚合的方法，可迁移用于人工智能金融决策
+4. [SkillTFM: Gated Skill Evolution for Training-Free Adaptation of Tabular Foundation Models](/202608/09/2608.06137v1-skilltfm-gated-skill-evolution-for-training-free-adaptation-of-tabular-foundation-models)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：表格基础模型的免训练自适应方法，是可用于金融等领域的通用AI技术
 
 
 <div class="dpr-home-promo-card">
