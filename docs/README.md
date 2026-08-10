@@ -6,33 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-09
-- 运行时间：2026-08-09 20:22:56 UTC
+- 最新运行日期：2026-08-10
+- 运行时间：2026-08-10 20:25:15 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：0
-- 速读区：4
+- 本次总论文数：7
+- 精读区：4
+- 速读区：3
 
 ### 今日简报（AI）
-今日速读4篇论文，暂无精读，整体关注时间序列预测与强化学习方向。最值得看的是基于干预式预测的多元CIR过程方法，以及用表格基础模型做时间序列分类的两篇7分工作。建议读者从这两篇入手，后续可再深入精读其中一篇。
-- 详情：[/202608/09/README](/202608/09/README)
+今日精读4篇、速读3篇，聚焦金融文档问答与表格建模两大方向。  
+最值得关注：《FinRank》构建SEC filing评测基准（10分），《Tabular Image》将表格转图像适配CNN（9分）。  
+建议从这两个方向入手，先看基准数据与图像转换方法的实际效果。
+- 详情：[/202608/10/README](/202608/10/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [FinRank: An Evidence-Grounded Benchmark for Financial Question Answering and Retrieval over SEC Filings](/202608/10/2608.07400v1-finrank-an-evidence-grounded-benchmark-for-financial-question-answering-and-retrieval-over-sec-filings)  
+   标签：评分：10.0/10、query:ai-finance
+   evidence：面向证券文件的金融问答与证据检索基准，直接对应金融分析中的自然语言处理
+2. [Tabular Image: a method to convert tabular data to images for convolutional neural networks](/202608/10/2608.07132v1-tabular-image-a-method-to-convert-tabular-data-to-images-for-convolutional-neural-networks)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：通过表格转图像使用CNN进行信用评分
+3. [Confidence Estimation for Financial Vision-Language Models in Chart and Document Understanding](/202608/10/2608.06532v1-confidence-estimation-for-financial-vision-language-models-in-chart-and-document-understanding)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：金融视觉语言模型，图表与文档理解，置信度估计
+4. [An Exploratory Evaluation of LLM-Assisted Rewriting of Moderate-Complexity Financial Sentences for DisCoCat-Based Sentiment Analysis](/202608/10/2608.07439v1-an-exploratory-evaluation-of-llm-assisted-rewriting-of-moderate-complexity-financial-sentences-for-discocat-based-sentiment-analysis)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：LLM辅助预处理用于基于NLP的金融情感分析
 
 ### 速读区论文标签
-1. [Amortized Interventional Forecasting for Multivariate CIR Processes](/202608/09/2608.03715v1-amortized-interventional-forecasting-for-multivariate-cir-processes)  
+1. [Beyond Co-Movement: Locality by Exposures Enables a Joint Factor-Graph Framework for Portfolio Diversification](/202608/10/2608.06618v1-beyond-co-movement-locality-by-exposures-enables-a-joint-factor-graph-framework-for-portfolio-diversification)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：面向金融多元CIR过程的摊销干预预测
-2. [TS2TabPFN: Time Series Classification and Extrinsic Regression through Feature Extraction and a Tabular Foundation Model](/202608/09/2608.04174v1-ts2tabpfn-time-series-classification-and-extrinsic-regression-through-feature-extraction-and-a-tabular-foundation-model)  
+   evidence：因子-图联合框架用于投资组合分散与构建
+2. [Optimized Certainty Equivalent Risk Minimization Using Samples: Algorithms, Convergence Rates, and Applications](/202608/10/2608.07113v1-optimized-certainty-equivalent-risk-minimization-using-samples-algorithms-convergence-rates-and-applications)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：时序分类与回归框架，可迁移用于股票市场分析
-3. [Revisiting TD Target Aggregation under Uncertainty in Q-Learning](/202608/09/2608.03069v1-revisiting-td-target-aggregation-under-uncertainty-in-q-learning)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：改进Q学习目标聚合的方法，可迁移用于人工智能金融决策
-4. [SkillTFM: Gated Skill Evolution for Training-Free Adaptation of Tabular Foundation Models](/202608/09/2608.06137v1-skilltfm-gated-skill-evolution-for-training-free-adaptation-of-tabular-foundation-models)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：表格基础模型的免训练自适应方法，是可用于金融等领域的通用AI技术
+   evidence：OCE风险最小化，组合优化，基于样本的算法
+3. [When GNNs Fail: Quantifying and Overcoming Temporal Correlation Volatility in Time Series](/202608/10/2608.07333v1-when-gnns-fail-quantifying-and-overcoming-temporal-correlation-volatility-in-time-series)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：面向动态时间序列的GNN方法，可迁移至金融市场多序列预测
 
 
 <div class="dpr-home-promo-card">
