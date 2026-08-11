@@ -1,0 +1,544 @@
+Title: Financial Numerical Prediction and Allocation as Token Generation
+
+URL Source: https://arxiv.org/pdf/2608.09880v1
+
+Published Time: Tue, 11 Aug 2026 02:39:22 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# FinATOM: Financial Numerical Prediction and Allocation as Token Generation 
+
+# Xu Ouyang, Moontae Lee 
+
+University of Illinois Chicago xouya@uic.edu, moontae@uic.edu 
+
+Abstract 
+
+Financial prediction typically relies on task-specific regres-sion, ranking, or policy heads, separating the language model from the numerical object ultimately evaluated. We investi-gate whether a causal language model can instead represent forecasts and decisions directly through constrained token generation. FinATOM introduces a unified, head-free inter-face for three-step stock-return forecasting and dynamic five-ETF allocation. The forecasting model autoregressively emits volatility-standardized return tokens and is trained with ordi-nal and ranking supervision followed by a one-epoch token-level policy stage. The allocation model generates normalized long-only weights; supervised fine-tuning imitates a causal mean–variance anchor, and DAPO-augmented GRPO opti-mizes realized 21-day Sharpe subject to anchor consistency. In 2023–2025 ETF tests, the allocation policy improves pooled gross Sharpe from 1.428 to 1.529 and net Sharpe under a 5-bp transaction-cost model from 1.394 to 1.494. The multi-modal allocation input attains the highest three-period mean Sharpe of 1.540, with its clearest advantage in 2025. On Fin-TexTS, the SFT and policy strategies achieve 73.52%/2.68 and 73.72%/2.69 cumulative-return/Sharpe, respectively. These results support the feasibility of direct language-model token generation for financial numerical prediction and decision-making, while motivating broader tests across assets, regimes, and random seeds. 
+
+# 1 Introduction 
+
+Financial systems usually combine heterogeneous evidence to produce numerical decisions. Prices describe market dy-namics, while news and regulatory filings contain informa-tion about monetary policy, industry conditions, firm funda-mentals, and events. The required outputs also differ: fore-casting produces scalar or multi-step returns, whereas portfo-lio construction produces a jointly constrained vector. Most systems encode the context and attach a task-specific regres-sion, ranking, or policy head (Nie et al. 2023; Li et al. 2024; Jin et al. 2024). Although effective, this fragments the output contract: each task needs its own parameterization, loss, de-coder, and validity mechanism, and the language model does not directly represent the final financial object. CAUSAL MARKET CONTEXT 
+
+prices · risk · news · filings · prior state 
+
+Llama 3.2 1B + LoRA 
+
+> shared vocabulary logits; no task-specific numerical head
+
+FORECAST PATH 
+
+D1:b12 → D2:b19 
+
+→ D3:b07 
+
+> conditional mean score top-20 ranking
+
+PORTFOLIO ACTION 
+
+GLD:250 · · · XLE:150 
+
+> row normalization long-only weights
+> ONE HEAD-FREE TOKEN INTERFACE
+
+Figure 1: FinATOM’s head-free interface: one causal lan-guage model emits constrained forecast or allocation tokens without a task-specific numerical head. We study whether the language model itself can serve as the numerical decision interface. Direct generation of-fers several attractive properties: the output is auditable, me-chanically parseable, and compatible with both supervised fine-tuning and token-level policy optimization. Neverthe-less, numerical token generation is not a trivial replacement for a regression head. Ordinary number strings have irregu-lar tokenization and do not preserve numerical order; uncon-strained decoding can produce malformed forecasts or port-folio weights that violate long-only and budget constraints; supervised targets can inadvertently incorporate future infor-mation; and token cross-entropy alone need not optimize the return–risk criterion used in deployment. A credible token-native design therefore requires an ordered numerical vo-cabulary, an explicit output grammar, a continuous decoding rule, causal supervision, and an objective aligned with the downstream financial decision. FinATOM provides this design without adding a task-specific numerical head to the standard language-model vo-cabulary projection. As summarized in Figure 1, the same causal Llama 3.2 1B backbone supports two complemen-arXiv:2608.09880v1 [cs.CV] 10 Aug 2026 tary tasks. For stock forecasting, the prompt combines a 64-session price-derived table with market context, SEC-filing summaries, and FinTexTS news organized at macro, sec-tor, related-company, and target-company levels (Lee et al. 2026). The model autoregressively emits ordered tokens for the consecutive D1, D2, and D3 returns. Conditional ex-pectations under the token distributions recover continuous return scores for cross-sectional ranking while preserving the discrete generation trace. For portfolio allocation, the prompt combines a visible 20-day return window, risk and correlation statistics, macroeconomic news, and the previous portfolio state. The model directly emits five long-only ETF weights, whose normalized values constitute the deployed action. The allocation task further separates causal imitation from outcome-based improvement. Supervised fine-tuning learns a mean–variance anchor computed only from information observable at the decision date, followed by shrinkage and deterministic quantization. A subsequent DAPO-augmented GRPO stage (Shao et al. 2024; Yu et al. 2025) samples le-gal allocation sequences and rewards their realized 21-day Sharpe while penalizing excessive deviation from the causal anchor. Future returns enter only this policy reward: they are absent from both the prompt and the supervised target. The language model therefore first learns a stable, fully specified allocation grammar and is then optimized against the finan-cial objective directly, without introducing a separate policy, value, or reward head. FinATOM complements several related research di-rections. Prior work serializes numerical sequences for language-model forecasting (Gruver et al. 2023), develops tokenized time-series models (Tao et al. 2025; Shi et al. 2025), generates quantized structured outputs (Chen et al. 2022; Jiang et al. 2026), and applies language models to fi-nancial prediction and decision-making (Koa et al. 2024). The distinguishing question studied here is whether a sin-gle constrained, head-free output interface can support both forecasting and allocation despite their different numerical semantics, validity constraints, and training signals. Fore-casting evaluates whether the interface can encode an or-dered future path, whereas allocation evaluates whether it can generate a jointly constrained action and improve that action through task-aligned policy optimization. Chronological ETF experiments over 2023–2025 show that the policy stage raises pooled gross Sharpe from 1.428 to 1.529 and net Sharpe under a 5-bp transaction-cost model from 1.394 to 1.494. The input-modality ablation yields the highest three-period mean Sharpe with news and time series together, although the multimodal advantage is concentrated in 2025 rather than uniform across years. On FinTexTS, SFT attains 73.52% cumulative return and 2.68 Sharpe, and the one-epoch policy stage reaches 73.72% and 2.69. The Fi-nATOM SFT-to-policy rows share one protocol, whereas comparison with the published FinTexTS system remains contextual. Together, the experiments suggest that direct to-ken generation can represent both financial forecasts and constrained decisions, while exposing important questions in calibration and nonstationarity. Our contributions are threefold: 
+
+• We introduce a shared constrained token interface for au-toregressive three-step return forecasting and normalized five-ETF allocation, without an additional task-specific numerical head. 
+
+• We develop a causal allocation pipeline that combines a fully specified mean–variance teacher, ordinal token supervision, and DAPO-augmented GRPO aligned with realized portfolio Sharpe. 
+
+• We provide chronological allocation evidence across three test periods, a controlled input-modality ablation, and an exploratory FinTexTS SFT-to-policy comparison, while separating within-protocol evidence from contex-tual comparison with the published baseline. 
+
+# 2 Related Work 
+
+Language models and time series. LLMTime serializes numerical sequences directly (Gruver et al. 2023); One Fits All and Time-LLM adapt pretrained language models to time-series inputs (Zhou et al. 2023; Jin et al. 2024). Special-ized architectures such as PatchTST and iTransformer remain strong alternatives (Nie et al. 2023; Liu et al. 2024b), and recent work questions when language-model priors improve forecasting (Tan et al. 2024). OpenTSLM integrates time series with a language-model interface through multimodal adaptation (Langer et al. 2026). TokenCast and Kronos fur-ther illustrate tokenized or pretrained sequence modeling for time series (Tao et al. 2025; Shi et al. 2025). Our focus is the output side: the forecast or action is generated through the LM vocabulary rather than a separate numerical head. 
+
+Financial text and prediction. FNSPID and Time-MMD provide text–time-series resources (Dong, Fan, and Peng 2024; Liu et al. 2024a). FinTexTS pairs stock histories with macro, sector, related-company, and target-company text (Lee et al. 2026). MASTER models temporal and cross-sectional stock structure with a specialized network (Li et al. 2024); language-model studies also find predictive informa-tion in headlines, filings, and self-reflective decision traces (Lopez-Lira and Tang 2023; Kim, Muhn, and Nikolaev 2024; Koa et al. 2024). We use FinTexTS only as an exploratory stock-ranking setting and keep it separate from the controlled ETF experiment. 
+
+Structured generation and policy optimization. Pix2Seq and next-point prediction show that quantized numeri-cal structures can be learned as token sequences (Chen et al. 2022; Jiang et al. 2026). Mean–variance optimiza-tion supplies a causal allocation teacher (Markowitz 1952), while equal weighting is a difficult out-of-sample reference (DeMiguel, Garlappi, and Uppal 2009). GRPO estimates critic-free group-relative advantages (Shao et al. 2024). DAPO extends this family with decoupled Clip-Higher, dy-namic sampling, token-level policy gradients, and overlong reward shaping (Yu et al. 2025); a financial study likewise combines improved GRPO with DAPO ideas (Zha and Liu 2025). Our allocation stage adopts the applicable asymmetric clipping and token-level update, but not the complete DAPO recipe. (A) DEPLOY (B) CAUSAL SFT 
+
+> (C) DAPO-AUGMENTED GRPO
+> Causal context
+> 20-day returns, risk, news, prior anchor
+> Llama 3.2 1B + LoRA
+> Allocation tokens
+> ETF tags + five grid values
+> Deterministic decode
+> token expectations
+
+→ normalize 
+
+→ wt ∈ ∆5
+
+> Visible state
+
+Rt, μ t, Σt,
+
+wA 
+
+> t−1
+> Mean–variance anchor
+> volatility
+
+−0.05 mean 
+
++0 .05 half-L1 
+
+> Causal target
+> 15% equal-weight shrink 50-unit quantization
+> SFT update
+> teacher-forced token CE + ordinal CE at values
+> Group rollout sample
+
+G = 8 legal allocation sequences  
+
+> Action decode
+> raw
+
+zgt ; normalized portfolio wgt
+
+> Financial reward
+> future 21-day Sharpe
+
+−8 12 ∥zgt − wA 
+
+> t
+
+∥1 
+
+> DAPO-style token update
+> group-relative advantage; clip
+
+[0 .80 , 1.28] 
+
+> three passes; behavior-KL stop
+> All lanes run left to right. Future returns appear only in the reward in (C); no reference-model KL penalty is used.
+
+Figure 2: Allocation architecture. Each lane proceeds left to right. The SFT target is constructed only from visible information, whereas forward 21-day returns enter only the policy reward. The policy update uses group-relative advantages and DAPO-style asymmetric token clipping, with no reference-model KL penalty. 
+
+# 3 Method 
+
+Model overview. Figures 2 and 3 show the allocation and forecasting instantiations of the shared token-native design. Both instantiate the same LoRA-adapted Llama 3.2 1B archi-tecture and tied vocabulary projection, but use task-specific output grammars and training objectives. Target construc-tion and reward computation are external training operations rather than additional neural heads; inference retains only the causal prompt, constrained token generation, and determin-istic numerical decoding. 
+
+Shared Token-Native Interface 
+
+For causal context xt and structured answer yt =(yt, 1, . . . , y t,L ), the backbone models 
+
+pθ (yt | xt) = 
+
+> L
+
+Y
+
+> ℓ=1
+
+pθ (yt,ℓ | xt, y t,<ℓ ). (1) Both tasks adapt Llama 3.2 1B (Dubey et al. 2024) with LoRA (Hu et al. 2022). Valid numerical values are learned vocabulary items scored by the tied LM readout. No re-gression, policy, value, or reward head is appended. Table 1 contrasts the two contracts. 
+
+Task Token output SFT objective Decode 
+
+Allocation ETF tags + five grid values Token CE +ordinal CE at value slots Expectation de-code; normalize row 
+
+Forecast D1–D3 tokens from 41 bins Ordinal CE +same-date rank loss Autoregressive prefix; expecta-tion per slot 
+
+Table 1: Two numerical contracts implemented through the same causal token interface. 
+
+Portfolio: Causal Mean–Variance Target 
+
+Allocation architecture. Figure 2 separates deployment, causal SFT, and policy optimization. At deployment, the model maps the serialized 20-day market context and previ-ous anchor to ETF tags and five grid-valued tokens, whose expectations are normalized into a long-only portfolio. The SFT lane constructs the mean–variance anchor exclusively from the visible state, whereas the policy lane samples legal allocations and evaluates them using forward 21-day Sharpe together with the anchor penalty. Both objectives update the same language-model parameters; no separate allocation, value, or reward network is introduced. The universe is ordered as GLD, SPY, TLT, UUP, and XLE. Let Rt ∈ R20 ×5 be the strictly visible return window ending at decision date t, with sample mean μt and covari-ance Σt. The continuous teacher solves 
+
+ewt = arg min 
+
+> w∈W
+
+p252 w⊤Σtw − 0.05(252 μt)⊤w
+
++ 0 .05 12 ∥w − wA
+
+> t−1
+
+∥1, (2) where W = {w ≥ 0, 1⊤w = 1 , w i ≤ 0.5}. The first date omits the turnover term. Thus the target is causal but path dependent: the previous quantized anchor is both prompt state and optimization state. The solution is shrunk and discretized as 
+
+wt = 0 .85 ewt + 0 .15 1/5, aA 
+
+> t
+
+= Q50 ,1000 (1000 wt), (3) (A) DECODE (B) FORECAST SFT (C) POLICY DESIGN 
+
+> Causal prompt
+> 64 sessions + context, news, and filings
+> Llama 3.2 1B shared readout
+> Autoregressive path
+
+D1:b12 → D2:b19 
+
+→ D3:b07  
+
+> Numerical decision
+> conditional means
+
+→ rescale 
+
+→ compound → top-20 rank  
+
+> Realized targets
+> three consecutive one-day returns
+> Causal scaling
+> divide by trailing 20-day volatility; clip to
+
+[−8, 8]  
+
+> Ordered tokens
+> 41 train-only quantile bins with centers
+
+ck 
+
+> SFT update
+> ordinal CE at D1–D3 + same-date ranking loss
+> Group rollout sample
+
+G = 4 legal D1–D3 trajectories 
+
+> Date-level panel
+> complete same-date stock cross-section
+> Whitened financial reward
+> 0.40 step + 0.25 path + 0.05 direction + 0.25 rank + 0.05 top-20
+> Token-PPO update
+> three bucket positions; clip 0.20 KL 0.02 to cached SFT
+> The lower lane specifies the implemented training design; no completed forecasting policy-stage result is claimed.
+
+Figure 3: Forecasting architecture. D1, D2, and D3 are generated autoregressively; conditional token means produce the continuous ranking score. The lower lane shows the evaluated one-epoch policy stage. where Q50 ,1000 uses largest-remainder allocation on a 50-unit grid, enforces a 1000-unit budget, and assigns at least one grid step to every asset. The normalized state wA 
+
+> t
+
+=
+
+aA 
+
+> t
+
+/1000 is passed to the next date. This is a designed causal teacher, not future-return ground truth. 
+
+Portfolio SFT and DAPO-Augmented GRPO 
+
+The prompt contains the 20-day return table, annualized risk and correlations, calendar fields, daily macro-financial news, asset order, and wA
+
+> t−1
+
+. A target answer has the form 
+
+<GLD><250><SPY><200>...<XLE><150> .
+
+Every boundary, ETF tag, and value receives sequence cross-entropy. At the five value positions, an additional Gaussian ordinal target over {0, 50 , . . . , 1000 } is used: 
+
+qjk ∝ exp 
+
+"
+
+− (k − k∗ 
+
+> j
+
+)2
+
+2(0 .8) 2
+
+#
+
+,
+
+LSFT = Ltok +
+
+> 5
+
+X
+
+> j=1
+
+CE( qj , p j ).
+
+(4) At inference, baj = P 
+
+> k
+
+pjk vk and the row is normalized to sum to one; a degenerate row falls back to equal weight. The policy stage samples G = 8 legal allocation se-quences. For raw token action zgt = agt /1000 , deployed weights are wgt = zgt /(1⊤zgt ). Using only returns t + 1: t +21 , the reward is 
+
+Rgt = Sh( wgt ; t + 1: t + 21) − 8 12 ∥zgt − wA 
+
+> t
+
+∥1, (5) with invalid parses assigned −5. Group advantages are 
+
+Agt = Rgt − Rt
+
+max( st, 0.65) , (6) and are set to zero for effectively constant-reward groups. For active answer token ℓ, let ρgtℓ = πθ /π old . The token-level clipped objective is 
+
+Lpol = − 1
+
+M
+
+X
+
+> g,ℓ
+
+mgℓ min( ρgtℓ Agt , clip( ρgtℓ , 0.80 , 1.28) Agt ) .
+
+(7) Training uses three passes and behavior-KL early stopping at 0.03, but the reference-KL coefficient is zero. This is best described as DAPO-augmented GRPO : it combines group-relative advantages with DAPO’s decoupled Clip-Higher and token-level update, but does not implement dynamic batch replenishment or overlong reward shaping (Yu et al. 2025). Neither the loss nor any KL term compares predictions with future target weights. 
+
+Forecast Targets, SFT, and Autoregressive Decode 
+
+Forecasting architecture. Figure 3 organizes the forecast-ing model into autoregressive decoding, supervised target construction, and policy refinement. The causal prompt is processed by the same backbone architecture, which emits D1, D2, and D3 bucket tokens sequentially so that each gen-erated prefix conditions the next horizon. Conditional means over the ordered bucket distributions are rescaled by trailing volatility and compounded into the continuous score used for top-20 ranking. SFT learns train-only, volatility-standardized bins, while the one-epoch policy stage samples complete paths and updates the same three bucket positions using the five-component financial reward. The forecasting prompt contains 64 sessions of return, gap, and range features; risk, return, and drawdown summaries; market and sector context; four levels of paired news; and filing summaries. For h ∈ { 1, 2, 3}, the target is the consec-utive one-day return 
+
+rt,h = Pt+h/P t+h−1 − 1,zt,h = clip( rt,h /σ t, 20 , −8, 8) , (8) where σt, 20 is trailing 20-day volatility known at t. Forty-one quantile bins are fit on training targets pooled across training tickers and horizons; each bin has center ck = E[z | b = k].The fixed grammar is 
+
+> <|forecast_start|><D1><b12><D2><b19> <D3><b07><|forecast_end|> .
+
+SFT computes Gaussian ordinal CE only at the three bucket slots and adds a same-date, per-horizon pairwise ranking loss with coefficient 0.5. The scaffold is fixed rather than learned as ordinary answer text. Decoding is genuinely autoregressive. The D1 argmax bucket is appended before evaluating D2, and D2 is ap-pended before D3. Numerical values remain conditional ex-pectations, bzt,h = P 
+
+> k
+
+pt,h,k ck, then are rescaled by σt, 20 
+
+and compounded into a three-day ranking score. Thus the discrete prefix and continuous score serve complementary roles. 
+
+Forecast Policy Optimization 
+
+The evaluated one-epoch policy stage samples G = 4 legal autoregressive trajectories and forms complete decision-date stock cross-sections. Five reward components are whitened within each group and combined as 
+
+R = 0 .40 Rstep + 0 .25 Rpath + 0 .05 Rdir 
+
++ 0 .25 Rrank + 0 .05 Rtop20 . (9) A clipped token-PPO update is applied only at the three sampled bucket positions. KL coefficient 0.02 compares cur-rent action probabilities with cached source-SFT probabili-ties; no second reference network or reward head is instanti-ated. This mechanism is distinct from the allocation stage’s zero-reference-KL DAPO-augmented GRPO. The resulting checkpoint is evaluated against its SFT initialization under the same stock-ranking and backtesting protocol. 
+
+# 4 Experimental Setup 
+
+ETF allocation dataset. We construct a daily multimodal dataset for five liquid ETFs: GLD, SPY, TLT, UUP, and XLE, from January 2018 to October 2025. The underlying market data contain daily OHLCV observations. For each decision date t, the LLM receives a chronological text table covering the latest 20 trading days, with the relative day, cal-endar date, and each ETF’s close-to-close return expressed as integer basis points. The prompt also includes annualized volatility, the 5 × 5 return-correlation matrix computed from the same window, and the previous portfolio allocation. We collect macroeconomic news through NewsAPI (NewsAPI 2026) from major publishers, including Bloomberg, Reuters, CNBC and other widely followed outlets. Articles concern-ing monetary policy, inflation, growth, employment, trade, energy, and geopolitical risk are grouped by date and sum-marized by DeepSeek-V4 (DeepSeek-AI 2026) into an ap-proximately 100-word daily news block. 
+
+FinTexTS forecasting dataset. For stock forecasting, we use FinTexTS (Lee et al. 2026), which covers 100 large U.S. companies from 2019 to 2023 and pairs their price histories with text derived from approximately one million news ar-ticles and SEC filings. Its textual information is organized into macro-, sector-, related-company-, and target-company-level blocks. For each stock and decision date, the LLM receives the latest 64 trading sessions as a text table contain-ing close-to-close returns, opening gaps, and intraday high– low ranges in integer basis points. The prompt additionally reports trailing volatility, multi-horizon returns, drawdown from the 52-week high, and same-day market and sector context. The four news levels and five SEC-filing categories are retained as separately labeled text blocks, after which the model autoregressively emits three tokens representing the consecutive returns on days D1, D2, and D3. 
+
+Portfolio allocation. Three expanding chronological ex-periments train on 2018–2022 and test 2023 (249 days), train 2019–2023 and test 2024 (251 days), and train 2020–2024 and test January–October 2025 (209 days). SFT runs five epochs with batch size 1, gradient accumulation 4, learning rate 2 × 10 −4, bfloat16, LoRA rank 64, scale 128, dropout 0.05, ordinal width 0.8, and ordinal coefficient 1. The pol-icy stage runs one epoch with learning rate 3 × 10 −5, group size 8, and temperature 1. The modality ablation reruns this same SFT-to-policy pipeline while changing only the in-cluded market modalities; dates, asset order, and the previous anchor remain available in every arm. The final 20 training dates are excluded because they lack a fully contained future reward window. Metrics use daily returns, zero risk-free rate, and 252-day annualization. Pooled evaluation concatenates all 709 test days; net Sharpe charges 5 basis points per unit of one-way turnover. 
+
+Stock forecasting. The universe contains 100 FinTexTS equities. Context and bucket construction use training ob-servations before 2022, 2022 is validation, and the reported test contains 239 trading days through December 19, 2023. Stocks are ranked by decoded three-day return; the top 20 are equally weighted and rebalanced every three sessions with 5-bp one-way costs. We evaluate both SFT and its one-epoch policy refinement. The policy stage uses group size 4, a policy learning-rate decay from 10 −6 to 10 −7, and KL coefficient 0.02 to cached SFT action probabilities. 
+
+Chronology and leakage controls. Allocation prompts contain observations stamped no later than t. The causal target is recomputed sequentially inside each experiment, so the previous-anchor state cannot cross from test into train-ing. Reward windows begin at t + 1 and are separate from prompt fields; terminal training dates without 21 future ses-sions are dropped. Forecast volatility, bin boundaries, and Year Method Ann. return Ann. vol. Sharpe Max drawdown 2023 SFT 7.18% 5.03% 1.404 -2.81% Policy 7.11% 4.98% 1.404 -2.78% Causal target 7.92% 5.03% 1.542 -2.83% Equal weight 6.55% 7.47% 0.886 -5.28% 2024 SFT 7.35% 5.00% 1.445 -4.72% Policy 7.88% 4.93% 1.564 -4.72% Causal target 7.06% 4.93% 1.407 -4.69% Equal weight 9.59% 6.87% 1.367 -4.88% 2025 SFT 10.46% 6.91% 1.474 -6.28% Policy 11.76% 6.87% 1.653 -6.04% Causal target 11.58% 6.61% 1.691 -5.21% Equal weight 15.72% 10.03% 1.506 -7.99% 
+
+Table 2: Out-of-sample five-ETF results. “Policy” denotes DAPO-augmented GRPO initialized from SFT. Return and volatility are annualized; the causal target is a numerical reference rather than a learned policy. The 2025 test ends October 31. bin centers are estimated from training data only, and rank-ing losses compare stocks sharing the same decision date. The base-model pretraining cutoff is discussed below. 
+
+Evaluation and comparison scope. For portfolio wt,next-session gross return is w⊤ 
+
+> t
+
+rt+1 . One-way turnover is  
+
+> 12
+
+∥wt − wt−1∥1; net return subtracts 0.0005 times turnover. Annual return is daily mean times 252, volatility is daily stan-dard deviation times √252 , and Sharpe is their ratio. Deter-ministic expectation decoding is used throughout. The causal target and equal weight are numerical references, while the allocation SFT-to-policy comparison holds the backbone, grammar, context, and decoder fixed. In the stock experi-ment, FinATOM SFT and Policy also share a common split, decoder, and backtest; only their comparison with the pub-lished FinTexTS row is contextual rather than controlled. 
+
+# 5 Results 
+
+Portfolio Allocation 
+
+Table 2 shows that the policy stage is unchanged from SFT at three-decimal Sharpe in 2023, but improves both sides of the ratio in 2024 and 2025. Annual return rises by 0.52 and 1.31 percentage points, respectively, while volatility falls by 0.07 and 0.04 points. The 2024 policy also exceeds the causal teacher’s Sharpe (1.564 versus 1.407), indicating that pol-icy optimization is not merely reproducing the SFT target; the reversal in 2023 and 2025 shows that the gain remains regime dependent. Equal weighting earns more raw return in 2024–2025, but at substantially higher volatility and larger drawdown. Figure 4 visualizes this regime-dependent pat-tern: the policy matches SFT in 2023, separates positively in 2024 and 2025, and achieves the strongest pooled Sharpe among the learned policies. The pooled comparison in Table 3 avoids averaging an-nual ratios. Policy optimization raises gross Sharpe by 0.101 and net Sharpe by 0.100, while average one-way turnover increases only from 1.481% to 1.537% (5.6 basis points per day). Its gross Sharpe of 1.529 is within 0.011 of the causal target’s 1.540. Together, these results suggest that the policy 0.8 1.0 1.2 1.4 1.6 2023 2024 2025 Pooled   
+
+> Annualized Sharpe
+> SFT SFT + policy Equal wt.
+
+Figure 4: Sharpe by test period and after pooling all 709 days. The policy curve is DAPO-augmented GRPO initial-ized from SFT. stage mainly improves the return–risk tradeoff rather than exploiting extra trading intensity.                          
+
+> Policy 2023 2024 2025 Pooled Net 5 bp SFT 1.404 1.445 1.474 1.428 1.394 Policy 1.404 1.564 1.653 1.529 1.494
+> Causal target 1.542 1.407 1.691 1.540 —Equal weight 0.886 1.367 1.506 1.245 —
+
+Table 3: Portfolio Sharpe across test periods. Bold indicates improvement of the learned policy over its SFT initializa-tion. Net values are reported where the same turnover-cost calculation is available. 
+
+Input-Modality Ablation 
+
+Table 4 isolates the contribution of news and time-series con-text using the same SFT-to-policy training pipeline, while retaining dates, asset order, and the previous causal anchor in every arm. The combined input obtains the highest simple mean Sharpe, 1.540, exceeding time series only by 0.061 and news only by 0.104. The annual pattern is not uniform: time series only leads the combined model by just 0.004 in 2023 and 0.001 in 2024, whereas news plus time series leads by 0.190 over time series only and by 0.180 over news only in 2025. Thus, recent returns and risk statistics provide the more stable standalone signal, while macroeconomic news appears complementary when the 2025 regime makes it in-formative. Because the table contains only three single-run periods, the result supports regime-dependent complemen-tarity rather than a statistically general claim that adding news always helps.                 
+
+> Input modality 2023 2024 2025 Mean Sharpe News only 1.377 1.459 1.473 1.436 Time series only 1.408 1.565 1.463 1.479 News + time series 1.404 1.564 1.653 1.540
+
+Table 4: Input-modality ablation for the full SFT-to-policy pipeline, measured by annual Sharpe ratio. Dates and the previous causal anchor remain present in every arm; the final column is the simple mean across the three test periods. Bold values indicate the best result in each column. 
+
+Exploratory Stock Result         
+
+> System Cumulative return Sharpe FinTexTS 53.98% 2.67 FinATOM SFT 73.52% 2.68 FinATOM Policy 73.72% 2.69
+
+Table 5: Exploratory 2023 stock-strategy results. FinATOM SFT and Policy use the same protocol; comparison with the published FinTexTS system is contextual because its protocol differs. Within the common FinATOM protocol, the one-epoch policy stage raises cumulative return from 73.52% to 73.72% and Sharpe from 2.68 to 2.69. The small increment indicates that most of the strategy performance is already learned dur-ing SFT; policy optimization provides a modest refinement rather than a wholesale change in the ranking signal. Relative to the published FinTexTS row, the policy strategy is higher by 19.74 percentage points in cumulative return (36.6% rel-ative) but only 0.02 in Sharpe. This divergence between ter-minal wealth and risk-adjusted efficiency suggests that the large return gap may reflect compounding, exposure, timing, or other protocol differences rather than uniformly superior forecasts. Because the published baseline does not share the same split and the table lacks matched volatility, drawdown, and turnover, it does not establish cross-system dominance. The supported conclusions are narrower: the head-free token score sustains a high-Sharpe top-20 strategy, and the eval-uated policy stage improves it slightly without destabilizing performance. 
+
+# 6 Discussion and Limitations 
+
+The allocation results support a more specific interpretation than a uniform benefit from reinforcement learning. DAPO-augmented GRPO is effectively neutral in 2023 and improves Sharpe in 2024 and 2025; the pooled net gain survives the 5-bp cost model while turnover rises only slightly. The pol-icy stage therefore appears to refine the return–risk tradeoff rather than obtain performance simply by trading more. The stock experiment separates two claims. The within-protocol SFT-to-policy comparison improves both reported metrics slightly, suggesting that the supervised token repre-sentation carries most of the predictive signal and the pol-icy objective provides only incremental task alignment. By contrast, the larger cumulative-return difference relative to FinTexTS is not accompanied by a comparably large Sharpe difference. The study remains limited to five ETFs, three approxi-mately one-year allocation tests, a partial 2025 period, one training seed per setting, and stylized transaction costs; ac-cordingly, the results should be interpreted as evidence of feasibility rather than universal robustness. Meta reports a December 2023 pretraining-data cutoff for Llama 3.2 (Meta 2024), and its model card does not identify targeted pre-training on our daily ETF data, macro-news summaries, or time-series-to-allocation task. In particular, the market ob-servations and news used in the 2024 and 2025 allocation tests occur after the disclosed cutoff, reducing the likeli-hood that improvements in these periods arise from direct memorization of the evaluated events. At the same time, the base model may still contribute broad financial and economic knowledge acquired during pretraining, while the 2023 result warrants more cautious interpretation because it overlaps the cutoff year. Future work should examine whether these find-ings persist across broader asset universes, longer horizons, additional market regimes, and repeated training seeds. 
+
+# 7 Conclusion 
+
+FinATOM demonstrates that a causal language model can emit both multi-step return forecasts and constrained port-folio allocations through one head-free token interface. For allocation, a strictly causal mean–variance teacher supplies supervised targets and DAPO-augmented GRPO improves pooled gross and net Sharpe with little additional turnover. The modality ablation shows that time-series context pro-vides the stable foundation, while news contributes most strongly in the 2025 regime. For forecasting, the same vocabulary-based interface supports autoregressive D1–D3 scores, and the evaluated one-epoch policy stage modestly improves the SFT strategy from 73.52% return and 2.68 Sharpe to 73.72% and 2.69. These findings establish fea-sibility rather than universal superiority. Broader asset uni-verses, longer post-cutoff evaluation periods, repeated seeds, matched baselines, and uncertainty-aware analyses will fur-ther strengthen the evidence for the generality and robustness of direct numerical token generation in financial modeling. 
+
+# References 
+
+Chen, T.; Saxena, S.; Li, L.; Fleet, D. J.; and Hinton, G. 2022. Pix2Seq: A Language Modeling Framework for Ob-ject Detection. In International Conference on Learning Representations .DeepSeek-AI. 2026. DeepSeek-V4 Technical Documen-tation. https://fe-static.deepseek.com/chat/transparency/ deepseek-V4-model-card-EN.pdf. Accessed 2026-07-28. DeMiguel, V.; Garlappi, L.; and Uppal, R. 2009. Optimal Versus Naive Diversification: How Inefficient Is the 1/N Port-folio Strategy? The Review of Financial Studies , 22(5): 1915– 1953. Dong, Z.; Fan, X.; and Peng, Z. 2024. FNSPID: A Compre-hensive Financial News Dataset in Time Series. In Proceed-ings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 4918–4927. Dubey, A.; et al. 2024. The Llama 3 Herd of Models. arXiv preprint arXiv:2407.21783 .Gruver, N.; Finzi, M.; Qiu, S.; and Wilson, A. G. 2023. Large Language Models Are Zero-Shot Time Series Forecasters. In Advances in Neural Information Processing Systems , vol-ume 36. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations .Jiang, Q.; Huo, J.; Chen, X.; Xiong, Y.; Zeng, Z.; Chen, Y.; Ren, T.; Yu, J.; and Zhang, L. 2026. Detect Anything via Next Point Prediction. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,25472–25483. Jin, M.; Wang, S.; Ma, L.; Chu, Z.; Zhang, J. Y.; Shi, X.; Chen, P.-Y.; Liang, Y.; Li, Y.-F.; Pan, S.; and Wen, Q. 2024. Time-LLM: Time Series Forecasting by Reprogramming Large Language Models. In International Conference on Learning Representations .Kim, A.; Muhn, M.; and Nikolaev, V. 2024. Financial State-ment Analysis with Large Language Models. arXiv preprint arXiv:2407.17866 .Koa, K. J. L.; Ma, Y.; Ng, R.; and Chua, T.-S. 2024. Learn-ing to Generate Explainable Stock Predictions Using Self-Reflective Large Language Models. In Proceedings of the ACM Web Conference 2024 , 4304–4315. Langer, P.; Kaar, T.; Rosenblattl, M.; Xu, M. A.; Chow, W.; Maritsch, M.; Verma, A.; Han, B.; Kim, D. S.; Chubb, H.; Ceresnak, S.; Zahedivash, A.; Sandhu, A. T. S.; Rodriguez, F.; McDuff, D.; Fleisch, E.; Aalami, O.; Barata, F.; and Schmiedmayer, P. 2026. OpenTSLM: Time-Series Language Models for Reasoning over Multivariate Medical Text- and Time-Series Data. In International Conference on Machine Learning . ArXiv:2510.02410. Lee, J.; Park, S.; Lim, T.; Lee, S.; Seo, J.; Kang, D.; Choi, H.; Kim, M.; Yoo, S.; Lee, S.; Lee, Y.; and Ahn, W. 2026. FinTexTS: Financial Text-Paired Time-Series Dataset via Semantic-Based and Multi-Level Pairing. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Dis-covery and Data Mining , 1–12. Li, T.; Liu, Z.; Shen, Y.; Wang, X.; Chen, H.; and Huang, S. 2024. MASTER: Market-Guided Stock Transformer for Stock Price Forecasting. In Proceedings of the AAAI Con-ference on Artificial Intelligence , volume 38, 162–170. Liu, H.; Xu, S.; Zhao, Z.; Kong, L.; Kamarthi, H.; Sasa-nur, A. B.; Sharma, M.; Cui, J.; Wen, Q.; Zhang, C.; and Prakash, B. A. 2024a. Time-MMD: Multi-Domain Multi-modal Dataset for Time Series Analysis. In Advances in Neu-ral Information Processing Systems: Datasets and Bench-marks Track , volume 37. Liu, Y.; Hu, T.; Zhang, H.; Wu, H.; Wang, S.; Ma, L.; and Long, M. 2024b. iTransformer: Inverted Transformers Are Effective for Time Series Forecasting. In International Con-ference on Learning Representations .Lopez-Lira, A.; and Tang, Y. 2023. Can ChatGPT Forecast Stock Price Movements? Return Predictability and Large Language Models. arXiv preprint arXiv:2304.07619 .Markowitz, H. 1952. Portfolio Selection. The Journal of Finance , 7(1): 77–91. Meta. 2024. Llama 3.2 Model Card. https: //github.com/meta-llama/llama-models/blob/main/models/ llama3_2/MODEL_CARD.md. Accessed 2026-07-28. NewsAPI. 2026. NewsAPI: Everything Endpoint Documen-tation. https://newsapi.org/docs/endpoints/everything. Ac-cessed 2026-07-28. Nie, Y.; Nguyen, N. H.; Sinthong, P.; and Kalagnanam, J. 2023. A Time Series Is Worth 64 Words: Long-Term Fore-casting with Transformers. In International Conference on Learning Representations .Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y. K.; Wu, Y.; and Guo, D. 2024. DeepSeekMath: Pushing the Limits of Mathemati-cal Reasoning in Open Language Models. arXiv preprint arXiv:2402.03300 .Shi, Y.; et al. 2025. Kronos: A Foundation Model for the Language of Financial Markets. arXiv preprint arXiv:2508.02739 .Tan, M.; Merrill, M. A.; Gupta, V.; Althoff, T.; and Hartvigsen, T. 2024. Are Language Models Actually Useful for Time Series Forecasting? In Advances in Neural Infor-mation Processing Systems , volume 37. Tao, M.; et al. 2025. TokenCast: Tokenized Time Series Foundation Models. arXiv preprint arXiv:2508.09191 .Yu, Q.; Zhang, Z.; Zhu, R.; Yuan, Y.; Zuo, X.; Yue, Y.; et al. 2025. DAPO: An Open-Source LLM Reinforcement Learning System at Scale. arXiv preprint arXiv:2503.14476 .Zha, R.; and Liu, B. 2025. A New DAPO Algorithm for Stock Trading. arXiv preprint arXiv:2505.06408 .Zhou, T.; Niu, P.; Wang, X.; Sun, L.; and Jin, R. 2023. One Fits All: Power General Time Series Analysis by Pretrained LM. In Advances in Neural Information Processing Systems ,volume 36, 43322–43355. Supplementary Material 
+
+# 1 Scope, Motivation, and Novelty 
+
+Q1. Why use a 1B-parameter language model for a five-asset allocation problem that a tiny network, or the mean–variance optimizer itself, can solve? 
+
+A. The research question is not parameter efficiency on this specific problem but whether a single causal LM can act as the numerical decision interface for heterogeneous financial outputs—an ordered multi-step forecast and a jointly con-strained simplex action—while ingesting text and numbers in one prompt. The five-ETF setting is a deliberately small, controlled testbed in which a fully specified causal teacher exists, so imitation and outcome-based improvement can be separated cleanly. The same interface then scales to the 100-stock forecasting task, whose four-level news and filing text cannot be consumed by compact numerical models at all. 
+
+Q2. The learned policy’s pooled Sharpe (1.529) trails the causal target (1.540). Why not simply deploy the anchor? 
+
+A. The anchor is a hand-specified rule that cannot read news and cannot be improved by outcome-based training; the token policy can do both. The policy finishes within 0.011 of the teacher pooled, surpasses it in 2024 (1.564 vs. 1.407), and the modality ablation shows its clearest multimodal advantage in 2025—capabilities unavailable to the optimizer. The paper’s claim is feasibility of the LM interface, not that it dominates its own teacher after three test periods. 
+
+Q3. Expectation decoding is a fixed linear readout over bin centers. Isn’t “head-free” therefore a misnomer? 
+
+A. The expectation is a parameter-free, post-hoc functional of the emitted token distribution, analogous to reading a probability off a classifier. All trained pathways—token CE, ordinal CE, the rank loss, and the policy gradients—flow through the ordinary tied vocabulary projection, and the dis-crete tokens remain the sampled, auditable generation trace that the RL stages act on. A regression head, in contrast, adds trained task-specific parameters and a separate loss path and produces no such trace. 
+
+Q4. What is new relative to Pix2Seq-style quantized outputs, LLMTime, TokenCast, and Kronos? 
+
+A. Those works quantize inputs or outputs for a single task family. The contribution here is one constrained head-free interface covering two different numerical contracts (ordered forecasts and a budgeted long-only action), trained by SFT from a strictly causal financial teacher and then improved by token-level policy optimization against realized portfolio Sharpe. The novelty claim is intentionally kept narrow to this combination; the paper makes no absolute-first claim. 
+
+Q5. The most informative missing ablation is the same back-bone with a regression or policy head. Why is it absent? 
+
+A. We agree it is the most valuable additional experiment and identify it as such. It was deferred because a matched head-based arm requires its own design decisions (head ar-chitecture, loss, and a continuous-action RL algorithm), each of which is a confound; the comparisons we do report hold the backbone, prompt, data, grammar, and decoder fixed so that only the training stage or the input modality varies. The present claim is therefore feasibility of the head-free con-tract, evaluated against calibrated numerical references, not superiority over head-based designs. 
+
+# 2 Baselines, Costs, and Interpretation 
+
+Q6. Why is equal weight the only naive baseline? Where are minimum variance, risk parity, and momentum? 
+
+A. Equal weight is the canonical hard-to-beat 1/N reference, and the causal mean–variance target already provides an op-timized covariance-based comparator computed on exactly the information the model sees. Minimum variance and risk parity are close relatives of the same 20-day-window fam-ily and are inexpensive to add as further reference rows; we do not expect them to change the SFT-to-policy conclusion, which is internal to the learned models, but agree they would usefully bracket the anchor row. 
+
+Q7. Equal weight earns more raw return in 2024–2025. Is the model just a low-volatility tilt? 
+
+A. The optimized and rewarded criterion is risk-adjusted return, and equal weight never wins on Sharpe in any pe-riod (0.886/1.367/1.506 vs. the policy’s 1.404/1.564/1.653). Its extra 2025 return comes with 10.03% volatility and a 
+
+−7.99% drawdown against the policy’s 6.87% and −6.04% .Nor is the policy purely defensive: in 2024 and 2025 it raises return over SFT (7.35% →7.88%, 10.46% →11.76%) while also lowering volatility. A volatility-targeted equal-weight row is a reasonable additional reference we can include. 
+
+Q8. Is the FinTexTS comparison meaningful given the differ-ent protocols? Why show it at all? 
+
+A. The published row is included only to situate the ex-ploratory task, and the paper labels it contextual for pre-cisely this reason. The controlled claim is the within-protocol SFT →policy comparison (73.52% →73.72% re-turn, 2.68 →2.69 Sharpe) under an identical split, decoder, cost model, and backtest. The divergence between the 19.74-point return gap and the 0.02 Sharpe gap is itself presented as evidence against reading the table as cross-system domi-nance. 
+
+Q9. Are the allocation gains robust to transaction costs be-yond the stylized 5 bp? 
+
+A. Yes, to any plausible linear cost. The policy’s pooled net gain (0.100) is nearly identical to its gross gain (0.101) because turnover rises only from 1.481% to 1.537% per day. Setting the pooled annual gross-return advantage ( ≈0.49 pp) against the extra annualized one-way turnover ( 0.056% ×
+
+252 ≈ 14 .1 pp) gives a break-even linear cost of roughly 340 bp per unit of one-way turnover—about two orders of magnitude above realistic costs for these five highly liquid ETFs. Impact and slippage models are listed as future work. 
+
+Q10. The policy beats its teacher only in 2024. Is “regime dependence” a euphemism for cherry-picking? 
+
+A. No aggregation was chosen post hoc: the headline pooled statistic is one under which the policy trails its own teacher (1.529 vs. 1.540), and all three periods are reported with equal prominence. The 2024 crossover demonstrates the mechanism—an outcome reward can push the policy past pure imitation—while 2023 and 2025 bound its size. The paper draws exactly that bounded conclusion. 
+
+# 3 Statistical Reliability 
+
+Q11. One training seed and three yearly runs: are the re-ported gains statistically significant? 
+
+A. No formal significance is claimed, and the paper says so (“feasibility rather than universal robustness”). The de-sign does, however, make such tests possible: SFT and pol-icy produce paired daily return series on identical dates, so paired Sharpe-difference tests (Jobson–Korkie with the Memmel correction, or a Ledoit–Wolf bootstrap) apply di-rectly to the pooled 709-day series, and repeated seeds are explicitly listed as future work. In the interim, the consistency of the pattern across return, volatility, Sortino, Calmar, and drawdown—rather than a single fragile statistic—is what the interpretation rests on. 
+
+Q12. The 2023 SFT and policy Sharpe are identical to four decimals. Did the policy stage do anything there? 
+
+A. The two 2023 portfolios are not identical: annual re-turn (7.177% vs. 7.105%), volatility (5.027% vs. 4.977%), turnover (1.316% vs. 1.271%), and drawdown all differ; the return–risk ratio happens to coincide at 1.4042. Behavior-KL early stopping (threshold 0.03) deliberately bounds each policy update, so in a regime where the sampled rewards give little directional signal the optimized policy remains near its initialization. That is the intended failure mode: refine when the signal supports it, otherwise do no harm. 
+
+Q13. The modality-ablation gaps (0.061 and 0.104 in mean Sharpe) could be within single-run noise. 
+
+A. Agreed, and the paper states that the table “supports regime-dependent complementarity rather than a statistically general claim.” What the ablation does establish is structural: with an identical pipeline and only the modality varied, time-series-only nearly ties the multimodal arm in 2023–2024 (gaps of 0.004 and 0.001) while the multimodal arm leads by 0.190 and 0.180 in 2025. The claim is the location of the news contribution, not its universal magnitude. 
+
+# 4 Data Integrity and Leakage 
+
+Q14. Llama 3.2’s disclosed December 2023 pretraining cut-off overlaps the 2023 allocation test and the entire stock experiment. 
+
+A. For allocation, the 2024 and 2025 tests postdate the cut-off, and the pooled SFT →policy gain comes entirely from those two periods (2023 contributes zero at three decimals); the paper explicitly flags 2023 for cautious interpretation. For the stock experiment, the 2023 overlap is one reason it is labeled exploratory: the controlled quantity there is the SFT-vs.-policy delta, in which both arms share identical con-tamination exposure, fine-tuning bins and volatility statistics are computed from pre-2022 data only, and absolute lev-els are not claimed as contamination-free. Post-cutoff stock evaluation is identified as future work. 
+
+Q15. Daily news is summarized by DeepSeek-V4, a model trained after all test periods. Can the summarizer inject hind-sight? 
+
+A. The summarizer is applied per date to that date’s col-lected articles, but we agree its parametric knowledge is a residual leakage channel worth bounding. Two facts bound it: the time-series-only arm, which contains no news any-where, reaches 1.565 in 2024 versus 1.564 for the multi-modal arm, so the 2024 gain cannot be a news artifact; and the news channel’s measurable contribution is confined to 2025 ( +0 .190 over time-series-only), which is therefore the only result a hindsight-bearing summarizer could plausibly inflate. Re-summarizing with a model whose training pre-dates the test periods is a directly feasible robustness check that we flag for the revision. 
+
+Q16. Summarize all look-ahead controls in one place. 
+
+A. Prompts contain only observations stamped no later than t.The mean–variance anchor is recomputed sequentially inside each experiment, so its path-dependent state never crosses from test into training. Policy rewards use returns from t+1 
+
+to t+21 only, disjoint from every prompt field, and the final 20 training dates are dropped because their reward windows are not fully contained in the training span. Forecast volatility scaling, bin boundaries, and bin centers are estimated from training data only, and ranking losses compare only stocks sharing a decision date. The base-model cutoff is treated separately, as above. 
+
+Q17. Were the anchor constants (0.05 return weight, 0.05 turnover weight, 0.85 shrinkage, 50-unit grid) or the training hyperparameters tuned on the test periods? 
+
+A. No. All anchor constants and all training settings are sin-gle fixed configurations reused unchanged across the three chronological experiments and every ablation arm; nothing is retuned per period, so no test period can influence any selection. The anchor terms follow textbook practice (an-nualized risk–return tradeoff, a turnover penalty, shrinkage toward 1/N), and the optimization values follow common LoRA and group-relative policy-optimization practice. 
+
+# 5 Allocation Design 
+
+Q18. Why GLD, SPY, TLT, UUP, and XLE? 
+
+A. The five span distinct macro exposures—equities, dura-tion, gold, the dollar, and energy—are among the most liquid ETFs, and share a long common daily history from 2018. This gives the covariance-driven teacher genuine diversification structure and gives the macro-news channel economically distinct hooks. The universe was fixed before evaluation and not selected on test performance. 
+
+Q19. At test time, does the prompt contain the model’s own previous allocation or the anchor’s previous state? If the latter, the optimizer stays in the loop at deployment. 
+
+A. Both training and evaluation condition on the previous anchor state wA
+
+> t−1
+
+, recomputed sequentially within each ex-periment. This state is computable at t from the visible 20-day window alone—a deterministic five-asset program with no future data and no LM in the loop—so the evaluated system is “LM plus a cheap causal state variable,” not “LM plus an oracle.” The design also gives every arm an identical, well-defined state, which is what makes the SFT/policy and modality comparisons controlled. The fully closed-loop vari-ant, in which the model consumes its own previous output, is an acknowledged next step. 
+
+Q20. Why is the anchor-consistency penalty computed on the raw token action z rather than the normalized weights, and why coefficient 8? Doesn’t this pin the policy to the anchor? 
+
+A. Penalizing raw grid units teaches budget adherence jointly with composition: deviations in z capture both misallocation and total-budget errors, which normalization would forgive. The coefficient keeps sampled actions in a trust region around a known-safe teacher so that the very noisy 21-day Sharpe cannot drag the policy anywhere it likes. The 2024 result shows the penalty does not pin the policy: it reaches 1.564 while its anchor achieves 1.407. A sensitivity sweep over the coefficient is future work within the stated single-seed scope. 
+
+Q21. A single 21-day realized Sharpe is extremely noisy. How does learning survive, and why a 21-day reward for a daily-rebalanced portfolio? 
+
+A. Noise is handled by construction: the group-relative ad-vantage over G=8 samples of the same prompt removes prompt-level reward level, the standard-deviation floor of 0.65 prevents advantage blow-up in near-tied groups, effec-tively constant-reward groups are zeroed, the anchor penalty densifies the signal, and three clipped passes with ratio bounds [0 .80 , 1.28] plus behavior-KL early stopping bound each update. Twenty-one trading days is roughly the short-est window with a stable within-window Sharpe—a one-day “Sharpe” is undefined—and evaluating each daily action by its month-ahead consequence is a smoothness prior consis-tent with the anchor’s own turnover penalty. The outcome (a 0.10 pooled Sharpe gain at a 5.6 bp/day turnover increase) is consistent with refinement rather than noise-chasing. 
+
+Q22. Consecutive training dates share overlapping 21-day reward windows, correlating rewards. 
+
+A. Advantages are computed within a group at a single prompt, so the baseline is per-date and the overlap intro-duces gradient correlation, not bias. One policy epoch with early stopping limits any accumulation of correlated updates. Non-overlapping or horizon-matched reward windows are a straightforward variant for future comparison. 
+
+Q23. Why a 50-unit grid, a 0.5 per-asset cap, and a 50-unit minimum? 
+
+A. The 21-value vocabulary over {0, 50 , . . . , 1000 } balances resolution against sample efficiency: 2.5% granularity is below realistic implementation noise at daily rebalancing while keeping the ordinal target concentrated on few tokens. The 0.5 cap and the quantizer’s per-asset minimum encode standard long-only diversification constraints and ensure the teacher and the policy share one feasible set. All are fixed design constants shared across every experiment. 
+
+Q24. How are invalid or degenerate outputs handled, and how were the −5 penalty and 0.65 floor chosen? 
+
+A. Sampling constrains the answer scaffold so trajectories are grammar-legal; the −5 reward is a guard for residual parse failures and sits far below any attainable Sharpe-based reward, so an invalid sample always receives its group’s most negative advantage. At deterministic inference the expecta-tion over the fixed value-slot vocabulary is always numeri-cally defined, and the equal-weight fallback is a conservative guard for the degenerate all-near-zero row. Both constants were fixed a priori and shared across all arms; the floor exists because the strong anchor penalty makes near-tied reward groups common. 
+
+# 6 Policy Optimization 
+
+Q25. Why is the reference-model KL coefficient zero when GRPO variants usually keep one? 
+
+A. Following the DAPO observation that reference-KL penalties fight the reward signal in short-horizon structured tasks, the trust region is provided instead by asymmetric clip-ping, the three-pass limit, and behavior-KL early stopping at 0.03. In addition, the anchor penalty already regularizes the policy in action space—a task-meaningful constraint that a distributional KL to a frozen reference only approximates. The paper names the method DAPO-augmented GRPO and tabulates exactly which DAPO mechanisms are and are not present, so no full-DAPO claim is made. 
+
+Q26. Training samples at temperature 1 but evaluation uses deterministic expectation decoding. Is this a train–test mis-match? 
+
+A. It is the standard on-policy division of labor: sampling provides exploration, and the deployed action is the mean of the learned distribution. Rewards are computed on sampled normalized actions, so sharpening the distribution around high-reward actions moves the deterministic expectation ac-cordingly. Deterministic decoding also removes sampling variance from the evaluation itself, which matters in a single-seed study. 
+
+# 7 Forecasting Design 
+
+Q27. Why 41 bins and ordinal width 0.8, and how sensitive are results to these values? 
+
+A. Forty-one train-only quantile bins place roughly 2.4% of training mass in each bin, concentrating resolution where standardized returns actually lie, and conditional-mean cen-ters make expectation decoding calibrated on the training distribution by construction. Width 0.8 spreads ordinal credit over adjacent bins so near-misses are graded rather than punished as full errors. Both were fixed a priori; sensitiv-ity sweeps are future work within the stated scope. 
+
+Q28. The backtest is a top-20 strategy, yet the top-20 reward component gets weight only 0.05. Why the mismatch? 
+
+A. The backtest depends on the cross-sectional order-ing, which the 0.25 rank component targets directly and densely, whereas realized top-20 basket return is a sparse, high-variance signal that invites selection-noise chasing if weighted heavily. The step and path components (0.65 com-bined) preserve calibration of the underlying scores that gen-erate the ranking. The small top-20 term keeps the deployed criterion visible to the policy without letting it dominate. 
+
+Q29. Why is the forecasting policy gain so small (73.52% →73.72%, 2.68 →2.69)? 
+
+A. The one-epoch stage with a 0.02 KL to cached SFT prob-abilities is deliberately conservative, and the paper interprets the result accordingly: the supervised token representation already carries most of the predictive signal, and the policy stage supplies incremental task alignment without destabiliz-ing it. The design claim being tested is that the token interface 
+
+tolerates outcome-based RL at all—which it does, improv-ing both reported metrics—not that RL is the main source of performance. 
+
+Q30. How are the numeric tokens implemented? 
+
+A. All task tokens—41 bin tokens plus horizon and boundary markers for forecasting, and 21 grid values plus five ETF tags for allocation—are added vocabulary items scored by the tied input–output embedding, with no separate head. They are trained jointly with the LoRA adapters during SFT, and in the forecasting policy stage the special embeddings receive their own learning-rate schedule ( 5 × 10 −6 → 5 × 10 −7)alongside the policy rate ( 10 −6 → 10 −7). 
+
+Q31. Why does allocation SFT apply cross-entropy to the full answer, while forecasting trains only the three bucket slots under a fixed scaffold? 
+
+A. The allocation answer’s tags and ordering are part of the contract the model must reproduce, so full-sequence CE teaches the entire grammar; the forecasting scaffold is a con-stant frame with no content, so it is forced and the losses con-centrate on the three informative slots. Both choices avoid spending capacity on constants while ensuring the emitted trace is fully specified and mechanically parseable. 
+
+Q32. Which pairs enter the ranking loss? 
+
+A. Only pairs of stocks sharing the same decision date, formed per horizon, with coefficient 0.5. Pairs never span dates, so the loss trains the score for exactly its cross-sectional ranking use without introducing temporal comparisons that could leak ordering information across time. 
+
+# 8 Practicality and Reproducibility 
+
+Q33. What are the compute and latency costs? Is a daily LLM allocation loop practical? 
+
+A. Inference is one constrained generation of roughly a dozen answer tokens per day on a 1B-parameter LoRA model in bfloat16—negligible next to any daily data pipeline and fea-sible on a single GPU. Training per experiment is five SFT epochs over at most about five years of daily prompts plus one policy epoch. The head-free design adds no inference-time machinery beyond a softmax expectation at the value slots. 
+
+Q34. Does the interface extend to new assets or universes without full retraining? 
+
+A. The bin and grid vocabularies are asset-agnostic because targets are volatility-standardized or budget-normalized; the ETF tags and the anchor are universe-specific, so adding as-sets means extending the tag set and re-running LoRA SFT, which is cheap. The forecasting model already shares one vocabulary across 100 stocks, which is within-universe evi-dence of cross-sectional generality; transfer across universes is untested and is listed as a limitation. 
+
+Q35. Why Llama 3.2 1B? Would scale, or a randomly ini-tialized backbone, change the conclusions? 
+
+A. The 1B model is the smallest widely available causal LM that comfortably ingests the long multimodal prompt, which keeps every ablation affordable and makes the feasibility claim conservative: the interface does not depend on frontier-scale capability. Scale and random-initialization ablations (probing how much the pretrained LM prior contributes) are natural next steps; the fact that the news channel produces the 2025 advantage suggests the text-reading capability—an LM-specific asset—is doing real work.

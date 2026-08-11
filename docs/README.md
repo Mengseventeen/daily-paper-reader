@@ -6,43 +6,50 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-10
-- 运行时间：2026-08-10 20:25:15 UTC
+- 最新运行日期：2026-08-11
+- 运行时间：2026-08-11 21:07:32 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：4
-- 速读区：3
+- 本次总论文数：10
+- 精读区：6
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读4篇、速读3篇，聚焦金融文档问答与表格建模两大方向。  
-最值得关注：《FinRank》构建SEC filing评测基准（10分），《Tabular Image》将表格转图像适配CNN（9分）。  
-建议从这两个方向入手，先看基准数据与图像转换方法的实际效果。
-- 详情：[/202608/10/README](/202608/10/README)
+今日精读6篇、速读4篇，聚焦金融文本理解与时间序列预测两大方向。最值得关注的是开放权重模型在金融文本上的表现，以及混合神经-经典校正方法对高频股票预测的优化。建议普通读者优先精读这两篇9分论文，其余速读即可。
+- 详情：[/202608/11/README](/202608/11/README)
 
 ### 精读区论文标签
-1. [FinRank: An Evidence-Grounded Benchmark for Financial Question Answering and Retrieval over SEC Filings](/202608/10/2608.07400v1-finrank-an-evidence-grounded-benchmark-for-financial-question-answering-and-retrieval-over-sec-filings)  
-   标签：评分：10.0/10、query:ai-finance
-   evidence：面向证券文件的金融问答与证据检索基准，直接对应金融分析中的自然语言处理
-2. [Tabular Image: a method to convert tabular data to images for convolutional neural networks](/202608/10/2608.07132v1-tabular-image-a-method-to-convert-tabular-data-to-images-for-convolutional-neural-networks)  
+1. [Can Open-Weight Models Compete on Financial Text Comprehension?](/202608/11/2608.08634v1-can-open-weight-models-compete-on-financial-text-comprehension)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：通过表格转图像使用CNN进行信用评分
-3. [Confidence Estimation for Financial Vision-Language Models in Chart and Document Understanding](/202608/10/2608.06532v1-confidence-estimation-for-financial-vision-language-models-in-chart-and-document-understanding)  
+   evidence：在金融文本理解基准上评估开放权重大模型
+2. [Hybrid Neural-Classical Correction for Frozen Time Series Foundation Models: A Comprehensive Ablation Study on High-Frequency Stock Prediction](/202608/11/2608.08825v1-hybrid-neural-classical-correction-for-frozen-time-series-foundation-models-a-comprehensive-ablation-study-on-high-frequency-stock-prediction)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：直接面向高频股票收益预测的深度学习混合修正方法
+3. [How Simple Can It Get? From Interpretable Equations to Readable Rules for Financial Decision Making](/202608/11/2608.09433v1-how-simple-can-it-get-from-interpretable-equations-to-readable-rules-for-financial-decision-making)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：面向金融决策的可解释机器学习到可读规则简化。
+4. [RA-FinBERT: Rule-aware LoRA adaptation for low-resource financial sentiment classification](/202608/11/2608.09834v1-ra-finbert-rule-aware-lora-adaptation-for-low-resource-financial-sentiment-classification)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：融合规则感知LoRA与FinBERT的低资源金融情感分类
+5. [Financial Numerical Prediction and Allocation as Token Generation](/202608/11/2608.09880v1-financial-numerical-prediction-and-allocation-as-token-generation)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：用因果语言模型直接生成股票收益预测与ETF配置权重，属于智能投顾组合管理
+6. [AI Governance for Institutional Readiness in Finance](/202608/11/2608.02311v2-ai-governance-for-institutional-readiness-in-finance)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：金融视觉语言模型，图表与文档理解，置信度估计
-4. [An Exploratory Evaluation of LLM-Assisted Rewriting of Moderate-Complexity Financial Sentences for DisCoCat-Based Sentiment Analysis](/202608/10/2608.07439v1-an-exploratory-evaluation-of-llm-assisted-rewriting-of-moderate-complexity-financial-sentences-for-discocat-based-sentiment-analysis)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：LLM辅助预处理用于基于NLP的金融情感分析
+   evidence：关注资产管理中代理式AI的治理问题。
 
 ### 速读区论文标签
-1. [Beyond Co-Movement: Locality by Exposures Enables a Joint Factor-Graph Framework for Portfolio Diversification](/202608/10/2608.06618v1-beyond-co-movement-locality-by-exposures-enables-a-joint-factor-graph-framework-for-portfolio-diversification)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：因子-图联合框架用于投资组合分散与构建
-2. [Optimized Certainty Equivalent Risk Minimization Using Samples: Algorithms, Convergence Rates, and Applications](/202608/10/2608.07113v1-optimized-certainty-equivalent-risk-minimization-using-samples-algorithms-convergence-rates-and-applications)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：OCE风险最小化，组合优化，基于样本的算法
-3. [When GNNs Fail: Quantifying and Overcoming Temporal Correlation Volatility in Time Series](/202608/10/2608.07333v1-when-gnns-fail-quantifying-and-overcoming-temporal-correlation-volatility-in-time-series)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：面向动态时间序列的GNN方法，可迁移至金融市场多序列预测
+1. [KReF: Training-Free Retrieval for Long-Term Time-Series Forecasting and Predictive Uncertainty](/202608/11/2608.06748v1-kref-training-free-retrieval-for-long-term-time-series-forecasting-and-predictive-uncertainty)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：长期时间序列预测的免训练检索方法
+2. [End-to-End Neural Decomposition with Koopman Operators for Time-Series Forecasting](/202608/11/2608.08788v1-end-to-end-neural-decomposition-with-koopman-operators-for-time-series-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：端到端Koopman深度预测方法，可迁移至股票市场分析
+3. [Tabular Numeric Stretch Transformation](/202608/11/2608.09162v1-tabular-numeric-stretch-transformation)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：面向表格数据的深度学习预处理方法，可迁移至金融表格建模。
+4. [Conditional Regime Analog Forecasting with Trajectories: A Nonparametric Framework for Multivariate Probabilistic](/202608/11/2608.09534v1-conditional-regime-analog-forecasting-with-trajectories-a-nonparametric-framework-for-multivariate-probabilistic)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：基于收益轨迹的状态类比预测，面向金融时间序列的AI分析
 
 
 <div class="dpr-home-promo-card">
