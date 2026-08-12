@@ -1,0 +1,227 @@
+Title: V-FiLLM: Verified Financial LLM Reasoning Benchmark
+
+URL Source: https://arxiv.org/pdf/2608.11047v1
+
+Published Time: Wed, 12 Aug 2026 01:17:40 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# V-FiLLM: Verified Financial LLM Reasoning Benchmark 
+
+Alicia Larsen 1∗ Victoire Laurent 1∗ Aulia Kharis Rakhmasari 1∗
+
+Lara Turgut 1∗ Nino Antulov-Fantulin 1,21ETH Zürich, Zürich 
+
+> 2
+
+Aisot Technologies Ltd 
+
+{alarsen, vlaurent, arakhmasari, lturgut}@ethz.ch nino@aisot.com 
+
+Abstract 
+
+While existing benchmarks have made substan-tial progress in evaluating LLMs across STEM domains, financial reasoning over structured data remains comparatively less explored. We introduce V-FiLLM , a framework that gener-ates financial reasoning benchmarks from ex-ecutable computation trees grounded in real tables, yielding items whose answers are cor-rect by construction. Trees are evaluated sym-bolically to obtain ground truth and rendered into natural-language questions, removing any model from the labeling loop, so items can be generated at arbitrary scale without annotation cost and without inheriting a generator’s er-ror rate. V-FiLLM exposes four independently controllable axes of difficulty including com-putation depth, expression breadth, financial concept complexity, and context size. By eval-uating on open-source models, we find that accuracy falls up to 51% as reasoning depth in-creases, and up to 47% points under adversarial numerical perturbations, highlighting remain-ing challenges in robust financial reasoning over tables. We further show that lightweight LoRA fine-tuning on verified chain-of-thought traces improves accuracy from 81.1% to 85.6% on held-out problems and outperforms the base model by 5% points on FinQA (Chen et al., 2022a), suggesting that targeted, low-cost adap-tation is a promising direction for composi-tional reasoning in financial QA. 1
+
+1 Introduction 
+
+Recent advances in graph learning (Antulov-Fantulin and Kolm, 2026), transformer language models (Jazbec et al., 2021), and generally deep learning (Antulov-Fantulin and Kolm, 2023) have had a profound influence on financial decision mak-ing. However, reasoning over structured financial data remains a distinctive challenge for large lan- 
+
+> 1Code available at https://github.com/auliakharis/ ML-in-Finance-and-Complex-System
+
+guage models. Unlike open-ended text genera-tion or even mathematical problem-solving over symbolic expressions, financial reasoning demands the simultaneous satisfaction of several constraints: correct retrieval of values from structured tables, knowledge of domain-specific financial concepts and their formulas, and the ability to compose multi-step arithmetic across heterogeneous quanti-ties such as monetary amounts, rates, and ratios. Existing benchmarks have made substantial progress in evaluating LLMs on STEM reasoning and general numerical tasks (Yuan et al., 2025; Li et al., 2024; Rein et al., 2023), yet financial rea-soning over structured tabular data ( particularly in settings that require compositional depth and domain knowledge) remains comparatively under-explored (Chen et al., 2022a; Zhu et al., 2021; Zhao et al., 2022; Koncel-Kedziorski et al., 2024). A core obstacle to progress in this area is the lack of bench-marks with explicit, controllable difficulty (Zhu et al., 2024; Mirzadeh et al., 2025). Most existing financial QA datasets are constructed from real-world documents via human annotation or model-assisted extraction, which conflates source-level noise (including formatting irregularities, missing values, and ambiguous phrasing) with genuine fail-ures in financial reasoning (Chen et al., 2020b). This makes it difficult to isolate where and why models fail (Dziri et al., 2023). Furthermore, be-cause ground-truth answers are written manually or extracted heuristically, the cost of scaling such benchmarks to cover a broad distribution of reason-ing depths is prohibitive (Chen et al., 2020a). We address these limitations by introducing a de-terministic benchmark generation framework for fi-nancial reasoning over synthetic spreadsheets. The framework generates natural-language questions by sampling executable computation trees grounded in spreadsheet values, producing automatically ver-ified answers without manual annotation. By con-trolling reasoning depth and incorporating derived arXiv:2608.11047v1 [cs.AI] 11 Aug 2026 financial concepts such as gross profit, operating income, and net income, it enables scalable evalua-tion of both compositional reasoning and financial domain knowledge. Using this framework, we construct single-turn and multi-turn benchmarks and evaluate a range of open-source LLMs across increasing reason-ing complexity. We show that performance de-clines sharply with reasoning depth, that LoRA fine-tuning on verified chain-of-thought traces im-proves Qwen3-4B over its zero-shot baseline, and that OCR-style character corruption is the most effective adversarial perturbation. Together, these results provide a reproducible benchmark for study-ing robust compositional financial reasoning. 
+
+2 Related Work 
+
+Financial question answering benchmarks have progressively increased in complexity, from multi-step numerical reasoning over reports in FinQA (Chen et al., 2022a), to conversational settings in ConvFinQA (Chen et al., 2022b), to hybrid table-text evidence in TAT-QA (Zhu et al., 2021), and long-context retrieval over SEC filings in Fi-nanceBench (Islam et al., 2023). FINGPT Bench (Wang et al., 2023) offers broader financial NLP evaluation across sentiment, relation, and forecast-ing tasks. These datasets are constructed via human annotation, which limits scalability and makes rea-soning difficulty difficult to control systematically. General reasoning benchmarks such as DROP (Dua et al., 2019) and GSM8K (Yuan et al., 2025) have been widely used to probe arithmetic and multi-step mathematical reasoning, while TabFact (Chen et al., 2020a) addresses fact verification over semi-structured tables. Neither line of work tar-gets the intersection of domain-specific financial knowledge and compositional tabular reasoning that motivates our benchmark. Our framework addresses these gaps through a deterministic, annotation-free generation pipeline with explicit control over reasoning depth, grounded in synthetic financial spreadsheets and verified computation trees. 
+
+3 Benchmark Generation Pipeline 
+
+We generate the benchmark using a deterministic pipeline that maps synthetic financial spreadsheets to natural-language questions with executable an-swers. Starting from structured financial data, the pipeline builds typed semantic representations of spreadsheet cells, samples computation graphs with controlled depth and breadth, grounds each graph in concrete values, and renders the result as a fi-nancial reasoning question. This ensures that each example has a known computation trace and an automatically verifiable answer. 
+
+3.1 Financial Data 
+
+The first stage constructs two synthetic financial data sources. The first mimics a typical 10-Q fil-ing, with financial tables resembling those found in company reports. The second is a regularized finan-cial sheet with consistent column names, units, and temporal structure, allowing us to isolate composi-tional numerical reasoning from formatting noise, extraction artifacts, and missing values. The regularized sheet contains company-year ob-servations for 15 synthetic companies from 2020 to 2025. Each row includes company metadata, such as name, ticker, sector, country, exchange, and credit rating, followed by normalized financial variables including revenue, costs, expenses, assets, liabilities, equity, cash, receivables, inventories, in-vestments, current liabilities, capital expenditures, dividends, shares outstanding, stock price, and em-ployees. The number of companies is adjustable; we use 6 in the prompt to balance realistic report scale with manageable LLM context length. Financial values are generated to preserve inter-nal coherence while remaining synthetic. Revenue is initialized from company-specific ranges and evolves through sampled yearly growth or decline. Income-statement quantities are tied to revenue through plausible ratios, while balance-sheet com-ponents are sampled as percentages of related par-ent quantities, such as cash relative to total assets or inventories relative to cost of goods sold. Addi-tional variables are sampled from realistic ranges or derived from intermediate quantities, yielding tables that support meaningful arithmetic and com-positional reasoning. From these spreadsheets, we construct typed financial atoms. Each atom corresponds to one spreadsheet cell and stores its numerical value to-gether with semantic metadata: financial concept, company, fiscal year, unit, and quantity type. These atoms provide the grounding layer for question gen-eration. 
+
+3.2 Question-Answer Pair Generation 
+
+The next stage samples a symbolic expression tem-plate, represented as a typed binary tree. Leaves Synthetic financial data 
+
+Two formats 
+
+Atom construction 
+
+Values, metadata 
+
+Typed tree sampling 
+
+Operator composition 
+
+Language rendering 
+
+Question, expression 
+
+Final QA pairs 
+
+Deterministic answers     
+
+> 12345
+
+Controllable difficulty: sampled depth, derived-concept probability, number of leaves, and operator composition 
+
+Figure 1: Benchmark generation pipeline. Synthetic spreadsheets are decomposed into typed atoms, composed into expression trees whose depth and operator mix control problem difficulty, and rendered into natural-language questions paired with deterministically computed answers. 
+
+are financial atoms, while internal nodes specify an operation and metadata about their children. The operator set includes addition, subtraction, mul-tiplication, ratios, growth rates, minimum, maxi-mum, and average. The sampler is type-aware: it only constructs expressions whose child outputs are compatible with the parent operation and each other, preventing invalid expressions such as multi-plying a year by a monetary amount. A key feature of this generation process is that because of the tree structure, the difficulty of a question can be explicitly controlled. In particular, tree depth provides a direct proxy for the number of reasoning steps required. Indeed, simple ques-tions such as: ” Provide value of company A’s total assets in 2024 " are represented as a simple leaf and have depth 0, while slightly more complex ones such as: ” Give Maximum between company A’s total assets and company B’s total assets in 2024 "are represented as a tree with two leaves and one operator node and thus have depth 1. Shallow ex-pressions correspond to simple lookups or one-step arithmetic questions, while deeper expressions re-quire the model to compose several intermediate results. The pipeline can also optionally use bal-anced trees, which distribute computation more evenly across branches. This allows us to also con-trol the breadth of a question, as opposed to the depth, with a breadth to depth growth factor of 2i
+
+for depth i. See 2 for an example of such trees. The pipeline also supports named derived finan-cial concepts, such as gross profit, operating in-come, pretax income, income tax expense, net in-come, current assets, long-term assets, and long-term liabilities. These concepts are stored as spe-cial atoms with hidden executable formula trees. Because their formulas are not shown in the ques-tion and the values cannot be directly looked up, 
+
+> Depth 0
+> Revenue
+> Apex Dynamics Corp 2020
+> What is revenue for Apex Dynamics Corp in 2020?
+> Depth 1
+> ×
+> Current liabilities
+> Crimson Pharmaceuticals 2021
+> Income tax rate
+> Crimson Pharmaceuticals 2021
+> What is current liabilities scaled by income tax for Crimson Pharmaceuticals in 2021?
+> Depth 2
+> −××
+> Total assets
+> Meridian Systems 2023
+> Income tax rate
+> Meridian Systems 2023
+> COGS
+> Meridian Systems 2023
+> Income tax rate
+> Meridian Systems 2023
+> What is the difference between to-tal assets scaled by income tax and cost of goods sold scaled by income tax for Meridian Systems in 2023?
+
+Figure 2: Examples of grounded computation trees and their rendered natural-language questions. Leaves in-clude spreadsheet metadata such as concept, company, and year; internal nodes define the arithmetic computa-tion. 
+
+they test financial knowledge in addition to arith-metic reasoning. To avoid ambiguity between named financial concepts and arbitrary equivalent arithmetic ex-pressions, the sampler applies a rejection step for protected derived concepts. If a sampled template reconstructs the canonical formula of a protected concept without explicitly using the correspond-ing named concept atom, the tree is rejected and resampled. This prevents, for example, a manu-ally sampled difference between revenue and cost of goods sold from being treated differently than the named concept ”gross profit". As a result, the benchmark maintains a clear distinction between raw arithmetic composition and explicitly intro-duced financial abstractions. The sampling process is parameterized to control the distribution of generated examples. In particu-lar, we specify a minimum and maximum template depth, and each question is sampled with a depth drawn from this range. This makes it possible to generate mixtures of simple and highly composi-tional questions, or to focus evaluation on a specific difficulty band. We also control the probability of sampling named derived concepts, in order to ensure that they appear more often than regular spreadsheet cells. After a valid template is sampled, the pipeline grounds it in concrete spreadsheet atoms using a binding environment that tracks constraints such as company, fiscal year, and financial concept. Same-period operations bind operands to compat-ible company-year contexts. Growth operations select two distinct years for the same company and concept, while temporal aggregations such as mini-mum, maximum, and average select a set of report-ing years for a given company-concept pair. The result is a fully bound expression whose leaves are spreadsheet cells and whose internal nodes define the exact computation. The bound expression is then rendered into a natural-language question through a bottom-up se-mantic procedure. Leaves are translated into short phrases using their metadata, such as ” revenue for Apex Dynamics Corp in 2020 ”. Internal nodes then combine their children with operator-specific tem-plates; for example, a subtraction node over rev-enue and cost of goods sold becomes “ the differ-ence between revenue and cost of goods sold for Apex Dynamics Corp in 2020 ”. Because intermedi-ate phrases retain metadata such as company, year, unit, and concept, the renderer can avoid redundant phrasing when context is shared across subexpres-sions. After rendering, we apply lightweight linguistic data augmentation to the natural-language ques-tions. These augmentations preserve the underly-ing computation graph and ground-truth answer, but introduce surface-level variation in how the question is phrased. For example, we introduce mi-nor typographical errors, vary capitalization, and replace standard phrasing with informal alterna-tives such as ” What is the value of ... ” versus ” How would you calculate ... ”. Such perturbations enable the assessment of model robustness to superficial linguistic variations and reduce the likelihood that benchmark performance is driven by sensitivity to specific prompt templates. Evaluating model behavior across multiple semantically equivalent formulations provides a more reliable measure of financial reasoning and domain knowledge, while improving the ecological validity of the benchmark by more closely reflecting the diversity of expres-sions observed in practical financial applications. The executable expression linked to the rendered question is evaluated directly to obtain the ground-truth answer. Since the answer is computed from the expression tree rather than written manually, each question-answer pair is automatically verified. For every generated example, we store the natural-language question, the numeric answer, the full symbolic expression, the template expression, the requested and realized depths, the probability of sampling derived concepts, and the list of spread-sheet cells used as leaves. This metadata makes the benchmark reproducible and enables fine-grained analysis by depth, operator type, number of re-quired cells, use of derived concepts, and temporal reasoning structure. 
+
+3.3 Augmentation 
+
+When constructing a financial benchmark for large language models (LLMs), it is important to account for the linguistic variability that naturally arises in real-world user interactions. Semantically equiva-lent financial questions can be expressed through a variety of surface-level formulations, including differences in phrasing, e.g., “What is the value of...” versus “How would you calculate...”, gram-mar, capitalization, punctuation, and formatting. Prior work has shown that LLMs are highly sen-sitive to such meaning-preserving variation: Sclar et al. (2023) report performance swings of up to 76 accuracy points from prompt formatting alone, and Mizrahi et al. (2024) find that instruction para-phrases change both absolute and relative model rankings. Controlled input augmentations were therefore applied to preserve the underlying fi-nancial task while altering its textual representa-tion, following the invariance-testing paradigm of Ribeiro et al. (2020). Such augmentations enable the assessment of model robustness to superficial linguistic variations and reduce the likelihood that benchmark performance is driven by sensitivity to specific prompt templates. Evaluating model behavior across multiple semantically equivalent formulations provides a more reliable measure of financial reasoning and domain knowledge, while improving the ecological validity of the benchmark by more closely reflecting the diversity of expres-sions observed in practical financial applications. Original question (single-turn). What is the operating in-come for NovaStar Technologies in 2024?         
+
+> Expression tree. subtract(subtract(revenue, cogs), operating_expenses) (d(T) = 2 )
+> Turn 1 — User: What is the gross profit for NovaStar Tech-nologies in 2024?
+> Turn 1 — Model: $100,535
+> Turn 2 — User: What is the operating income for NovaStar Technologies in 2024?
+> Turn 2 — Model: $80,626
+> Table 1: Multi-turn conversion of a depth-2 problem. Each turn resolves one node of the expression tree, with the final turn restating the original single-turn question.
+
+4 Extensions 
+
+4.1 Multi-Turn Extension 
+
+Single-turn financial QA conflates two distinct fail-ure modes: errors in intermediate arithmetic and errors in compositional planning. Prior work on compositional reasoning finds that transformers de-grade sharply as problem depth grows, in ways that aggregate accuracy alone does not expose (Dziri et al., 2023), and decomposition-based prompting improves performance precisely by making the sub-problem sequence explicit (Zhou et al., 2023). Yet model performance also drops substantially when the same task is distributed across conversational turns rather than posed at once (Laban et al., 2025), making the multi-turn setting a distinct axis of eval-uation rather than a reformatting of the single-turn one. Let each problem be associated with an expres-sion tree T of bound depth d(T ), where internal nodes correspond to parenthesized sub-expressions in the string representation form of T . We convert 
+
+T into a multi-turn dialogue under the following rules, we convert only trees with d(T ) ≥ 1, re-taining shallower items unchanged. Each parenthe-sized sub-expression becomes one turn, ordered by computational dependency; the final turn restates the original question in full, keeping the multi-turn variant comparable to its one-shot counterpart. Per-turn targets are read directly from the correspond-ing nodes of T , requiring no additional annotation. Because the procedure is purely structural, the multi-turn benchmark inherits the scale and cover-age of the single-turn benchmark while exposing intermediate computations as first-class evaluation targets. This enables per-depth diagnostics that are not identifiable from single-question correctness. 
+
+4.2 Adversarial Robustness 
+
+A deployed financial QA system encounters tables that are noisy, partially missing, or assembled from heterogeneous sources. Following prior work on adversarial robustness in table QA (Zhao et al., 2023; Zhou et al., 2024), we perturb the input tables of existing items while leaving the question and an-swer unchanged. Mirzadeh et al. (2025) report drops of up to 65% from a single such clause. All perturbations are restricted to question-irrelevant 
+
+cells, i.e., cells absent from the expression tree computing the answer, so the ground truth is invari-ant by construction and any accuracy drop reflects model failure rather than label shift. Four perturbation families mirror failure modes in real financial pipelines. 
+
+(i) Missing values: random question-irrelevant cells are emptied, simulating incomplete filings and partial extraction. 
+
+(ii) Garbage values: such cells are overwrit-ten with {− 10 7, 10 12 , −1, "ERROR" }, probing whether the model anchors to relevant cells or is drawn to salient outliers. 
+
+(iii) OCR look-alikes: digits are replaced with visually similar characters ( 0→O, 1→l, 5→S, etc.), reproducing a common OCR failure on scanned statements. 
+
+(iv) Cross-sheet contamination: rows are swapped with rows from other companies, yielding tables that are well-formed but semantically incon-sistent, as in faulty multi-document consolidation. We additionally perturb at the question level, appending irrelevant context (rumors, market sen-timent, statements about other companies). This targets the distractibility documented by Shi et al. (2023), who find that a single irrelevant sentence substantially degrades arithmetic reasoning. 
+
+4.3 Controlling Reasoning Difficulty 
+
+Because each question is derived from an expres-sion tree over table cells, we can vary computa-tional structure and numerical properties indepen-dently while retaining exact ground truth. 
+
+(i) Depth. Tree depth sets the number of com-positional steps, increasing demands on multi-step reasoning and intermediate-state tracking. 
+
+(ii) Breadth. Balanced trees, rather than linear chains, force several sub-results to be computed and held simultaneously, widening the set of rele-vant table entries. 
+
+(iii) Value scaling. A multiplicative factor en-larges operands without altering reasoning struc-ture, varying numerical difficulty independently of depth. 
+
+4.4 LoRA 
+
+To improve the model’s ability to perform the domain-specific numerical reasoning and calcu-lation tasks required by our financial benchmark, a pretrained model can be fine-tuned using Low-Rank Adaptation (LoRA) (Hu et al., 2021). Rather than updating the full set of model parameters, LoRA introduces trainable low-rank matrices while keeping the original model weights frozen, fol-lowing a broader line of parameter-efficient fine-tuning methods (Houlsby et al., 2019; Lialin et al., 2024). In our implementation, LoRA was applied to the attention projection layers ( q_proj , k_proj ,
+
+v_proj , and o_proj ) as well as the feed-forward network projections ( gate_proj , up_proj , and 
+
+down_proj ). Adapting the attention layers allows the model to learn task-specific patterns in how financial information is represented and attended to, while modifying the feed-forward projections enables adjustments to the model’s internal fea-ture transformations and reasoning capabilities. A rank of ( r = 16 ), a scaling factor ( α = 32 ), and a dropout rate of 0.05 were used, to provide a bal-ance between adaptation capacity and parameter efficiency. This configuration substantially reduced the number of trainable parameters and the asso-ciated computational requirements while enabling effective specialization of the base model for finan-cial reasoning tasks. 
+
+5 Results 
+
+5.1 Benchmarking results Model comparison Table 2 reports accuracy for six models on 250 mixed-depth questions, over real 10-Q filings and over simplified financial state-ments. The 10-Q Fillings type support reasoning trees only up to depth 4, whereas simplified state-ments admit depths up to 8. In the mixed-depth setting, we sample questions with depths between zero and five for the simplified case and zero and four for 10Q. Model rankings remain stable across both evalu-ation settings. Gemma-31B achieves the highest ac-curacy in both contexts (98.4% and 97.6%), closely followed by GPT-OSS-120B, Qwen3.7-Plus, and DeepSeek-v4-Flash. The performance gap widens significantly on simplified statements that introduce more complex queries. In this setting, Llama-3.3-70B and Qwen3.5-9B degrade to 80.8% and 55.2% respectively, whereas Gemma-31B and DeepSeek-v4-Flash exhibit high resilience, dropping less than a percentage point compared to the filings baseline. Despite a significantly smaller parameter count, Gemma-31B matches or outperforms both GPT-OSS-120B and Qwen3.7-Plus across all conditions. This indicates that task effectiveness is likely driven more by specialized training data and robust table parsing mechanisms than by model scale. 
+
+Multi-turn Results Restructuring complex prompts into sequential sub-queries mitigates much of the performance degradation observed on the harder dataset. Under this multi-turn framework, Qwen3.5-9B improves from 55.2% to 86.8% and Llama-3.3-70B rises from 80.8% to 86.8%, whereas models already operating near the performance ceiling exhibit negligible shifts. The greatest gains manifest in models that struggled most in the single-turn setting. We hypothesize that query decomposition ease the context load required for single-step reasoning. 
+
+Effect of reasoning depth. Table 3 shows the accuracy based on the number of steps needed to find information and do the calculation. We tested 100 questions for each level. On the simplified statements, accuracy stays steady up to 6 steps, but then falls quickly. For example, Gemma-31B drops from 85.0% at 6 steps to 55.0% at 8 steps, and DeepSeek-v4-Flash drops from 84.0% to 26.0%. DeepSeek-v4-Flash gets worse much faster than Gemma-31B after 6 steps, which flips their ranking from the easier questions. For the 10-Q fillings, where only depths 1–4 are available, Both models get almost perfect scores for 1 or 2 steps, but drop to about 60–72% for 3 or 4 steps. When comparing the same number of steps, the 10-Q fillings are about 20 points harder than the simplified ones at steps 3 and 4. This is expected because real documents have messy lay-outs, footnotes, and mixed units that the simplified versions do not have. 
+
+5.2 Adversarial Robustness Results 
+
+All models perform much worse when we do the pertubations test (Table 4). On average, across the six different types of noise, Gemma-31B’s score drops by 27.3 points on 10-Q Fillings and DeepSeek-v4-Flash drops by 29.6 points. These drops are even bigger on the simplified statements Model Single-turn Multi-turn                     
+
+> 10Q Simplified Simplified
+> Large ( ≥70B)
+> GPT-OSS-120B 98.0 93.6 97.6
+> Qwen3.7-Plus 98.0 94.4 98.0
+> DeepSeek-v4-Flash 96.4 95.6 88.0 Llama-3.3-70B 97.2 80.8 86.8
+> Small / mid ( ≤31B)
+> Gemma-31B 98.4 97.6 96.4 Qwen3.5-9B 90.4 55.2 86.8
+
+Table 2: Accuracy (%) on 250 mixed-depth questions under 10Q-fillings and simplified spreadsheet context. Multi-turn decomposes each question into sequential sub-queries. Best per column in bold .                                         
+
+> Depth 10Q Simplified
+> Gemma DS-v4 Gemma DS-v4 1100.0 98.0 84.0 77.0 298.0 95.0 95.3 78.0 370.0 60.0 90.7 86.0 472.0 70.0 94.3 93.0
+> 5––89.7 92.0 6––85.0 84.0 7––72.0 53.0 8––55.0 26.0 Avg. 85.0 80.8 83.3 73.6
+
+Table 3: Accuracy (%) by reasoning depth (number of chained retrieval/arithmetic steps), 100 questions per cell. Depths 5–8 were not instantiable in the 10Q setting. DS-v4 = DeepSeek-v4-Flash. 
+
+(35.7 and 47.0 points). The ranking of the mod-els always stays the same: Gemma-31B beats DeepSeek-v4-Flash on all seven noise tests in both document types, and its lead actually grows when the test gets harder. Adding useless extra information is the easiest test. It lowers both models’ scores by less than 20 points on 10-Q Fillings, showing that they are pretty good at ignoring extra text that does not matter. Other issues, like missing numbers, random text, scanning typos, and mixed-up spreadsheets, all result in scores between 70% and 85% on 10-Q Fillings. This means that mild noise and confusing data lower the scores but do not completely break the models. Two situations are completely different. Chang-ing the units or scale is the most harmful test on 10-Q Fillings, crashing Gemma-31B to just 3.0% and DeepSeek-v4-Flash to 22.0%. This massive failure shows that both models mostly read num-bers without checking the unit labels at the top of the table. Interestingly, changing the units is much                                            
+
+> Perturbation 10Q Simplified
+> Gemma DS-v4 Gemma DS-v4 Clean (no perturbation) 98.4 96.4 97.6 95.6 Missing values 78.0 72.0 59.0 44.0 Garbage values 82.0 70.0 54.0 42.0 OCR look-alike 82.0 76.0 72.0 53.0 Cross-sheet contamination 85.0 78.0 58.0 44.0 Distractor information 82.0 79.0 77.0 65.0 Unit / scale shift 3.0 22.0 57.0 38.0 Combined 26.0 17.0 48.0 43.0 Avg. ∆vs. clean −27.3 −29.6 −35.7 −47.0
+
+Table 4: Accuracy (%) under adversarial spreadsheet perturbations, mixed depth, 100 questions per cell. Clean rows are the corresponding mixed-depth base-lines from Table 2. 
+
+less harmful on the simplified statements (where they score 57.0% and 38.0%). This again demon-strates that the real documents are harder than the simplified ones, likely because 10-Q Fillings have much more complicated and messy unit labels. Finally, when we combine all the noise together, the scores fall to 26.0% and 17.0% on real docu-ments. This is worse than almost any single prob-lem on its own (except the unit changes), meaning the different errors pile up and make things much harder. In this combined test, the gap between the two models shrinks to just 9 points, suggesting the test becomes so messy that even the better model’s table-reading skills cannot save it. 
+
+5.3 LoRA Fine-Tuning with Verified Chain-of-Thought                                       
+
+> rαDropout Acc. (%) Correct Baseline (no LoRA) 81.1 73/90 880.10 85.6 77/90 880.15 85.6 77/90 840.10 83.3 75/90 16 32 0.05 83.3 75/90 440.10 82.2 74/90 816 0.10 81.1 73/90 816 0.15 81.1 73/90 840.15 81.1 73/90
+
+Table 5: LoRA hyperparameter sweep on the held-out benchmark ( n = 90 ). Baseline is the zero-shot base model without LoRA adapters. Configurations are or-dered by accuracy; best result in bold . We vary rank 
+
+r ∈ { 4, 8, 16 }, scaling factor α ∈ { 4, 8, 16 , 32 }, and dropout ∈ { 0.05 , 0.10 , 0.15 }.
+
+We fine-tune Qwen3.5-4B on the financial QA training pool using a two-phase recipe. Phase 1 r α Dropout Acc. (%) Correct Baseline (no LoRA) 27 27/100 8 8 0.10 32 32/100 
+
+> Table 6: Evaluation of LoRA adapters on the FinQA dataset.
+
+generates chain-of-thought (CoT) traces for each training item and retains only those whose final an-swer matches the ground-truth value derived from the expression tree, yielding 608 verified exam-ples from a pool of 688 (88% retention) Phase 2 
+
+fine-tunes the model using LoRA adapters (0.50% trainable parameters) on the verified traces. We sweep r, α, and dropout on the held-out benchmark (n=90 ; Table 5): r=8 , α=8 , dropout 0.10 attains the highest accuracy ( 85 .6% ), tied at dropout 0.15 .Accuracy is most sensitive to the α/r ratio, with 
+
+α/r ̸ =1 erasing the gain over baseline. To evaluate generalization to other datasets, we evaluated the LoRA-finetuned Qwen3.5-4B on FinQA (Chen et al., 2022a), another dataset of question-answer pairs based on financial reports. We used the LoRA configuration r=8 , α=8 , and dropout 0.10 , which performed best among the tested settings while using simpler regularization. As shown in Table 6, the LoRA-finetuned model correctly answered 32/100 questions, which is an increase compared to 27/100 for the baseline. This experiment was conducted solely as a proof of con-cept to determine whether the LoRA performance improvements stem from overfitting. 
+
+6 Conclusion 
+
+We introduced a deterministic benchmark gener-ation framework for evaluating financial reason-ing in large language models over structured tab-ular data. By generating executable computa-tion trees grounded in synthetic financial spread-sheets, our approach produces automatically veri-fied question-answer pairs while providing explicit control over reasoning depth, expression breadth, financial-domain complexity, and linguistic varia-tion. This enables systematic evaluation of compo-sitional financial reasoning without the scalability and annotation limitations of existing benchmarks. Our experiments demonstrate that reasoning depth is the primary factor limiting model per-formance, with accuracy degrading substantially as the number of compositional reasoning steps increases. While LoRA fine-tuning on verified chain-of-thought traces improves performance over strong zero-shot baselines, considerable headroom remains, particularly on deeper reasoning tasks. We further show that OCR-style character corruption poses a greater challenge than missing or irrelevant data, highlighting the importance of robust numer-ical extraction in practical financial applications. The proposed multi-turn benchmark additionally provides fine-grained insight into intermediate rea-soning failures that are not observable through end-to-end evaluation alone. Overall, the benchmark provides a reproducible and extensively tested metric for studying finan-cial reasoning, model robustness, and reasoning scalability in LLMs. Future work will expand the diversity of financial concepts and document for-mats, increase coverage of deeper reasoning chains, incorporate cross-table and cross-document reason-ing, and explore verifier-guided training and infer-ence methods that further improve reliability on complex financial analysis tasks. 
+
+7 Limitations 
+
+Although the final answers in our dataset are guar-anteed to be correct by construction, the questions themselves may still contain imperfections. In particular, the underlying mathematical reasoning steps may occasionally be translated into English in ways that are ambiguous or lack sufficient con-text. Several limitations of our evaluation should also be acknowledged. The main limitation comes from the constrained compute resources for this study. Our experiments cover only six models, are restricted to English-language documents, and con-sider a single table-formatting convention. In future work, with access to more compute power, we plan to increase statistical significance by increasing the number of tests and running multiple trials over the same questions. Finally, our fine-tuning experiments—exploring hyperparameters such as LoRA rank, scaling factor, and dropout—were restricted to a relatively small evaluation set of 90 problems due to limited com-pute resources. Because the best-performing con-figuration was selected using this same constrained set, the observed performance gains should be inter-preted as preliminary evidence that it is possible to improve the reasoning of models, while extensive fine-tuning is left for future work. References 
+
+Nino Antulov-Fantulin and Petter N Kolm. 2023. Ad-vances of Machine Learning Approaches for Finan-cial Decision Making and Time-Series Analysis: A Panel Discussion. Journal of Financial Data Science ,5(2):146. Nino Antulov-Fantulin and Petter N Kolm. 2026. Graph Neural Networks in Asset and Investment Manage-ment: An Overview for Practitioners. The Journal of Portfolio Management .Wenhu Chen, Hongmin Wang, Jianshu Chen, Yunkai Zhang, Hong Wang, Shiyang Li, Xiyou Zhou, and William Yang Wang. 2020a. TabFact: A Large-scale Dataset for Table-based Fact Verification. arXiv preprint . ArXiv:1909.02164 [cs.CL]. Wenhu Chen, Hanwen Zha, Zhiyu Chen, Wenhan Xiong, Hong Wang, and William Yang Wang. 2020b. Hy-bridQA: A Dataset of Multi-Hop Question Answer-ing over Tabular and Textual Data. In Findings of the Association for Computational Linguistics: EMNLP 2020 , pages 1026–1036, Online. Association for Computational Linguistics. Zhiyu Chen, Wenhu Chen, Charese Smiley, Sameena Shah, Iana Borova, Dylan Langdon, Reema Moussa, Matt Beane, Ting-Hao Huang, Bryan Routledge, and William Yang Wang. 2022a. FinQA: A Dataset of Numerical Reasoning over Financial Data. arXiv preprint . ArXiv:2109.00122 [cs.CL]. Zhiyu Chen, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. 2022b. ConvFinQA: Exploring the Chain of Numerical Rea-soning in Conversational Finance Question Answer-ing. arXiv preprint . ArXiv:2210.03849 [cs.CL]. Dheeru Dua, Yizhong Wang, Pradeep Dasigi, Gabriel Stanovsky, Sameer Singh, and Matt Gardner. 2019. DROP: A Reading Comprehension Benchmark Re-quiring Discrete Reasoning Over Paragraphs. arXiv preprint . ArXiv:1903.00161 [cs.CL]. Nouha Dziri, Ximing Lu, Melanie Sclar, Xiang Lorraine Li, Liwei Jiang, Bill Yuchen Lin, Peter West, Chan-dra Bhagavatula, Ronan Le Bras, Jena D. Hwang, Soumya Sanyal, Sean Welleck, Xiang Ren, Allyson Ettinger, Zaid Harchaoui, and Yejin Choi. 2023. Faith and Fate: Limits of Transformers on Com-positionality. arXiv preprint . ArXiv:2305.18654 [cs.CL]. Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin de Laroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. 2019. Parameter-Efficient Transfer Learning for NLP. arXiv preprint . ArXiv:1902.00751 [cs.LG]. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. LoRA: Low-Rank Adapta-tion of Large Language Models. arXiv preprint .ArXiv:2106.09685 [cs.CL]. Pranab Islam, Anand Kannappan, Douwe Kiela, Re-becca Qian, Nino Scherrer, and Bertie Vidgen. 2023. FinanceBench: A New Benchmark for Financial Question Answering. arXiv preprint .ArXiv:2311.11944 [cs.CL]. Metod Jazbec, Barna Pàsztor, Felix Faltings, Nino Antulov-Fantulin, and Petter N Kolm. 2021. On the impact of publicly available news and information transfer to financial markets. Royal Society Open Science , 8(7):202321. Rik Koncel-Kedziorski, Michael Krumdick, Viet Lai, Varshini Reddy, Charles Lovering, and Chris Tan-ner. 2024. BizBench: A Quantitative Reasoning Benchmark for Business and Finance. arXiv preprint .ArXiv:2311.06602 [cs.CL]. Philippe Laban, Hiroaki Hayashi, Yingbo Zhou, and Jennifer Neville. 2025. LLMs Get Lost In Multi-Turn Conversation. Haonan Li, Yixuan Zhang, Fajri Koto, Yifei Yang, Hai Zhao, Yeyun Gong, Nan Duan, and Timothy Bald-win. 2024. CMMLU: Measuring massive multitask language understanding in Chinese. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 11260–11285, Bangkok, Thailand. As-sociation for Computational Linguistics. Vladislav Lialin, Vijeta Deshpande, Xiaowei Yao, and Anna Rumshisky. 2024. Scaling Down to Scale Up: A Guide to Parameter-Efficient Fine-Tuning. arXiv preprint . ArXiv:2303.15647 [cs.CL]. Iman Mirzadeh, Keivan Alizadeh, Hooman Shahrokhi, Oncel Tuzel, Samy Bengio, and Mehrdad Farajtabar. 2025. GSM-Symbolic: Understanding the Limita-tions of Mathematical Reasoning in Large Language Models. arXiv preprint . ArXiv:2410.05229 [cs.LG]. Moran Mizrahi, Guy Kaplan, Dan Malkin, Rotem Dror, Dafna Shahaf, and Gabriel Stanovsky. 2024. State of What Art? A Call for Multi-Prompt LLM Evaluation. 
+
+Transactions of the Association for Computational Linguistics , 12:933–949. David Rein, Betty Li Hou, Asa Cooper Stickland, Jack-son Petty, Richard Yuanzhe Pang, Julien Dirani, Ju-lian Michael, and Samuel R. Bowman. 2023. GPQA: A Graduate-Level Google-Proof Q&A Benchmark. 
+
+arXiv preprint . ArXiv:2311.12022 [cs.AI]. Marco Tulio Ribeiro, Tongshuang Wu, Carlos Guestrin, and Sameer Singh. 2020. Beyond Accuracy: Be-havioral Testing of NLP Models with CheckList. In 
+
+Proceedings of the 58th Annual Meeting of the Asso-ciation for Computational Linguistics , pages 4902– 4912, Online. Association for Computational Lin-guistics. Melanie Sclar, Yejin Choi, Yulia Tsvetkov, and Alane Suhr. 2023. Quantifying Language Models’ Sensitiv-ity to Spurious Features in Prompt Design or: How I learned to start worrying about prompt formatting. Freda Shi, Xinyun Chen, Kanishka Misra, Nathan Scales, David Dohan, Ed H. Chi, Nathanael Schärli, and Denny Zhou. 2023. Large Language Models Can Be Easily Distracted by Irrelevant Context. In 
+
+Proceedings of the 40th International Conference on Machine Learning , pages 31210–31227. PMLR. Neng Wang, Hongyang Yang, and Christina Dan Wang. 2023. FinGPT: Instruction Tuning Benchmark for Open-Source Large Language Models in Finan-cial Datasets. arXiv preprint . ArXiv:2310.04793 [cs.CL]. Fan Yuan, Yuchen Yan, Yifan Jiang, Haoran Zhao, Tao Feng, Jinyan Chen, Yanwei Lou, Wenqi Zhang, Yongliang Shen, Weiming Lu, Jun Xiao, and Yueting Zhuang. 2025. GSM8K-V: Can Vision Language Models Solve Grade School Math Word Problems in Visual Contexts. arXiv preprint . ArXiv:2509.25160 [cs.CV]. Yilun Zhao, Yunxiang Li, Chenying Li, and Rui Zhang. 2022. MultiHiertt: Numerical Reasoning over Multi Hierarchical Tabular and Textual Data. arXiv preprint . ArXiv:2206.01347 [cs.AI]. Yilun Zhao, Chen Zhao, Linyong Nan, Zhenting Qi, Wenlin Zhang, Xiangru Tang, Boyu Mi, and Dragomir Radev. 2023. RobuT: A Systematic Study of Table QA Robustness Against Human-Annotated Adversarial Perturbations. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 6064– 6081, Toronto, Canada. Association for Computa-tional Linguistics. Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei, Nathan Scales, Xuezhi Wang, Dale Schuurmans, Claire Cui, Olivier Bousquet, Quoc Le, and Ed Chi. 2023. Least-to-Most Prompting Enables Com-plex Reasoning in Large Language Models. arXiv preprint . ArXiv:2205.10625 [cs.AI]. Wei Zhou, Mohsen Mesgar, Heike Adel, and Annemarie Friedrich. 2024. FREB-TQA: A Fine-Grained Ro-bustness Evaluation Benchmark for Table Question Answering. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies (Volume 1: Long Papers) , pages 2479–2497, Mexico City, Mexico. Association for Computational Linguistics. Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. TAT-QA: A Question Answering Benchmark on a Hybrid of Tabular and Textual Con-tent in Finance. arXiv preprint . ArXiv:2105.07624 [cs.CL]. Kaijie Zhu, Jiaao Chen, Jindong Wang, Neil Zhenqiang Gong, Diyi Yang, and Xing Xie. 2024. DyVal: Dy-namic Evaluation of Large Language Models for Rea-soning Tasks. arXiv preprint . ArXiv:2309.17167 [cs.AI] version: 3.
