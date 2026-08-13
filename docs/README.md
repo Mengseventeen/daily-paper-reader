@@ -6,61 +6,56 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-12
-- 运行时间：2026-08-12 21:24:10 UTC
+- 最新运行日期：2026-08-13
+- 运行时间：2026-08-13 21:09:53 UTC
 - 运行状态：成功
-- 本次总论文数：13
-- 精读区：6
-- 速读区：7
+- 本次总论文数：12
+- 精读区：7
+- 速读区：5
 
 ### 今日简报（AI）
-今日共处理13篇金融AI论文，精读6篇、速读7篇，重点聚焦市场微观结构与LLM投资应用。  
-最值得关注：媒体偏见对股价的动态冲击（2020冲击研究），以及面向LLM组合管理的可审计评估框架OpenPM，均为9.0高分。  
-建议普通读者优先关注量化交易策略的自动化合成与美联储讲话对波动率曲面的影响，延伸理解市场定价机制。
-- 详情：[/202608/12/README](/202608/12/README)
+今日精读7篇、速读5篇，共12篇金融AI与财报预测文献；其中两份9分精读聚焦完整财务报表长期预测与金融智能体前沿基准。最值得关注：报表预测模型“Forma”与金融智能体基准“FrontierFinance”是当前高分热点。建议优先阅读这两个方向，了解金融AI能力边界与长程预测方法。
+- 详情：[/202608/13/README](/202608/13/README)
 
 ### 精读区论文标签
-1. [Quantitative Analysis of Media Bias and Stock Price Dynamics: The 2020 Shock](/202608/12/2608.05899v1-quantitative-analysis-of-media-bias-and-stock-price-dynamics-the-2020-shock)  
+1. [Long-Horizon Forecasting of Complete Financial Statements with Forma](/202608/13/2608.11327v1-long-horizon-forecasting-of-complete-financial-statements-with-forma)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：利用新闻标题构建立场指标并分析股价动态，属于金融自然语言处理研究
-2. [OpenPM: Auditable Point-in-Time Evaluation for LLM Portfolio-Management Agents](/202608/12/2608.09988v1-openpm-auditable-point-in-time-evaluation-for-llm-portfolio-management-agents)  
+   evidence：基于Transformer的财务报表预测
+2. [FrontierFinance: A Challenging Benchmark for Measuring Frontier Intelligence of Finance Agents](/202608/13/2608.11683v1-frontierfinance-a-challenging-benchmark-for-measuring-frontier-intelligence-of-finance-agents)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向LLM组合管理智能体的可审计评估框架，直接对应智能投顾组合管理
-3. [VeriFin: A Neurosymbolic Framework for Verifying LLM-Generated Financial Claims](/202608/12/2608.10213v1-verifin-a-neurosymbolic-framework-for-verifying-llm-generated-financial-claims)  
+   evidence：面向金融分析智能体的基准，覆盖投资者工作流查询与评分
+3. [LabelFusion-TS: Fusing Large Language Models, Transformer Encoders, and Financial Time Series for Monetary-Policy Stance Classification](/202608/13/2608.11753v1-labelfusion-ts-fusing-large-language-models-transformer-encoders-and-financial-time-series-for-monetary-policy-stance-classification)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：用于验证大模型生成金融数值声明的神经符号框架
-4. [How People Evaluate AI-, Expert-, and Peer-Style Financial Advice](/202608/12/2608.09019v1-how-people-evaluate-ai--expert--and-peer-style-financial-advice)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：研究AI金融建议的用户评价，属于AI在金融中的应用
-5. [Context Is Not Authority: Structured Runtime Governance for Financial Market Agents](/202608/12/2608.09025v1-context-is-not-authority-structured-runtime-governance-for-financial-market-agents)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向金融AI智能体的运行时治理框架，防范未授权的交易或策略影响
-6. [Beyond Forecasting: Recasting Volatility Control as a Routing Problem](/202608/12/2608.10375v1-beyond-forecasting-recasting-volatility-control-as-a-routing-problem)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于AI的波动率控制路由框架，用于组合风险敞口管理
+   evidence：融合金融时间序列与大语言模型/Transformer编码器进行美联储立场分类
+4. [TradingMoE: Routing the Right Experts in Evolving Markets](/202608/13/2608.11785v1-tradingmoe-routing-the-right-experts-in-evolving-markets)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：大模型金融交易中的动态专家路由机制
+5. [GRPO for Financial Advice Generation: Outperforming Commercial LLMs under CATE Evaluation](/202608/13/2608.11787v1-grpo-for-financial-advice-generation-outperforming-commercial-llms-under-cate-evaluation)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：使用GRPO微调大语言模型生成金融建议
+6. [Calibration Bets on the Past: Post-Training Quantization for Financial Time-Series Forecasting](/202608/13/2608.12259v1-calibration-bets-on-the-past-post-training-quantization-for-financial-time-series-forecasting)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：面向标普500金融预测的神经网络训练后量化研究
+7. [Large Language Model-Driven Small-Capitalization Trading: Integrating Financial News Sentiment, Macroeconomic Indicators, and Technical Signals](/202608/13/2608.12283v1-large-language-model-driven-small-capitalization-trading-integrating-financial-news-sentiment-macroeconomic-indicators-and-technical-signals)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：利用大语言模型从金融新闻中提取情感并用于组合构建
 
 ### 速读区论文标签
-1. [Objective-oriented quantitative investment: A specification-driven framework for automated synthesis of trading strategy pipelines](/202608/12/2608.10410v1-objective-oriented-quantitative-investment-a-specification-driven-framework-for-automated-synthesis-of-trading-strategy-pipelines)  
+1. [Observational Policy Ranking for SMB Financial Guidance from Multi-Action Accounting Logs](/202608/13/2608.10050v1-observational-policy-ranking-for-smb-financial-guidance-from-multi-action-accounting-logs)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：自动化交易策略流水线合成直接体现AI在量化投资中的应用
-2. [When the Fed Speaks: Dynamics and Forecasts of the Volatility Surface](/202608/12/2608.10693v1-when-the-fed-speaks-dynamics-and-forecasts-of-the-volatility-surface)  
+   evidence：机器学习和LLM用于中小企业财务指导
+2. [Do People Follow AI Advice? Evidence from a Pension Portfolio Choice Experiment](/202608/13/2608.11371v1-do-people-follow-ai-advice-evidence-from-a-pension-portfolio-choice-experiment)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：机器学习框架预测FOMC会议前后的隐含波动率曲面
-3. [V-FiLLM: Verified Financial LLM Reasoning Benchmark](/202608/12/2608.11047v1-v-fillm-verified-financial-llm-reasoning-benchmark)  
+   evidence：通过养老金组合选择实验研究AI建议对投资决策的影响
+3. [From Numbers to Judgment: Specialist LLM Agents and Reinforcement Learning for European Listed Real Estate](/202608/13/2608.11381v1-from-numbers-to-judgment-specialist-llm-agents-and-reinforcement-learning-for-european-listed-real-estate)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：自动生成金融推理基准，属于大语言模型在金融NLP中的重要评估工具
-4. [Against Explainable Artificial Intelligence In Law: Why Justifiable Ai Matters. A Credit Scoring Example](/202608/12/2608.07452v1-against-explainable-artificial-intelligence-in-law-why-justifiable-ai-matters-a-credit-scoring-example)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：讨论基于AI的信用评分、可解释性及法律合理性
-5. [REATS: LLM Reasoning-based Ensemble Learning for Adaptive Time Series Forecasting](/202608/12/2608.10149v1-reats-llm-reasoning-based-ensemble-learning-for-adaptive-time-series-forecasting)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：利用LLM推理的自适应时间序列集成学习，可应用于金融行情分析
-6. [Beyond Cash Flows: A Multi-Agent AI Framework for Valuing Clinical-Stage, Cross-Border Biotechnology](/202608/12/2608.10175v1-beyond-cash-flows-a-multi-agent-ai-framework-for-valuing-clinical-stage-cross-border-biotechnology)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：用于生物医药投资估值的多智能体框架，将LLM智能体应用于金融分析
-7. [Certified High-Dimensional Wasserstein Robust Portfolio Optimization](/202608/12/2608.07032v1-certified-high-dimensional-wasserstein-robust-portfolio-optimization)  
+   evidence：专家LLM智能体与强化学习用于欧洲上市房地产金融分析
+4. [Regime-Gated Residual Mixture-of-Experts for Cross-Sectional Volatility Forecasting](/202608/13/2608.12251v1-regime-gated-residual-mixture-of-experts-for-cross-sectional-volatility-forecasting)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：面向美国股票截面波动率预测的机制门控混合专家神经网络
+5. [FM-LLM: A frequency-enhanced mixture-of-experts framework for adapting LLMs to time series forecasting](/202608/13/2608.11623v1-fm-llm-a-frequency-enhanced-mixture-of-experts-framework-for-adapting-llms-to-time-series-forecasting)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：稳健投资组合优化方法可直接应用于智能投顾资产配置
+   evidence：面向时间序列预测的频率增强LLM适配，适用于金融序列
 
 
 <div class="dpr-home-promo-card">

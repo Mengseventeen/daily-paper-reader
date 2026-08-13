@@ -1,0 +1,903 @@
+Title: Large Language Model-Driven Small-Capitalization Trading: Integrating Financial News Sentiment, Macroeconomic Indicators, and Technical Signals
+
+URL Source: https://arxiv.org/pdf/2608.12283v1
+
+Published Time: Thu, 13 Aug 2026 01:11:51 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+## Large Language Model-Driven Small-Capitalization Trading: Integrating Financial News Sentiment, Macroeconomic Indicators, and Technical Signals 
+
+Alireza Kargarzadeh 1, Nariman Khaledian 2, Navid Parvini 3, Arman Khaledian 3
+
+> 1
+
+Tailstate Intelligence Ltd., 2Independent Researcher, 3Zanista AI Ltd.  
+
+> Correspondence: alireza.kargarzadeh@tailstate.ai
+
+Abstract 
+
+Large language models can extract richer sig-nals from financial news than fixed sentiment lexicons, and recent work has explored feeding such signals into portfolio construction. We study an uncertainty-aware construction that feeds model-predicted risk – decomposed into aleatoric and epistemic components – directly into the covariance matrix of portfolio alloca-tors, rather than treating portfolio risk as fixed or adjusting only expected returns. We eval-uate the pipeline on Russell 2000 equities un-der three stock-selection regimes: a pure-alpha trigger that isolates abnormal stock moves not explained by macro indicators, a pure-beta trig-ger that captures macro-indicator moves be-fore the stock itself fires, and a beta trigger in which both channels agree. Across the full holding-period grid, the separated pure-alpha and pure-beta legs usually dominate the beta intersection on Sharpe and return. Two hori-zons are especially informative. At one day, pure beta can work under low and moderate transaction costs because it captures immedi-ate lead-lag spillovers from liquid macro and sector indicators into exposed small-cap stocks, but this advantage disappears at 100 bps when turnover and microstructure noise dominate. At 40 days, pure beta works for a different rea-son: slower macro repricing overtakes the firm-specific pure-alpha channel. The strongest con-servative row is pure beta with GPT-4o mini sentiment, a Student-t target, a 40-day hold-ing period, and risk parity allocation, reaching Sharpe 2.33 at 100 bps. The results suggest that stock-selection regime and allocator choice matter at least as much as the sentiment model, and that separating firm-specific and macro-exposure triggers is more informative than re-quiring both to fire simultaneously. Code is available at the following repository. 1
+
+> 1https://anonymous.4open.science/r/ Tyche-2EBA/
+
+1 Introduction 
+
+Financial news moves markets (Tetlock, 2007), but fixed lexicon methods miss negation, context, and domain-specific financial language. Large lan-guage models (LLMs) address this by condition-ing on the full news context, and recent evidence shows that LLM-derived financial sentiment can contain return-predictive information and outper-form dictionary-based sentiment measures (Lopez-Lira and Tang, 2026; Chen et al., 2022; Kirtac and Germano, 2024). Two gaps remain. First, most studies score iso-lated headlines rather than related news stories, even though repeated coverage can overweight a single event. Second, sentiment is usually treated as an expected-return input while portfolio risk remains historical and signal-independent (Co-lasanto et al., 2022; Lee et al., 2025; Chen, 2025; Taheripour et al., 2025). This is limiting because a predictive model can also provide information about uncertainty and cross-asset covariance. We address both gaps with a pipeline that clusters related articles into representative news-summary sentiment features, combines them with macroeconomic and technical indicators, and pre-dicts both expected returns and covariance for port-folio construction. To limit look-ahead bias, sen-timent is scored with models whose knowledge cutoffs precede the 2025 test period. The main em-pirical result is that decomposing the macro-beta trigger matters: pure alpha and pure beta generally outperform the beta intersection, but for different reasons across horizons. Figure 1 previews this pattern. 
+
+Contributions. We build a news-summary LLM sentiment pipeline that clusters related coverage before scoring, using models whose knowledge cutoffs limit look-ahead bias. We combine this with an uncertainty-aware return-distribution model that decomposes predictive covariance into aleatoric arXiv:2608.12283v1 [q-fin.PM] 12 Aug 2026 1 2 3 5 10 20 40 60          
+
+> Holding period (trading days)
+> −2 −1 012
+> Sharpe
+> best allocation model per arm at each point
+> Sharpe across holding periods (100 bp)
+> Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+
+Figure 1: Holding-period sweep at 100 bps. Pure alpha leads at 5, 10, and 60 days; pure beta leads at 20 and 40 days. 
+
+and epistemic components and feeds it directly into standard portfolio allocators, rather than treating risk as a separate, historically-estimated quantity. We evaluate the resulting pipeline across sentiment scorer, target distribution, allocator, holding period, transaction cost, and stock-selection regime, to test how much each of these choices actually matters. 
+
+2 Related Work 
+
+Turning financial news into a usable sentiment sig-nal predates LLMs by nearly two decades. Early work scored sentiment from fixed positive/negative lexicons, showing that media pessimism, negative-word frequency, and informal investor discourse predict returns, earnings, and price reaction speed at both the market and firm level (Das and Chen, 2007; Tetlock, 2007; Tetlock et al., 2008; Calomiris and Mamaysky, 2019; Glasserman et al., 2019). These methods are transparent, but their fixed vo-cabularies struggle with negation, context, and domain-specific phrasing. LLMs address this limitation by conditioning on richer text context: Lopez-Lira and Tang (2026) show that GPT-4 scores from post-cutoff headlines predict initial re-actions and subsequent drift, especially for smaller stocks and negative news; Chen et al. (2022) ex-tract contextual embeddings from financial news and find incremental information beyond techni-cal predictors and simpler text representations; and Kirtac and Germano (2024) compare OPT, BERT, FinBERT, and the Loughran–McDonald dictio-nary, with the OPT long–short strategy achieving a Sharpe ratio of 3.05 at 10 bps transaction costs. Jadhav and Mirza (2025) survey the broader LLM-equity literature, confirming that this has become a fast-growing research area. Across this literature, however, news is typically treated as a stream of independent observations: each headline or arti-cle is scored on its own, and repeated syndicated coverage of the same event can therefore give that event outsized weight simply because it appears many times. We instead first collapse related cov-erage into representative news-summary sentiment before scoring, so that a story’s influence reflects how much it matters rather than how often it was reported. LLM trading studies also face a specific vali-dation problem: a model may appear predictive because its training data overlaps the evaluation pe-riod. Glasserman and Lin (2024) distinguish look-ahead bias from a distraction effect, where general company knowledge can distort sentiment judg-ments even without memorizing the subsequent return. Eliseev and Seleznev (2026) extend the warning to macroeconomic forecasting with “fake date” tests, finding that none of the modern LLMs they test passes the strictest look-ahead screen. Riz-vani et al. (2026) add a complementary robust-ness concern by showing that LLM-driven trading pipelines can be vulnerable to adversarially ma-nipulated headlines. These findings motivate our cutoff-aware sentiment scoring, strict trailing stan-dardization, and representative-story construction. A separate literature asks how a predictive signal should become portfolio weights. Equal weight-ing, risk parity (Maillard et al., 2010), and hier-archical risk parity (López de Prado, 2016) either ignore the expected-return signal or allocate pri-marily from covariance, while mean-variance op-timization (Markowitz, 1952) treats predicted re-turn and risk as fixed point estimates. Sentiment-based portfolio papers usually inject language infor-mation into expected returns or Black–Litterman views: Colasanto et al. (2022) use a BERT senti-ment score to form Black–Litterman views, Lee et al. (2025) translate LLM forecasts and predictive uncertainty into views and confidence levels, and Chen (2025) and Taheripour et al. (2025) adjust MVO-style expected-return inputs directly. Predic-tive uncertainty has been used for trade sizing by Spears et al. (2020), but at the single-position level rather than as a cross-asset portfolio covariance. Kargarzadeh (2024) develops a small-capitalization trading framework that combines LLM-scored financial news with macroeconomic and technical signals, and motivates decomposing News-Enhanced Multimodal Pipeline for Return Prediction and Portfolio Allocation 
+
+A Data and feature construction  B Multimodal encoders and  
+
+> temporal representation
+
+C Predictive moments and  
+
+> uncertainty estimation
+
+D Portfolio weight allocation   
+
+> Daily OHLCV data
+> Raw daily data
+> open, high, low,
+> close, volume
+> Feature
+> engineering
+> returns, volatility,
+> momentum
+> T-day daily
+> tensor
+> Stock selection filter (gate for news)
+> Self trigger
+> abnormal own return
+> Indicator trigger
+> direction-consistent linked shock
+> Financial news
+> 1
+> Asset/date
+> mapping
+> 2
+> Summarization
+> 3
+> LLM
+> sentiment
+> scoring
+> 4
+> 30-day
+> rolling
+> deduplication
+> 5
+> Daily
+> sentiment +
+> coverage
+> 6
+> T-day
+> news
+> tensor
+> Daily temporal
+> encoder
+> News temporal
+> encoder
+> Concatenate
+> embeddings
+> Sequential
+> encoder
+> Cross-asset
+> representation
+> MC-dropout at inference
+> Mean
+> head
+> Covariance
+> head
+> Predictive
+> mean
+> Aleatoric
+> covariance
+> Epistemic
+> covariance
+> Total covariance
+> Arithmetic-return moments
+> Predicted moments
+> from C
+> Pre-balance
+> holdings
+> Weight allocation strategies
+> 1. Risk-aware MVO
+> uses
+> 2. Equal Weight
+> uniform allocation
+> 3. Risk Parity
+> equal risk shares
+> 4. Hierarchical RP
+> cluster-based weights
+> 5. Black–Litterman
+> prior + views
+> 6. Bayesian BL
+> posterior update
+> Target portfolio weights
+> compared across methods
+> At least one trigger selects a stock–date pair for news processing
+> Self-triggered Indicator-triggered
+> Pure Alpha
+> self only
+> Beta
+> both
+> Pure Beta
+> indicator only
+> Selected stock–date pairs
+
+Figure 2: End-to-end trading pipeline. The experiment begins with a Russell 2000 price and news panel, resolves a tradable cross-section using one of three macro-beta trigger legs, clusters related articles into news-summary sentiment features, and trains a return-distribution network that outputs both expected returns and predictive covariance. The same predicted moments are then passed to six allocation rules, allowing the benchmark to isolate the effects of the stock-selection regime, sentiment scorer, target distribution, and portfolio construction method. 
+
+macro-beta events into pure-alpha, pure-beta, and beta-intersection legs, according to whether a stock’s own abnormal return, its exposure to a co-moving macroeconomic indicator’s abnormal move, or both, exceed a z-score threshold. The remaining gap is therefore not whether text can contain return information, but how to combine news-summary sentiment, macro/technical stock selection, predictive uncertainty, and allocation in one controlled benchmark. We test that full chain by feeding model-predicted covariance directly into the portfolio stage and evaluating whether per-formance depends on the sentiment backend, return target, allocator, holding period, transaction cost, and stock-selection regime. 
+
+3 Methodology 
+
+For assets i ∈ { 1, . . . , N } and trading days t, our target is the forward log-return vector y(H)
+
+t ∈ RN
+
+over horizon H. Rather than predicting return alone, we estimate the full conditional return dis-tribution – its mean and covariance, ˆμt = E[y(H)
+
+t |Ft] and ˆΣt = Cov( y(H)
+
+t | F t) – since it is the co-variance estimate that ultimately distinguishes our portfolio construction from prior work. Figure 2 gives the full workflow. The remainder of this sec-tion follows the pipeline end to end: how the trad-able universe is selected (Section 3.1), how news becomes a daily sentiment signal (Section 3.2), how that signal becomes a joint return-and-risk prediction (Section 3.3), and how that prediction becomes a portfolio (Section 3.4). Dataset and experimental protocol are described in Section 4. 
+
+3.1 Stock Selection 
+
+We compare three ways to define the traded cross-section, each decomposing a macro-beta trigger into a separate event set. All three start from the same eligible Russell 2000 pool and define a stock-side event set SS and an indicator-side event set SI .A stock’s own movement is flagged via its return z-score, 
+
+Z = R − μσ (1) and its relationship to a given indicator is measured via beta, 
+
+β = Cov( Ri, R ind )Var( Rind ) (2) computed over a rolling window against a curated panel of macroeconomic releases, commodities, currencies, rates, volatility, world-index, and sector-ETF indicators (details in Appendix A). An indi-cator trigger fires when an indicator has an abnor-mal move and the stock is sufficiently exposed to that indicator; a stock trigger fires when the stock itself has an abnormal move. Following the small-capitalization LLM-driven trading framework of Kargarzadeh (2024), the three selection legs are then pure alpha, SS \ SI ; pure beta, SI \ SS ; and beta, SI ∩ SS . Pure alpha isolates firm-specific abnormal moves not contemporaneously explained by macro indicators. Pure beta is the anticipatory macro leg: an indicator has moved for a levered stock, but the stock itself has not yet registered its own abnormal move. Beta is the confirmatory leg, where stock and indicator triggers fire together and agree on direction. In all three regimes, candidates are ranked using only in-sample BUY events and capped at 50 names for model training and back-testing. At allocation time, the filter acts as a mask: the predictive model still emits full return and co-variance forecasts, but the allocator may hold only names with an active BUY signal under the selected leg. 
+
+3.2 From News to Sentiment 
+
+Much of the LLM-sentiment trading literature scores individual headlines or articles as indepen-dent observations (Section 2). We instead treat sen-timent as a property of a story , not an article: mul-tiple outlets frequently cover the same event, and scoring each report separately lets syndicated cover-age dominate a signal simply by being repeated, not by being informative. For each article–asset pair, the sentiment model returns a calibrated probability distribution over negative, neutral, and positive out-comes. These probabilities are transformed into a final normalized sentiment surprise through entity-prior correction, strictly trailing rolling demeaning, and group-day cross-sectional standardization. The exact scoring and normalization formulas are re-ported in Appendix B. We then collapse repeated coverage before it reaches the model. Within a trailing 30-day win-dow, article summaries are embedded and clustered by single-linkage agglomerative clustering using cosine distance as the merge criterion, merging two articles into the same story once their similarity reaches 0.90. Each resulting cluster is treated as one underlying story. For every story cluster, only the article nearest to the cluster centroid is retained as the representative news item; all other articles in that cluster are treated as duplicate coverage. The clustering, centroid, and representative-selection formulas are given in Appendix B. The daily sen-timent feature ¯si,d is then computed from these representative articles and paired with a log-scaled story count as a coverage-volume feature. Neither feature is forward-filled, so the signal never reflects information unavailable at the time it would have been used. To score sentiment, we use GPT-4o mini, whose October 2023 knowledge cutoff precedes our evalu-ation period by construction, directly limiting look-ahead bias (Glasserman and Lin, 2024) – though not the related distraction effect, since the model may still carry general knowledge of a company independent of the specific event being scored. To test whether our results are an artifact of this par-ticular scorer, we repeat the full pipeline with three alternative scorers spanning domain-specific and general-purpose designs: FinBERT (Araci, 2019), Mistral 7B Instruct (Jiang et al., 2023), and Llama 2 13B Chat (Touvron et al., 2023). 
+
+3.3 Joint Return and Risk Prediction 
+
+The sentiment signal above feeds a multimodal net-work alongside daily price- and volume-derived technical features. The news branch uses the news-summary sentiment and coverage features summa-rized in Table 2, while the daily branch uses the OHLCV-derived indicators summarized in Table 3. The two branches are encoded separately, concate-nated over the lookback window, and combined into a per-asset representation hi,t . Rather than treating risk as a separate, historically-estimated quantity the way prior work does, we predict it from this same representation, alongside return, and we distinguish two sources of uncertainty rather than collapsing them into one number. Dropout applied to hi,t (rate 0.2) gives a stochas-tic representation ˜hi,t,n = Dropout( hi,t ; ωn) for the n-th of S forward passes; a mean head and covariance head operate on each draw, with the covariance head parameterized as rank-2 low-rank plus diagonal to guarantee a valid estimate by con-struction, 
+
+ˆΣAt,n = Ft,n F ⊤ 
+
+> t,n
+
++ diag( dt,n ) (3) This aleatoric term captures the market’s own con-ditional randomness, but says nothing about how much the model itself should be trusted on a given prediction. We capture that separately, as epistemic 
+
+uncertainty, by keeping dropout active at inference and treating the spread across S stochastic passes as our confidence in the forecast itself: 
+
+ˆμt = 1
+
+S
+
+> S
+
+X
+
+> n=1
+
+ˆμt,n , ˆΣAt = 1
+
+S
+
+> S
+
+X
+
+> n=1
+
+ˆΣAt,n (4) 
+
+ˆΣEt = 1
+
+S − 1
+
+> S
+
+X
+
+> n=1
+
+ ˆμt,n − ˆμt
+
+  ˆμt,n − ˆμt
+
+⊤ (5) Following the decomposition of Spears et al. (2020), originally used to size individual trades, we combine both into a single predictive covariance, 
+
+ˆΣt = ˆΣAt + ˆΣEt (6) extending it from a single-signal quantity to a full 
+
+N × N cross-asset covariance matrix. With S = 1 ,epistemic covariance is exactly zero, recovering a model with no explicit account of its own uncer-tainty. The model is trained by maximizing the likeli-hood of realized returns under its own predicted aleatoric distribution, Gaussian or Student-t (full training objective in Appendix E), so risk is learned jointly with return rather than fit afterward from residuals. Before reaching the portfolio stage below, ˆμt and ˆΣt are converted from log- to arithmetic-return moments, written μt and Σt (full conversion in Appendix E). 
+
+3.4 Risk-Aware Portfolio Construction 
+
+This combined covariance is what we feed into port-folio construction. Where prior sentiment-driven work adjusts a portfolio’s expected-return input but leaves the covariance matrix at its historical value (Section 2), we feed Σt directly into a standard mean-variance optimizer (Markowitz, 1952) with transaction-cost regularization, full investment, and a per-asset position cap of 40%, at a risk-aversion setting of δ = 2 .5. All reported filtered portfolios are long-only: the stock-selection signal is used only as a BUY eligibility mask, and constrained allocators impose non-negativity, full investment, and the same position cap. The optimizer is there-fore penalized more heavily when the model itself is uncertain, not only when the asset has histori-cally been volatile. The exact objective is reported in Appendix G (Equation 23). We benchmark this against five standard alterna-tives: equal-weighted, risk parity (Maillard et al., 2010), hierarchical risk parity (López de Prado, 2016), and Black–Litterman and Bayesian Black– Litterman (Black and Litterman, 1992), the lat-ter pair implemented following Lee et al. (2025) in letting epistemic uncertainty widen the view-confidence matrix alongside Σt. Standard Black– Litterman and its Bayesian variant differ only in the allocation step applied to an identical posterior: closed-form renormalized weights versus our own constrained optimizer (Equation 23) applied to the same posterior moments, isolating the effect of the allocation step from the effect of the posterior itself. Each baseline consumes the identical (μt, Σt) for a controlled comparison; full baseline formulas are given in Appendix G. 
+
+4 Experimental Setup 
+
+4.1 Data and Sample 
+
+We evaluate the pipeline on Russell 2000 equities with daily OHLCV data from October 2, 2023 through December 31, 2025 and scored news from October 1, 2023 through December 31, 2025. Macro-beta selection additionally uses a macro-indicator panel spanning January 1, 2022 through January 1, 2026. All universe selection, standard-ization, model fitting, and early stopping use only the in-sample period ending December 31, 2024. Within that in-sample period, the first 80% of trad-ing days are used for training and the remaining 20% for validation, with a holding-period embargo at split boundaries. The 2025 calendar year is held out for backtesting. 
+
+4.2 Benchmark Grid 
+
+For each selection regime, sentiment back-end, target distribution, holding period, and transaction-cost setting, we train the predictive model and evaluate all six allocation methods from Section 3.4. The three selection regimes are pure alpha, pure beta, and beta. Hold-ing periods are H ∈ {1, 2, 3, 5, 10 , 20 , 40 , 60 }
+
+trading days. Transaction-cost scenarios are 
+
+{0, 1, 2, 5, 10 , 20 , 50 , 100 } basis points, with a fixed 5 bps one-way slippage component in ad-dition to the reported transaction-cost setting. The main results emphasize the conservative 100 bps setting across the full holding-period grid; Ap-pendix D reports the corresponding 50 bps sweep, detailed best rows, sentiment-backend effects, and allocator-level diagnostics. A 30-day holding pe-riod was not part of the executed grid, so it is not reported. Performance is reported using cumulative net return, annualized return, annualized volatility, Sharpe ratio, Sortino ratio, Calmar ratio, maximum drawdown, average turnover, total costs, hit rate, and exposure. Because the out-of-sample period is one calendar year, annualized metrics should be read as annualized summaries of a single test year rather than as estimates over many independent years. 
+
+5 Results and Discussion 
+
+5.1 Selection Regime and Holding Period 
+
+Figure 1 summarizes the conservative 100 bps benchmark. The main result is that the separated pure-alpha and pure-beta legs are more useful than the beta intersection. Pure alpha leads at 5, 10, and 60 trading days; pure beta leads at 20 and 40 days. The one-day result is cost-sensitive: pure beta is strongest at low costs, but the edge disappears un-der the 100 bps stress case (Appendix D). The pattern has a direct financial interpretation. Pure alpha selects abnormal stock moves with-out a simultaneous macro trigger, a setting where small-cap information diffusion can be slow be-cause coverage, liquidity, and arbitrage capacity are limited (Bernard and Thomas, 1989; Johnson and Schwartz, 2001; Shanthikumar, 2003). Pure beta instead selects stocks exposed to an abnormal macro or market-indicator move before the stock itself has moved abnormally. This makes it plausi-ble both as a one-day lead–lag signal at low costs and as a slower 40-day macro-transmission signal, where investors gradually map rates, sector, com-modity, volatility, and demand shocks into hetero-geneous small-cap fundamentals (Andersen et al., 2007). Table 1 reports the best cost-sensitive con-figurations, and Figure 3 shows the 60-day cumu-lative path supporting the long-horizon pure-alpha interpretation. This 60-day advantage does not depend on the specific 100 bps cost point emphasized elsewhere in this section. Figure 4 sweeps the best allocator within each selection regime across the full range of explicit transaction costs at the 60-day horizon, and pure alpha remains the strongest filtered regime from zero costs through 100 bps; if anything, its lead over pure beta and the beta intersection widens rather than narrows as costs rise. Because 60-day rebalancing already trades infrequently, the cost sweep moves absolute Sharpe levels only modestly. What it rules out is the possibility that pure alpha’s edge at this horizon is an accident of the particular cost assumption used in Table 1. 2025-04 2025-05 2025-06 2025-07 2025-08 2025-09 2025-10 2025-11 2025-12 2026-01 -20% -10% 0% 10% 20% 30% 40% 50%          
+
+> Cumulative return, net of costs
+> H=60d · 100 bp costs · 2025 out-of-sample · best model per arm; blended over backends x distributions
+> Cumulative return by selection arm
+> Buy & hold EW EW rebalanced Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+
+Figure 3: Cumulative net-return paths for the filtered se-lection regimes at 100 bps transaction cost and a 60-day holding period, compared with Buy-and-Hold, an equal-weight (EW) portfolio, and the Russell benchmark in-dex. The longer-horizon results favor pure alpha, while pure beta remains positive and the beta-intersection strat-egy exhibits weaker performance. 
+
+5.2 Strategy Comparison Across Holding Horizons 
+
+The horizon comparison is not monotone because the two separated legs capture different adjustment speeds. At one day, pure beta has the clearer eco-nomic channel: the signal starts from a liquid macro, sector, rate, commodity, volatility, or in-dex move that has already occurred, and then buys small-cap stocks with measured exposure whose own abnormal move has not yet appeared. This is a short lead–lag trade. It can work before slower constituents fully incorporate the factor shock, but it is fragile because one-day rebalancing pays the spread and opening-price noise repeatedly; under 100 bps costs the advantage disappears. Pure alpha is more plausible at the horizons where it leads, especially 5, 10, and 60 trading days. These trades start from a stock-specific ab-normal move without a simultaneous macro trigger, so the information is more likely to be firm-level: earnings revisions, financing news, contracts, gov-ernance changes, litigation, product updates, or other events not immediately summarized by broad indicators. Small-cap names have thinner analyst coverage and weaker arbitrage capacity, so this in-formation can diffuse over several sessions rather than being fully priced by the next open (Bernard and Thomas, 1989; Johnson and Schwartz, 2001; Cost Selection Sentiment Target H Allocator Net Ann. Sharpe Max DD 
+
+20 Pure beta GPT-4o mini Student-t 40 RP 111.1% 102.5% 2.51 -18.3% 20 Pure alpha FinBERT Gaussian 60 HRP 47.1% 57.9% 2.10 -14.3% 20 Beta FinBERT Student-t 20 MVO 48.7% 56.2% 1.19 -21.7% 50 Pure beta GPT-4o mini Student-t 40 RP 106.9% 100.0% 2.44 -18.3% 50 Pure alpha Mistral-7B Gaussian 60 HRP 50.3% 61.6% 2.05 -15.5% 50 Beta FinBERT Student-t 20 MVO 44.7% 53.2% 1.12 -21.9% 100 Pure beta GPT-4o mini Student-t 40 RP 100.1% 95.9% 2.33 -18.3% 100 Pure alpha Mistral-7B Gaussian 60 HRP 47.8% 59.3% 1.96 -15.5% 100 Beta FinBERT Student-t 20 MVO 38.4% 48.2% 1.01 -22.4% 
+
+Table 1: Best 2025 net backtest for each filtered stock-selection regime at 20, 50, and 100 bps transaction costs, restricting the holding period to 20, 40, or 60 trading days. Each row is selected by Sharpe over sentiment backends, available return targets, and six allocation methods. 0 1 2 5 10 20 50 100          
+
+> Transaction cost (bp)
+> 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0
+> Sharpe
+> best allocation model per arm at each point
+> Sharpe across transaction costs (H=60d)
+> Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+
+Figure 4: Transaction-cost robustness for the filtered selection regimes at a 60-day holding period. Each line reports the best allocator within a selection regime at each explicit cost setting, averaged over sentiment backends and target distributions. 
+
+Shanthikumar, 2003). The 5- and 10-day results fit this delayed-incorporation channel. The 60-day result is consistent with a smaller set of persistent firm-specific events, where lower turnover allows fundamental repricing to dominate trading frictions. By contrast, 20 and 40 days favor pure beta, sug-gesting that macro repricing can remain important while investors translate aggregate shocks into het-erogeneous small-cap cash-flow and discount-rate effects. The main conclusion is therefore not that one leg dominates all horizons, but that separating 
+
+SS \ SI from SI \ SS reveals distinct firm-specific and macro-transmission mechanisms that the inter-section SI ∩ SS obscures. This interpretation also explains why the beta intersection is generally weaker. Requiring both the stock and indicator channels to fire at the same time is economically conservative, but it re-moves two useful cases: early macro spillovers be-fore the stock has reacted, and idiosyncratic stock events without a broad factor shock. The separated regimes therefore act less like minor variants of one filter and more like different trading hypotheses. Pure beta is a lead–lag or macro-transmission strat-egy; pure alpha is a delayed firm-specific repricing strategy. The empirical benchmark supports this distinction because the preferred leg changes with holding period and transaction cost instead of show-ing a single universally dominant selection rule. 
+
+6 Conclusion 
+
+This paper studies small-capitalization trading with LLM-derived news sentiment, macroeconomic in-dicators, technical signals, and uncertainty-aware portfolio construction. The central result is that the way the tradable set is defined matters at least as much as the sentiment backend or allocator. Sep-arating the macro-beta trigger into pure alpha and pure beta usually produces stronger Sharpe and re-turn than requiring the stock-side and indicator-side triggers to fire together. The horizon pattern is economically inter-pretable. Pure beta works best when the signal is a cross-asset transmission problem: at very short horizons, liquid macro or sector instruments can lead slower small-cap constituents; at 20–40 trading days, aggregate shocks can continue to be mapped into heterogeneous firm fundamentals. Pure alpha works best when the signal is firm-specific and slower to diffuse, especially at 5, 10, and 60 trading days. These results suggest that LLM news sentiment is most useful when embed-ded in a broader trading architecture that controls the opportunity set, distinguishes macro and id-iosyncratic channels, and passes predicted risk into portfolio construction rather than using sentiment only as an expected-return overlay. 
+
+Limitations 
+
+Several limitations qualify the results. First, GPT-4o mini’s October 2023 knowledge cutoff helps limit look-ahead bias, but it does not eliminate dis-traction from general pre-existing company knowl-edge. The same cutoff constraint also prevents use of newer models with later training cutoffs. Second, long articles are summarized before scoring. This controls cost and context length, but any nuance lost during summarization cannot be recovered downstream. Third, the evaluation is not a live deployment. It does not measure real-time retrieval, summariza-tion, scoring latency, or timestamp precision within the trading day. Executing at the next available open may therefore be imperfect for less liquid stocks. Finally, the horizon explanations are financial interpretations of a one-year out-of-sample bench-mark, not causal identification of the underlying news events. Because the design compares many models, allocators, targets, costs, and holding pe-riods, the best cells should be read as economi-cally motivated evidence rather than as stable pro-duction parameters. A longer live sample, formal multiple-testing adjustment, and event-level attri-bution would be needed before treating any single horizon–selection pair as a persistent anomaly. 
+
+References 
+
+Torben G. Andersen, Tim Bollerslev, Francis X. Diebold, and Clara Vega. 2007. Real-time price dis-covery in stock, bond and foreign exchange markets. 
+
+Journal of International Economics , 73(2):251–277. Dogu Araci. 2019. Finbert: Financial sentiment analy-sis with pre-trained language models. arXiv preprint arXiv:1908.10063 .Victor L. Bernard and Jacob K. Thomas. 1989. Post-earnings-announcement drift: Delayed price re-sponse or risk premium? Journal of Accounting Research , 27:1–36. Fischer Black and Robert Litterman. 1992. Global portfolio optimization. Financial Analysts Journal ,48(5):28–43. Charles W. Calomiris and Harry Mamaysky. 2019. How news and its context drive risk and returns around the world. Journal of Financial Economics , 133(2):299– 336. Qizhao Chen. 2025. Sentiment-aware mean-variance portfolio optimization for cryptocurrencies. arXiv:2508.16378. Yifei Chen, Bryan T. Kelly, and Dacheng Xiu. 2022. Expected returns and large language models. SSRN Electronic Journal . Available at SSRN: https: //ssrn.com/abstract=4416687 ; posted April 21, 2023; last revised February 24, 2026. Francesco Colasanto, Luca Grilli, and Domenico San-toro. 2022. Bert’s sentiment score for portfolio op-timization: A fine-tuned view in black and litter-man model. Neural Computing and Applications ,34:17507–17521. Sanjiv R. Das and Mike Y. Chen. 2007. Yahoo! for amazon: Sentiment extraction from small talk on the web. Management Science , 53(9):1375–1388. Alexander Eliseev and Sergei Seleznev. 2026. Fake date tests: Can we trust in-sample accuracy of llms in macroeconomic forecasting? arXiv:2601.07992. Paul Glasserman, Fulin Li, and Harry Mamaysky. 2019. Time variation in the news-returns relation-ship. SSRN Electronic Journal .Paul Glasserman and Caden Lin. 2024. Assessing look-ahead bias in stock return predictions generated by gpt sentiment analysis. Journal of Financial Data Science , 6(1):25–42. Aakanksha Jadhav and Vishal Mirza. 2025. Large lan-guage models in equity markets: Applications, tech-niques, and insights. Frontiers in Artificial Intelli-gence , 8. Albert Q. Jiang, Alexandre Sablayrolles, Arthur Men-sch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guil-laume Lample, Lucile Saulnier, Lélio Renard Lavaud, Marie-Anne Lachaux, Pierre Stock, Teven Le Scao, Thibaut Lavril, Thomas Wang, Timothée Lacroix, and William El Sayed. 2023. Mistral 7b. arXiv preprint arXiv:2310.06825 .W. Bruce Johnson and William C. Schwartz. 2001. Ev-idence that capital markets learn from academic re-search: Earnings surprises and the persistence of post-announcement drift. SSRN working paper. Alireza Kargarzadeh. 2024. Developing and backtest-ing a trading strategy using large language models, macroeconomic and technical indicators. MSc thesis, Imperial College London. Kemal Kirtac and Guido Germano. 2024. Sentiment trading with large language models. Finance Re-search Letters , 62:105227. Youngbin Lee, Yejin Kim, Juhyeong Kim, Suin Kim, and Yongjae Lee. 2025. Llm-enhanced black-litterman portfolio optimization. In Proceedings of the 34th ACM International Conference on Informa-tion and Knowledge Management (CIKM ’25), FinAI Workshop .Marcos López de Prado. 2016. Building diversified portfolios that outperform out-of-sample. Journal of Portfolio Management , 42(4):59–69. Alejandro Lopez-Lira and Yuehua Tang. 2026. Can chatgpt forecast stock price movements? return pre-dictability and large language models. Journal of Financial Economics, forthcoming .Sébastien Maillard, Thierry Roncalli, and Jérôme Teiletche. 2010. The properties of equally weighted risk contribution portfolios. The Journal of Portfolio Management , 36(4):60–70. Harry Markowitz. 1952. Portfolio selection. The Jour-nal of Finance , 7(1):77–91. Advije Rizvani, Giovanni Apruzzese, and Pavel Laskov. 2026. Adversarial news and lost profits: Manipu-lating headlines in llm-driven algorithmic trading. arXiv:2601.13082. Devin M. Shanthikumar. 2003. Small and large trades around earnings announcements: Does trading be-havior explain post-earnings-announcement drift? SSRN working paper. Trent Spears, Stefan Zohren, and Stephen Roberts. 2020. Investment sizing with deep learning prediction un-certainties for high-frequency eurodollar futures trad-ing. arXiv:2007.15982. Esmaeil Taheripour, Seyed Jafar Sadjadi, and Babak Amiri. 2025. A novel approach to portfolio construc-tion: An application of finbert sentiment analysis and credibilistic cvar criterion. IEEE Access , 13:76775– 76795. Paul C. Tetlock. 2007. Giving content to investor sen-timent: The role of media in the stock market. The Journal of Finance , 62(3):1139–1168. Paul C. Tetlock, Maytal Saar-Tsechansky, and Sofus Macskassy. 2008. More than words: Quantifying lan-guage to measure firms’ fundamentals. The Journal of Finance , 63(3):1437–1467. Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-bert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. 2023. Llama 2: Open founda-tion and fine-tuned chat models. arXiv preprint arXiv:2307.09288 .Appendix Overview A Stock-Selection Details. Universal liquidity selection and the pure-alpha, pure-beta, and beta trigger legs used in Section 3.1. 
+
+B Feature Definitions. The daily technical and news feature tables underlying the model in Section 3.3. 
+
+C Sentiment-Distribution Diagnostics. Distri-bution, class-mix, and time-series plots for the four sentiment scorers. 
+
+D Selection and Sharpe Diagnostics. Full holding-period, sentiment-backend, target-distribution, and allocator diagnostics support-ing Section 5. 
+
+E Training Objective and Return-Scale Con-version. Derivations of the Gaussian and Student-t likelihoods used to train the model in Section 3.3, along with the log-to-arithmetic return conversion. 
+
+F Backtesting Procedure. Rebalancing, transaction-cost accounting, selection mask-ing, and metric computation. 
+
+G Baseline Portfolio Formulations. Poste-rior and allocation formulas for the Black– Litterman, Bayesian Black–Litterman, and hierarchical risk parity baselines from Sec-tion 3.4. 
+
+A Stock-Selection Details 
+
+Macro-beta indicator panel. The three filtered regimes use a fixed panel of 58 exogenous indi-cators: 50 Yahoo Finance market series and 8 FRED macroeconomic releases. The Yahoo por-tion covers 11 GICS sector ETFs, major world equity indices, VIX, metals, energy, agriculture, rates, crypto, and broad commodity exposure. The FRED portion covers GDP, inflation, unemploy-ment, capacity utilization, consumer confidence, housing starts, building permits, and the federal funds rate. Daily market indicators are sourced from Yahoo Finance; lower-frequency macroeco-nomic releases are sourced from the public FRED CSV endpoint and forward-filled only after their returns and z-scores are computed. 
+
+Rolling windows and tail co-movement. Beta (Equation 2) is computed over a rolling 120-trading-day window for daily-frequency indicators and a 240-day window for FRED indicators; the stock-side return z-score (Equation 1) uses the same 120-trading-day window, so that self-triggered and indicator-triggered abnormal moves are judged against a consistent look-back horizon. In addi-tion to standard beta, we separately compute co-movement conditional on the indicator being in the tails of its own return distribution – specifically, when its return z-score is above +1 or below −1 –to capture whether a stock’s sensitivity to an indi-cator changes under stressed conditions rather than only on average. The implementation requires at least 25% of the conditional regime window to be populated, avoiding a degenerate case in which the shorter price panel produces no conditional beta estimates. 
+
+Trigger sets. A stock-side trigger fires when the stock’s own return z-score satisfies |Zi| ≥ 2;the stock-side direction is the sign of Zi. An indicator-side trigger fires when an indicator sat-isfies |Zind | ≥ 2, the stock’s absolute beta to that indicator exceeds 1, and the corresponding positive-tail or negative-tail conditional beta also exceeds 1 in absolute value. If several indicators fire for the same stock-date pair, the indicator direction is accepted only when their signs are unanimous; mixed directions become HOLD. This produces two daily sets: SS , the self-triggered stocks, and 
+
+SI , the indicator-triggered stocks. 
+
+Pure alpha, pure beta, and beta. The three fil-tered strategies are set operations over SS and SI .Pure alpha is SS \ SI : the stock moved abnor-mally on its own, with no contemporaneous macro-indicator trigger explaining the event. Pure beta is 
+
+SI \ SS : a macro or market indicator moved and the stock is exposed to it, but the stock has not yet made its own abnormal move. This is the antici-patory leg. Beta is SI ∩ SS : both channels fired, and the position is allowed only if stock-side and indicator-side directions agree. 
+
+Ranking, cap, and live mask. A filtered name qualifies for the training universe only if it has at least one in-sample BUY under the selected leg. Qualified names are ranked by in-sample BUY frequency and tie-broken by mean signal strength. Pure alpha uses the absolute stock z-score as strength; pure beta and beta use the number of triggering indicators. The top 50 names are re-tained across all three regimes. During the 2025 backtest, the same filter creates the live allocation mask: when no BUY signal is active for a filtered regime on a rebalance date, the portfolio holds cash until the next rebalance rather than reverting to an unfiltered universe. 
+
+B Feature Definitions 
+
+This appendix details the two feature groups that feed the multimodal network in Section 3.3: news-derived sentiment and daily price-based indicators. 
+
+News features. The scorer returns a calibrated probability over negative, neutral, and positive classes, 
+
+pτ,i =  p−
+
+> τ,i
+
+, p 0
+
+> τ,i
+
+, p +
+
+> τ,i
+
+, P 
+
+> k
+
+pkτ,i = 1 (7) after clipping and renormalization if the model re-turns slightly off-sum probabilities. The raw direc-tional score is 
+
+sraw τ,i = p+ 
+
+> τ,i
+
+− p− 
+
+> τ,i
+
+(8) The production sentiment variable is the normal-ized score sf inal τ,i . First, an entity-prior correction subtracts the measured named-versus-masked bias 
+
+δi for ticker i, falling back to the group prior when the ticker prior is unavailable. Second, a strictly trailing winsorized location estimate removes re-cent ticker-level drift without using the current article. With mτ,i denoting the ticker-level trail-ing median, mτ,g the corresponding group-level trailing median, nτ,i the ticker history count, and 
+
+κshrink = 20 .0 the shrinkage constant, 
+
+˜mτ,i = wτ,i mτ,i + (1 − wτ,i )mτ,g ,wτ,i = nτ,i 
+
+nτ,i + κshrink 
+
+. (9) The pre-standardized surprise is therefore 
+
+uτ,i = sraw τ,i − δi − ˜mτ,i . (10) Finally, for the article’s trading day d(τ ) and group 
+
+g(τ ), the score is converted to a cross-sectional z-score, 
+
+sf inal τ,i = uτ,i − μg(τ ),d (τ )
+
+max {σg(τ ),d (τ ), σ min } , (11) where μg,d and σg,d are computed across rows in the same group and trading day, with floor 
+
+σmin = 10 −6. If the group-day cell contains fewer than three rows, the unstandardized surprise uτ,i is retained and the row is flagged. Each article is mapped to the first trading day on or after publication, using a publication cutoff of 20:00 UTC: articles published at or after this time are treated as arriving on the next trading day, so that no article is attributed to a decision date that had already closed before the article appeared. For each asset-date pair, articles in the trailing M = 30 -day window are embedded and grouped into story clusters by single-linkage agglomerative clustering with cosine-distance threshold 1 − η,
+
+d(τ, τ ′) = 1 − e⊤
+
+> τ,i
+
+eτ ′,i ,d(τ, τ ′) ≤ 1 − η
+
+(12) We set η = 0 .90 , so two articles are merged into the same story only when their embedding cosine similarity is at least 0.90. For cluster Ck, the cen-troid is 
+
+ck =
+
+P  
+
+> τ∈Ck
+
+eτ,i 
+
+P  
+
+> τ∈Ck
+
+eτ,i 2
+
+, (13) and the representative article is the article nearest to that centroid, 
+
+rk = arg max  
+
+> τ∈Ck
+
+e⊤
+
+> τ,i
+
+ck (14) Writing Ki,d for the resulting story count on day d,the daily sentiment feature uses only these repre-sentative news items: 
+
+¯si,d = 1
+
+Ki,d Ki,d 
+
+X
+
+> k=1
+
+sf inal rk ,i (15) paired with log(1 + Ki,d ) as a coverage-volume feature. The resulting news feature group is listed in Table 2; both features are zero on days with no relevant coverage. 
+
+Daily features. The daily branch consumes a standard set of price- and volume-derived technical indicators computed from adjusted daily OHLCV data, listed in Table 3. These range from sim-ple return measures (close-to-close, open-to-close, overnight) to volatility and momentum indicators (rolling volatility, RSI, ATR) that are common in technical trading strategies and provide the model with a market baseline against which the sentiment signal can add incremental information. Feature Definition or interpretation 
+
+mean_sent Mean normalized sentiment of centroid-representative stories in the trailing 30-day window log_n_articles log(1 + Ki,d ), the log count of unique representative stories in the same window 
+
+Table 2: News feature group. 
+
+Feature Definition or interpretation 
+
+ret_close Close-to-close log return ret_oc Open-to-close log return ret_overnight Previous-close-to-open log return ret_adj Adjusted-close log return hl_range Daily high-low range scaled by close roll_vol 20-day rolling volatility of adjusted log returns roll_mean_ret 20-day rolling mean adjusted log return rel_volume Volume divided by 20-day rolling mean volume vol_change Log-volume first difference amihud Same-day absolute adjusted log return divided by same-day dollar volume mom_5, mom_20 Five-day and twenty-day adjusted-price momentum rsi 14-day relative strength index scaled to [0 , 1] 
+
+atr 14-day average true range scaled by close z_ret, z_vol 20-day rolling z-scores of return and log volume ma_ratio Close relative to 20-day rolling moving average 
+
+Table 3: Daily OHLCV feature group. 
+
+C Sentiment-Distribution Diagnostics 
+
+The following figures summarize the scored news feed before it enters the portfolio model. All four backends score the same article–ticker universe where available; each distributional difference is therefore a property of the sentiment model rather than of the downstream allocator. Figure 5 reports score dispersion, Figure 6 reports class mix and confidence, and Figure 7 reports time-series cali-bration. 
+
+D Selection and Sharpe Diagnostics 
+
+D.1 Holding-Period Robustness 
+
+Figure 8 repeats the main holding-period sweep at 50 bps. The pattern is similar to Figure 1: the beta intersection is not the preferred filtered regime beyond the one-day cell, pure alpha dominates the intermediate firm-specific horizons, and pure beta dominates the 40-day macro-transmission cell. Ta-ble 4 gives the numeric 100 bps sweep behind the main-text comparison. 
+
+D.2 Best Cost-Sensitive Configurations 
+
+Table 5 reports the pure-alpha leadership cells, while Table 6 separates the best medium- and long-horizon rows by target distribution. The broader −1.00 −0.75 −0.50 −0.25 0.00 0.25 0.50 0.75 1.00                  
+
+> Net sentiment score p+−p−
+> 0510 15 20 25
+> Density
+> 451,854+ scored articles · 2023-10 to 2025-12
+> Distribution of scored sentiment
+> −1.00 −0.75 −0.50 −0.25 0.00 0.25 0.50 0.75 1.00
+> Net sentiment score p+−p−
+> 0% 20% 40% 60% 80% 100%
+> Cumulative share of articles
+> Same scores, cumulative
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+
+Figure 5: Distribution of net sentiment score, p+ − p−,by backend. The histogram shows where each scorer concentrates its article-level mass, while the empirical CDF makes tail mass and median shifts easier to com-pare. FinBERT has the widest score dispersion, GPT-4o mini and Llama-2-13B skew positive, and Mistral-7B places more mass near neutral. These calibration differ-ences explain why identical news coverage can induce different portfolio forecasts. 
+
+cost-sensitive best-configuration table is reported in the main text as Table 1. 
+
+D.3 Cross-Horizon Strategy Diagnostics 
+
+Figure 9 shows allocator-level Sharpe dispersion at the lower transaction-cost setting, and Figure 10 summarizes the 60-day pure-alpha risk-return ev-idence; the corresponding cost-robustness sweep is reported in the main text as Figure 4. Figure 11 gives a representative short-horizon cumulative H Sharpe Annualized return Pure alpha Pure beta Beta Pure alpha Pure beta Beta 
+
+1 -1.28 -2.15 -0.84 -89.2% -146.5% -27.5% 2 -0.15 -2.44 -0.19 12.4% -150.7% -8.0% 3 -0.72 -1.73 -1.27 -33.8% -102.0% -52.5% 5 1.01 -0.79 -1.34 89.0% -42.0% -40.7% 10 1.11 -0.60 -0.83 49.6% -22.2% -22.6% 20 0.06 0.09 -0.15 7.7% 3.2% 0.2% 40 0.62 2.05 0.15 14.6% 74.7% 6.4% 60 1.87 1.48 0.69 57.0% 41.8% 23.9% 
+
+Table 4: Best-allocator filtered-regime sweep at 100 bps. For each holding period and selection regime, the reported value is the best allocation model after averaging that model over sentiment backends and target distributions. This is the numeric table behind the main-text interpretation. 
+
+H Best allocator Figure Sharpe Ann. return Cum. net 
+
+5 Risk parity Fig. 1 1.01 89.0% 70.0% 10 Hierarchical RP Fig. 1 1.11 49.6% 43.8% 60 Equal weight Fig. 1 1.87 57.0% 43.3% 
+
+Table 5: Pure-alpha leadership cells at 100 bps transaction cost. Positive Negative Neutral 0% 10% 20% 30% 40% 50% 60% 70%          
+
+> Share of articles
+> 34 21 46 35 16 49 10 21 69 26 866
+> 451,854+ scored articles · 2023-10 to 2025-12
+> Predicted class mix
+> 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+> Probability on the chosen class
+> 0% 20% 40% 60% 80% 100%
+> Cumulative share of articles
+> no-opinion floor
+> Confidence in the chosen class
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+
+Figure 6: Predicted class mix and confidence by sen-timent backend. The left panel reports the share of article–ticker pairs assigned to positive, negative, or neutral by argmax probability; the right panel reports the CDF of the winning class probability. This distin-guishes directional bias from conviction. Llama-2-13B is highly confident on many rows, while GPT-4o mini and Mistral-7B use lower-confidence assignments more often. 
+
+path, while the 60-day path is reported in the main text as Figure 3. 
+
+D.4 Allocator Strategy Diagnostics 
+
+The allocator panels below are shown at each filtered leg’s most informative high-cost horizon rather than at a single common horizon. Figure 12 shows pure alpha at H = 60 , where it has its strongest 100 bps Sharpe in the holding sweep. Figure 13 shows pure beta at H = 40 , its strongest conservative configuration. Figure 14 shows the beta intersection at H = 20 , its best high-cost medium/long-horizon cell even though it remains weaker than the separated legs. 2023-10 2024-01 2024-04 2024-07 2024-10 2025-01 2025-04 2025-07 2025-10 2026-01 −0.05 0.00 0.05 0.10 0.15 0.20 0.25    
+
+> Mean net sentiment
+> 451,854+ scored articles · 2023-10 to 2025-12
+> Mean sentiment by month
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+
+Figure 7: Monthly mean net sentiment by backend through the scored-news sample. Persistent level differ-ences reveal standing model bias, while parallel month-to-month movement indicates that the backends react to the same news cycle but place it on different scales. This plot is useful for interpreting portfolio differences that arise from calibration rather than from distinct article coverage. 
+
+D.5 Sentiment-Backend Diagnostics 
+
+The sentiment-backend panels repeat the same hori-zon choices by selection leg: Figure 15 for pure alpha, Figure 16 for pure beta, and Figure 17 for the beta intersection. 
+
+E Training Objective and Return-Scale Conversion 
+
+E.1 Training Procedure 
+
+Each training example is a synchronized cross-sectional window. For decision day t, the model receives the previous T = 30 trading days of daily technical features and news features for all assets, and the supervised target is the forward H-day log Cost Selection Target Sentiment H Allocator Net Ann. Sharpe Max DD 
+
+50 Beta Gaussian Mistral-7B 60 EW 15.6% 26.2% 0.76 -17.7% 50 Beta Student-t FinBERT 20 MVO 44.7% 53.2% 1.12 -21.9% 50 Pure alpha Gaussian Mistral-7B 60 HRP 50.3% 61.6% 2.05 -15.5% 50 Pure alpha Student-t Mistral-7B 60 EW 45.6% 56.9% 1.96 -15.2% 50 Pure beta Gaussian FinBERT 40 HRP 78.4% 79.8% 2.15 -18.5% 50 Pure beta Student-t GPT-4o mini 40 RP 106.9% 100.0% 2.44 -18.3% 
+
+Table 6: Best high-cost medium/long-horizon row within each filtered stock-selection and target-distribution pair. Rows are selected by Sharpe over sentiment backends, holding periods, transaction costs, and allocation methods. 1 2 3 5 10 20 40 60          
+
+> Holding period (trading days)
+> −1.0 −0.5 0.0 0.5 1.0 1.5 2.0
+> Sharpe
+> best allocation model per arm at each point
+> Sharpe across holding periods (50 bp)
+> Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+
+Figure 8: Holding-period sweep at 50 bps transaction cost. Each point selects the best allocator within a selec-tion regime after averaging that allocator over sentiment backends and target distributions. The lower-cost sweep confirms that the separated pure-alpha and pure-beta legs, not the beta intersection, drive most of the useful filtered performance. 
+
+return from t to t + H. Samples are assigned by decision date, and a sample is retained only if its entire forward target window stays inside the same split. Validation and test splits are additionally em-bargoed by at least H trading days, so no training horizon overlaps a later evaluation horizon. Feature standardization is fit on training look-back days only and then reused unchanged for vali-dation and test. Warm-up NaNs from rolling indi-cators, undefined ratios, and no-news observations are filled only after standardization. Each branch encoder is a 1D convolutional network with 32 channels and kernel size 3, followed by a shared 64-dimensional hidden representation; dropout with rate 0.2 is applied throughout the network, includ-ing at the prediction head used for the stochastic passes described below. The network is trained with AdamW, batch size 32, learning rate 10 −3,weight decay 10 −5, gradient clipping at 1.0, and early stopping on validation negative log-likelihood −0.5 0.0 0.5 1.0 1.5 2.0 2.5            
+
+> Sharpe
+> Equal weight Risk parity Hierarchical RP Mean-variance Black-Litterman Bayesian BL
+> H=40d · 50 bp costs · 2025 out-of-sample · point = mean over backends x distributions; bar = min-max
+> Sharpe by allocation model and selection arm
+> Russell 2000 0.56
+> Pure Alpha SS∖SIPure Beta SI∖SSBeta SI∩SS
+
+Figure 9: Allocator-level Sharpe comparison for the filtered selection regimes at 50 bps transaction cost and a 40-day holding period. Points are means over sentiment backends and target distributions; horizontal bars show the min–max range across those configurations. Pure beta is the strongest filtered selection regime in this setting. 
+
+with patience 8 over a maximum of 40 epochs. The covariance head uses a rank-2 low-rank-plus-diagonal parameterization, with a Cholesky jitter of 10 −4 added before decomposition for numerical stability. At inference, dropout remains active for 50 stochastic forward passes, producing the epis-temic covariance term in Equation 5. All reported results use a fixed random seed of 7 for weight initialization and dropout sampling. 
+
+E.2 Distributional Objective 
+
+Training likelihoods are fit only to the aleatoric distribution per draw (Section 3.3); MC-dropout is used only at inference. Under the Gaussian setting, 
+
+y(H)
+
+t | F t, ω ∼ N (ˆ μt,n , ˆΣAt,n ),
+
+with negative log-likelihood, for a batch of Bs sam-ples and eb = yb − ˆμb,0% 10% 20% 30% 40% 50%                   
+
+> Annualized volatility
+> 0% 10% 20% 30% 40% 50%
+> Annualized return
+> SR 0.25 SR 0.5 SR 0.75 SR 1
+> H=60d · 100 bp costs · 2025 out-of-sample · colour = arm, marker = allocation model, star = naive
+> Risk and return by selection arm
+> Buy & hold EW EW rebalanced Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SSPure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+> Equal weight Risk parity Hierarchical RP Mean-variance Black-Litterman Bayesian BL
+
+Figure 10: Risk-return plane for the filtered regimes in the 100 bps, 60-day evaluation slice. Each point is a selection-regime and allocator pair averaged over senti-ment backends and target distributions; color identifies the selection regime and marker shape identifies the allocator. The figure shows the long-horizon setting where pure alpha offers the strongest risk-adjusted pro-file among the filtered regimes. 
+
+LG = 1
+
+BsBsX
+
+b=1 
+
+12
+
+h
+
+e⊤
+
+b ( ˆΣAb )−1eb (16) 
+
++ log | ˆΣAb | + N log(2 π)
+
+i
+
+.
+
+This is computed via the aleatoric Cholesky fac-tor for numerical stability. A Student-t alternative accommodates heavier tails, 
+
+y(H)
+
+t | F t, ω ∼ tν (ˆ μt,n , S t,n ),
+
+where 
+
+St,n = ν − 2
+
+ν ˆΣAt,n .
+
+We fix the degrees of freedom at ν = 5 across all Student-t configurations, chosen to give meaning-fully heavier tails than the Gaussian case without pushing into a regime so fat-tailed that the covari-ance itself becomes poorly identified. The model is 2025-03 2025-05 2025-07 2025-09 2025-11 2026-01 -40% -20% 0% 20% 40% 60%          
+
+> Cumulative return, net of costs
+> H=10d · 100 bp costs · 2025 out-of-sample · best model per arm; blended over backends x distributions
+> Cumulative return by selection arm
+> Buy & hold EW EW rebalanced Russell 2000
+> Pure Alpha SS∖SI
+> Pure Beta SI∖SS
+> Beta SI∩SS
+
+Figure 11: Cumulative net-return paths for the filtered selection regimes at 100 bps transaction cost and a 10-day holding period, compared with Buy-and-Hold, an equal-weight (EW) portfolio, and the Russell bench-mark index. The shorter-horizon results show pure al-pha separating from pure beta and beta, consistent with firm-specific information diffusion over several trading days. 
+
+trained by minimizing the negative log-likelihood 
+
+Lt = − 1
+
+BsBsX
+
+b=1 
+
+h
+
+log Γ 
+
+ ν + N
+
+2
+
+
+
+− log Γ 
+
+ ν
+
+2
+
+
+
+(17) 
+
+− 12 log |Sb| − N
+
+2 log( νπ )
+
+− ν + N
+
+2 log 
+
+
+
+1 + qb
+
+ν
+
+ i 
+
+.
+
+Here, 
+
+qb = ( yb − ˆμb)⊤S−1
+
+b (yb − ˆμb), (18) is the squared Mahalanobis distance under the Student-t scale matrix. The training objective is the selected distribu-tional negative log-likelihood: 
+
+L = Ldist , (19) where Ldist is LG or Lt, depending on the con-figured predictive distribution. 
+
+E.3 Return-Scale Conversion 
+
+Training operates on log returns; portfolio construc-tion requires arithmetic-return moments: 
+
+μi,t = exp 
+
+
+
+ˆμi,t + 12 ˆΣii,t 
+
+
+
+− 1. (20) 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00         
+
+> Sharpe
+> Equal weight Risk parity Hierarchical RP Mean-variance Black-Litterman Bayesian BL
+> 1.87 1.66 1.71 0.70 1.76 1.47
+> 10% 20% 30% 40% 50% 60%
+> Annualized return
+> 54.7% 57.0% 49.9% 35.9% 52.4% 45.3%
+> Allocation models under Pure Alpha SS∖SI
+> H=60d · 100 bp costs · 2025 out-of-sample · point = mean over backends x distributions; bar = min-max
+
+Figure 12: Portfolio-strategy comparison for pure alpha at 100 bps and a 60-day holding period. This is the strongest pure-alpha horizon in the conservative sweep; equal weight is the best allocator after averaging over sentiment backends and target distributions. 0.0 0.5 1.0 1.5 2.0         
+
+> Sharpe
+> Equal weight Risk parity Hierarchical RP Mean-variance Black-Litterman Bayesian BL
+> 1.67 2.05 1.94 1.16 1.68 1.93
+> 0% 20% 40% 60% 80% 100%
+> Annualized return
+> 51.0% 74.7% 69.3% 46.3% 51.4% 63.9%
+> Allocation models under Pure Beta SI∖SS
+> H=40d · 100 bp costs · 2025 out-of-sample · point = mean over backends x distributions; bar = min-max
+
+Figure 13: Portfolio-strategy comparison for pure beta at 100 bps and a 40-day holding period. Risk parity is strongest in this cell, supporting the interpretation that the pure-beta leg acts as a risk-filtered macro-exposure strategy rather than only an expected-return signal. 
+
+Σij,t = exp 
+
+
+
+ˆμi,t + ˆ μj,t + 12 ˆΣii,t + 12 ˆΣjj,t 
+
+
+
+(21) 
+
+×
+
+
+
+exp( ˆΣij,t ) − 1
+
+
+
+.
+
+After return-scale conversion, each covariance matrix is symmetrized and positive-definite regular-ized by diagonal loading: if its smallest eigenvalue is below ϵ = 10 −4, (ϵ − λmin )I is added so that the minimum eigenvalue is floored at ϵ.
+
+F Backtesting Procedure 
+
+For each holding period H, the trained model emits out-of-sample mean and covariance forecasts on the 2025 decision dates. These log-return moments −2.5 −2.0 −1.5 −1.0 −0.5 0.0 0.5 1.0         
+
+> Sharpe
+> Equal weight Risk parity Hierarchical RP Mean-variance Black-Litterman Bayesian BL
+> -0.36 -0.54 -0.68 -0.33 -0.15 -0.86
+> -60% -40% -20% 0% 20% 40%
+> Annualized return
+> -14.8% -21.2% -25.9% 0.2% -6.8% -21.9%
+> Allocation models under Beta SI∩SS
+> H=20d · 100 bp costs · 2025 out-of-sample · point = mean over backends x distributions; bar = min-max
+
+Figure 14: Portfolio-strategy comparison for the beta intersection at 100 bps and a 20-day holding period. This is the beta leg’s strongest high-cost medium/long-horizon cell, but the narrow intersection mask still leaves it behind the separated pure-alpha and pure-beta legs. 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00         
+
+> Sharpe
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+> 1.50 1.61 1.54 1.48
+> 10% 20% 30% 40% 50% 60%
+> Annualized return
+> 48.5% 49.9% 49.6% 48.8%
+> Sentiment backends under Pure Alpha SS∖SI
+> H=60d · 100 bp costs · 2025 out-of-sample · mean over allocation models x distributions; bar = min-max; rule = grand mean
+
+Figure 15: Sentiment-backend sensitivity for pure alpha at 100 bps and a 60-day holding period. The pure-alpha trigger isolates self-triggered abnormal stock moves with no simultaneous macro-indicator trigger, so differ-ences across backends reflect how sentiment features interact with the strongest long-horizon firm-specific event set. 
+
+are converted to arithmetic-return moments using the equations above, then regularized to ensure positive definiteness before allocation. Rebalance dates are every H trading days. A portfolio chosen at decision day t earns the realized daily returns from t + 1 through the next rebalance date, with weights allowed to drift between rebalances as asset prices move. All six allocation methods consume the same forecast pair (μt, Σt) on a given rebalance date. In the pure-alpha, pure-beta, and beta regimes, forecasts are produced for the full selected cross-section, and the allocation is then masked to names with an active BUY signal under the selected trig-ger leg. If no name is selected on a rebalance date, the benchmark holds cash until the next rebalance rather than falling back to the unfiltered portfolio. 0.0 0.5 1.0 1.5 2.0         
+
+> Sharpe
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+> 1.76 1.76 1.67 1.77
+> 0% 20% 40% 60% 80% 100%
+> Annualized return
+> 60.8% 60.1% 56.8% 60.0%
+> Sentiment backends under Pure Beta SI∖SS
+> H=40d · 100 bp costs · 2025 out-of-sample · mean over allocation models x distributions; bar = min-max; rule = grand mean
+
+Figure 16: Sentiment-backend sensitivity for pure beta at 100 bps and a 40-day holding period. Pure beta is the anticipatory macro leg, SI \ SS ; the plot shows whether language-derived news features add value once the eli-gible stocks are selected by macro-indicator exposure rather than by their own abnormal move. −2.5 −2.0 −1.5 −1.0 −0.5 0.0 0.5 1.0         
+
+> Sharpe
+> GPT-4o-mini FinBERT Mistral-7B Llama-2-13B
+> -0.57 -0.44 -0.53 -0.40
+> -60% -40% -20% 0% 20% 40%
+> Annualized return
+> -18.8% -12.2% -17.2% -12.1%
+> Sentiment backends under Beta SI∩SS
+> H=20d · 100 bp costs · 2025 out-of-sample · mean over allocation models x distributions; bar = min-max; rule = grand mean
+
+Figure 17: Sentiment-backend sensitivity for the beta intersection leg at 100 bps and a 20-day holding period. This is the beta leg’s strongest high-cost medium/long-horizon setting; requiring both stock-side and indicator-side triggers to agree still produces a narrower opportu-nity set than pure alpha or pure beta. 
+
+Transaction costs are applied at the end of each holding segment. The one-way cost rate is the explicit transaction-cost setting plus the fixed 5 bps slippage component, divided by 10,000. Let R be the gross holding-period return and let turnover be the L1 change in target weights at the rebalance. The effective one-way rate is x = ( cost rate ) ×
+
+turnover /2, and the round-trip net return is 
+
+R′ = R(1 − x) − 2x
+
+1 + x (22) The daily equity curve is reported net of these segment-level cost charges. Portfolio metrics are computed from the resulting daily net value path; cumulative gross return is retained separately by rerunning the same strategy with transaction costs and slippage set to zero. 
+
+G Baseline Portfolio Formulations 
+
+Mean–variance optimization. The primary risk-aware allocator solves a constrained mean–variance problem using the model’s predicted arithmetic-return mean μt and covariance Σt, with risk aver-sion δ = 2 .5 shared across all allocators that use it, 
+
+wM V O t = arg max 
+
+w
+
+
+
+μ⊤
+
+t w − δ
+
+2 w⊤Σtw (23) 
+
+− κturn ∥w − wt− ∥1
+
+
+
+,
+
+subject to full investment, non-negativity, and a per-asset position cap of wi ≤ 0.40 . The ℓ1 term penalizes turnover from the previous tradable port-folio wt− . In the reported experiments κturn = 0 .0,so transaction costs are applied by the backtest cost model rather than by an optimizer-internal turnover penalty. 
+
+Black–Litterman. With P = I, view vector 
+
+Qt = μt, equal-weight market portfolio weq , and equilibrium prior πt = δΣtweq , the posterior mean and covariance follow the standard BL update, 
+
+μBL t = (τ Σt)−1 + P ⊤Ω−1
+
+t P −1 (24) 
+
+× (τ Σt)−1πt + P ⊤Ω−1
+
+t Qt
+
+,
+
+ΣBL t = Σ t + (τ Σt)−1 + P ⊤Ω−1
+
+t P −1 (25) with Ωt = diag(Σ 11 ,t , . . . , ΣN N,t ) and τ = 0 .05 
+
+controlling prior uncertainty throughout. The re-sulting portfolio is 
+
+˜wBL t = ( δΣBL t )−1μBL t , wBL t = ˜wBL t
+
+1⊤ ˜wBL t
+
+(26) falling back to equal weight if this normalization is unsafe. 
+
+Bayesian Black–Litterman. Treating the expected-return vector θt as latent, with prior θt ∼ N (πt, τ Σt) and view model 
+
+Qt | θt ∼ N (P θ t, Ωt), the posterior preci-sion, covariance, and mean are 
+
+Λpost t = ( τ Σt)−1 + P ⊤Ω−1
+
+t P, (27) 
+
+V post t = (Λ post t )−1, (28) 
+
+mpost t = V post t
+
+(τ Σt)−1πt + P ⊤Ω−1
+
+t Qt
+
+ (29) with posterior predictive covariance Σpred,post t =Σt + V post t (numerically identical to ΣBL t above). These moments are then substituted for (μt, Σt)
+
+in the constrained optimization of Equation 23, subject to the same investment and position-cap constraints. Hierarchical Risk Parity. Covariance is first converted to a correlation-based distance, 
+
+ρij,t = Σij,t 
+
+pΣii,t Σjj,t 
+
+, dij,t =
+
+q 1−ρij,t  
+
+> 2
+
+(30) and hierarchical clustering orders assets so that similar assets are adjacent. For a cluster C, inverse-variance weights and cluster variance are 
+
+ωCi = 1/Σii,t 
+
+P 
+
+> j∈C
+
+1/Σjj,t 
+
+,σ2 
+
+> C
+
+= ( ωC )⊤ΣC,t ωC
+
+(31) For sibling clusters L and R, capital assigned to the left cluster is 
+
+αL = σ2
+
+> R
+
+σ2 
+
+> L
+
++ σ2
+
+> R
+
+, αR = 1 − αL (32) applied recursively down the cluster hierarchy.
