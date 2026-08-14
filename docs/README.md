@@ -6,56 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-13
-- 运行时间：2026-08-13 21:09:53 UTC
+- 最新运行日期：2026-08-14
+- 运行时间：2026-08-14 21:05:14 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：7
+- 本次总论文数：11
+- 精读区：6
 - 速读区：5
 
 ### 今日简报（AI）
-今日精读7篇、速读5篇，共12篇金融AI与财报预测文献；其中两份9分精读聚焦完整财务报表长期预测与金融智能体前沿基准。最值得关注：报表预测模型“Forma”与金融智能体基准“FrontierFinance”是当前高分热点。建议优先阅读这两个方向，了解金融AI能力边界与长程预测方法。
-- 详情：[/202608/13/README](/202608/13/README)
+今日精读6篇、速读5篇，聚焦金融时序与AI预测。  
+最值得看LSTM横截面异质性建模与AI多场景利率预测，两篇均获9.0/10。  
+下一步可关注流匹配订单簿生成FlowLOB与弱因子下的混合频率学习。
+- 详情：[/202608/14/README](/202608/14/README)
 
 ### 精读区论文标签
-1. [Long-Horizon Forecasting of Complete Financial Statements with Forma](/202608/13/2608.11327v1-long-horizon-forecasting-of-complete-financial-statements-with-forma)  
+1. [Cross-Sectional Heterogeneity in LSTM Networks for Financial Time Series](/202608/14/2608.05755v2-cross-sectional-heterogeneity-in-lstm-networks-for-financial-time-series)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：基于Transformer的财务报表预测
-2. [FrontierFinance: A Challenging Benchmark for Measuring Frontier Intelligence of Finance Agents](/202608/13/2608.11683v1-frontierfinance-a-challenging-benchmark-for-measuring-frontier-intelligence-of-finance-agents)  
+   evidence：与v1相同的金融时间序列LSTM扩展方法
+2. [AI-Driven Multiscenario Interest Rate Forecasting: A Proof of Concept for Banking Asset Management](/202608/14/2608.12424v1-ai-driven-multiscenario-interest-rate-forecasting-a-proof-of-concept-for-banking-asset-management)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：面向金融分析智能体的基准，覆盖投资者工作流查询与评分
-3. [LabelFusion-TS: Fusing Large Language Models, Transformer Encoders, and Financial Time Series for Monetary-Policy Stance Classification](/202608/13/2608.11753v1-labelfusion-ts-fusing-large-language-models-transformer-encoders-and-financial-time-series-for-monetary-policy-stance-classification)  
+   evidence：将AI与计量经济模型结合进行利率预测，支持银行资产负债管理
+3. [AQuA: Recursively Self-Improving Quantitative Trading Research Agents](/202608/14/2608.12841v1-aqua-recursively-self-improving-quantitative-trading-research-agents)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：融合金融时间序列与大语言模型/Transformer编码器进行美联储立场分类
-4. [TradingMoE: Routing the Right Experts in Evolving Markets](/202608/13/2608.11785v1-tradingmoe-routing-the-right-experts-in-evolving-markets)  
+   evidence：深度学习方法驱动的量化交易研究智能体
+4. [TIEM: Temporal Integration of Hypergraph Evidence and Skill Memory for Event-Driven Financial Forecasting](/202608/14/2608.13024v1-tiem-temporal-integration-of-hypergraph-evidence-and-skill-memory-for-event-driven-financial-forecasting)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：大模型金融交易中的动态专家路由机制
-5. [GRPO for Financial Advice Generation: Outperforming Commercial LLMs under CATE Evaluation](/202608/13/2608.11787v1-grpo-for-financial-advice-generation-outperforming-commercial-llms-under-cate-evaluation)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：使用GRPO微调大语言模型生成金融建议
-6. [Calibration Bets on the Past: Post-Training Quantization for Financial Time-Series Forecasting](/202608/13/2608.12259v1-calibration-bets-on-the-past-post-training-quantization-for-financial-time-series-forecasting)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：面向标普500金融预测的神经网络训练后量化研究
-7. [Large Language Model-Driven Small-Capitalization Trading: Integrating Financial News Sentiment, Macroeconomic Indicators, and Technical Signals](/202608/13/2608.12283v1-large-language-model-driven-small-capitalization-trading-integrating-financial-news-sentiment-macroeconomic-indicators-and-technical-signals)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：利用大语言模型从金融新闻中提取情感并用于组合构建
+   evidence：基于大模型智能体的事件驱动金融预测，利用超图证据检索与技能记忆，属于NLP金融分析
+5. [Diffusion Models in Finance: A Survey](/202608/14/2608.12583v1-diffusion-models-in-finance-a-survey)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：金融数据深度生成扩散模型综述
+6. [LOB-ID: Evaluating Synthetic Market Data by Inception Distances](/202608/14/2608.13082v1-lob-id-evaluating-synthetic-market-data-by-inception-distances)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：面向合成限价订单簿市场数据的嵌入评估框架
 
 ### 速读区论文标签
-1. [Observational Policy Ranking for SMB Financial Guidance from Multi-Action Accounting Logs](/202608/13/2608.10050v1-observational-policy-ranking-for-smb-financial-guidance-from-multi-action-accounting-logs)  
+1. [FlowLOB: Efficient and Controllable Limit Order Book Generation with Flow Matching](/202608/14/2608.13096v1-flowlob-efficient-and-controllable-limit-order-book-generation-with-flow-matching)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：机器学习和LLM用于中小企业财务指导
-2. [Do People Follow AI Advice? Evidence from a Pension Portfolio Choice Experiment](/202608/13/2608.11371v1-do-people-follow-ai-advice-evidence-from-a-pension-portfolio-choice-experiment)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：通过养老金组合选择实验研究AI建议对投资决策的影响
-3. [From Numbers to Judgment: Specialist LLM Agents and Reinforcement Learning for European Listed Real Estate](/202608/13/2608.11381v1-from-numbers-to-judgment-specialist-llm-agents-and-reinforcement-learning-for-european-listed-real-estate)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：专家LLM智能体与强化学习用于欧洲上市房地产金融分析
-4. [Regime-Gated Residual Mixture-of-Experts for Cross-Sectional Volatility Forecasting](/202608/13/2608.12251v1-regime-gated-residual-mixture-of-experts-for-cross-sectional-volatility-forecasting)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向美国股票截面波动率预测的机制门控混合专家神经网络
-5. [FM-LLM: A frequency-enhanced mixture-of-experts framework for adapting LLMs to time series forecasting](/202608/13/2608.11623v1-fm-llm-a-frequency-enhanced-mixture-of-experts-framework-for-adapting-llms-to-time-series-forecasting)  
+   evidence：基于流匹配的高效限价订单簿生成模型，是深度学习在股票市场微观结构中的应用
+2. [FM-LLM: A frequency-enhanced mixture-of-experts framework for adapting LLMs to time series forecasting](/202608/14/2608.11623v1-fm-llm-a-frequency-enhanced-mixture-of-experts-framework-for-adapting-llms-to-time-series-forecasting)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：利用频率增强混合专家将LLM适配到时间序列预测，可迁移到金融市场预测
+3. [Supervised Mixed-Frequency Learning for Macro-Financial Forecasting When Factors are Weak](/202608/14/2608.12589v1-supervised-mixed-frequency-learning-for-macro-financial-forecasting-when-factors-are-weak)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：用于混合频率宏观金融预测的监督机器学习
+4. [What Makes a Peer? Valuation-Anchored Similarity in Private Markets](/202608/14/2608.12594v1-what-makes-a-peer-valuation-anchored-similarity-in-private-markets)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：私募市场估值中的机器学习相似性
+5. [Governing Agentic AI in FinTech](/202608/14/2608.11344v2-governing-agentic-ai-in-fintech)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：面向时间序列预测的频率增强LLM适配，适用于金融序列
+   evidence：研究金融科技中智能体AI的治理与可验证性，属于AI在金融领域的议题。
 
 
 <div class="dpr-home-promo-card">

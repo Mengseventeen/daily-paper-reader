@@ -1,0 +1,274 @@
+Title: LOB-ID: Evaluating Synthetic Market Data by Inception Distances
+
+URL Source: https://arxiv.org/pdf/2608.13082v1
+
+Published Time: Fri, 14 Aug 2026 01:02:32 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# LOB-ID: Evaluating Synthetic Market Data by Inception Distances 
+
+# Andreea Bacalum 
+
+Simudyne London, United Kingdom 
+
+# Zhuohan Wang ∗
+
+Simudyne London, United Kingdom 
+
+# Ollie Olby 
+
+Simudyne London, United Kingdom 
+
+# Martin Garaj 
+
+Simudyne London, United Kingdom 
+
+# Namid Stillman 
+
+Simudyne London, United Kingdom namid@simudyne.com 
+
+## Abstract 
+
+Generative models of limit orderbook (LOB) data have advanced rapidly, but their evaluation often focuses on stylised facts and se-lected market statistics. These measures provide useful diagnostics but may not capture the joint temporal and cross-level structure of order-book trajectories. We introduce LOB-ID, an embedding-based framework that adapts the Fréchet Inception Distance (FID) and Monge Inception Distance (MIND) to LOB data. To obtain domain-specific embeddings, we train the DeepLOB architecture on four months of Level-2 order-book data for five equities. We show that LOB-ID is stable across time, instruments, and embedding check-points, and rises monotonically under controlled distortions. We then construct a moment-matching attack against FID and a deep-book perturbation that evades statistic-based evaluation. MIND remains substantially more sensitive to both distortions. Finally, we score five generative LOB models, spanning stochastic baselines and deep learning approaches, and find that LOB-ID ranks them in line with the joint temporal and cross-level structure each captures by construction. 
+
+## Keywords 
+
+synthetic market data, limit orderbooks, generative model evalua-tion, embedding-based evaluation, inception networks 
+
+## 1 Introduction 
+
+Synthetic market data is becoming an increasingly useful tool in quantitative finance [1]. It supports applications such as backtesting, execution analysis, risk measurement, and market-microstructure research, and it reduces reliance on historical datasets that can be costly. It also addresses a more basic limitation of historical data: real markets provide only one realised path of what occurs, whereas generative models produce many alternative scenarios, allowing market behaviour to be studied beyond what has already happened. A limit orderbook (LOB) records outstanding bids and asks at each price level, with a matching engine pairing incoming orders against resting ones by price-time priority [9]. The book evolves through a stream of messages, so a synthetic LOB model must generate this order flow rather than prices alone. Recent generative models have substantially improved the re-alism of synthetic order flow, but progress in generation has out-paced progress in evaluation [6, 14, 15]. Historical data provides a ground-truth reference, yet evaluation cannot be posed as matching a specific sequence. Models are not expected to perfectly reproduce 
+
+> ∗Joint affiliation with King’s College London, United Kingdom.
+
+a single realised market path, but to produce plausible alternatives from the same underlying distribution. Evaluation is therefore a question of distributional similarity rather than point-wise accu-racy. Hence, most existing validation methods assess generative models of LOB data by checking whether the generated data re-produce selected properties of real markets. Such comparisons are informative but partial, since a sequence can match a wide range of individual statistics and still fail to behave like a coherent market trajectory. What these comparisons tend to miss is the underlying joint structure of the data. A realistic LOB sequence should preserve the dependence between successive book states, between liquidity at the touch and in the deeper levels, between the bid and ask sides of the book, and between all of these and the prevailing market regime. Such dependencies are hard to capture with a fixed set of hand-designed statistics, as they are spread across time and price levels, and evaluating them benefits from a representation of the order-book trajectory as a whole. We address this problem by introducing inception distances for LOB (LOB-ID), an embedding-based framework for evaluating synthetic LOB data. To achieve this, we train a DeepLOB network on four months of Level-2 order-book data for five equities listed on the Hong Kong Stock Exchange (HKEX) [20]. After removing the LSTM and classification head, we use the network’s Inception representation as a domain-specific feature extractor. We then apply the Fréchet Inception Distance (FID) and the Monge Inception Distance (MIND) to the resulting embeddings [3, 10]. As the metrics are based on representations constructed from Level-2 order-book windows, they are sensitive to the joint structure that statistic-based comparisons can overlook. This work makes four contributions. First, we introduce LOB-ID, adapting FID and MIND metrics from image-generation evalua-tion to representations learned from LOB data. Second, we show that MIND is consistent across nearby trading days, distinguishes between instruments, responds monotonically to controlled pertur-bations, and stabilises at later stages of DeepLOB training. Third, we analyse the adversarial weaknesses of FID and selected statistic-based LOB evaluations and show that MIND remains sensitive to the loss of joint structure they miss. Fourth, we compare Zero In-telligence, Compound Hawkes, LOBGAN, LOBS5 and DiffLOB on a common dataset using LOB-ID, stylised facts, and existing bench-mark metrics. We believe our work will support a more rigorous evaluation of synthetic market data by assessing the joint structure of the generated order-book trajectories that standard statistics may miss. 
+
+> 1arXiv:2608.13082v1 [q-fin.CP] 13 Aug 2026 Bacalum et al.
+
+## 2 Related Work 
+
+Synthetic LOB models. Early methods for generating synthetic LOB data were typically based on stochastic models. For example, zero-intelligence models generate orders according to exogenously specified stochastic rules, without explicitly modeling strategic op-timisation or learning by market participants [8]. Alternatively, other models use Hawkes processes to allow past events to affect the rate of future events, which have been shown to capture clus-tered and self-exciting order flow [2, 11]. Although interpretable, these models require the event structure and arrival dynamics to be specified and calibrated in advance. The development of deep learning shifted the focus towards learning representations directly from LOB data. For example, LOB-GAN generates synthetic order flow using a conditional generative adversarial network [5, 6]. LOBS5 instead treats order-flow gen-eration as an end-to-end autoregressive sequence-modelling task [14]. LOBS5 tokenises message-level LOB data and generates the tokens sequentially using simplified structured state-space layers, which can process long histories efficiently. More recently, DiffLOB uses a regime-conditioned diffusion model to generate future LOB trajectories under specified market conditions [19]. It conditions on historical LOB states and future regimes defined by trend, volatility, liquidity, and order-flow imbalance. This enables controllable and counterfactual generation, allowing the model to simulate how the orderbook may evolve under hypothetical future conditions. 
+
+Evaluation of synthetic LOB data. Generative LOB models have often been evaluated using so-called ‘stylised facts’ such as heavy-tailed returns, volatility clustering, and persistent order-flow de-pendence [7, 13]. These tests show whether a simulator reproduces well-known properties of real markets. However, the choice of sta-tistics and the way they are measured often differ across studies, which makes direct comparison difficult. More recently, LOB-Bench introduced a standardised framework for evaluating synthetic LOB data [15]. It compares real and gener-ated data through distributions of selected market-microstructure statistics, using both the 𝐿 1 norm and Wasserstein-1 distance. The framework also evaluates price-impact responses across multiple lags and includes a trained discriminator that measures how well real and generated trajectories can be separated. Together, these components provide a broad assessment of the realism and quality of synthetic LOB data. In this work, we use the distributional and price-impact components of LOB-Bench as an evaluation frame-work and do not directly evaluate its discriminator. 
+
+Embedding-based generative metrics. Embedding-based metrics offer a complementary approach to evaluation. They pass real and generated samples through a fixed, pre-trained network and com-pare the resulting feature distributions. Similarity is therefore mea-sured in a learned representation space rather than directly from raw inputs or hand-selected summary statistics. Past work has con-sidered embedding networks within the context of calibration for generative models of market data but not the evaluation of the resulting synthetic data [17]. The Fréchet Inception Distance (FID) was introduced for evalu-ating generated images by comparing Gaussian approximations of the Inception-v3 feature distributions of real and generated samples [10]. However, FID captures only the first two moments of these distributions, and its empirical estimate can be biased or unstable when the sample size is small [4]. The Monge Inception Distance (MIND) was introduced as an alternative to FID for evaluating generative models [3]. Rather than approximating the embedding distributions as Gaussian, MIND computes a scaled average of the squared 2-Wasserstein distances between their one-dimensional projections along random unit di-rections. This allows it to capture differences beyond the first two moments without estimating high-dimensional covariance matri-ces. 
+
+## 3 Methods 
+
+In this section, we outline how we adapt the Fréchet Inception Distance (FID) and the Monge Inception Distance (MIND) to the evaluation of LOB data. Both metrics compare distributions of fea-ture embeddings produced by the pre-trained network, convention-ally the Inception-v3 model trained on ImageNet. Since features learned from natural images are inappropriate for financial data, we replace this backbone with a domain-specific feature extractor trained directly on LOB data. We use the DeepLOB model, whose architecture and training are described in Section 3.2.1. The trained network yields an embedding function 𝜓 𝑤 that maps a window of 
+
+𝑇 = 100 successive event-indexed Level-2 book states, 𝑥 ∈ R𝑇 ×40 , to a fixed 96-dimensional feature vector. This representation plays the same role as the Inception-v3 features in the image setting, while capturing relationships across price levels and over time that are specific to LOB data. Both real and generated samples are passed through 𝜓 𝑤 to obtain two sets of embeddings, whose distributions are then compared. FID compares Gaussian approximations of the embedding distri-butions, whereas MIND compares their random one-dimensional projections. Lower values indicate greater similarity in the learned LOB representation space. All experiments use four months of message-level (L3) data col-lected between September and December 2025 for five liquid equi-ties listed on the Hong Kong Stock Exchange (HKEX): 0700.HK (Ten-cent), 1024.HK (Kuaishou), 9999.HK (NetEase), 3690.HK (Meituan), and 9888.HK (Baidu). From the raw event streams, we construct the order messages and corresponding Level-2 books containing the ten best price levels on each side. We split the data chronologically, using 1 September to 12 December for training, 13 to 20 December for validation, and 21 to 31 December for testing, so that all evalua-tion is performed on market days that follow the training period. We choose this period so that evaluation spans a range of liquidity conditions: the training window covers active trading, while the validation and test windows fall in the year-end holiday period, when participation is materially reduced. This provides a natural distribution shift under which to assess how the LOB-ID metric changes in thin markets. The same split and book-reconstruction pipeline are used throughout the experiments, for both the em-bedding network and the generative models. Although the source dataset contains message-level data and some generators operate at the message level, all inputs to the LOB-ID feature extractor are Level-2 book-state windows. Accordingly, when discussing joint structure in the context of LOB-ID, we refer specifically to temporal, 
+
+> 2LOB-ID: Evaluating Synthetic Market Data by Inception Distances
+
+cross-level, and bid–ask dependencies within Level-2 trajectories. LOB-ID does not directly evaluate the full message-level order-flow process. 
+
+## 3.1 Synthetic Market Data 
+
+We train and evaluate five synthetic LOB models using the common dataset and temporal split described above: Zero-intelligence (ZI), Compound Hawkes process (CH), LOBGAN, LOBS5 and DiffLOB. Our implementations of the ZI and CH baselines are adapted from the calibration procedures used in Kawawa-Beaudan et al. [12]. The ZI model independently samples order side and action type from empirical categorical distributions, inter-arrival times and volumes from fitted exponential distributions, and price depth from a Gaussian mixture model. It therefore preserves calibrated marginals while removing temporal and conditional dependence. The CH model introduces temporal dependence through an eight-dimensional Hawkes process, with one dimension for each action– side combination and sum-of-exponential kernels at four fixed timescales. For each test chunk, it conditions on the preceding 1024 real events and generates the next 1024 events using Ogata’s thinning algorithm [16]. Volumes and price depths are sampled from fitted exponential and Gaussian-mixture mark distributions, respectively. We also consider three deep generative models for LOB data. LOBGAN follows the conditional architecture of Coletta et al. [6]. Its generator combines an LSTM representation of the previous 30 nine-dimensional market states with a 64-dimensional Gauss-ian noise vector to generate a seven-feature order representation. During closed-loop training, generated orders update the market-state features fed back to the generator for up to five unrolled steps. LOBS5 is implemented as a masked-token generator over message-level LOB data [14]. Its message and book branches pro-cess 22-token order messages and a 41-dimensional signed volume image using structured state-space layers. Generation proceeds token by token from a real message context, with each completed message and updated book state fed back into the model. DiffLOB is a regime-conditioned diffusion model that jointly generates future Level-2 price and volume trajectories rather than individual order messages [19]. During training, the conditioning information is randomly dropped with probability 0 .5, allowing the model to learn both conditional and unconditional score estimates. We evaluate DiffLOB in two settings. First, we condition it on the historical LOB and the realised future trend, volatility, liquidity, and order-flow im-balance to test whether it can reproduce a specified market regime. Secondly, to observe how the model performs without conditioning information, we set all conditioning inputs to null, so the model generates unconditionally from the learned distribution. A central challenge for LOB models is determining whether the resulting synthetic data are realistic. We evaluate each generator using three complementary approaches. First, we test the 11 stylised facts of financial time series considered by Cont [7]. Second, we compute the distributional metrics introduced by LOB-Bench [15], which compare real and generated data using distances over a standard set of market-microstructure statistics, including spread, imbalance, timing, and volume measures. The full list of statistics is provided by Nagy et al. [15]. Since all generators are evaluated on Level-2 book states, we use 12 of the 21 LOB-Bench measures that do not require message-level data. Finally, we introduce LOB-ID, our own method of evaluating synthetic order-book data, an embedding-based evaluation framework using Inception Distances. We provide a comparison of the relative ranking of models with respect to these different evaluation frameworks in Section 4.5. 
+
+## 3.2 Inception Distances 
+
+3.2.1 Inception Network. An Inception network is a deep convo-lutional neural network built around the Inception module, intro-duced in GoogLeNet by Szegedy et al. [18]. The module applies convolutions of multiple sizes in parallel and concatenates their outputs, allowing features to be captured at multiple scales. DeepLOB combines convolutional layers, an Inception module, and an LSTM to predict short-term mid-price movements from raw LOB data [20]. We follow the architecture, preprocessing, and train-ing procedure of Zhang et al. [20], using the dataset and temporal split described above. Each input contains the most recent 𝑇 = 100 order-book events, 𝑥 ∈ R𝑇 ×40 , with price and size information from the ten best bid and ask levels, producing a 96-dimensional feature vector. An LSTM and linear classification head use these features to predict whether the mid-price will move down, remain stationary, or move up over the next 100 messages. On the held-out test set, the trained DeepLOB classifier achieves an accuracy of 75 .44% and a macro-𝐹 1 score of 75 .29%, indicating balanced predictive performance across the three mid-price movement classes. For LOB-ID, we remove the recurrent and classification layers and use the time-averaged output of the Inception module as the embedding, namely 
+
+𝜓 𝑤 (𝑥 ) = 1
+
+𝑇 
+
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =1
+
+Inception  Conv (𝑥 ) 
+
+> :,𝑡
+
+∈ R96 . (1) 
+
+3.2.2 Fréchet Inception Distance (FID). The Fréchet Inception Dis-tance (FID) compares real and generated embeddings in the feature space of a fixed network [10]. Let 𝑝 data and 𝑝 𝜃 denote their respec-tive distributions. FID fits Gaussians with empirical means 𝜇, ˜𝜇 and covariance matrices Σ, ˜Σ, and computes FID (𝑝 𝜃 , 𝑝 data ) = ∥𝜇 − ˜𝜇 ∥22 + tr 
+
+
+
+Σ + ˜Σ − 2
+
+
+
+Σ1/2 ˜ΣΣ 1/2 1/2 
+
+. (2) A lower FID indicates greater similarity between the real and gen-erated embedding distributions. However, the Gaussian approxima-tion means that FID depends only on their means and covariances and therefore cannot detect differences beyond the first two mo-ments. 
+
+3.2.3 Monge Inception Distance (MIND). The Monge Inception Distance (MIND) is an embedding-based measure introduced as an alternative to FID [3]. Rather than fitting Gaussian approxima-tions to the embedding distributions, MIND averages the squared 2-Wasserstein distances between their one-dimensional projections along random unit directions. For embeddings in R96 and a unit direction 𝑢 drawn uniformly from the sphere S95 , MIND is defined as MIND (𝑝 𝜃 , 𝑝 data ) = 𝛼 E𝑢 ∼U ( S95 )
+
+𝑊 22
+
+ 𝑢 ⊤𝑝 𝜃 , 𝑢 ⊤𝑝 data 
+
+ . (3) 
+
+> 3Bacalum et al.
+
+Here, 𝑢 ⊤𝑝 denotes the distribution of 𝑢 ⊤𝑋 for 𝑋 ∼ 𝑝 , and 𝑊 22 is the squared 2-Wasserstein distance. Following the empirical scaling proposed by Berthet et al. [3], we use 𝛼 = 3𝑑 = 288, where 𝑑 = 96 is the embedding dimension. Note that this construction differs from the Wasserstein-1 distance used by LOB-Bench [15], which com-pares univariate distributions of individual scalar market statistics rather than projections of the embedding distribution. All reported MIND values estimate the expectation in Eq. (3) using 256 random projections. For uniformly weighted empirical distributions of equal size, each one-dimensional squared 2-Wasserstein distance can be com-puted exactly by sorting the projected values. MIND therefore avoids estimating and storing high-dimensional covariance matri-ces. At the population level, MIND is zero if and only if the two embedding distributions are equal. Matching only their means and covariances is therefore insufficient to make MIND zero. Berthet et al. [3] show empirically that MIND is more resistant, though not immune, to moment-matching attacks than FID. We confirm this behaviour for LOB embeddings in Section 4.3.1, where MIND remains substantially more sensitive than FID after the embedding moments are approximately matched. We therefore use MIND as the primary score within the LOB-ID framework throughout the remainder of the paper. 
+
+## 4 Results 
+
+In this section, we show that LOB-ID behaves as a reliable evalua-tion metric for synthetic market data: it is consistent across time and instruments, responds monotonically to perturbations, stabilises across embedding checkpoints, and remains sensitive to adversarial attacks that FID and selected LOB-Bench statistics substantially un-derestimate or miss. We then use it to score the generative models of Section 3.1. All experiments use the trained DeepLOB Inception layer as the embedding network. The stability analysis and the moment-matching attack use all five stocks over the six test days, since they require only real data. Experiments involving the gen-erative models, namely the joint-structure attack, the checkpoint analysis, and the model comparison, use three stocks (9999.HK, 1024.HK, 0700.HK), as each generator must be separately trained and calibrated per instrument. 
+
+## 4.1 Stability and Robustness of LOB-ID 
+
+We expect samples from the same stock taken on nearby days to have similar LOB structure. We therefore compare MIND across all stock–day pairs in the test period. Figure 1 shows the pairwise MIND distances. The white entries on the main diagonal are zero because each stock–day is compared with itself. The off-diagonal entries within each 6 × 6 stock block are consistently dark, showing that MIND assigns low distances to different days from the same instrument. In contrast, the cross-stock blocks are substantially lighter, revealing a clear separation between instruments. A small number of dates depart from this pattern and show larger distances from nearby days, particularly around the Christmas period. 
+
+## 4.2 Sensitivity Analysis 
+
+We test whether MIND responds to small, gradual corruptions by applying perturbations of increasing strength 𝜀 to the historical 
+
+Figure 1: Pairwise MIND distances between all stock-days in the test period (five stocks, six dates each). Each 6× 6 diagonal block compares different days of the same stock, while the off-diagonal blocks compare different stocks. Darker colours indicate smaller distances; the white main diagonal marks each stock-day compared with itself, where MIND is zero. 
+
+LOB data. Each input window is 𝑋 ∈ R𝑇 ×40 , where 𝑇 = 100 and the features contain the 𝑧 -scored prices and volumes at the ten best bid and ask levels. We modify the price path directly as well as the temporal structure of the window (through deletions). Let P denote the set of 20 price columns. For each price pertur-bation, we apply the same time-dependent shift 𝛿 𝑡 to every price level, 
+
+e𝑋 𝑡,𝑗 = 𝑋 𝑡,𝑗 + 𝜎 𝑝 𝛿 𝑡 , 𝑗 ∈ P , (4) where 𝜎 𝑝 is the mean standard deviation of the price features. The volume columns are unchanged. We draw 𝑠 ∼ Unif {− 1, +1} inde-pendently for each window so that the perturbations are approxi-mately zero-mean across the dataset. For 𝑡 ∈ { 0, . . . ,𝑇 − 1}, the three price shifts are 
+
+𝛿 trend  
+
+> 𝑡
+
+= 𝜀𝑠 
+
+ 2𝑡 𝑇 − 1 − 1
+
+
+
+, (5) 
+
+𝛿 walk  
+
+> 𝑡
+
+= 𝜀 b𝑊 𝑡 , (6) 
+
+𝛿 jump  
+
+> 𝑡
+
+= 𝜀𝑠 1{𝑡 ≥ 𝜏 }, 𝜏 ∼ Unif [𝑇 /4, 3𝑇 /4). (7) The linear trend creates a total upward or downward movement of 2𝜀𝜎 𝑝 across the window. For the random-walk perturbation, b𝑊 is a Gaussian random walk standardised to zero mean and unit variance within each window. It introduces smooth stochastic movement with scale 𝜀𝜎 𝑝 . The jump perturbation introduces a single step change at a randomly selected point in the middle half of the win-dow. The fourth perturbation, row deletion, removes each row inde-pendently with probability 𝜀 . The surviving rows retain their order and are shifted to the beginning of the window, while the remain-ing tail is filled by repeating the final surviving row. Successive retained rows are therefore separated by 1 /( 1 − 𝜀 ) original events 
+
+> 4LOB-ID: Evaluating Synthetic Market Data by Inception Distances
+
+Figure 2: MIND as a function of perturbation strength 𝜀 for the four perturbation mechanisms: a) linear trend, b) random walk, c) price jump, and d) row deletion. Top: example mid-price paths for a single stock-day (0700.HK, 22 December 2025) at increasing 𝜀 , with the historical unperturbed path in dark green. Bottom: mean MIND (log scale) across stock-days, with shaded bands showing ±1 standard deviation. 
+
+on average. Thus, 𝜀 acts on the event index rather than on feature values, and we evaluate this perturbation over a smaller range. Figure 2 shows the mean MIND score for the four perturbation mechanisms, with shaded bands representing one standard devi-ation across stock-days. For all four perturbations, MIND is zero when 𝜀 = 0 and rises steadily as the distortion becomes stronger, with no reversals. The perturbations are deliberately kept subtle to test whether MIND can detect small deviations from the real data. Accordingly, the MIND score increases only moderately for the trend and jump perturbations. The random-walk perturbation introduces more persistent noise throughout each price level and therefore produces a larger increase in MIND. Row deletion has a similarly strong effect because removing events disrupts the tem-poral structure and spacing of the original order-book sequence. 
+
+## 4.3 Adversarial Attacks 
+
+4.3.1 Moment-Matching Attack on FID. FID compares embedding distributions using only their means and covariance matrices [10]. It therefore cannot distinguish distributions that share these moments but differ in shape. Motivated by Berthet et al. [3], we construct an attack in the LOB input space that maximises the difference from the real embedding distribution while keeping its mean and covariance close to the real values. We collect up to 20 ,000 real embeddings from the five stocks over the test period and, after shuffling with a fixed random seed, divide them equally into a target pool 𝑋 𝐴 and an evaluation pool 
+
+𝑋 𝐵 . The target mean 𝜇 and covariance Σ are estimated from the full pool 𝑋 𝐴 .The attack starts from 𝑛 = 1024 real LOB windows and treats the input tensor 𝑎 ∈ R𝑛 ×𝑇 ×40 as the optimisation variable while keeping the DeepLOB network fixed. Writing 𝐸 = embed (𝑎 ), we maximise the shape loss Lshape (𝑎 ) subject to Lmom (𝑎 ) ≤ 𝜏 . The shape loss averages the squared 2-Wasserstein distances between one-dimensional projections of 𝐸 and a fixed 𝑛 -sample subset of 
+
+𝑋 𝐵 , using 𝐾 = 128 random directions redrawn at each optimisation step. The moment loss is 
+
+Lmom (𝑎 ) = ¯𝐸 − 𝜇 22 + 1
+
+𝑑 ∥Σ𝐸 − Σ∥2 
+
+> 𝐹
+
+, 𝑑 = 96 , (8) where ¯ 𝐸 and Σ𝐸 are the mean and covariance of the attacked embed-dings, and 𝜇 and Σ are the corresponding target moments estimated from 𝑋 𝐴 . The threshold 𝜏 is the moment discrepancy of a genuine real batch of size 𝑛 , so a feasible attack matches the real moments within the sampling variation of a genuine batch. We optimise in alternating distortion and polishing phases. The distortion phase increases the shape loss using Adam with learning rate 5 × 10 −2, while an adaptive penalty keeps the moment loss below 2 𝜏 . The polishing phase minimises only the moment loss, starting with a learning rate of 2 .5×10 −2 and reducing it on plateaus to 10 −4. Polishing stops when the loss falls below 0 .2𝜏 . We run three cycles and retain the feasible result with the largest MIND score. Since empirical FID and MIND depend on sample size, all final comparisons use matched batches of 𝑛 = 1024 embeddings. Let 
+
+𝑋 (𝑛 ) 
+
+> 𝐴
+
+⊂ 𝑋 𝐴 and 𝑋 (𝑛 ) 
+
+> 𝐵
+
+⊂ 𝑋 𝐵 denote the real batches used to compute the real–real noise floor. For each metric 𝑚 , we report 
+
+𝑅 𝑚 =
+
+𝑑 𝑚 
+
+
+
+𝐸, 𝑋 (𝑛 )
+
+> 𝐵
+
+
+
+𝑑 𝑚 
+
+
+
+𝑋 (𝑛 ) 
+
+> 𝐴
+
+, 𝑋 (𝑛 )
+
+> 𝐵
+
+ . (9) Here, 𝐸 , 𝑋 (𝑛 ) 
+
+> 𝐴
+
+, and 𝑋 (𝑛 ) 
+
+> 𝐵
+
+each contain 1024 embeddings. A ratio close to one means that the attacked samples appear as similar to the real data as two genuine real batches, while a larger value indicates that the attack remains detectable. The optimisation converges with a moment loss of 0 .0033, sat-isfying Lmom ≤ 𝜏 . FID increases from a real–real noise floor of 
+
+> 5Bacalum et al.
+
+Figure 3: Effect of inception-network training on LOB-ID. Left: DeepLOB training loss (log scale) over training steps, with five evaluation checkpoints C1–C5 at different stages of training. Right: MIND (log scale) between historical data and synthetic data from each one of five generative models, computed at the same five checkpoints; error bars show ±1 standard error of the mean. 
+
+0.17 to 0 .59, giving 𝑅 FID = 3.5. MIND increases from 0 .54 to 40 .3, yielding 𝑅 MIND = 74 .5, approximately 21 times the FID ratio. Thus, FID does not miss the attack entirely but substantially understates the remaining distributional distortion, whereas MIND places the attacked data far outside the real–real baseline. 
+
+4.3.2 Joint-Structure Attack against Statistic-Based LOB Evaluation. 
+
+LOB-Bench evaluates synthetic LOB data using distributions of selected market statistics, price-impact responses computed from the mid-price, and a trained discriminator [15]. Here, we focus on the first two components. Marginal distributional comparisons do not verify that deep-book liquidity evolves coherently over time, with the Level-1 state, with the opposite side of the book, or with the prevailing market regime. We therefore construct adversarial LOB data that preserve the evaluated marginals and impact re-sponse while deliberately breaking these dependencies. We omit the discriminator because it serves a different evaluation objec-tive: measuring the empirical separability of real and generated sequences. This experiment instead isolates whether the evaluated statistics and impact response detect the perturbation. We leave discriminator-based evaluation of the attack for future work. We construct the attack for each real trading day. Prices, times-tamps, message features, and quantities at level 1 are left unchanged, while the size and order count columns at levels 2 to 10 are rear-ranged. For each side of the book, we divide the data into contiguous segments separated by price changes in the deep levels and permute only segments of equal length. Reordering the deep-book values does not change their marginal distributions. Most LOB-Bench sta-tistics use only Level-1 data, which the attack leaves unchanged, so their scores are unaffected. For every stock-day we report each metric as its percentage above that day’s real–real noise floor, ob-tained by splitting the day into even and odd row blocks: −100% means the metric sees no difference at all, 0% is the sampling floor, and positive values mean detection. We find that the distributional statistics and impact-response components from LOB-Bench do not detect it. Averaged over its 12 distributional statistics that do not require message-level data, the attack sits 95% ± 1% below the noise floor across the 18 stock-days. This follows from the construction. Indeed, 9 of the 12 statistics are preserved exactly, whereas the three that shift (total bid volume, total ask volume, and volume per minute) stay below their real–real baselines, and the impact response function is untouched. Every evaluated LOB-Bench statistic rates the adversarial sequence at least as favourably as a second genuine sample of the same day. However, we find that LOB-ID, using MIND, is able to detect the attack. Averaged over the same 18 stock-days, the attack sits 75% ±
+
+17% above the noise floor, and the mean is positive for every stock: 
+
++40% for 9999.HK, +144% for 1024.HK, and +42% for 0700.HK. LOB-ID consistently places the attack above genuine sampling variation. 
+
+## 4.4 Impact of Inception Network Training 
+
+We next examine how the training stage of the DeepLOB Inception network affects the stability and consistency of the MIND score when applied to different LOB generative models. We select five checkpoints at progressively later stages of training and, for each, compute LOB-ID between the historical data and synthetic data gen-erated by five fixed models (ZI, CH, LOBGAN, LOBS5 and DiffLOB with null and future conditioning). Since the generators are held constant throughout, any change in LOB-ID across checkpoints reflects the evolving embedding network rather than a change in the generated data. As shown in Figure 3, as DeepLOB training approaches con-vergence, the MIND scores also converge towards stable plateaus across all generator configurations. Most of the reduction occurs at the earlier checkpoints, while the changes between approximately 40 ,000 and 50 ,000 training steps are small. This indicates that, once the DeepLOB representation is sufficiently trained, the resulting MIND scores become less sensitive to the particular checkpoint used to construct the embedding space. 
+
+## 4.5 Comparison of Generative Models 
+
+We compare five generative models using stylised facts, LOB-Bench distances, and LOB-ID, evaluating DiffLOB under both null and future conditioning. Table 1 reports the mean ± one standard devi-ation across three stocks and six test days. The variation therefore reflects differences across stocks and dates. We separate future-conditioned DiffLOB from the other generators in Table 1 because it is an oracle: the trend, volatility, liquidity, and order-flow im-balance variables it conditions on are computed from the realised future trajectory, so it is scored on a strictly easier task. We therefore 
+
+> 6LOB-ID: Evaluating Synthetic Market Data by Inception Distances
+
+Table 1: Comparison of synthetic LOB generators. Values are means ± one standard deviation across 18 stock-days; lower is better except for stylised facts. Future-conditioned DiffLOB † uses realised future regime variables and is excluded from the non-oracle ranking. Best and second-best non-oracle results are shown in bold and underlined. 
+
+Model Stylised Facts (of 11) LOB-Bench (Wasserstein-1) LOB-Bench ( 𝐿 1) LOB-ID (MIND) Zero Intelligence 4.56 ± 1.82 1.5315 ± 0.3679 0.6158 ± 0.0235 26 .5514 ± 11 .3785 Compound Hawkes 6.06 ± 0.87 2.0498 ± 0.5278 0.5170 ± 0.0433 24 .4254 ± 9.8464 LOBGAN 5.67 ± 1.28 1.1038 ± 0.2484 0.5642 ± 0.0903 17 .9711 ± 8.6250 LOBS5 5.28 ± 1.78 0.7515 ± 0.4162 0.4195 ± 0.0450 9.1201 ± 4.2673 DiffLOB (null cond) 7.33 ± 0.69 0.9168 ± 0.7167 0.2735 ± 0.0776 6.0251 ± 3.7417 
+
+DiffLOB (future cond) † 7.22 ± 1.00 0.2124 ± 0.0683 0.1558 ± 0.0238 2.8204 ± 0.9424 report it as an upper reference point rather than as a competitor, and rank the remaining models among themselves. Future-conditioned DiffLOB attains the best values on all three distance measures, with low variability across stocks and dates, and reproduces 7 .22 ± 1.00 stylised facts. Historical data scores 7 .67 ± 0.59 under the same evaluation. Among the five non-oracle generators, null-conditioned Dif-fLOB is strongest overall. It reproduces the most stylised facts, with 7 .33 ± 0.69, and records the lowest 𝐿 1 and LOB-ID distances, ranking second only on Wasserstein-1. LOBS5 follows, with the lowest Wasserstein-1 distance and second place under both 𝐿 1 and LOB-ID. The separation is clearest under LOB-ID, which orders the models as DiffLOB (null), LOBS5, LOBGAN, CH and ZI. Among LOBGAN, CH and ZI, LOBGAN performs best under both LOB-ID and Wasserstein-1. The metrics nevertheless produce different rank-ings, where CH reproduces 6 .06 ± 0.87 stylised facts, more than the other non-DiffLOB models, but records the highest Wasserstein-1 distance, while LOBS5 reproduces fewer stylised facts while per-forming strongly on all three distance measures. 
+
+## 5 Discussion 
+
+Our results show that LOB-ID provides a stable measure of similar-ity between real and synthetic LOB data. The pairwise comparisons show that the trained embeddings capture persistent differences between instruments. Samples from the same stock remain close across nearby dates, while different stocks are clearly separated. The unusually high distances for a small number of dates may reflect changes in liquidity, volatility, or trading activity. We do not investigate the cause here, but the result suggests that LOB-ID could also be used to study changes in market conditions, unusual trading days, or possible regime shifts. The perturbation experiments support the same conclusion. The changes are deliberately small and remain within the range of normal market variation, yet LOB-ID responds before the altered price paths become visibly unrealistic. Its consistent increase across several different perturbations shows that the metric is sensitive to a broad range of structural changes, not only to one specific distortion or to changes that are obvious in the raw data. The checkpoint experiment indicates that, although the absolute MIND scores depend on the stage of DeepLOB training, the rela-tive ordering of the generator configurations remains unchanged across checkpoints. Once the embedding network is sufficiently trained, the scores stabilise and become less sensitive to checkpoint selection. The two adversarial experiments expose different weaknesses in FID and the evaluated statistic-based components of LOB-Bench. The first moment-matching attack targets FID directly. Because FID depends only on the embedding mean and covariance, it substan-tially understates the distortion once these moments are matched. MIND still detects a large difference because it compares the pro-jected distributions rather than summarising the embeddings only by their means and covariances. The joint-structure attack shows a similar limitation in statistic-based benchmarks. The attacked sequence preserves most of the measured marginal distributions and leaves the market-impact response unchanged, but it no longer forms a coherent market trajectory. The attack breaks consistency between the deep-book trajectory and the corresponding order flow, market conditions, and Level-1 state. Although LOB-ID does not observe the message stream directly, it detects the resulting distortion in the temporal, cross-level, and bid–ask structure of the Level-2 book trajectory. Independently rearranging the bid and ask sides also breaks their dependence, while the segment boundaries disrupt continuity in the deep book. The attacked data therefore appear realistic when individual features are examined separately, but not when the orderbook is viewed as a joint time series. This supports using the two ap-proaches together. Statistic-based benchmarks provide clear and interpretable diagnostics, while LOB-ID captures temporal and cross-level relationships that individual statistics may miss. Be-yond complementing statistic-based diagnostics, LOB-ID provides a reusable distance-based alternative to the LOB-Bench discrimi-nator. The discriminator assigns each trajectory a probability of being real, with model quality inferred from how well its outputs separate real and generated samples. In contrast, LOB-ID directly computes a non-negative discrepancy between the real and gen-erated embedding distributions, without requiring a classification threshold. Once the DeepLOB feature extractor is fixed, the same representation and scoring rule can be applied across generators without training an additional real-versus-generated classifier for each comparison. Finally, LOB-ID produces an ordering consistent with the de-pendencies represented by the tested models. These mechanisms are not observed directly, but they leave signatures in the tem-poral and cross-level structure of the book trajectories, which is 
+
+> 7
+
+Bacalum et al. 
+
+what LOB-ID measures. Zero Intelligence samples side, type, tim-ing, volume, and depth independently, so no relationship between order flow and book state can arise, and it scores worst. Compound Hawkes lets past events raise the intensity of future arrivals, which introduces dependence in event timing, but volumes and depths remain independently sampled, so the book state is still not ex-plained by its order flow. LOBGAN improves on both because its generator conditions each new order on the current market state, creating genuine flow to book dependence, but that state enters only as a small set of hand-crafted order and book features, so the dependence it can learn is limited to what this summary ex-poses. LOBS5 improves further because it models the raw message stream directly. Its S5 backbone, a structured state space model, maintains a compressed continuous state of a long message context. DiffLOB models the full trajectory jointly across time and price levels, allowing cross-level and bid–ask dependencies to be repre-sented directly rather than carried implicitly through sequential generation. When the other metrics produce a different ordering, the disagreement reflects differences in the properties emphasised by each metric. For CH, its large Wasserstein distance may reflect the more extreme timing distributions produced by self-excitation. Future-conditioned DiffLOB receives regime variables computed from the future trajectory, giving it information unavailable to the other generators considered. Its low distances therefore measure regime reproduction rather than unconditional generative quality. However, null-conditioned DiffLOB receives no future information. LOB-ID clearly distinguishes these settings, demonstrating that LOB-ID captures both the benefit of regime information and the underlying quality of the generator. LOB-ID depends on the choice of embedding network. Its ab-solute scores are therefore comparable only when the same repre-sentation, preprocessing, sample size, and projection protocol are used. As the current embedding is constructed from Level-2 book states, it evaluates temporal and cross-level trajectory structure rather than the full message-level process. Our experiments are limited to five liquid HKEX equities, so validation across markets, instruments, and regimes remains future work, although the stable ranking across checkpoints suggests limited sensitivity to check-point selection within the chosen representation. A direct empirical comparison between inception distances and trained discriminator scores remains an important direction for future work. 
+
+## 6 Conclusion 
+
+We introduced LOB-ID, an embedding-based framework for evalu-ating synthetic limit orderbook data. By comparing real and gener-ated limit order-book data in the representation space learned by the DeepLOB Inception network, LOB-ID provides a summary of temporal and cross-level similarity between Level-2 order-book tra-jectories. Our experiments demonstrate that LOB-ID is consistent across instruments and trading days, detects subtle perturbations of the data, and yields stable model rankings. Moment matching substantially reduces FID’s sensitivity, while a deep-book attack pre-serves the selected LOB-Bench statistics. MIND remains sensitive to both distortions. These results highlight LOB-ID as an effective method for measuring joint temporal and cross-level structure in Level-2 trajectories. 
+
+## References 
+
+[1] Samuel A. Assefa, Danial Dervovic, Mahmoud Mahfouz, Robert E. Tillman, Prashant Reddy, and Manuela Veloso. 2020. Generating Synthetic Data in Fi-nance: Opportunities, Challenges and Pitfalls. In Proceedings of the First ACM International Conference on AI in Finance (ICAIF ’20) . 1–8. [2] Emmanuel Bacry, Iacopo Mastromatteo, and Jean-François Muzy. 2015. Hawkes Processes in Finance. Market Microstructure and Liquidity 1, 1 (2015), 1550005. [3] Quentin Berthet, Yu-Han Wu, Clement Crepy, Romuald Elie, Klaus Greff, and Michael Eli Sander. 2026. MIND: Monge Inception Distance for Generative Models Evaluation. arXiv:2605.06797 [4] Min Jin Chong and David Forsyth. 2020. Effectively Unbiased FID and Inception Score and Where to Find Them. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 6070–6079. [5] Andrea Coletta, Joseph Jerome, Rahul Savani, and Svitlana Vyetrenko. 2023. Conditional Generators for Limit Order Book Environments: Explainability, Challenges, and Robustness. In Proceedings of the Fourth ACM International Conference on AI in Finance (ICAIF ’23) . Association for Computing Machinery, New York, NY, USA, 27–35. [6] Andrea Coletta, Matteo Prata, Michele Conti, Emanuele Mercanti, Novella Bar-tolini, Aymeric Moulin, Svitlana Vyetrenko, and Tucker Balch. 2021. Towards Realistic Market Simulations: A Generative Adversarial Networks Approach. In 
+
+Proceedings of the Second ACM International Conference on AI in Finance (ICAIF ’21) . Association for Computing Machinery, New York, NY, USA, 1–9. [7] Rama Cont. 2001. Empirical Properties of Asset Returns: Stylized Facts and Statistical Issues. Quantitative Finance 1, 2 (2001), 223–236. [8] J. Doyne Farmer, Paolo Patelli, and Ilija I. Zovko. 2005. The Predictive Power of Zero Intelligence in Financial Markets. Proceedings of the National Academy of Sciences 102, 6 (2005), 2254–2259. [9] Martin D. Gould, Mason A. Porter, Stacy Williams, Mark McDonald, Daniel J. Fenn, and Sam D. Howison. 2013. Limit Order Books. Quantitative Finance 13, 11 (2013), 1709–1742. [10] Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bernhard Nessler, and Sepp Hochreiter. 2017. GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium. In Advances in Neural Information Processing Systems ,Vol. 30. 6626–6637. [11] Konark Jain, Nick Firoozye, Jonathan Kochems, and Philip Treleaven. 2024. Limit Order Book Dynamics and Order Size Modelling Using Compound Hawkes Process. Finance Research Letters 69 (2024), 106157. [12] Maxime Kawawa-Beaudan, Srijan Sood, Kassiani Papasotiriou, Daniel Borrajo, and Manuela Veloso. 2026. TradeFM: A Generative Foundation Model for Trade-flow and Market Microstructure. arXiv:2602.23784 [cs.LG] [13] Fabrizio Lillo and J. Doyne Farmer. 2004. The Long Memory of the Efficient Market. Studies in Nonlinear Dynamics & Econometrics 8, 3 (2004). [14] Peer Nagy, Sascha Frey, Silvia Sapora, Kang Li, Anisoara Calinescu, Stefan Zohren, and Jakob N. Foerster. 2023. Generative AI for End-to-End Limit Order Book Modelling: A Token-Level Autoregressive Generative Model of Message Flow Using a Deep State Space Network. In Proceedings of the Fourth ACM International Conference on AI in Finance (ICAIF ’23) . Association for Computing Machinery, New York, NY, USA, 91–99. [15] Peer Nagy, Sascha Yves Frey, Kang Li, Bidipta Sarkar, Svitlana Vyetrenko, Stefan Zohren, Ani Calinescu, and Jakob Nicolaus Foerster. 2025. LOB-Bench: Bench-marking Generative AI for Finance – an Application to Limit Order Book Data. In 
+
+Proceedings of the 42nd International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 267) . PMLR, 45437–45460. [16] Yosihiko Ogata. 1981. On Lewis’ Simulation Method for Point Processes. IEEE Transactions on Information Theory 27, 1 (1981), 23–31. [17] Namid R Stillman, Rory Baggott, Justin Lyon, Jianfei Zhang, Dingqui Zhu, Tao Chen, and Perukrishnen Vytelingum. 2023. Deep calibration of market simula-tions using neural density estimators and embedding networks. In Proceedings of the Fourth ACM International Conference on AI in Finance . 46–54. [18] Christian Szegedy, Wei Liu, Yangqing Jia, Pierre Sermanet, Scott Reed, Dragomir Anguelov, Dumitru Erhan, Vincent Vanhoucke, and Andrew Rabinovich. 2015. Going Deeper with Convolutions. In Proceedings of the IEEE Conference on Com-puter Vision and Pattern Recognition . 1–9. [19] Zhuohan Wang and Carmine Ventre. 2026. DiffLOB: Diffusion Models for Counterfactual Generation in Limit Order Books. In Proceedings of the 35th International Joint Conference on Artificial Intelligence (IJCAI-ECAI 2026) .arXiv:2602.03776 [q-fin.CP] Accepted, in press. [20] Zihao Zhang, Stefan Zohren, and Stephen Roberts. 2019. DeepLOB: Deep Con-volutional Neural Networks for Limit Order Books. IEEE Transactions on Signal Processing 67, 11 (2019), 3001–3012. 8

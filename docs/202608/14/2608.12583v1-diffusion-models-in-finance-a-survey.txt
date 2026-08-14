@@ -1,0 +1,332 @@
+Title: Diffusion Models in Finance: A Survey
+
+URL Source: https://arxiv.org/pdf/2608.12583v1
+
+Published Time: Fri, 14 Aug 2026 00:20:48 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Diffusion Models in Finance: A Survey 
+
+# Zhuohan Wang 
+
+King’s College London London, United Kingdom zhuohan.wang@kcl.ac.uk 
+
+# Carmine Ventre 
+
+King’s College London London, United Kingdom carmine.ventre@kcl.ac.uk 
+
+## Abstract 
+
+Diffusion generative models have rapidly emerged as powerful tools for modeling complex financial data. Their appeal is both structural and practical: they offer stable likelihood-based training, strong mode coverage, flexible conditioning, and a stochastic-differential-equation formulation that aligns naturally with the Itô calculus and stochastic control frameworks widely used in finance. This survey reviews the growing literature on diffusion-family generative mod-els for financial applications. We organize prior work primarily by financial data type, covering time series, limit order books, tabular data, and other structured financial objects, while discussing the modeling goals and application contexts that arise within each cate-gory. To the best of our knowledge, this is the first survey dedicated specifically to diffusion-family models for financial data. For more detailed information, we have open-sourced a repository 1.
+
+## Keywords 
+
+Diffusion models, Flow models, Finance, Survey 
+
+## 1 Introduction 
+
+Financial markets play a central role in modern economies by al-locating capital, transferring risk, and supporting investment and consumption decisions. However, financial data are notoriously dif-ficult to model, which often exhibit heavy tails, volatility clustering, nonlinear dependence, regime changes, and abrupt responses to macroeconomic or geopolitical events [8, 22, 25]. These properties make it challenging for traditional parametric models to fully cap-ture the distributional complexity of financial markets, especially when the goal is to support decision under uncertainty. Generative modeling has therefore become increasingly relevant in finance. Rather than estimating a single expected outcome, generative mod-els aim to learn the underlying data distribution and produce plausi-ble samples from it. This is particularly useful for applications such as financial data generation, stress testing, portfolio risk analysis, market simulation, derivative pricing, etc. [61, 65, 72, 90]. Diffusion models have recently emerged as one of the most powerful classes of generative models. Originally popularized in computer vision and later extended to domains such as language, time series and tabular data [92], diffusion models generate sam-ples through a gradual denoising process [27, 76, 80]. Compared with earlier generative approaches such as generative adversar-ial networks [23], variational autoencoders [39], and normalizing flows [68], diffusion models offer attractive properties including sta-ble training, high sample quality, flexible conditioning mechanisms, and strong empirical performance in modeling complex distribu-tions [16, 28, 37, 62]. These characteristics make diffusion models a promising candidate for financial applications. Financial data are 
+
+> 1https://github.com/ZhuoHan1998/Diffusion-Models-In-Finance
+
+noisy, high-dimensional, non-stationary, and often governed by la-tent market regimes. A generative framework that can learn rich dis-tributions and condition on market states, historical information, or external variables may therefore be useful for generating synthetic price paths, estimating risk measures, improving forecasting sys-tems, and supporting downstream decision-making [10, 12, 81, 82]. However, the use of diffusion models in finance remains rela-tively new, and the literature is dispersed across applications in-cluding time-series generation, limit order books, tabular data, and structured financial objects [7, 35, 72, 99]. Existing surveys cover synthetic data in finance [65], diffusion models for generic time se-ries [93], diffusion models for tabular data [50], and large language models or agents in finance [49, 70], but none provides a dedicated overview of diffusion models across financial applications. This survey provides a structured overview of diffusion models in finance by reviewing methodological foundations, organizing applications across financial time series, limit order books, tabular data, and other structured financial objects, and identifying future research directions. The remainder of the paper is organized as follows: Section 2 introduces diffusion models, flow models, and related generative modeling foundations; Section 3 to Section 6 review applications across the main financial data modalities; and Section 7 discusses open problems and concluding remarks. Figure 1 illustrates the conceptual pipeline behind the survey. 
+
+## 2 Background 
+
+This section fixes the common vocabulary used throughout the survey. We keep the presentation deliberately compact: the goal is not to re-derive diffusion models, but to identify the design choices that become consequential once the data are time series, limit order books, tabular data, or other financial objects. 
+
+Diffusion-based models. DDPMs define a forward noising pro-cess that gradually transforms data 𝑥 0 ∼ 𝑝 data into an approximately Gaussian variable 𝑥 𝑇 , typically through transitions 𝑞 (𝑥 𝑡 | 𝑥 𝑡 −1) with a prescribed noise schedule [27]. A neural network is then trained to reverse this process, often by predicting the injected noise. The practical appeal is that training is stable and uses a simple denoising objective, while sampling produces diverse draws by running the learned reverse chain from noise to data. Score-based generative models instead learn 𝑠 𝜃 (𝑥, 𝑡, 𝑐 ) ≈ ∇ 𝑥 log 𝑝 𝑡 (𝑥 | 𝑐 ) at multiple noise levels [79]. The two views meet in the score-SDE formulation [80], where a forward process 
+
+𝑑𝑥 𝑡 = 𝑓 𝑡 (𝑥 𝑡 ) 𝑑𝑡 + 𝑔 𝑡 𝑑𝑤 𝑡 (1) is sampled in reverse by replacing the unknown score with a neural estimate: 
+
+𝑑𝑥 𝑡 = {𝑓 𝑡 (𝑥 𝑡 ) − 𝑔 2 
+
+> 𝑡
+
+𝑠 𝜃 (𝑥 𝑡 , 𝑡, 𝑐 )} 𝑑𝑡 + 𝑔 𝑡 𝑑 ¯𝑤 𝑡 . (2) arXiv:2608.12583v1 [q-fin.CP] 12 Aug 2026 Anonymous Author(s) 
+
+Figure 1: Taxonomy of diffusion-family models in finance organized by financial data type. Data are generated through noising and guided denoising, then used for downstream tasks such as simulation, forecasting, risk analysis, portfolio construction, and privacy preservation. 
+
+Algorithm 1 Diffusion-based models: training and sampling  
+
+> 1:
+
+Input: A dataset of samples 𝑥 0 ∼ 𝑝 𝑑𝑎𝑡𝑎 , optional condition 𝑐 , schedule 
+
+(𝛼 𝑡 , 𝛽 𝑡 ), score network 𝑠 𝜃 𝑡 or noise predictor 𝜖 𝜃 𝑡 .
+
+Training  
+
+> 2:
+
+for each minibatch do  
+
+> 3:
+
+Sample 𝑡 ∼ 𝑈 (0,𝑇 ) and 𝜖 ∼ N ( 0, 𝐼 ). 
+
+> 4:
+
+Set 𝑥 𝑡 = 𝛼 𝑡 𝑥 0 + 𝛽 𝑡 𝜖 . 
+
+> 5:
+
+Minimize ∥𝑠 𝜃 𝑡 (𝑥 𝑡 , 𝑐 ) − ∇ log 𝑝 𝑡 (𝑥 𝑡 | 𝑥 0 ) ∥ 2. 
+
+> 6:
+
+Equivalently, under Gaussian paths, minimize ∥𝜖 𝜃 𝑡 (𝑥 𝑡 , 𝑐 ) − 𝜖 ∥2. 
+
+> 7:
+
+end for 
+
+Sampling  
+
+> 8:
+
+Draw 𝑥 𝑇 ∼ N ( 0, 𝐼 ). 
+
+> 9:
+
+for 𝑡 = 𝑇 ,𝑇 − Δ𝑡, . . . , Δ𝑡 do  
+
+> 10:
+
+Draw 𝑧 ∼ N ( 0, 𝐼 ). 
+
+> 11:
+
+𝑥 𝑡 −Δ𝑡 = 𝑥 𝑡 − { 𝑓 𝑡 (𝑥 𝑡 ) − 𝑔 2 
+
+> 𝑡
+
+𝑠 𝜃 (𝑥 𝑡 , 𝑐 ) } Δ𝑡 + 𝑔 𝑡 
+
+√Δ𝑡 𝑧 . 
+
+> 12:
+
+end for  
+
+> 13:
+
+return synthetic sample ˆ 𝑥 0.
+
+Here 𝑐 denotes optional conditioning information and ¯ 𝑤 𝑡 is the reverse-time Brownian motion. Training usually samples 𝑥 0, a noise level 𝑡 , and a perturbed observation 𝑥 𝑡 = 𝛼 𝑡 𝑥 0 + 𝜎 𝑡 𝜖 , then fits ei-ther the score or the injected noise. Algorithm 1 summarizes this diffusion-based training and Euler–Maruyama sampling. This for-mulation is especially natural in finance because stochastic differ-ential equations are already widely used to describe price dynamics. However, instead of calibrating a fixed drift or volatility coefficient for an assumed market process like a classical financial diffusion model, the neural network learns the reverse-time score, or equiva-lently a denoising drift, that transforms simple noise into samples from the empirical financial data distribution. 
+
+Flow-based models. Recent work also uses continuous-time transport formulations that learn a vector field from a base distri-bution to the data distribution. In its simplest form, flow matching 
+
+Algorithm 2 Flow-based models: training and sampling  
+
+> 1:
+
+Input: data 𝑥 , base noise 𝑧 ∼ 𝑝 0, optional condition 𝑐 , vector field 𝑣 𝜃 .
+
+Training  
+
+> 2:
+
+for each minibatch do  
+
+> 3:
+
+Sample 𝑡 ∼ 𝑈 (0, 1), 𝑧 ∼ 𝑝 0, and 𝑥 ∼ 𝑝 data . 
+
+> 4:
+
+Set 𝑥 𝑡 = (1 − 𝑡 )𝑧 + 𝑡𝑥 and target velocity 𝑢 𝑡 = 𝑥 − 𝑧 . 
+
+> 5:
+
+Minimize ∥𝑣 𝜃 (𝑥 𝑡 , 𝑡, 𝑐 ) − 𝑢 𝑡 ∥22 . 
+
+> 6:
+
+end for 
+
+Sampling  
+
+> 7:
+
+Draw 𝑥 0 ∼ 𝑝 0. 
+
+> 8:
+
+for 𝑡 = 0, Δ𝑡, . . . , 1 − Δ𝑡 do  
+
+> 9:
+
+𝑥 𝑡 +Δ𝑡 = 𝑥 𝑡 + Δ𝑡 𝑣 𝜃 (𝑥 𝑡 , 𝑡, 𝑐 ). 
+
+> 10:
+
+end for  
+
+> 11:
+
+return synthetic sample ˆ 𝑥 1.
+
+learns an ODE 
+
+𝑑𝑥 𝑡 
+
+𝑑𝑡 = 𝑣 𝜃 (𝑥 𝑡 , 𝑡, 𝑐 ), 𝑥 0 ∼ 𝑝 0, (3) whose terminal distribution approximates 𝑝 data . With a linear con-ditional path 𝑥 𝑡 = (1 − 𝑡 )𝑧 + 𝑡𝑥 between noise 𝑧 ∼ 𝑝 0 and data 
+
+𝑥 ∼ 𝑝 data , the target velocity is 𝑢 𝑡 = 𝑥 − 𝑧 , giving the objective 
+
+LFM (𝜃 ) = E𝑥,𝑧,𝑡 
+
+∥𝑣 𝜃 (𝑥 𝑡 , 𝑡, 𝑐 ) − ( 𝑥 − 𝑧 )∥ 22
+
+ . (4) Algorithm 2 summarizes the corresponding training and Euler sam-pling [30, 52]. Diffusion model families are increasingly understood as instances of a unified generative-transport view. Stochastic inter-polants unify flows and diffusions by learning dynamics along paths between a simple base distribution and the data distribution [2], while recent tutorials on flow matching and diffusion models em-phasize that both learn fields that transport noise into data under different sampling dynamics and training targets [30]. 
+
+Guidance. Classifier guidance modifies the reverse process us-ing gradients from an auxiliary model [16], while classifier-free guidance learns conditional and unconditional scores in a single Diffusion Models in Finance: A Survey 
+
+model and interpolates them at sampling time [28]. Conditioning layers such as FiLM provide a general mechanism for injecting external variables by feature-wise modulation [64]. Finance papers adapt this idea to regime labels [82, 89], factor states [19, 21], asset identities [14], stress scenarios [13], portfolio objectives [4, 19], and structural constraints [43, 74]. 
+
+Sampling accelerators. Sampling speed is a recurring bottle-neck, especially in finance where simulation, stress testing, and portfolio evaluation may require many generated paths. DDIM [77], improved diffusion objectives [62], EDM design choices [37], and consistency models [78] improve sample quality per function eval-uation. Training-free numerical solvers further accelerate sampling by treating generation as solving a diffusion ODE, including DPM-Solver [57], DPM-Solver++ [58], and unified predictor-corrector solvers such as UniPC [100]. 
+
+Architectural backbones. Backbone choice determines what structure a diffusion-family model can represent. TimeGrad sup-ports probabilistic time-series forecasting [67], CSDI targets condi-tional imputation [83], SSSD combines diffusion with structured state-space sequence modeling [3], and TSDiff/Diffusion-TS study forecasting-oriented and interpretable time-series generation [41, 94]. For tabular settings, TabDDPM and TabSyn adapt diffusion to mixed-type data [42, 96], while transformer-based denoisers and rectified-flow or stochastic-interpolant models broaden the design space beyond standard U-Net-style diffusion [2, 31, 55, 63]. Finance papers typically do not adopt these backbones unchanged; rather, they adapt the same design principles to specific financial structure. 
+
+## 3 Time Series Data 
+
+Financial time series form the largest cluster in the current litera-ture. In this section, we use the term narrowly: the modeled object is an ordered sequence such as prices, returns, macroeconomic vari-ables, etc. We therefore separate this section from LOBs in section 4, where the sequence is constrained by order-book mechanics, and from structured objects such as implied-volatility surfaces or yield curves. The dominant assets are equities, with smaller coverage of ETFs, futures, energy prices, and macro-conditioned paths. Across these settings, the generator must preserve stylized facts that ordi-nary time-series metrics often miss, such as heavy tails, volatility clustering, leverage effects, serial dependence and cross-sectional covariance. 
+
+## 3.1 Unconditional Generation 
+
+Unconditional generation asks whether a model can synthesize financial time series without specifying a future condition or control signal. We read these papers along two axes: the financial variable being generated and the dimensionality of the generated object. The variable axis separates price paths from returns, spreads, volumes, and transformed market features. The dimensionality axis separates single-instrument generation from multivariate panels that must preserve cross-asset dependence. Most unconditional finance papers in the current corpus are stock-market papers. Takahashi and Mizuno [81] use US intraday stock data and generate a single-stock, multivariate-feature time se-ries, where log returns, spreads, and trading volumes are converted to wavelet images and reconstructed as synthetic market series. Lesniewski and Trigila [46] use US equity data to generate a mul-tivariate stock-return scenario used for covariance regularization and portfolio-level simulation. Diffusion Factor Models [10] move to high-dimensional stock-return panels, generating multivariate asset returns under a latent factor structure rather than indepen-dent univariate series. Kim et al. [38] use historical stock data and generate price-path-oriented series with a GBM-informed noising process, making the model closer to price dynamics than return-only scenario generation. Liu and Wan [54] directly target synthetic asset-price-path generation with a DDPM, placing the work on the price-series side of unconditional financial time-series generation rather than the return-scenario side. Masi et al. [59] propose a GAN–diffusion framework for high-quality synthetic financial time series, jointly generating stock mid-price and volume series while using the GAN critic to improve the realism of cross-asset correla-tion structures. Fiaingen [69] is useful as a synthetic-data quality benchmark rather than merely a core diffusion architecture: it pro-poses graph-based generative methods for financial time series and evaluates whether synthetic stock-price windows resemble real data, generate quickly, and support downstream machine-learning tasks. 
+
+## 3.2 Conditional Generation 
+
+Conditional generation studies whether a model can synthesize financial time series under a user-specified condition. Compared with unconditional generation, the key question is not only what variable is generated, but also what information controls the gener-ation. We read this literature along two axes: the generated data object, such as prices, returns or charts, and the conditioning signal, such as trend, volatility, partial observations, stress regimes, or op-timization states. This distinction is important because conditional generators are usually evaluated by whether they respond correctly to the condition, not only by whether their samples look realistic on average. For stock data, conditional generation mainly appears as control-lable stock time-series synthesis and stress-scenario construction. CoFinDiff [82] uses Japanese stock price series and generates mul-tivariate stock time series conditioned on user-specified trend and volatility controls, so the generated object is price-like stock series rather than return-only scenarios. InterDiff [56] conditions stock time-series synthesis on learned intra- and inter-stock correlation representations, using hierarchical transformers and classifier-free guidance to generate Chinese equity series that preserve cross-stock dependence. Choudhary et al. [13] use a conditional DDPM to gen-erate synthetic Dow-30 return sequences parameterized by crash intensity, augmenting PPO training with crisis-like market episodes so that the resulting portfolio policy is more robust to tail-risk and out-of-sample stress events. Guo et al. [24] uses financial time-series observations under partial or compressed measurements and recon-structs plausible stock and macro time-series signals, making the generated object a conditionally completed financial series rather than an unconditional market sample. Outside stocks, Alzahrani [4] generate regime-conditioned ETF return scenarios with a tail-weighted diffusion model and use them in a turnover-constrained CVaR portfolio allocator. Zarifis et al. [95] use multivariate energy price time series and generates conditional Anonymous Author(s) 
+
+Table 1: Representative diffusion-family finance papers organized by data domain. The table is illustrative rather than exhaustive; entries are selected to span the main data objects, applications, and model families used in this survey.                                                                                                                                                                                                                                                         
+
+> Data domain Paper Year Venue Model Region Asset Generated object Application
+> Time series DiffSTOCK [14] 2024 ICASSP Diffusion US Stock Price series Prediction / portfolio
+> Time series DiffsFormer [21] 2024 arXiv Diffusion CN Stock Factor series Factor augmentation
+> Time series Beyond Monte Carlo [46] 2024 arXiv Diffusion US Stock Return vectors Market simulation
+> Time series Financial Time Series Denoiser [87] 2024 ICAIF Diffusion US Stock Price series Denoising / trading signal
+> Time series Generation of Synthetic Financial Time Series [81] 2025 Quantitative Finance Diffusion US Stock Return and volume series Synthetic generation
+> Time series Diffusion Factor Models [10] 2025 arXiv Diffusion US Stock Return series Factor-structured generation
+> Time series CoFinDiff [82] 2025 IJCAI Diffusion JP Stock Price series Controllable generation
+> Time series Diffusion-Augmented RL [13] 2025 arXiv Diffusion US Stock Return series Stress scenarios / portfolio
+> Time series Factor-Based Conditional Diffusion [19] 2025 arXiv Diffusion CN Stock Return series Portfolio optimization
+> Time series FlowHFT [48] 2025 arXiv Flow Synthetic Stock Trading actions HFT imitation policy
+> Time series Diffolio [12] 2026 Information Fusion Diffusion US Stock Return series Forecasting / portfolio
+> LOB TRADES [7] 2025 ECAI Diffusion US Stock LOB orderflow Market simulation
+> LOB DiffVolume [88] 2025 ICAIF Diffusion US Stock LOB volume Volume generation
+> LOB Painting the Market [5] 2025 arXiv Diffusion US Stock LOB snapshots Simulation / forecasting
+> LOB Controllable Financial Market Generation [32] 2026 AAAI Diffusion CN Stock LOB orderflow Controllable market generation
+> LOB Limit Order Book Event Stream Prediction [101] 2026 Data Science and Engineering Diffusion US, CN Stock LOB orderflow Event-stream prediction
+> LOB DiffLOB [89] 2026 IJCAI-ECAI Diffusion US Stock LOB snapshots Counterfactual generation
+> Tabular FinDiff [72] 2023 ICAIF Diffusion Multi Multi Tabular records Tabular synthesis
+> Tabular Entity-based Financial Tabular Synthesis [53] 2024 ICAIF Diffusion Multi Multi Tabular records Entity-based synthesis
+> Tabular Imb-FinDiff [74] 2024 ICAIF Diffusion Multi Multi Tabular records Imbalance synthesis
+> Tabular Latent-Space Flow-Based Diffusion [34] 2025 arXiv Flow Multi Multi Tabular records Data augmentation
+> Tabular DP-FinDiff [75] 2025 arXiv Diffusion Multi Multi Mixed-type tabular Private synthesis
+> Tabular EmDT [44] 2026 arXiv Diffusion Multi Fraud Tabular records Fraud augmentation
+> Tabular Privacy Risks and Tradeoffs [103] 2026 arXiv Diffusion Multi Multi Tabular records Privacy evaluation
+> Structured Correlation Matrix Diffusion [43] 2024 ICAIF Diffusion US Stock Correlation matrix Correlation synthesis
+> Structured IV-Surface Diffusion [35] 2025 arXiv Diffusion US Option IV surface Surface forecasting
+> Structured Exotic Options and Counterparty Games [99] 2025 arXiv Diffusion Global Option Option price paths Exotic option valuation
+> Structured Term-Structure Diffusion [18] 2026 Expert Systems with Applications Diffusion JP Interest rate Yield curve Term-structure generation
+> Structured Risk-Neutral Derivative Pricing [84] 2026 arXiv Diffusion Global Stock Risk-neutral asset paths Derivative pricing
+> Structured TF-CoDiT [98] 2026 arXiv Diffusion CN Treasury future Price series Fixed-income synthesis
+
+scenario paths for multistage stochastic optimization, and evaluate it on energy arbitrage in New York State’s day-ahead electricity market. 
+
+## 3.3 Prediction and Trading 
+
+Many forecasting and trading papers also use conditional diffusion models, so the distinction from Section 3.2 is based on the model’s primary purpose rather than its architecture. We discuss papers here when diffusion mainly supports prediction, portfolio alloca-tion, or trading decisions, and reserve Section 3.2 for work whose main contribution is controllable financial time-series synthesis. Prediction-oriented papers use diffusion models to forecast future financial states or to construct signals for trading and allocation. In this subsection, prediction covers point and distributional fore-casts of prices, returns, chart movements, denoised signals, portfolio weights, and trading actions. These models are usually evaluated by downstream decision value, including risk-adjusted returns, draw-down control, transaction-cost robustness, and performance across market regimes. Stock-level prediction papers mostly use diffusion as a way to denoise, augment, or represent financial time-series signals. Koa et al. [40] propose a diffusion variational autoencoder for multi-step stock-price prediction, using diffusion to address stochasticity in future price trajectories. Wang and Ventre [87] apply a diffu-sion denoiser to US stock price series before downstream predic-tion and trading evaluation. Fang et al. [17] use a spatio-temporal diffusion model to infer missing and real-time financial data in firm-characteristic panels. Daiya et al. [14] generate probabilistic stock-market predictions from relational stock time-series data, making the modeled object a cross-sectional prediction distribution rather than a standalone synthetic series. Gao et al. [21] use Chinese stock factor and price-related data, with diffusion-based factor aug-mentation serving the prediction model rather than general market simulation. Chen and Wang [11] use diffusion-generated hierarchi-cal multi-granular experts for stock prediction across US, Chinese, and Hong Kong markets. Lee et al. [45] recast financial forecasting as conditional image generation: historical price charts are treated as visual inputs, and a text-to-image diffusion model generates the next chart image to predict future price trends. Nguyen et al. [60] further combine visual representations with retrieval-guided diffusion for stock forecasting. A second group uses diffusion-generated distributions not merely as forecasts, but as inputs to portfolio optimization and trading poli-cies. Cho et al. [12] use Diffolio to forecast the joint distribution of future asset returns, combining hierarchical asset/market atten-tion with a correlation-guided regularizer so that the generated forecasts are directly useful for portfolio construction. Gao et al. [19] condition stock-return generation on asset-specific factors and use the resulting samples for constrained mean-variance and mean-CVaR portfolio optimization. Aghapour et al. [1] use score-based diffusion within dynamic portfolio selection, connecting generated return scenarios to sequential allocation decisions. Bagchi et al. [6] evaluate conditional diffusion models for portfolio construc-tion on large-scale equity data, showing that factor dimensionality controls a bias–variance tradeoff: too few factors underfit return dynamics, while too many factors overfit and produce unstable, concentrated portfolios. Li et al. [48] use flow matching for high-frequency market making, generating market-conditioned bid–ask action sequences from expert demonstrations rather than forecast-ing prices directly. Diffusion Models in Finance: A Survey 
+
+## 4 Limit Order Book Data 
+
+Limit order book (LOB) data describe the visible supply and demand around the best bid and ask. Unlike financial time series, LOB data are event-driven, high-dimensional, and constrained by market mechanics: prices must respect tick sizes, bid prices must remain below ask prices, queue sizes are nonnegative, and order flow must evolve in a temporally coherent way. These constraints make LOB generation more difficult than generic multivariate time-series syn-thesis. We organize this section by the generated object: orderflow generation models event streams, whereas orderbook generation models book states. 
+
+## 4.1 Orderflow Generation 
+
+Order-flow generation papers synthesize sequences of market events, including order submissions, cancellations or amends. Berti et al. [7] propose TRADES, a transformer-based denoising diffusion en-gine that generates market-state-conditioned LOB orderflow for realistic and responsive market simulation, with evaluation focused on synthetic-data usefulness and responsiveness to trading-agent interventions. ByteGen [47] works at the orderbook-event level with a tokenizer-free byte-space generator, making it useful context for event-stream generation even though its architecture is not a standard diffusion model. Zheng et al. [101] propose LOBDIF, which treats LOB event-stream prediction as learning a joint time–event distribution with a diffusion model, using a denoising network and skip-step sampling to forecast both the type and timing of future order-book events. Huang et al. [32] propose DigMA, which uses conditional diffusion to generate time-varying market-state param-eters, such as mid-price return and order-arrival intensity, and then guides an economics-informed meta-agent to sample realistic and controllable order flow. 
+
+## 4.2 Orderbook Generation 
+
+Order-book generation papers synthesize structured book states, snapshots, or counterfactual LOB trajectories. DiffVolume [88] fo-cus on conditional generation of future LOB volume snapshots from past volume history and time-of-day information, with optional liquidity-profile conditioning for counterfactual volume scenarios. Backhouse et al. [5] convert LOB data into structured images and use diffusion inpainting to generate future book states in parallel, reducing autoregressive error accumulation while achieving strong LOB-Bench performance. Wang and Ventre [89] propose DiffLOB for controllable counterfactual LOB generation, conditioning future book trajectories on hypothetical regimes such as trend, volatility, liquidity, and order-flow imbalance to support stress testing and scenario analysis. 
+
+## 5 Tabular Data 
+
+Financial tabular data consist of row-wise records such as credit applications, payment transactions, customer attributes, fund char-acteristics, fraud labels, and account-level features. Unlike financial time series or LOBs, these data are usually mixed-type: continuous fields, categorical variables, binary indicators, timestamps, labels, and entity identifiers may appear in the same table. The main mod-eling challenge is therefore not temporal coherence, but preserving feature-label relationships, categorical distributions, business con-straints, rare classes, and privacy. We organize this section by the motivation for generation: synthesis and augmentation for utility, and privacy and trustworthiness for safe deployment. 
+
+## 5.1 Synthesis and Augmentation 
+
+The first group of tabular papers uses diffusion models to gener-ate synthetic financial records that can replace, supplement, or rebalance real training data. Sattarov et al. [72] propose FinDiff for financial tabular data generation, targeting mixed financial records such as credit, payment, and fund-like tables. Entity-based finan-cial tabular synthesis [53] extends this idea to entity-structured records, where generated rows must remain plausible within the attributes and relationships of financial entities. Sattarov et al. [74] focus on class imbalance: their conditional diffusion model gener-ates minority-class financial records so that downstream classifiers can learn rare but important events. Fraud-focused work follows the same rare-event logic: Pushkarenko and Zaslavskyi [66] study synthetic fraud-record generation for improving downstream fraud detection, where usefulness is measured by whether generated samples improve rare-event classification. Flow-based latent-space augmentation work [34] follows the same utility-driven logic, us-ing latent flow-based samples to improve prediction on credit and customer tabular tasks. Kuo and Motsch [44] apply a diffusion trans-former to fraud-detection tables, where the generated records are useful only if they improve rare-event detection without distorting the fraud/non-fraud boundary. 
+
+## 5.2 Privacy and Trustworthiness 
+
+The second group treats synthetic or generated tabular records as objects that must satisfy privacy, compliance, validity, or explana-tion constraints. Financial institutions often cannot share raw cus-tomer, transaction, or credit records, so synthetic data are valuable only if they retain utility while reducing memorization and disclo-sure risk. Federated diffusion with differential privacy addresses this setting by learning tabular generators across decentralized financial datasets while limiting information leakage from any par-ticipant [73]. Privacy-preserving mixed-type diffusion models make the same concern explicit for heterogeneous financial tables, where leakage may occur through rare categorical combinations as well as continuous outliers [75]. Measuring privacy risks and tradeoffs in financial synthetic data generation shifts the emphasis from model design to evaluation: utility, fidelity, and disclosure risk must be reported together rather than optimized separately [103]. Cardei et al. [9] address trustworthiness from a constraint-satisfaction per-spective, proposing constrained tabular diffusion for finance so that generated records respect domain rules rather than only matching marginal distributions. Zhang et al. [97] propose Tabular Diffusion Counterfactual Explanation, a classifier-guided diffusion method for heterogeneous tabular data that uses a Gumbel-softmax-based reverse process to generate valid and diverse counterfactuals for credit-lending and related tabular decision tasks. 
+
+## 6 Other Structured Financial Data 
+
+Not all financial objects are ordinary time series, LOB states, or tabular rows. Some data objects carry mathematical structure that Anonymous Author(s) 
+
+must be preserved by the generator. Examples include correlation matrices, implied-volatility surfaces, yield curves, derivative paths, and risk-neutral pricing objects. These objects are structured be-cause validity is partly defined by financial constraints: correlation matrices should be symmetric and positive semidefinite, volatility surfaces should respect no-arbitrage and cross-maturity consis-tency, yield curves should remain smooth and economically plausi-ble, and derivative paths may need to respect payoff or risk-neutral dynamics. For this reason, evaluation in this section is less about generic sample realism and more about whether generated objects remain financially admissible. Matrix, surface, and curve papers make this constraint issue explicit. Kubiak et al. [43] apply DDPMs to financial correlation matrices, proposing both unconditional and conditional generators that reproduce empirical market structure and regime differences, with a case study showing how synthetic matrices can augment data for asset allocation and risk modeling. Jin and Agarwal [35] forecast implied-volatility surfaces with generative diffusion models, where the generated object is a surface over strike and maturity. Term-structure work uses diffusion models to generate yield curves across maturities, making the data object a cross-maturity curve whose quality depends on smoothness, level-slope-curvature structure, and economic plausibility [18]. Related fixed-income work extends structured generation to treasury futures: Zhang et al. [98] use a conditional diffusion transformer to synthesize treasury-futures time series under user-specified conditions. Derivative-path and pricing papers use diffusion models for valuation-oriented structured data. Zhao and Shen [99] apply condi-tional diffusion to exotic option valuation and counterparty games, where generated paths must remain consistent with payoff con-ditions and valuation objectives. Gao et al. [20] generate solution paths of Markovian stochastic differential equations using diffusion models, placing the emphasis on path generation under specified stochastic dynamics rather than empirical market-data synthesis. Tiwari [84] modify DDPM reverse dynamics with a closed-form risk-neutral score shift, generating asset-price paths whose dis-counted prices satisfy the martingale condition and can be used to price European and path-dependent derivatives. 
+
+## 7 Open Directions and Conclusion 
+
+Across the reviewed literature, the main pattern is that financial generation is becoming increasingly data-object specific, which motivates three open directions for the next phase of research: building finance-specific evaluation benchmarks, understanding how diffusion and flow models scale in realistic market settings, and moving beyond generation toward decision-making. 
+
+Evaluation and benchmark. The most urgent open problem is benchmark and evaluation discipline. Diffusion models in image, video, and language generation became cumulative partly because the community built shared datasets, standard protocols, visible leaderboards, and increasingly demanding evaluation suites [15, 26, 33, 85, 86]. Finance does not yet have an equivalent. Many papers use proprietary data, incompatible horizons, different preprocessing choices, weak or non-overlapping baselines, and downstream tasks that are difficult to compare. As a result, the field risks producing many plausible demonstrations but little cumulative evidence. A useful research agenda is to build object-specific benchmark suites rather than relying on ad hoc realism checks. Image generation benefited from standardized scores such as Inception Score (IS) Sal-imans et al. [71] and Fréchet Inception Distance (FID) [26], which made distributional realism numerically comparable across papers. 
+
+Scaling up. A second open direction is scaling. In language mod-eling, scaling laws made progress more predictable by relating loss to model size, data, and compute [36], while compute-optimal train-ing showed that data and parameters must be scaled jointly rather than increasing model size alone [29]. Recent work suggests that diffusion transformers exhibit similar power-law behavior, with pretraining loss scaling predictably with compute and correlating with generation quality [51]. Finance has not yet had an analogous scaling moment. Existing studies remain fragmented across propri-etary datasets, asset classes, sampling frequencies, horizons, and evaluation protocols, making it unclear whether larger financial dif-fusion models improve because of scale, data quality, conditioning, or task design. A useful research agenda is therefore to study finan-cial scaling laws directly: how model performance changes with more assets, longer histories, higher-frequency observations, richer conditioning variables, and larger compute budgets. Such scaling evidence would help move the field from isolated demonstrations toward benchmarked and compute-aware financial generators. 
+
+Going beyond generation. Most existing diffusion-based fi-nance studies evaluate whether generated samples resemble real financial data or improve downstream tasks through scenario aug-mentation. A more ambitious direction is to use diffusion models directly as decision-makers. In the broader machine-learning litera-ture, diffusion models have been used to generate behavior trajecto-ries for planning, conditional action sequences, and reinforcement-learning policies [91, 102]. Finance has natural counterparts, includ-ing portfolio construction, hedging, execution, and market making, where the output is not only a plausible market path but an action under uncertainty. Future work could therefore move from asking whether generated samples look realistic to whether diffusion-based policies support better decisions under market uncertainty, risk limits, and regulatory constraints. This survey argues for a data-first view of diffusion models in finance. Progress will not come from treating finance as another generic data modality or from comparing model families in isolation. It will come from building benchmarked, scaled, and constraint-aware generators whose validity is defined by the financial object they model. The next phase of diffusion models in finance should therefore move beyond asking whether diffusion can generate fi-nancial data, and instead ask whether such models can become trustworthy financial simulators and decision engines. 
+
+## References                   
+
+> [1] Ahmad Aghapour, Erhan Bayraktar, and Fengyi Yuan. 2025. Solving Dynamic Portfolio Selection Problems via Score-Based Diffusion Models. arXiv preprint arXiv:2507.09916 (2025). [2] Michael S. Albergo, Nicholas M. Boffi, and Eric Vanden-Eijnden. 2023. Stochastic Interpolants: A Unifying Framework for Flows and Diffusions. arXiv preprint arXiv:2303.08797 (2023). [3] Juan Miguel Lopez Alcaraz and Nils Strodthoff. 2022. Diffusion-based Time Series Imputation and Forecasting with Structured State Space Models. Trans-actions on Machine Learning Research (2022). [4] Ali Atiah Alzahrani. 2025. Multi-Agent Regime-Conditioned Diffusion (MARCD) for CVaR-Constrained Portfolio Decisions. arXiv preprint arXiv:2510.10807 (2025).
+
+Diffusion Models in Finance: A Survey 
+
+[5] Alfred Backhouse, Kang Li, Jakob Foerster, Anisoara Calinescu, and Stefan Zohren. 2025. Painting the Market: Generative Diffusion Models for Financial Limit Order Book Simulation and Forecasting. arXiv preprint arXiv:2509.05107 
+
+(2025). [6] Avi Bagchi, Michael Tesfaye, and Om Shastri. 2026. Factor Dimensionality and the Bias-Variance Tradeoff in Diffusion Portfolio Models. arXiv preprint arXiv:2603.10385 (2026). [7] Leonardo Berti, Bardh Prenkaj, and Paola Velardi. 2025. TRADES: Gener-ating Realistic Market Simulations with Diffusion Models. arXiv preprint arXiv:2502.07071 (2025). [8] Tim Bollerslev. 1986. Generalized Autoregressive Conditional Heteroskedastic-ity. Journal of Econometrics 31, 3 (1986), 307–327. [9] Michael Cardei, Jose M. Munoz, Oscar Barrera, Shreyas K. Chandrahas, and Partha Saha. 2025. Constrained Tabular Diffusion for Finance. In Proceedings of the 6th ACM International Conference on AI in Finance . 543–551. [10] Minshuo Chen, Renyuan Xu, Yumin Xu, and Ruixun Zhang. 2025. Diffusion Factor Models: Generating High-Dimensional Returns with Factor Structure. 
+
+arXiv preprint arXiv:2504.06566 (2025). [11] Weijun Chen and Yanze Wang. 2025. Dhmoe: Diffusion generated hierarchi-cal multi-granular expertise for stock prediction. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 11490–11499. [12] So-Yoon Cho, Jin-Young Kim, Kayoung Ban, Hyeng Keun Koo, and Hyun-Gyoon Kim. 2025. Diffolio: A Diffusion Model for Multivariate Probabilistic Financial Time-Series Forecasting and Portfolio Construction. arXiv preprint arXiv:2511.07014 (2025). [13] Himanshu Choudhary, Arishi Orra, and Manoj Thakur. 2025. Diffusion-Augmented Reinforcement Learning for Robust Portfolio Optimization under Stress Scenarios. arXiv preprint arXiv:2510.07099 (2025). [14] Divyanshu Daiya, Monika Yadav, and Harshit Singh Rao. 2024. DiffSTOCK: Probabilistic Relational Stock Market Predictions using Diffusion Models. In 
+
+IEEE International Conference on Acoustics, Speech and Signal Processing .[15] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. 2009. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition . Ieee, 248–255. [16] Prafulla Dhariwal and Alexander Quinn Nichol. 2021. Diffusion Models Beat GANs on Image Synthesis. In Advances in Neural Information Processing Systems ,Vol. 34. 8780–8794. [17] Yupeng Fang, Ruirui Liu, Huichou Huang, Peilin Zhao, and Qingyao Wu. 2024. A spatio-temporal diffusion model for missing and real-time financial data inference. In Proceedings of the 33rd ACM international conference on information and knowledge management . 602–611. [18] Yosuke Fukunishi, Haorong Qiu, Akihiko Takahashi, and Fan Ye. 2025. Generat-ing the Term Structure of Interest Rates with Diffusion Models. Expert Systems with Applications (forthcoming); CIRJE Discussion Paper CF-1262 (2025). [19] Xuefeng Gao, Mengying He, Xuedong He, and Jiale Zha. 2025. Factor-Based Conditional Diffusion Model for Contextual Portfolio Optimization. arXiv preprint arXiv:2509.22088 (2025). [20] Xuefeng Gao, Jiale Zha, and Xun Yu Zhou. 2025. Generating Solution Paths of Markovian Stochastic Differential Equations using Diffusion Models. arXiv preprint arXiv:2509.08731 (2025). [21] Yuan Gao, Haokun Chen, Xiang Wang, Zhicai Wang, Xue Wang, Jinyang Gao, and Bolin Ding. 2024. DiffsFormer: A Diffusion Transformer on Stock Factor Augmentation. arXiv preprint arXiv:2402.06656 (2024). [22] Jim Gatheral, Thibault Jaisson, and Mathieu Rosenbaum. 2018. Volatility is Rough. Quantitative Finance 18, 6 (2018), 933–949. [23] Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley, Sherjil Ozair, Aaron Courville, and Yoshua Bengio. 2020. Generative adversarial networks. Commun. ACM 63, 11 (2020), 139–144. [24] Zhengyi Guo, Jiatu Li, Wenpin Tang, and David D. Yao. 2025. Diffusion Gen-erative Models Meet Compressed Sensing, with Applications to Imaging and Finance. arXiv preprint arXiv:2509.03898 (2025). [25] Steven L. Heston. 1993. A Closed-Form Solution for Options with Stochastic Volatility with Applications to Bond and Currency Options. The Review of Financial Studies 6, 2 (1993), 327–343. [26] Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bernhard Nessler, and Sepp Hochreiter. 2017. Gans trained by a two time-scale update rule converge to a local nash equilibrium. Advances in neural information processing systems 
+
+30 (2017). [27] Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. Denoising Diffusion Proba-bilistic Models. In Advances in Neural Information Processing Systems , Vol. 33. 6840–6851. [28] Jonathan Ho and Tim Salimans. 2022. Classifier-Free Diffusion Guidance. In 
+
+NeurIPS Workshop on Deep Generative Models .[29] Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, Diego de Las Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, et al. 2022. Training compute-optimal large language models. 
+
+arXiv preprint arXiv:2203.15556 (2022). [30] Peter Holderrieth and Ezra Erives. 2026. An Introduction to Flow Matching and Diffusion Models. arXiv preprint arXiv:2506.02070 (2026). [31] Yang Hu, Xiao Wang, Zezhen Ding, Lirong Wu, Huatian Zhang, Stan Z. Li, Sheng Wang, Jiheng Zhang, Ziyun Li, and Tianlong Chen. 2024. FlowTS: Time Series Generation via Rectified Flow. arXiv preprint arXiv:2411.07506 (2024). [32] Yu-Hao Huang, Chang Xu, Yang Liu, Weiqing Liu, Wu-Jun Li, and Jiang Bian. 2026. Controllable Financial Market Generation with Diffusion Guided Meta Agent. In Proceedings of the AAAI Conference on Artificial Intelligence .[33] Ziqi Huang, Yinan He, Jiashuo Yu, Fan Zhang, Chenyang Si, Yuming Jiang, Yuanhan Zhang, Tianxing Wu, Qingyang Jin, Nattapol Chanpaisit, et al. 2024. Vbench: Comprehensive benchmark suite for video generative models. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .21807–21818. [34] Md. Tawfique Ihsan, Md. Rakibul Hasan Rafi, Ahmed Shoyeb Raihan, Imtiaz Ahmed, and Abdullahil Azeem. 2025. Boosting Predictive Performance on Tab-ular Data through Data Augmentation with Latent-Space Flow-Based Diffusion. 
+
+arXiv preprint arXiv:2511.16571 (2025). [35] Chen Jin and Ankush Agarwal. 2025. Forecasting Implied Volatility Surface with Generative Diffusion Models. arXiv preprint arXiv:2511.07571 (2025). [36] Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 (2020). [37] Tero Karras, Miika Aittala, Timo Aila, and Samuli Laine. 2022. Elucidating the Design Space of Diffusion-Based Generative Models. In Advances in Neural Information Processing Systems , Vol. 35. 26565–26577. [38] Gihun Kim, Sun-Yong Choi, and Yeoneung Kim. 2025. A Diffusion-Based Generative Model for Financial Time Series via Geometric Brownian Motion. 
+
+arXiv preprint arXiv:2507.19003 (2025). [39] Diederik P Kingma and Max Welling. 2013. Auto-encoding variational bayes. 
+
+arXiv preprint arXiv:1312.6114 (2013). [40] Kelvin JL Koa, Yunshan Ma, Ritchie Ng, and Tat-Seng Chua. 2023. Diffusion variational autoencoder for tackling stochasticity in multi-step regression stock price prediction. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management . 1087–1096. [41] Marcel Kollovieh, Abdul Fatir Ansari, Michael Bohlke-Schneider, Jasper Zschieg-ner, Hao Wang, and Yuyang Wang. 2023. Predict, Refine, Synthesize: Self-Guiding Diffusion Models for Probabilistic Time Series Forecasting. In Advances in Neural Information Processing Systems .[42] Akim Kotelnikov, Dmitry Baranchuk, Ivan Rubachev, and Artem Babenko. 2023. TabDDPM: Modelling Tabular Data with Diffusion Models. In Proceedings of the 40th International Conference on Machine Learning .[43] Szymon Kubiak, Tillman Weyde, Oleksandr Galkin, Daniel Philps, and Ram Gopal. 2024. Denoising Diffusion Probabilistic Model for Realistic Financial Correlation Matrices. In Proceedings of the 5th ACM International Conference on AI in Finance . 1–9. [44] En-Ya Kuo and Sebastien Motsch. 2026. EmDT: Embedding Diffusion Trans-former for Tabular Data Generation in Fraud Detection. arXiv preprint arXiv:2603.13566 (2026). [45] Taegyeong Lee, Jiwon Park, Kyunga Bang, Seunghyun Hwang, and Ung-Jin Jang. 2025. Exploring Diffusion Models for Generative Forecasting of Financial Charts. arXiv preprint arXiv:2509.02308 (2025). [46] Andrew Lesniewski and Giulio Trigila. 2024. Beyond Monte Carlo: Harness-ing Diffusion Models to Simulate Financial Market Dynamics. arXiv preprint arXiv:2412.00036 (2024). [47] Yang Li and Zhi Chen. 2025. ByteGen: A Tokenizer-Free Generative Model for Orderbook Events in Byte Space. arXiv preprint arXiv:2508.02247 (2025). [48] Yang Li, Zhi Chen, and Steve Yang. 2025. FlowHFT: Imitation Learning via Flow Matching Policy for Optimal High-Frequency Trading under Diverse Market Conditions. arXiv preprint arXiv:2505.05784 (2025). [49] Yinheng Li, Shaofei Wang, Han Ding, and Hang Chen. 2023. Large language models in finance: A survey. In Proceedings of the fourth ACM international conference on AI in finance . 374–382. [50] Zhong Li, Qi Huang, Lincen Yang, Jiayang Shi, Zhao Yang, Niki van Stein, Thomas Bäck, and Matthijs van Leeuwen. 2025. Diffusion models for tabu-lar data: Challenges, current progress, and future directions. arXiv preprint arXiv:2502.17119 (2025). [51] Zhengyang Liang, Hao He, Ceyuan Yang, and Bo Dai. 2024. Scaling laws for diffusion transformers. arXiv preprint arXiv:2410.08184 (2024). [52] Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, and Matt Le. 2023. Flow Matching for Generative Modeling. In International Conference on Learning Representations .[53] Changshuo Liu and Canyao Liu. 2024. Entity-based Financial Tabular Data Synthesis with Diffusion Models. In Proceedings of the 5th ACM International Conference on AI in Finance .[54] Shujie Liu and JW Wan. 2024. Synthetic asset price paths generation using denoising diffusion probabilistic model. In International Conference on Scientific Computing and Machine Learning .Anonymous Author(s) 
+
+[55] Xingchao Liu, Chengyue Gong, and Qiang Liu. 2023. Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow. In International Conference on Learning Representations .[56] Hou-Wan Long, Zhoufei Tang, Jianhui Zhang, Zhuoyang Zhan, Tao Lu, and Xiaoquan Michael Zhang. 2025. InterDiff: Synthesizing Financial Time Series with Inter-Stock Correlations via Classifier-Free Guided Diffusion. In Joint European Conference on Machine Learning and Knowledge Discovery in Databases .Springer, 212–229. [57] Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li, and Jun Zhu. 2022. Dpm-solver: A fast ode solver for diffusion probabilistic model sampling in around 10 steps. Advances in neural information processing systems 35 (2022), 5775–5787. [58] Cheng Lu, Yuhao Zhou, Fan Bao, Jianfei Chen, Chongxuan Li, and Jun Zhu. 2025. Dpm-solver++: Fast solver for guided sampling of diffusion probabilistic models. Machine Intelligence Research 22, 4 (2025), 730–751. [59] Giuseppe Masi, Andrea Coletta, and Novella Bartolini. 2026. High-Quality Synthetic Financial Time-Series using a GAN-Diffusion Framework. arXiv preprint arXiv:2605.27113 (2026). [60] Thi-Thu Nguyen, Xuan-Thong Truong, Thai-Binh Nguyen, and Nhat-Hai Nguyen. 2026. VARDiff: vision-augmented retrieval-guided diffusion for stock forecasting. Information Sciences (2026), 123113. [61] Hao Ni, Lukasz Szpruch, Marc Sabate-Vidales, Baoren Xiao, Magnus Wiese, and Shujian Liao. 2021. Sig-Wasserstein GANs for Time Series Generation. In 
+
+Proceedings of the 2nd ACM International Conference on AI in Finance .[62] Alexander Quinn Nichol and Prafulla Dhariwal. 2021. Improved denoising diffusion probabilistic models. In International conference on machine learning .PmLR, 8162–8171. [63] William Peebles and Saining Xie. 2023. Scalable Diffusion Models with Trans-formers. In Proceedings of the IEEE/CVF International Conference on Computer Vision .[64] Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. 2018. Film: Visual reasoning with a general conditioning layer. In 
+
+Proceedings of the AAAI conference on artificial intelligence , Vol. 32. [65] Vamsi K Potluru, Daniel Borrajo, Andrea Coletta, Niccolò Dalmasso, Yousef El-Laham, Elizabeth Fons, Mohsen Ghassemi, Sriram Gopalakrishnan, Vikesh Gosai, Eleonora Kreačić, et al. 2023. Synthetic data applications in finance. 
+
+arXiv preprint arXiv:2401.00081 (2023). [66] Yurii Pushkarenko and Volodymyr Zaslavskyi. 2024. Synthetic data generation for fraud detection using diffusion models. Information & Security 55, 2 (2024), 185–198. [67] Kashif Rasul, Calvin Seward, Ingmar Schuster, and Roland Vollgraf. 2021. Au-toregressive Denoising Diffusion Models for Multivariate Probabilistic Time Series Forecasting. In Proceedings of the 38th International Conference on Machine Learning . 8857–8868. [68] Danilo Rezende and Shakir Mohamed. 2015. Variational inference with normal-izing flows. In International conference on machine learning . PMLR, 1530–1538. [69] Jože M. Rožanec, Tina Žezlin, Laurentiu Vasiliu, Dunja Mladenić, Radu Prodan, and Dumitru Roman. 2025. Fiaingen: A Financial Time Series Generative Method Matching Real-World Data Quality. arXiv preprint arXiv:2510.01169 
+
+(2025). [70] Preetha Saha, Jingrao Lyu, Arnav Saxena, Tianjiao Zhao, and Dhagash Mehta. 2025. Large language model agents for investment management: Foundations, benchmarks, and research frontiers. In Proceedings of the 6th ACM International Conference on AI in Finance . 736–744. [71] Tim Salimans, Ian Goodfellow, Wojciech Zaremba, Vicki Cheung, Alec Radford, and Xi Chen. 2016. Improved techniques for training gans. Advances in neural information processing systems 29 (2016). [72] Timur Sattarov, Marco Schreyer, and Damian Borth. 2023. FinDiff: Diffusion Models for Financial Tabular Data Generation. In Proceedings of the 4th ACM International Conference on AI in Finance .[73] Timur Sattarov, Marco Schreyer, and Damian Borth. 2024. Federated Diffusion Modeling with Differential Privacy for Tabular Data Synthesis. arXiv preprint arXiv:2412.16083 (2024). [74] Timur Sattarov, Marco Schreyer, and Damian Borth. 2024. Imb-FinDiff: Con-ditional Diffusion Models for Class Imbalance Synthesis of Financial Tabular Data. In Proceedings of the 5th ACM International Conference on AI in Finance .[75] Timur Sattarov, Marco Schreyer, and Damian Borth. 2025. Privacy Preserving Diffusion Models for Mixed-Type Tabular Data Generation. arXiv preprint arXiv:2512.00638 (2025). [76] Jascha Sohl-Dickstein, Eric A. Weiss, Niru Maheswaranathan, and Surya Gan-guli. 2015. Deep Unsupervised Learning using Nonequilibrium Thermodynam-ics. In Proceedings of the 32nd International Conference on Machine Learning .2256–2265. [77] Jiaming Song, Chenlin Meng, and Stefano Ermon. 2021. Denoising Diffusion Implicit Models. In International Conference on Learning Representations .[78] Yang Song, Prafulla Dhariwal, Mark Chen, and Ilya Sutskever. 2023. Consistency Models. In Proceedings of the 40th International Conference on Machine Learning .[79] Yang Song and Stefano Ermon. 2019. Generative Modeling by Estimating Gradients of the Data Distribution. In Advances in Neural Information Processing Systems , Vol. 32. [80] Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Ste-fano Ermon, and Ben Poole. 2021. Score-Based Generative Modeling through Stochastic Differential Equations. In International Conference on Learning Rep-resentations .[81] Tomonori Takahashi and Takayuki Mizuno. 2025. Generation of Synthetic Financial Time Series by Diffusion Models. Quantitative Finance (2025). [82] Yuki Tanaka, Ryuji Hashimoto, Takehiro Takayanagi, Zhe Piao, Yuri Murayama, and Kiyoshi Izumi. 2025. CoFinDiff: Controllable Financial Diffusion Model for Time Series Generation. In Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence . 9357–9365. [83] Yusuke Tashiro, Jiaming Song, Yang Song, and Stefano Ermon. 2021. CSDI: Con-ditional Score-based Diffusion Models for Probabilistic Time Series Imputation. In Advances in Neural Information Processing Systems , Vol. 34. 24804–24816. [84] Nilay Tiwari. 2026. Generative Diffusion Model for Risk-Neutral Derivative Pricing. arXiv preprint arXiv:2603.20582 (2026). [85] Thomas Unterthiner, Sjoerd Van Steenkiste, Karol Kurach, Raphael Marinier, Marcin Michalski, and Sylvain Gelly. 2018. Towards accurate generative models of video: A new metric & challenges. arXiv preprint arXiv:1812.01717 (2018). [86] Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and Samuel R Bowman. 2018. GLUE: A multi-task benchmark and analysis platform for natural language understanding. arXiv preprint arXiv:1804.07461 (2018). [87] Zhuohan Wang and Carmine Ventre. 2024. A Financial Time Series Denoiser Based on Diffusion Model. In Proceedings of the 5th ACM International Conference on AI in Finance .[88] Zhuohan Wang and Carmine Ventre. 2025. Diffvolume: Diffusion models for vol-ume generation in limit order books. In Proceedings of the 6th ACM International Conference on AI in Finance . 587–595. [89] Zhuohan Wang and Carmine Ventre. 2026. DiffLOB: Diffusion Models for Counterfactual Generation in Limit Order Books. In Proceedings of the 35th International Joint Conference on Artificial Intelligence (IJCAI-ECAI 2026) .[90] Magnus Wiese, Robert Knobloch, Ralf Korn, and Peter Kretschmer. 2020. Quant GANs: Deep Generation of Financial Time Series. Quantitative Finance 20, 9 (2020). [91] Changfu Xu, Jianxiong Guo, Yuzhu Liang, Haiyang Huang, Haodong Zou, Xi Zheng, Shui Yu, Xiaowen Chu, Jiannong Cao, and Tian Wang. 2025. Diffusion Models for Reinforcement Learning: Foundations, Taxonomy, and Development. 
+
+arXiv preprint arXiv:2510.12253 (2025). [92] Ling Yang, Zhilong Zhang, Yang Song, Shenda Hong, Runsheng Xu, Yue Zhao, Wentao Zhang, Bin Cui, and Ming-Hsuan Yang. 2023. Diffusion models: A comprehensive survey of methods and applications. ACM computing surveys 
+
+56, 4 (2023), 1–39. [93] Yiyuan Yang, Ming Jin, Haomin Wen, Chaoli Zhang, Yuxuan Liang, Lintao Ma, Yi Wang, Chenghao Liu, Bin Yang, Zenglin Xu, Shirui Pan, and Qingsong Wen. 2024. A Survey on Diffusion Models for Time Series and Spatio-Temporal Data. 
+
+Comput. Surveys (2024). [94] Xinyu Yuan and Yan Qiao. 2024. Diffusion-TS: Interpretable Diffusion for General Time Series Generation. In International Conference on Learning Repre-sentations .[95] Stelios Zarifis, Ioannis Kordonis, and Petros Maragos. 2025. Diffusion-Based Scenario Tree Generation for Multivariate Time Series Prediction and Multistage Stochastic Optimization. arXiv preprint arXiv:2509.14832 (2025). [96] Hengrui Zhang, Jiani Zhang, Balasubramaniam Srinivasan, Zhengyuan Shen, Xiao Qin, Christos Faloutsos, Huzefa Rangwala, and George Karypis. 2024. Mixed-Type Tabular Data Synthesis with Score-based Diffusion in Latent Space. In International Conference on Learning Representations .[97] Wei Zhang, Brian Barr, and John Paisley. 2026. Tabular diffusion counterfactual explanations. Frontiers in Artificial Intelligence 9 (2026), 1743495. [98] Yingxiao Zhang, Jiaxin Duan, Junfu Zhang, and Ke Feng. 2026. TF-CoDiT: Conditional Time Series Synthesis with Diffusion Transformers for Treasury Futures. arXiv preprint arXiv:2601.11880 (2026). [99] Helin Zhao and Junchi Shen. 2025. Valuation of Exotic Options and Counter-party Games Based on Conditional Diffusion. arXiv preprint arXiv:2509.13374 
+
+(2025). [100] Wenliang Zhao, Lujia Bai, Yongming Rao, Jie Zhou, and Jiwen Lu. 2023. Unipc: A unified predictor-corrector framework for fast sampling of diffusion models. 
+
+Advances in Neural Information Processing Systems 36 (2023), 49842–49869. [101] Zetao Zheng, Guoan Li, Deqiang Ouyang, Decui Liang, and Jie Shao. 2024. Limit Order Book Event Stream Prediction with Diffusion Model. Data Science and Engineering (2024). [102] Zhengbang Zhu, Hanye Zhao, Haoran He, Yichao Zhong, Shenyu Zhang, Hao-quan Guo, Tingting Chen, and Weinan Zhang. 2023. Diffusion models for reinforcement learning: A survey. arXiv preprint arXiv:2311.01223 (2023). [103] Michael Zuo, Inwon Kang, Stacy Patterson, and Oshani Seneviratne. 2026. Measuring Privacy Risks and Tradeoffs in Financial Synthetic Data Generation. 
+
+arXiv preprint arXiv:2602.09288 (2026).
