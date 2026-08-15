@@ -6,55 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-14
-- 运行时间：2026-08-14 21:05:14 UTC
+- 最新运行日期：2026-08-15
+- 运行时间：2026-08-15 19:37:10 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：6
-- 速读区：5
+- 本次总论文数：2
+- 精读区：0
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读6篇、速读5篇，聚焦金融时序与AI预测。  
-最值得看LSTM横截面异质性建模与AI多场景利率预测，两篇均获9.0/10。  
-下一步可关注流匹配订单簿生成FlowLOB与弱因子下的混合频率学习。
-- 详情：[/202608/14/README](/202608/14/README)
+今日速读2篇，聚焦金融数学前沿：期权定价与投资组合优化双线推进。
+
+最值得关注的是《DYSANOS》提出的动态非参数期权曲面生成框架（7.0分），直接跳过平滑假设，兼顾无套利约束；另一篇则用随机Riccati方程求解多因子波动率下的均值-方差组合（6.0分），适合量化进阶。
+
+建议普通读者先消化期权曲面论文中的“动态无套利”思想，再看组合优化框架，避开繁琐推导，抓住模型适用场景即可。
+- 详情：[/202608/15/README](/202608/15/README)
 
 ### 精读区论文标签
-1. [Cross-Sectional Heterogeneity in LSTM Networks for Financial Time Series](/202608/14/2608.05755v2-cross-sectional-heterogeneity-in-lstm-networks-for-financial-time-series)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：与v1相同的金融时间序列LSTM扩展方法
-2. [AI-Driven Multiscenario Interest Rate Forecasting: A Proof of Concept for Banking Asset Management](/202608/14/2608.12424v1-ai-driven-multiscenario-interest-rate-forecasting-a-proof-of-concept-for-banking-asset-management)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：将AI与计量经济模型结合进行利率预测，支持银行资产负债管理
-3. [AQuA: Recursively Self-Improving Quantitative Trading Research Agents](/202608/14/2608.12841v1-aqua-recursively-self-improving-quantitative-trading-research-agents)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：深度学习方法驱动的量化交易研究智能体
-4. [TIEM: Temporal Integration of Hypergraph Evidence and Skill Memory for Event-Driven Financial Forecasting](/202608/14/2608.13024v1-tiem-temporal-integration-of-hypergraph-evidence-and-skill-memory-for-event-driven-financial-forecasting)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：基于大模型智能体的事件驱动金融预测，利用超图证据检索与技能记忆，属于NLP金融分析
-5. [Diffusion Models in Finance: A Survey](/202608/14/2608.12583v1-diffusion-models-in-finance-a-survey)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：金融数据深度生成扩散模型综述
-6. [LOB-ID: Evaluating Synthetic Market Data by Inception Distances](/202608/14/2608.13082v1-lob-id-evaluating-synthetic-market-data-by-inception-distances)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向合成限价订单簿市场数据的嵌入评估框架
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [FlowLOB: Efficient and Controllable Limit Order Book Generation with Flow Matching](/202608/14/2608.13096v1-flowlob-efficient-and-controllable-limit-order-book-generation-with-flow-matching)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：基于流匹配的高效限价订单簿生成模型，是深度学习在股票市场微观结构中的应用
-2. [FM-LLM: A frequency-enhanced mixture-of-experts framework for adapting LLMs to time series forecasting](/202608/14/2608.11623v1-fm-llm-a-frequency-enhanced-mixture-of-experts-framework-for-adapting-llms-to-time-series-forecasting)  
+1. [DYSANOS Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces](/202608/15/2608.12587v1-dysanos-generative-dynamic-smooth-arbitrage-free-non-parametric-option-surfaces)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：利用频率增强混合专家将LLM适配到时间序列预测，可迁移到金融市场预测
-3. [Supervised Mixed-Frequency Learning for Macro-Financial Forecasting When Factors are Weak](/202608/14/2608.12589v1-supervised-mixed-frequency-learning-for-macro-financial-forecasting-when-factors-are-weak)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：用于混合频率宏观金融预测的监督机器学习
-4. [What Makes a Peer? Valuation-Anchored Similarity in Private Markets](/202608/14/2608.12594v1-what-makes-a-peer-valuation-anchored-similarity-in-private-markets)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：私募市场估值中的机器学习相似性
-5. [Governing Agentic AI in FinTech](/202608/14/2608.11344v2-governing-agentic-ai-in-fintech)  
+   evidence：用于无套利期权曲面的生成模型，是金融中的AI/ML方法
+2. [A Computable Stochastic Riccati Equations Framework for Mean--Variance Portfolio Selection with Multifactor Stochastic Volatility Model](/202608/15/2608.07977v1-a-computable-stochastic-riccati-equations-framework-for-mean--variance-portfolio-selection-with-multifactor-stochastic-volatility-model)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：研究金融科技中智能体AI的治理与可验证性，属于AI在金融领域的议题。
+   evidence：具有随机波动率的投资组合选择框架，与自动化组合管理相关
 
 
 <div class="dpr-home-promo-card">
