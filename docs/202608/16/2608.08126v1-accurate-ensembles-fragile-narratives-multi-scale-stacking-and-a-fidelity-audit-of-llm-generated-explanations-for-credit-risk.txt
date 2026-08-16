@@ -1,0 +1,659 @@
+Title: Accurate Ensembles, Fragile Narratives: Multi-Scale Stacking and a Fidelity Audit of LLM-Generated Explanations for Credit Risk
+
+URL Source: https://arxiv.org/pdf/2608.08126v1
+
+Published Time: Tue, 11 Aug 2026 00:41:11 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Accurate Ensembles, Fragile Narratives: Multi-Scale Stacking and a Fidelity Audit of LLM-Generated Explanations for Credit Risk 
+
+Gregorius Reynaldi Pratama 
+
+School of Computer Science and Technology Harbin Institute of Technology, Shenzhen 
+
+Shenzhen, China gregoriusreynaldi@gmail.com 
+
+Kuo-Kun Tseng 
+
+School of Computer Science and Technology Harbin Institute of Technology, Shenzhen 
+
+Shenzhen, China kktseng@hit.edu.cn 
+
+Abstract: Credit scoring increasingly relies on model families whose decision logic cannot be read off their parameters, which places them in tension with supervisory expectations that adverse decisions be explainable. A common proposal is to close that gap with a language model: compute feature attributions, hand them to an LLM, and let it write the rationale. We build such a system end to end and then test whether the second half of the promise holds. The predictive component is a multi-scale stacking ensemble that fuses four differ-ently regularised gradient-boosting learners with a residual network through a small neural meta-learner trained on out-of-fold predictions. On a public 32,581-application credit dataset it reaches a test ROC-AUC of 0.9539 (95% CI [0 .9462 , 0.9616] ) and PR-AUC of 0.9137 ,improving on the strongest single model by ∆AUC = 0.0143 ;the improvement remains significant ( p = 0.016 ) even under a deliberately conservative independence assumption. The explanation component fuses SHAP and LIME attributions and passes only the top-ranked drivers to a 2.7B-parameter model under greedy decoding. Our central finding is asymmetric. The ranking gains are real but operationally small: at the F1-optimal threshold the ensemble avoids only six additional missed defaults out of 1,422 relative to a tuned random forest, cutting cost-weighted loss by under 2% . The narrative layer, in contrast, fails in a way that prompt engineering alone does not fix. In an audited case the model named three factors as risk-increasing that the underlying attributions scored as risk-reducing .We trace this to properties we measure rather than assume: SHAP and LIME agree on which features matter (overlap@10 = 0 .80 )but not on their order ( τ = 0 .43 , p = 0 .18 ), and the sign of the attribution for a feature such as applicant income is close to a coin flip across instances (modal-sign share 0.53 ). We also report calibration (ECS = 0 .117 ) and perturbation stability ( DPD = 0 .078 ) that both fall short of the thresholds our own protocol declares acceptable. We conclude that constrained prompting is a necessary but not sufficient control, and that grounding must be verified after generation rather than assumed from the prompt. 
+
+Index Terms: credit risk, stacking ensembles, explainable AI, SHAP, LIME, large language models, explanation fidelity, model calibration 
+
+I. I NTRODUCTION 
+
+A credit decision is a decision about a person. When a lender declines an application or prices it punitively, the applicant in most jurisdictions acquires a right to be told why, and the supervisor acquires an interest in whether the stated reason is the operative one [1]. This is what distinguishes credit scoring from most tabular classification problems: the score is not the deliverable. The score plus a defensible account of the score is the deliverable. The modelling literature has largely optimised the first half. Gradient-boosted trees and their ensembles now domi-nate credit benchmarks [2], [3], and the margin over inter-pretable baselines such as regularised logistic regression is large enough that institutions are unwilling to give it up. The standard response is post-hoc attribution: fit whatever model performs best, then explain it with SHAP [4] or LIME [5]. This has become close to a default in credit risk management [6]. Attribution, however, produces a vector of signed real numbers, one per feature, expressed in units of log-odds or probability shift. A loan officer does not read that vector, and neither does an applicant. A recent and fast growing line of work therefore proposes a further translation step: feed the attributions to a large language model and let it write prose [7], [8], [9], [10], [11]. The appeal is obvious. The risk is equally obvious, because language models generate fluent text whether or not it is grounded in what they were given [14], and fluency is precisely what makes an ungrounded credit rationale dangerous: it is more persuasive than the correct one, not less. Most existing proposals control this risk at the input. They restrict the prompt to a handful of top-ranked drivers, forbid the model from inventing numbers, and decode greedily. We implement exactly this design and then ask the question that the design’s advocates usually leave to future work: does it work? Not whether the output reads well, since it plainly does, but whether the propositions it asserts match the attributions it was handed. The answer, on our system, is no. This paper reports that result together with the diagnostic work needed to explain it, and it revises the accompanying predictive claims downward where the evidence requires. 
+
+Contributions 
+
+1) A multi-scale stacking ensemble for credit default prediction. Four gradient-boosting learners deliberately configured at different depth/learning-rate scales, plus a residual network, are fused by a small neural meta-arXiv:2608.08126v1 [cs.LG] 8 Aug 2026 learner trained on out-of-fold predictions. It attains test ROC-AUC 0.9539 and PR-AUC 0.9137 (Section VII). 2) Statistical rather than rhetorical model comparison. 
+
+We attach confidence intervals to every headline metric and test the ensemble’s margin over the best single model under an assumption chosen to disadvantage our own claim. The margin survives ( p = 0 .016 ). 3) An operating-point analysis that qualifies the head-line. We show that the ranking gain translates into a cost reduction of under 2% at the deployed threshold across a wide range of misclassification cost ratios (Sec-tion VIII). Reporting AUC alone would have overstated the practical benefit. 4) A measured account of what the attribution layer actually provides. The ensemble’s risk representation differs qualitatively from that of the linear baseline: 
+
+loan_grade absorbs the role that loan_int_rate 
+
+and the bureau default flag play in logistic regression (Section IX). We quantify SHAP–LIME agreement, cross-model agreement, attribution concentration and directional stability instead of asserting them. 5) A fidelity audit of the narrative layer, with a doc-umented failure. We define a lightweight sign-and-membership audit, apply it, and report a case in which the generated rationale inverts the direction of three of the four drivers it was given (Section X). We connect this to the attribution instability measured in the previous section rather than treating it as a one-off. 6) Honest trustworthiness diagnostics. Calibration, per-turbation stability, local explanation consistency and group disparity are reported against the acceptance thresholds our own protocol specifies. Three of the four fail (Section XI). We argue this is more useful to a practitioner than a table of green ticks. A note on provenance is in order. An earlier version of this work reported a test ROC-AUC of 0.96 . Recomputation from the persisted artefacts gives 0.9539 . Every figure reported in this paper is recomputed from the serialised experiment outputs, and the reproduction scripts are released with the code. II. R ELATED WORK 
+
+A. Machine learning for credit scoring 
+
+Benchmarking studies over the past decade converge on a consistent ordering: ensembles of decision trees outperform single learners and outperform neural networks on typical credit-scoring feature sets, with the margin over regularised logistic regression material but not overwhelming [2], [3]. The broader tabular literature reports the same phenomenon and offers explanations grounded in the geometry of tabular decision boundaries: tree ensembles are biased towards axis-aligned, piecewise-constant functions, which suits features such as grade bands and debt-ratio thresholds [19], [20]. Our results reproduce this ordering, with random forest and XGBoost outperforming every neural architecture we test, and our ensemble is designed around it rather than against it, using the neural component as one voice among five rather than as a replacement. 
+
+B. Post-hoc attribution and its limits 
+
+SHAP [4] grounds attribution in the Shapley value [34], [35], which uniquely satisfies local accuracy, consistency and missingness. LIME [5] fits a sparse linear surrogate in a sampled neighbourhood. Both are model-agnostic and both are widely deployed in finance [6], [36], [37]. Their limitations are also well documented. LIME’s reliance on random perturbation makes its explanations unstable across runs [17], and both methods can be deliberately fooled by an adversary who exploits the off-manifold queries they is-sue [16]. Rudin argues from these failure modes that high-stakes decisions should use models that are interpretable by construction [18]. We do not resolve that debate. We do take from it the methodological point that an attribution vector is evidence about a model, not a transcript of it, and that anything built downstream inherits its noise. Section IX measures that noise on our system; Section X shows it propagating. 
+
+C. Language models as explanation interfaces 
+
+The proposal to have an LLM verbalise XAI output is recent and active [7], [8]. Kroeger et al. [9] ask whether LLMs can act as post-hoc explainers directly. Factorial studies of narrative quality find that readers prefer LLM-written explanations to raw attribution tables [10], which is the intended effect and also the reason a wrong narrative is worse than a wrong table. Work specific to credit risk asks whether LLMs can serve as governance-grade explainability tools [11] and whether LLM-derived feature rationales align with those of classical models [13]. Two-stage designs that add an explicit verification pass over the generated text [12] are, in our reading, the correct architectural response, and our results are an empirical argument for them. Faithfulness, meaning whether an explanation reflects the reasoning it purports to describe, has a precise treatment in NLP [15], and hallucination in conditional generation is surveyed in [14]. Our contribution here is narrow and concrete: we apply a minimal faithfulness check to a credit-risk narrative pipeline built the way the literature recommends, and report that it fails. 
+
+D. Positioning 
+
+Relative to prior work, the novelty of this paper is not the ensemble, and it is not the idea of pairing attribution with an LLM. It is the audit. We are not aware of a credit-risk study that reports both a full attribution-stability profile of its own ensemble and a documented sign-inversion failure of its own narrative layer, and that connects the two. III. D ATA AND PREPROCESSING 
+
+A. Dataset 
+
+We use the public Credit Risk Dataset, comprising 32 ,581 
+
+consumer loan applications described by eleven predictors TABLE I PREDICTORS AND TARGET . N AMES ARE GIVEN EXACTLY AS THEY APPEAR IN THE RELEASED DATA AND CODE .                
+
+> Feature Description
+> Numeric predictors
+> person_age Applicant age in years
+> person_income Annual income
+> person_emp_length Employment tenure in years
+> loan_amnt Requested principal
+> loan_int_rate Contractual interest rate
+> loan_percent_income Principal as a share of income
+> cb_person_cred_hist_length Length of credit history
+> Categorical predictors
+> person_home_ownership Rent, mortgage, own or other
+> loan_intent Stated purpose, six levels
+> loan_grade Internal grade A to G, ordinal, A best
+> cb_person_default_on_file Prior bureau default, binary
+> Target
+> loan_status 1 = default, 0 = repaid
+
+and a binary outcome loan_status (1 = default). Seven predictors are numeric and four categorical; Table I lists them. The target is imbalanced: 25 ,473 non-defaults ( 78 .18% )against 7,108 defaults ( 21 .82% ), a ratio of 3.58:1 .Overall completeness is 98 .97% . Missingness is confined to two continuous variables, loan_int_rate (3,116 records, 
+
+9.56% ) and person_emp_length (895 records, 2.75% ), and is scattered rather than structured. Duplicate rows account for 165 records ( 0.51% ). 
+
+B. Leakage control 
+
+The single most consequential preprocessing decision is ordering. We partition before we learn anything from the data. The design matrix and labels are split 80 /20 with 
+
+stratify=y , preserving the 21 .82% default rate in both par-titions, yielding 26 ,064 training and 6,517 test records ( 5,095 
+
+non-defaults, 1,422 defaults). Every subsequent transformation (winsorisation caps, imputation, scaling, encoding) estimates its parameters on the training partition only and is then applied unchanged to the test partition. The fitted transformer objects are serialised so that the inference service applies numerically identical transformations. 
+
+C. Transformations 
+
+Winsorisation. Domain-implausible extremes were capped rather than deleted: person_age at 100 years and 
+
+person_emp_length at 50 years, against raw maxima of 
+
+144 and 123 respectively. Caps are estimated on training data and reused. 
+
+Imputation. The two incomplete numeric columns are filled with a k-nearest-neighbour imputer ( k = 5). Because the missing variables are correlated with income and principal, local interpolation is preferable to global mean or median substitution. 
+
+Scaling. Numeric features are centred on the training me-dian and scaled by the training interquartile range. Income is severely right-skewed (sample skewness ≈ 32 , driven by a small number of very high earners), which is exactly the                                 
+
+> TABLE II BASE -LEARNER CONFIGURATIONS . T HE FOUR BOOSTING MODELS ARE SPREAD ACROSS THE DEPTH –SHRINKAGE PLANE BY DESIGN RATHER THAN TUNED TO A COMMON OPTIMUM .
+> Learner Depth Trees ηSubsample Colsample
+> XGBoost DEEP 8500 0.020 0.80 0.80 XGBoost SHALLOW 3300 0.050 0.90 0.90 LightGBM 6400 0.030 0.85 0.85 CatBoost 7450 0.025 0.80 0.80 Residual MLP n/a n/a 0.001 n/a n/a
+
+regime in which a robust scaler outperforms standardisation for gradient-based learners. 
+
+Encoding. loan_grade carries a natural order (A <
+
+· · · < G) and is ordinal-encoded so that higher values mean worse credit quality. person_home_ownership and 
+
+loan_intent are one-hot encoded with the first level dropped and handle_unknown=’ignore’ so that un-seen categories at inference yield a zero vector rather than an exception. cb_person_default_on_file is mapped 
+
+{N,Y } → { 0, 1}.Concatenation yields a 17 -dimensional design matrix used identically by every model reported here. IV. M ULTI -S CALE STACKING ENSEMBLE 
+
+A. Design rationale 
+
+Stacked generalisation [25] improves on a single learner when the base learners make different mistakes. Diversity is therefore the design objective, not accuracy of the in-dividual components. Credit data is mixed-type, moderately imbalanced, and contains both broad monotone trends (higher repayment burden, higher risk) and sharp local interactions (a marginal grade combined with short tenure). We assemble learners whose inductive biases cover that range. 
+
+Multi-scale gradient boosting. Rather than four tuned variants of the same configuration, we deliberately spread the learners across the depth–shrinkage plane. A deep XGBoost (depth 8, η = 0 .02 , 500 trees) captures high-order interactions. A shallow XGBoost (depth 3, η = 0 .05 , 300 trees) acts as a low-variance anchor that represents global monotone structure. LightGBM’s leaf-wise growth [22] concentrates capacity on high-gradient regions, improving coverage of sparse segments. CatBoost’s ordered boosting [23] reduces target leakage in categorical splits, which matters for the one-hot grade and intent blocks. Hyperparameters are given in Table II. 
+
+Residual network. Tree learners approximate smooth func-tions with staircases. The fifth base learner is a residual MLP over the scaled numeric manifold: dense layers of 512 and 
+
+256 units, a residual block expanding back to 512 with an identity skip [26], then 128 and 64 units before a sigmoid output. It contributes a smooth approximator whose errors are, by construction, poorly correlated with the trees’. Stage 0: data Stage 1: heterogeneous base learners Stage 2: fusion Stage 3: dual-layer explanation 
+
+Credit Risk Dataset 
+
+> 32,581 applications
+
+Leakage-controlled preprocessing   
+
+> 80/20 stratified →17 features
+
+XGBoost DEEP  
+
+> depth 8, η=0 .02
+
+XGBoost SHALLOW  
+
+> depth 3, η=0 .05
+
+LightGBM 
+
+> leaf-wise, depth 6
+
+CatBoost 
+
+> ordered boosting, depth 7
+
+Residual MLP 
+
+> 512 →256 →512 →128 →64
+
+Meta-learner 
+
+> 5→32 →16 →1, Swish, focal loss
+
+ˆp(default ) + risk band  
+
+> threshold τ ⋆=0 .362
+> out-of-fold meta-features (5-fold stratified)
+
+SHAP 
+
+> permutation explainer, 200-sample background
+
+LIME 
+
+> weighted local linear surrogate
+
+Attribution fusion (top-4 retained)     
+
+> ¯aj=12 ( ˜ϕj+ ˜λj)
+
+Phi-2 (2.7B), greedy decoding 
+
+> constrained prompt: drivers + risk band only
+
+Natural-language rationale 
+
+> 2–3 sentences, no numbers fidelity audit (Sec. X)
+
+Fig. 1. End-to-end system. Five heterogeneous base learners are fused by a neural meta-learner trained on out-of-fold predictions; the resulting probability drives both the credit decision and the explanation stack. The dashed edge marks the interface audited in Section X, where the attributions handed to the language model are compared against the propositions it asserts. 
+
+B. Imbalance handling 
+
+Every base learner absorbs the class imbalance before stacking, so that the meta-learner receives comparably scaled signals. The boosting models use 
+
+w+ = 1 − ππ = 1 − 0.2182 0.2182 ≈ 3.58 , (1) with π the training default rate. The neural components use focal loss [29], 
+
+Lfocal (pt) = − αt (1 − pt)γ log pt, (2) with α = 0 .25 for the positive class, 0.75 otherwise, and 
+
+γ = 2 .0. Focal loss down-weights the abundant easy negatives and concentrates gradient on the hard positives, which is the behaviour we want when defaults are the minority and the expensive error. 
+
+C. Out-of-fold meta-features 
+
+Training a meta-learner on in-sample base predictions leaks the target: the base models are overconfident on data they memorised, and the meta-learner learns to trust that overcon-fidence. We avoid this with the standard out-of-fold construc-tion, illustrated in Fig. 2. Let Dtr be partitioned into five stratified folds {F k}5
+
+> k=1
+
+.For each base learner m and fold k we refit on Dtr \ F k and score Fk:
+
+Zi,m = ˆp(−k(i))  
+
+> m
+
+(xi) , i ∈ F k(i), (3) where k(i) is the fold containing sample i. The result is a meta-feature matrix Z ∈ R26064 ×5 in which every entry is an honest held-out probability. Test meta-features average the five fold-models, 
+
+Zte  
+
+> i,m
+
+= 15
+
+> 5
+
+X
+
+> k=1
+
+ˆp(−k) 
+
+> m
+
+(xi) , (4) which also reduces variance relative to any single refit. 
+
+D. Meta-learner 
+
+The meta-learner is deliberately small: with only five inputs, capacity is a liability. It maps 5 → 32 → 16 → 1 with Swish activations [33], L2 penalty 10 −4, batch normalisation [31] after each hidden layer, and dropout 0.2 [32] after the first. Optimisation uses Adam [30] at 10 −3 with focal loss, plateau-triggered learning-rate halving (factor 0.5, patience 5, floor 
+
+10 −6) and early stopping on validation ROC-AUC (patience 
+
+10 , best weights restored). The narrow 32 → 16 bottleneck forces compact combination rules; batch normalisation sta-bilises training on the strongly correlated meta-features. Monitoring ROC-AUC rather than loss is a deliberate choice under imbalance: validation loss can improve while ranking quality degrades, and ranking is what the downstream thresh-old consumes. 
+
+E. Threshold selection 
+
+A 0.5 cut-off is inappropriate at a 21 .8% base rate. We select 
+
+τ ⋆ = arg max 
+
+> τ
+
+2 Prec( τ ) Rec( τ )Prec( τ ) + Rec( τ ) (5) on training data, giving τ ⋆ = 0 .362 for the ensemble, and ap-ply it unchanged to the test partition. We stress in Section VIII that F1 is a convenient but economically arbitrary criterion, and that the choice of τ matters more to realised cost than the choice of model. training partition split into 5 stratified folds   
+
+> fold 1 fold 2 fold 3 fold 4 fold 5 out-of-fold scores
+> ˆp(−k)
+> ifor every training sample fit the five base learners score only, never fitted
+
+out-of-fold meta-feature matrix   
+
+> Z∈R26064 ×5, one column per base learner
+
+meta-learner trained on (Z, y train )      
+
+> 5→32 →16 →1
+
+test scoring: base-learner probabilities  
+
+> averaged over the 5 fold-models no training-fold prediction ever reaches the meta-learner for the sample it was fitted on Fig. 2. Out-of-fold construction of the meta-feature matrix. Within each of five stratified folds the base learners are refitted on the complementary four folds and score only the held-out block, so no meta-feature is ever produced by a model that saw the corresponding label. Test-set meta-features average the five fold-models.
+
+V. D UAL -L AYER EXPLANATION FRAMEWORK 
+
+A. Layer 1: quantitative attribution 
+
+SHAP. Because the ensemble is a composition of five het-erogeneous learners and a network, no model-specific fast path applies. We wrap the entire pipeline (base scoring, stacking, meta-learner) in a single callable and explain that , using a permutation explainer with a 200 -sample background drawn from training data. Attributions are computed for 100 test instances, giving Φ ∈ R100 ×17 . Explaining the composition rather than a component is the methodologically important part: attributions taken from one base learner would describe a model that is not the one making the decision. Global importance is ¯ϕj = 1
+
+> n
+
+P 
+
+> i
+
+|ϕij |.
+
+LIME. For each of 50 test instances we fit a proximity-weighted sparse linear surrogate on perturbed neighbours, 
+
+g∗ = arg min 
+
+> g∈G
+
+X
+
+> z
+
+πx(z) f (z) − g(z)2 + Ω( g),πx(z) = exp  −∥ z − x∥2/σ 2,
+
+(6) and take the surrogate coefficients as local importances. 
+
+Fusion. SHAP and LIME scores are min–max normalised to a common scale, ˜ϕj and ˜λj , and averaged, ¯aj = 12 ( ˜ϕj +˜λj ). The intent is that consensus suppresses method-specific artefacts. Section IX examines whether the two methods agree enough for this averaging to be meaningful. 
+
+B. Layer 2: narrative generation 
+
+The narrative layer uses microsoft/phi-2 , a 2.7B-parameter decoder-only transformer [45], loaded in float32 
+
+with left-side padding. Model choice is driven by deployment constraints: narrative generation is an inference-time cost per application, and a 2.7B model runs on the same commodity hardware as the scoring service. The prompt is deliberately impoverished. It contains the predicted probability, a discretised risk band (HIGH /MODERATE /LOW ), the raw applicant profile, the top four fused drivers with signed impacts, the five globally most important features, and the three most sensitive features. It instructs the model to write two to three sentences, to reference at least three named features, to describe how they change risk, and to avoid both jargon and numerals. Decoding is greedy ( do_sample=False ,
+
+repetition_penalty=1.05 ). The full template is reproduced in the appendix. Every control here is an input-side control. Nothing in the design inspects the generated text. This is the standard configuration in the literature, and Section X is an argument that it is insufficient. VI. E XPERIMENTAL PROTOCOL 
+
+A. Metrics 
+
+Accuracy is excluded. At a 21 .8% default rate a constant non-default predictor achieves 78% accuracy while providing no risk discrimination, so accuracy would reward exactly the behaviour we need to detect. We report ROC-AUC for threshold-free ranking quality, PR-AUC for behaviour on the minority class, and F1, precision, recall and specificity at the selected operating point. Section VIII adds a cost-weighted view. 
+
+B. Uncertainty quantification 
+
+Point estimates without intervals invite over-reading of small differences. We report a 95% confidence interval for every AUC using the Hanley–McNeil variance approxima-tion [42], 
+
+dVar( A) = 1
+
+n+n−
+
+h
+
+A(1 − A) + ( n+ − 1)( Q1 − A2)+ ( n− − 1)( Q2 − A2)
+
+i
+
+,
+
+(7) with Q1 = A/ (2 − A) and Q2 = 2A2/(1 + A), and Wilson score intervals [44] for recall, precision and specificity, which behave correctly near the boundary where the normal approximation does not. For the ensemble-versus-baseline comparison the correct instrument is a correlated test such as DeLong’s [43], which requires the paired score vectors. Those were not retained by the original experiment. We therefore compute the z statistic under the assumption that the two AUCs are independent .Since predictions on a shared test set are strongly positively correlated, and Var( A1 −A2) = σ21 +σ22 −2ρσ 1σ2 decreases in 
+
+ρ, this inflates the standard error and understates significance. Any conclusion that survives it would survive the correct test. We report the sensitivity to ρ explicitly rather than quietly assuming a favourable value. 
+
+C. Reproducibility 
+
+Experiments ran on Windows 11 with an Intel Core Ultra 9 275HX (24 cores), 32 GB RAM, and GPU acceleration, under Python 3.10.13 with NumPy 1.26, pandas 2.1, SciPy 1.11, scikit-learn 1.4, XGBoost 2.0, LightGBM 4.0, CatBoost 1.2, TensorFlow 2.15, PyTorch 2.0 with pytorch-tabnet 4.0, SHAP 0.45 and LIME 0.2. A fixed seed, 5-fold stratified cross-validation and the 80 /20 stratified split are enforced throughout. Training and test tensors, fitted preprocessing objects, trained models and all metric artefacts are serialised; the analyses and figures in this paper are regenerated from those artefacts by released scripts. VII. P REDICTIVE PERFORMANCE 
+
+Table III and Fig. 3 report the full comparison. 
+
+The ordering reproduces the tabular literature. Random forest (0.9396 ) and XGBoost (0.9358 ) beat every neural architecture we trained. The best network, the residual MLP, reaches 0.9306 ; TabNet’s learnable tokenizer variant is the weakest of the deep models at 0.9197 , so the additional feature-tokenisation machinery cost more than it returned on a 17 -dimensional design matrix. This is consistent with the finding that tree ensembles retain an advantage on typical tabular data [19], [20]. It is worth stating plainly because it undercuts a common framing: the deep architectures here are not where the performance comes from. 
+
+The ensemble improves on the best single model, and the improvement is statistically supported. Against the random forest, ∆AUC = 0 .0143 . Under the conservative indepen-dence assumption of Section VI, z = 2 .40 and p = 0 .016 .Under more realistic correlation the margin is far more deci-sive: at ρ = 0 .5, p = 7 .3 × 10 −4; at ρ = 0 .8, p = 1 .3 × 10 −7.Against the best neural architecture, ∆AUC = 0 .0233 with 
+
+p = 1 .6 × 10 −4 even under the conservative assumption. The stacking gain is therefore real rather than noise, which is the claim H1 makes and the evidence supports. 
+
+Overfitting is controlled. The train–test ROC-AUC gap does not exceed 0.0082 in absolute value for any model, and is negative for the ensemble ( −0.0056 , i.e., test exceeds train). For a system with five base learners and a meta-network this is the reassuring outcome, and it is attributable to the out-of-fold protocol and early stopping rather than to luck. 
+
+PR-AUC separates the models more sharply than ROC-AUC. The ensemble’s 0.9137 against the random forest’s 
+
+0.8948 is a 0.0189 gap, larger than the corresponding ROC gap. Under imbalance this is the more relevant comparison, since PR-AUC is sensitive to performance on the minority class that motivates the exercise. VIII. O PERATING POINT AND COST 
+
+Table III reports ranking quality. Deployment consumes decisions, and the translation is not automatic. Consider the confusion matrices in Table IV. At its selected threshold the ensemble produces 364 false negatives and 40 
+
+false positives. The random forest produces 370 and 44 . The ensemble’s entire operational advantage over the strongest baseline is six additional defaults caught and four fewer good applicants wrongly declined, out of 6,517 decisions. The Wilson intervals for recall overlap almost completely ([0 .721 , 0.766] versus [0 .716 , 0.762] ). To make this precise, let cFN and cFP be the costs of a missed default and a wrongly declined applicant, and define expected cost per thousand applications 
+
+C(κ) = 1000 
+
+n
+
+ FP + κ FN , κ = cFN /c FP . (8) Fig. 4 plots the excess of each model over the ensemble. At 
+
+κ = 5 the ensemble costs 285 .4 against the random forest’s 
+
+290 .6, a 1.80% reduction; at κ = 10 , 564 .7 against 574 .5
+
+(1.71% ); at κ = 20 , 1123 .2 against 1142 .2 (1.67% ). The reduction is remarkably stable in κ and remarkably small. Two conclusions follow, and they pull in opposite directions. First, the honest one: a 0.0143 AUC gain does not buy 
+
+0.0143 worth of anything at a fixed threshold. ROC-AUC integrates over all thresholds; a deployed system occupies one. Papers that report only AUC improvements, including this one as originally drafted, invite the reader to infer an operational benefit that the confusion matrix does not support. We would rather state the limitation than let the abstract carry an implication we cannot defend. Second, the qualification: all models here are evaluated at 
+
+their own F1-optimal thresholds, and F1 weights precision and recall equally, which corresponds to κ ≈ 1. No lender believes that. At κ = 10 , every model in Table IV is operating well away from its cost-optimal point, and the ensemble’s superior ranking gives it more room to move: a better-ordered score list yields a better precision–recall frontier to select from. Threshold selection under an explicit cost model is, on this evidence, a higher-leverage intervention than further architecture search, a point we return to in Section XII. IX. W HAT THE ATTRIBUTION LAYER ACTUALLY SHOWS 
+
+A. The ensemble’s risk representation is not the linear model’s 
+
+Fig. 5 gives the global profile. loan_percent_income 
+
+leads at ¯ϕ = 0 .0827 , followed by loan_grade (0.0768 ) and 
+
+person_income (0.0464 ). The interesting result is what is absent . In the L1-regularised logistic baseline, the largest positive coefficients belong to 
+
+loan_percent_income , loan_int_rate and the bu-reau default flag. In the ensemble, loan_int_rate ranks twelfth ( 0.0131 ) and cb_person_default_on_file six-teenth of seventeen ( 0.0020 ). This is not a contradiction, and it is not a defect. 
+
+loan_grade is an internal rating that is itself a function of interest rate and bureau history: grade determines price. TABLE III TEST -SET PERFORMANCE . A LL VALUES RECOMPUTED FROM THE SERIALISED EXPERIMENT ARTEFACTS . AUC INTERVALS ARE HANLEY –M CNEIL ; τ ⋆ IS THE F1 -OPTIMAL THRESHOLD SELECTED ON TRAINING DATA . T HE GENERALISATION GAP COLUMN IS TRAIN MINUS TEST ROC-AUC. 
+
+Model ROC-AUC 95% CI PR-AUC F1 Precision Recall Specificity Gap Multi-scale ensemble 0.9539 [0 .9462 , 0.9616] 0.9137 0.8397 0.9636 0.7440 0.9921 −0.0056 
+
+Random forest 0.9396 [0 .9309 , 0.9484] 0.8948 0.8356 0.9599 0.7398 0.9914 −0.0082 
+
+XGBoost 0.9358 [0 .9268 , 0.9448] 0.8867 0.8241 0.9787 0.7117 0.9957 −0.0079 
+
+Residual network 0.9306 [0 .9213 , 0.9399] 0.8764 0.8094 0.9273 0.7180 0.9843 +0 .0063 
+
+Deep & Cross network 0.9251 [0 .9155 , 0.9348] 0.8653 0.7933 0.9076 0.7046 0.9800 −0.0027 
+
+TabNet (pure) 0.9218 [0 .9120 , 0.9317] 0.8608 0.7946 0.9180 0.7004 0.9825 +0 .0051 
+
+TabNet + tokenizer 0.9197 [0 .9098 , 0.9297] 0.8462 0.7747 0.8787 0.6927 0.9733 +0 .0012 
+
+Logistic regression 0.8663 [0 .8538 , 0.8787] 0.6956 0.6454 0.6248 0.6674 0.8881 −0.0027 0.86 0.88 0.90 0.92 0.94 0.96 
+
+Test ROC-AUC (95% CI) 
+
+Logistic Regression TabNet + Tokenizer TabNet (pure) Deep & Cross Net Residual Network XGBoost Random Forest Multi-Scale Ensemble 
+
+(a) Ranking quality 
+
+0.65 0.70 0.75 0.80 0.85 0.90 0.95 
+
+Test PR-AUC 
+
+> 0.696 0.846 0.861 0.865 0.876 0.887 0.895 0.914
+
+(b) Minority-class quality 
+
+Fig. 3. Test performance with uncertainty. (a) ROC-AUC with Hanley–McNeil 95% intervals. The ensemble’s interval is disjoint from those of the neural architectures and overlaps the random forest’s only marginally. (b) PR-AUC, the more informative summary under a 3.58:1 imbalance. TABLE IV TEST CONFUSION MATRICES AND WILSON 95% INTERVALS AT EACH MODEL ’S F1 -OPTIMAL THRESHOLD . n = 6 ,517 (1,422 DEFAULTS ). 
+
+Model TN FP FN TP Recall (95% CI) Prec. (95% CI) 
+
+Ensemble 5055 40 364 1058 [0 .721 , 0.766] [0 .951 , 0.973] 
+
+Random forest 5051 44 370 1052 [0 .716 , 0.762] [0 .947 , 0.970] 
+
+XGBoost 5073 22 410 1012 [0 .688 , 0.735] [0 .968 , 0.986] 
+
+Residual net 5015 80 401 1021 [0 .694 , 0.741] [0 .911 , 0.941] 
+
+Logistic reg. 4525 570 473 949 [0 .643 , 0.691] [0 .600 , 0.649] 
+
+A linear model, unable to represent that dependence, must recover the signal from the constituent variables. The ensemble represents the composite directly and the constituents become redundant. The practical consequence is specific and easy to get wrong: a compliance narrative generated from ensem-ble attributions will not mention prior defaults, even though prior defaults demonstrably influence the outcome through the grade. An adverse-action notice that omits them may be accurate about the model and still misleading about the decision. Attribution to a feature is not attribution to a cause, and collinear composites make the gap operationally visible. 
+
+B. Attribution is diffuse, not concentrated 
+
+The earlier draft asserted that the top five features account for “almost 75% ” of attribution mass. Recomputed from the stored SHAP matrix, the figure is 67 .4% ; eight of seventeen features are required to reach 80% . Locally the picture is similar: the median instance requires six features to account for 80% of its own |ϕ| mass (IQR 5–6). This matters directly for the narrative layer, which is handed only the top four drivers. Averaged over the explained in-stances, those four carry 72 .3% of an instance’s attribution mass, so the prompt discards more than a quarter of the evidence before the language model sees it. The truncation is a defensible engineering choice, since shorter prompts are easier to constrain, but it is a lossy summary and the residual is not negligible. 
+
+C. Cross-model agreement is high; SHAP–LIME agreement is not 
+
+Two agreement questions are often conflated. They have different answers here. 5 10 15 20 25 
+
+relative cost of a missed default, cFN /cFP 
+
+0100 200 300 400 500 
+
+> excess cost vs. ensemble (per 1,000 applications)
+
+Multi-scale ensemble (reference) Random Forest XGBoost Residual Network Deep & Cross Net Logistic Regression Fig. 4. Excess cost-weighted loss relative to the proposed ensemble at each model’s F1-optimal threshold, as the relative cost of a missed default varies. The ensemble is best throughout, but its margin over a tuned random forest is small: under 2% across the plotted range. The visible separation is between the ensemble and the neural models, not between the ensemble and the tree baselines. 0.00 0.02 0.04 0.06 0.08 
+
+mean | j|     
+
+> person_home_ownership_OTHER cb_person_default_on_file cb_person_cred_hist_length loan_intent_MEDICAL person_age loan_int_rate person_home_ownership_OWN person_emp_length loan_intent_EDUCATION loan_intent_PERSONAL loan_intent_HOMEIMPROVEMENT loan_amnt loan_intent_VENTURE person_home_ownership_RENT person_income loan_grade loan_percent_income
+> 0% 20% 40% 60% 80% 100%
+
+cumulative share of attribution mass 
+
+Fig. 5. Global attribution profile of the ensemble over 100 explained test instances (bars, left axis: mean |ϕj |; line, top axis: cumulative share). Attribution is diffuse: the top five features carry 67 .4% of the mass and eight are needed to reach 80% . Note the position of loan_int_rate (12th) and cb_person_default_on_file (16th), both of which are leading predictors in the logistic baseline. 
+
+Across base learners, agreement is genuinely high (Fig. 6). Mean pairwise overlap@10 is 0.860 
+
+and mean Kendall τ is 0.776 ; loan_grade and 
+
+loan_percent_income appear in all five learners’ top three, and seven features appear in all five top-ten lists. Disagreement is concentrated in low-frequency one-hot levels: 
+
+loan_intent_VENTURE has a coefficient of variation of 
+
+0.833 across learners, cb_person_default_on_file 
+
+0.695 . So the claim that the ensemble’s headline drivers are architecture-independent is supported. 
+
+Across attribution methods, agreement is weaker than XGB-deep XGB-shallow LightGBM CatBoost Residual NN                                                     
+
+> loan_grade loan_percent_income person_income loan_intent_VENTURE person_home_ownership_RENT person_home_ownership_OWN loan_int_rate loan_intent_HOMEIMPROVEMENT loan_intent_EDUCATION loan_amnt person_emp_length loan_intent_PERSONAL person_age
+> .09 .10 .10 .10 .08 .08 .08 .09 .09 .08 .09 .07 .08 .06 .04 .05 .05 .05 .05 .04 .05 .04 .04 .04 .04 .02 .03 .03 .02 .01 .03 .02 .03 .02 --
+> .02 .01 .02 .02 .01
+> --.02 .01 .02 .02 .03 ------.03 .02 .01 .02 ------------.02
+> ------.01 --
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> importance (column-normalised)
+
+Fig. 6. Per-base-learner SHAP importances, normalised by column max-imum; “–” marks a feature outside that learner’s top ten. Mean pairwise overlap@10 is 0.86 and mean Kendall τ is 0.78 . loan_grade and 
+
+loan_percent_income appear in every learner’s top three. 12345678910 
+
+SHAP LIME 
+
+> loan_intent_HOMEIMPROVEMENT loan_intent_HOMEIMPROVEMENT person_home_ownership_OTHER loan_percent_income loan_percent_income loan_intent_VENTURE loan_intent_VENTURE person_home_ownership_RENT person_home_ownership_RENT person_emp_length person_home_ownership_OWN loan_grade loan_grade loan_intent_EDUCATION loan_intent_EDUCATION loan_intent_PERSONAL loan_intent_PERSONAL loan_amnt person_income person_income
+
+rank 1 (top) 10; overlap@10 = 0.80 , = 0.43 (p = 0.18 )
+
+Fig. 7. Global rankings under SHAP and LIME. Grey squares mark features present in only one ranking; red lines mark rank shifts of three or more. The methods largely agree on set membership (overlap@10 = 0 .80 ) and disagree on order ( τ = 0 .43 , p = 0 .18 ), including at the very top: LIME’s first-ranked feature is SHAP’s eleventh. 
+
+the framework assumes (Fig. 7). SHAP and LIME share 
+
+8 of 10 top features (overlap@10 = 0 .80 ), but rank corre-lation on the common set is only τ = 0 .429 (p = 0 .179 ), Spearman ρ = 0.524 (p = 0.183 ), neither significant at n = 8. Overlap@3 is 1/3. LIME’s top-ranked fea-ture, person_home_ownership_OWN , is eleventh under SHAP; SHAP’s top feature is LIME’s third. Hypothesis H4 as originally stated, namely that SHAP and LIME show high agreement on top features and that their com-bination is therefore more robust, is supported for membership 
+
+and unsupported for ordering . This is a material qualification, because the fusion step averages normalised scores and then truncates to the top four. Averaging two rankings that disagree on order produces a third ranking that is not the consensus of anything; it is an artefact of the normalisation. Where the methods agree on the set but not the order, a set-level fusion (intersection or union with equal weight) would be more defensible than a score-level average. 
+
+D. Attribution sign is unstable for several leading features 
+
+A narrative asserts direction: it says a factor raised or lowered risk. That proposition is only meaningful if the attribution’s sign is stable enough to support it. Fig. 8(a) measures this as the share of explained instances on which each feature takes its modal sign. The results are uneven. loan_percent_income and 
+
+loan_intent_VENTURE take a consistent sign on 79% 
+
+of instances and loan_grade on 76% , high but not decisive. person_income sits at 0.53 , statistically in-distinguishable from a coin flip; loan_amnt at 0.59 ;
+
+person_home_ownership_RENT at 0.63 .Some of this is legitimate interaction: income raises risk when paired with a large principal and lowers it otherwise, and a model that captures that is doing its job. But it has a consequence the framework must respect. Any statement of the form “the applicant’s income increased their risk” is a claim about one instance that cannot be generalised, and the fusion step, which averages normalised magnitudes and discards sign, provides the language model with no signal about how reliable the direction is. Fig. 8(b) sharpens the point: person_income is the input to which the ensemble’s output is most sensitive ( |∆ˆ p| = 0 .0356 ) and simultaneously the one whose attribution direction is least stable. This is the mechanism we see fail in the next section. X. F IDELITY AUDIT OF THE NARRATIVE LAYER 
+
+A. Why an audit is needed 
+
+The pipeline’s grounding argument is entirely structural: the prompt contains only computed drivers, the model is told to translate rather than infer, and decoding is deterministic. Determinism is not fidelity. A greedy decode produces the same output every time; it does not produce a correct one. We therefore define a minimal post-generation audit. Given an instance with fused drivers {(j, ¯aj )} and generated narrative 
+
+y: 
+
+> •
+
+Membership. Every feature named in y must appear in the driver set supplied in the prompt.  
+
+> •
+
+Direction. For every named feature, the direction asserted in y (raises / lowers risk) must match sign(¯ aj ). 
+
+> •
+
+Coverage. The prompt’s top driver by |¯aj | should be named. These are necessary conditions, not sufficient ones, and they are cheap: all three are checkable automatically against data already in memory. 
+
+B. An audited failure 
+
+Table V reports the audit on the worked case distributed with the reference implementation: an applicant aged 34 , income $92,000, renting, requesting $92,000 for a stated venture purpose at grade B and 13 .5% , with no bureau default. The ensemble returns ˆp = 0 .9402 , band HIGH .                              
+
+> TABLE V FIDELITY AUDIT OF THE WORKED CASE . A TTRIBUTIONS ARE THE FUSED
+> SHAP/LIME IMPACTS SUPPLIED IN THE PROMPT ;THE ASSERTION COLUMN IS WHAT THE GENERATED NARRATIVE CLAIMS . T HREE OF FOUR CHECKABLE PROPOSITIONS INVERT THE SIGN OF THE EVIDENCE .
+> Feature Impact Evidence Narrative asserts
+> loan_amnt +0 .3297 raises risk not mentioned
+> ..._ownership_RENT +0 .1179 raises risk raises risk ✓
+> ..._ownership_OWN +0 .0815 raises risk not mentioned
+> loan_intent_VENTURE −0.0720 lowers risk raises risk ✗
+> person_income −0.0569 lowers risk raises risk ✗
+> person_age −0.0092 lowers risk raises risk ✗
+
+The generated narrative reads: 
+
+“The risk level for this borrower is high due to their age, income, and home ownership status. Their intent to take out a venture loan also increases the risk. This case is similar to other high-risk cases in terms of income and home ownership status. However, the intent to take out a venture loan is a unique factor that sets this case apart. Based on these factors, it is recommended to closely monitor this borrower’s credit history and consider additional risk mitigation measures.” 
+
+It is fluent, appropriately hedged, correctly identifies the risk band, and would pass casual review. It is also wrong in a specific and consequential way. Three failures are visible in Table V: 1) Sign inversion. The narrative asserts that age, income and venture intent increase risk. The attributions score all three as risk-reducing (−0.0092 , −0.0569 , −0.0720 ). The model did not misjudge magnitude; it reversed direction, and did so for the majority of the features it chose to name. 2) Coverage failure. The dominant driver, loan_amnt 
+
+at +0 .3297 , is never mentioned. It carries roughly three times the next largest impact and is the one factor that plainly explains a 94% default probability on a loan equal to annual income. 3) Membership violation. person_age is asserted as a risk factor although it was not among the four drivers supplied. The narrative additionally attributes salience to venture intent (“a unique factor that sets this case apart”) that the evidence assigns to principal size. 
+
+C. Diagnosis 
+
+Three properties of the surrounding system make this out-come likely rather than accidental. 
+
+The prompt discards sign reliability. Fusion averages normalised magnitudes. The language model receives a signed impact but nothing about how stable that sign is, and Sec-tion IX shows that for person_income it is barely stable at all ( 0.53 ). 
+
+Prior knowledge overrides supplied evidence. A 2.7B model has strong priors about credit: high income is good, venture lending is speculative, young borrowers are risky. When the supplied attributions contradict those priors, as they 0.6 0.8 1.0 
+
+modal-sign share across 100 instances 
+
+> person_emp_length loan_intent_EDUCATION loan_intent_PERSONAL loan_intent_HOMEIMPROVEMENT loan_amnt loan_intent_VENTURE person_home_ownership_RENT person_income loan_grade loan_percent_income
+
+(a) Directional stability of attributions 
+
+0.00 0.01 0.02 0.03 
+
+mean | p| under ± perturbation 
+
+> loan_intent_EDUCATION loan_intent_HOMEIMPROVEMENT loan_intent_VENTURE loan_amnt loan_int_rate person_emp_length person_home_ownership_RENT loan_percent_income loan_grade person_income
+
+(b) Input sensitivity of the ensemble Fig. 8. (a) Directional stability: share of the 100 explained instances on which a feature’s attribution takes its modal sign. Bars below 0.7 (red) indicate features whose risk direction routinely flips across applicants; a value near 0.5 means the direction is near-arbitrary at the population level. (b) Sensitivity of the ensemble’s output to bounded perturbation of each input. The two panels disagree about person_income , which is the most sensitive input yet the least directionally stable. 
+
+do here since this applicant’s income and stated purpose reduce risk relative to the population, the prior wins. The instruction to translate rather than infer does not bind. 
+
+Nothing checks the output. Every control is upstream. The system has no mechanism that could have caught a sign inversion, which is why a deterministic decode produced a reproducibly wrong narrative rather than an occasionally wrong one. 
+
+D. Scope of this finding 
+
+We are explicit about what this is and is not. It is a documented, reproducible failure of a specific model under a specific prompt on a specific instance, verified against the attributions supplied in the same run. It is not an estimate of failure frequency: producing one would require generating and adjudicating narratives across a labelled sample, which is future work we describe in Section XIII. A single audited failure cannot establish a rate. It is, however, sufficient to refute the claim the earlier draft made, that the narratives “accurately reflect the underlying feature contributions”, and sufficient to establish that input-side constraints alone do not guarantee grounding. Our recommendation follows directly from the audit defini-tion: the three checks above are cheap, automatic, and would have blocked this output. A narrative layer in a regulated setting should run them and fall back to a deterministic template when they fail. This is the two-stage generate-then-verify pattern argued for in [12], and our result is a concrete instance of why the second stage is not optional. XI. T RUSTWORTHINESS DIAGNOSTICS 
+
+Ranking quality is one property of a scoring model. A credit system uses the probability itself: to price risk, to set the HIGH /MODERATE / LOW band that appears in the narrative prompt, and to aggregate expected loss. Table VI evaluates the 
+
+TABLE VI TRUSTWORTHINESS DIAGNOSTICS AGAINST THE ACCEPTANCE THRESHOLDS SPECIFIED BY OUR OWN EVALUATION PROTOCOL . T HREE OF FOUR FAIL .
+
+Diagnostic Value Threshold Verdict 
+
+Calibration (ECS, weighted) 0.1171 < 0.05 fail unweighted 0.2262 n/a n/a Perturbation stability (DPD) 0.0780 < 0.05 fail Local explanation consistency CV = 1 .1495 n/a low Group disparity (EOD) 0.0640 < 0.10 pass 
+
+Fig. 9. Reliability diagram for the ensemble ( n = 500 , 10 bins, ECS = 0.1171 ). The model is over-confident below ˆp ≈ 0.3 and erratic above it. The upper bins are sparsely populated, so the extreme excursions should be read as high-variance rather than as evidence of systematic bias. The low-probability region, where most applications fall, is well populated and consistently miscalibrated. 
+
+ensemble against the acceptance thresholds our own protocol declares. 
+
+Calibration fails. The expected calibration score is 0.1171 weighted and 0.2262 unweighted, against a 0.05 acceptance threshold. Fig. 9 shows systematic over-confidence in the low-probability region where the overwhelming majority of appli-cations sit. This is the expected consequence of two design choices: focal loss deliberately distorts the probability scale in exchange for better minority-class ranking, and modern neural networks are miscalibrated by default [39]. The remedy is standard and cheap, namely Platt scaling or isotonic regression on a held-out fold [40], and we did not apply it. We flag this rather than omit it because miscalibrated probabilities propagate directly into the risk band shown to the loan officer. 
+
+Perturbation stability fails. Under bounded input per-turbation (strength 0.01 , 10 repetitions) the mean absolute prediction shift is 0.0780 (σ = 0 .0595 , max 0.3284 ), against a 0.05 threshold. A 1% input perturbation moving the output by nearly 8 points is a material sensitivity for a system whose inputs are self-reported. 
+
+Local explanation consistency is low. Clustering the ex-plained instances into five groups and measuring within-cluster dispersion of attribution vectors gives a mean coefficient of variation of 1.1495 , so dispersion exceeds the mean. Similar applicants receive materially different explanations. This is consistent with the sign instability of Section IX and with LIME’s documented sampling variance [17]. 
+
+Group disparity passes, with an important caveat. 
+
+Equalised odds difference [41] is 0.0640 overall, below the 
+
+0.10 threshold, with the largest gap on the low-debt-ratio split ( 0.0839 ). The caveat is that the groups examined (grade presence, high income, low debt ratio) are model-derived proxies , not protected attributes. The dataset contains no race, gender or ethnicity fields, so no statement about discrimination on protected characteristics can be made from these numbers, and we make none. Reporting a passing EOD without that qualification would be the most misleading thing in this paper. XII. D ISCUSSION 
+
+A. Where the gains are, and are not 
+
+Read together, our results describe a system whose two halves succeed differently. The predictive half works, modestly. Multi-scale stacking beats the best single model by a margin that survives a deliberately unfavourable significance test, generalises without overfitting despite six trainable components, and improves PR-AUC by more than it improves ROC-AUC, which is the right direction under imbalance. But its operational advantage at the deployed threshold is six defaults in six thousand decisions. An institution weighing five base learners, a meta-network and the attendant governance burden against a single random forest should know that number before committing. The explanatory half is where the interesting failure is, and it is not where the literature usually looks. The attribution layer is sound in construction: explaining the composed pipeline rather than a component is the right choice, and cross-learner agreement confirms the headline drivers are not artefacts. What breaks is the last step, the one added specifically to make the system usable by non-specialists. That step inherits every instability upstream of it (diffuse attribution, unstable signs, method disagreement on ordering), compresses them into four numbers, and hands them to a model with strong independent priors and no obligation to defer. 
+
+B. Implications for LLM-based explanation interfaces 
+
+Three points generalise beyond this system. 
+
+Constrained prompting is a necessary but not suf-ficient control. Our prompt does everything the literature recommends. It still produced sign inversions. The reason is structural: prompt constraints shape the input distribution and cannot bind the output. Any deployment that treats prompt design as the safety mechanism is relying on a control that has no enforcement. 
+
+Verification is cheap and should be mandatory. Mem-bership, direction and coverage checks require no model calls, no labels and no human review. They would have blocked our failure case. In a regulated setting, an unverified narrative is a liability whose cost is bounded by the size of the credit decision, and the check costs microseconds. 
+
+Explanation quality inherits attribution quality. A narra-tive cannot be more faithful than the attributions it summarises. Reporting sign stability and inter-method rank agreement alongside importance rankings should be standard, because these properties, not mean |ϕ|, determine whether a directional claim about an individual applicant is supportable. 
+
+C. Practical guidance 
+
+For practitioners building similar systems, our results sug-gest an ordering of effort that differs from the one we followed. Calibrate before deploying, since miscalibrated probabilities corrupt both pricing and the risk bands that reach human reviewers, and the fix is a single held-out fold. Optimise the threshold against an explicit cost ratio rather than F1; Fig. 4 indicates this matters more than the choice among strong models. Verify narratives after generation. And treat additional base learners as the last resort rather than the first, since our fifth learner bought less than our threshold choice did. XIII. L IMITATIONS AND FUTURE WORK 
+
+Single dataset. All results come from one public dataset with a fixed 21 .8% default rate, no temporal structure and no macroeconomic covariates. Whether the meta-learner’s weighting generalises across imbalance regimes, feature dis-tributions or credit cycles is untested. 
+
+The fidelity audit is a case study. We document one reproducible failure in detail. We do not estimate a failure rate. The natural extension is to generate narratives for a stratified sample of several hundred test instances and score them automatically against the three audit criteria, which would yield per-criterion violation rates and support comparison across model scales and prompt designs. We regard this as the single highest-value follow-up and note that our audit definition makes it inexpensive. 
+
+Correlated AUC comparison. Paired score vectors were not retained, so DeLong’s test [43] could not be run. Our con-servative substitute understates significance; re-running with retained scores would tighten the comparison in our favour, which is the direction that requires no defence. 
+
+No calibration stage. We report miscalibration but do not correct it. Adding Platt or isotonic scaling on a dedicated fold, then re-deriving the risk bands, is straightforward and should precede any deployment. 
+
+Fixed base hyperparameters. Base configurations were set from prior experiments and held fixed while the meta-learner was tuned. Joint optimisation might improve the ensemble, at substantially higher cost. 
+
+Static evaluation. Batch prediction on a fixed split does not test concept drift, which is the dominant failure mode of deployed credit models across economic cycles. 
+
+Protected attributes absent. The dataset contains no pro-tected characteristics, so our disparity analysis uses proxies and cannot speak to discrimination. Beyond these, two directions follow naturally from our findings: fine-tuning or constrained decoding that forces the narrative model to respect supplied signs, and set-level rather than score-level attribution fusion, which Section IX suggests would be better founded given that the two methods agree on membership but not order. XIV. C ONCLUSION 
+
+We built a credit-risk system of the kind currently advocated in the explainable-AI literature: a high-performing ensemble, model-agnostic attribution over the composed pipeline, and a constrained language model to render the attributions as prose. We then measured both halves against their own claims. The ensemble performs as intended. Multi-scale stacking of four differently-regularised boosting learners and a residual network reaches test ROC-AUC 0.9539 and PR-AUC 0.9137 ,improving on the best single model by a margin that remains significant ( p = 0 .016 ) under a test chosen to disadvantage it, with no evidence of overfitting. We also show that this margin is worth less operationally than it appears: under 2% of cost-weighted loss at the deployed threshold. The narrative layer does not perform as claimed. Con-strained prompting, deterministic decoding and top-k trun-cation did not prevent a generated rationale from inverting the risk direction of three of the four factors it named, omitting the dominant driver, and introducing a feature it was never given. We trace this to measurable properties of the attribution layer beneath it: attribution is diffuse ( 67 .4% 
+
+mass in five of seventeen features), SHAP and LIME agree on membership but not order ( τ = 0 .43 , p = 0 .18 ), and the sign of the attribution for the ensemble’s most sensitive input is near-random across applicants ( 0.53 ). We report alongside these that the ensemble is miscalibrated ( ECS = 0 .117 ) and sensitive to bounded input perturbation ( DPD = 0 .078 ), both outside our own acceptance thresholds. The conclusion we draw is not that language models have no place in credit explanation. It is that grounding must be verified rather than assumed, that the verification is cheap, requiring only membership, direction and coverage checks over data already in memory, and that a system which enforces it can make the claim we could not: that the explanation given to the applicant matches the evidence the model actually used. APPENDIX ANARRATIVE PROMPT TEMPLATE 
+
+The template below is reproduced verbatim from the de-ployed service. Bracketed italics denote substituted values.                                                                     
+
+> You are an AI credit risk officer. Provide aclear, professional explanation. Prediction: [p] %default probability →Risk Level: [band]
+> Borrower Profile:
+> [raw feature: value, one per line]
+> Local Feature Drivers (for this specific case):
+> [feature: increases/decreases risk (impact:
+> ±x.xxx), top 4]
+> Global Context: Top globally important features are [top 5] .Most sensitive features (from analysis): [top 3] .Provide a2-3 sentence explanation: (1) State the risk level and key factors, (2) Explain how this case compares to typical patterns, (3) Give arecommendation.
+
+Generation uses the following decoding parameters.       
+
+> Parameter Value
+> max_new_tokens 256
+> min_new_tokens 64
+> do_sample False (greedy)
+> repetition_penalty 1.05
+
+The driver list carries signed impacts, so the direction that the audit in Section X finds inverted was explicitly present in the prompt. REFERENCES [1] B. Goodman and S. Flaxman, “European Union regulations on algorith-mic decision-making and a ‘right to explanation’,” AI Magazine , vol. 38, no. 3, pp. 50–57, 2017. [2] S. Lessmann, B. Baesens, H.-V. Seow, and L. C. Thomas, “Benchmark-ing state-of-the-art classification algorithms for credit scoring: An update of research,” European Journal of Operational Research , vol. 247, no. 1, pp. 124–136, 2015. [3] X. Dastile, T. Celik, and M. Potsane, “Statistical and machine learning models in credit scoring: A systematic literature survey,” Applied Soft Computing , vol. 91, 106263, 2020. [4] S. M. Lundberg and S.-I. Lee, “A unified approach to interpreting model predictions,” in Advances in Neural Information Processing Systems ,vol. 30, 2017, pp. 4765–4774. [5] M. T. Ribeiro, S. Singh, and C. Guestrin, “‘Why should I trust you?’ Ex-plaining the predictions of any classifier,” in Proc. 22nd ACM SIGKDD Int. Conf. Knowledge Discovery and Data Mining , 2016, pp. 1135–1144. [6] N. Bussmann, P. Giudici, D. Marinelli, and J. Papenbrock, “Explainable machine learning in credit risk management,” Computational Economics ,vol. 57, pp. 203–216, 2021. [7] A. Zytek, S. Pidò, and K. Veeramachaneni, “LLMs for XAI: Future directions for converting formal explanations to natural language,” arXiv preprint arXiv:2405.13036, 2024. [8] P. Mavrepis, G. Makridis, G. Fatouros, V. Koukos, M. M. Separdani, and D. Kyriazis, “XAI for all: Can large language models simplify explainable AI?,” arXiv preprint arXiv:2401.13110, 2024. [9] N. Kroeger, D. Ley, S. Krishna, C. Agarwal, and H. Lakkaraju, “Are large language models post hoc explainers?,” arXiv preprint       
+
+> arXiv:2310.05797, 2023. [10] “From XAI to stories: A factorial study of LLM-generated explanation quality,” arXiv preprint arXiv:2601.02224, 2026. [11] “Could large language models work as post-hoc explainability tools in credit risk models?,” arXiv preprint arXiv:2602.18895, 2026.
+
+[12] “A two-stage LLM framework for accessible and verified XAI explana-tions,” arXiv preprint arXiv:2604.12543, 2026. [13] “Interpreting LLMs as credit risk classifiers: Do their feature explana-tions align with classical ML?,” arXiv preprint arXiv:2510.25701, 2025. [14] Z. Ji et al. , “Survey of hallucination in natural language generation,” 
+
+ACM Computing Surveys , vol. 55, no. 12, pp. 1–38, 2023. [15] A. Jacovi and Y. Goldberg, “Towards faithfully interpretable NLP systems: How should we define and evaluate faithfulness?,” in Proc. 58th Annual Meeting of the Association for Computational Linguistics ,2020, pp. 4198–4205. [16] D. Slack, S. Hilgard, E. Jia, S. Singh, and H. Lakkaraju, “Fooling LIME and SHAP: Adversarial attacks on post hoc explanation methods,” in 
+
+Proc. AAAI/ACM Conf. AI, Ethics, and Society , 2020, pp. 180–186. [17] D. Alvarez-Melis and T. S. Jaakkola, “On the robustness of interpretabil-ity methods,” arXiv preprint arXiv:1806.08049, 2018. [18] C. Rudin, “Stop explaining black box machine learning models for high stakes decisions and use interpretable models instead,” Nature Machine Intelligence , vol. 1, pp. 206–215, 2019. [19] L. Grinsztajn, E. Oyallon, and G. Varoquaux, “Why do tree-based models still outperform deep learning on typical tabular data?,” in 
+
+Advances in Neural Information Processing Systems, Datasets and Benchmarks Track , vol. 35, 2022. [20] R. Shwartz-Ziv and A. Armon, “Tabular data: Deep learning is not all you need,” Information Fusion , vol. 81, pp. 84–90, 2022. [21] T. Chen and C. Guestrin, “XGBoost: A scalable tree boosting system,” in Proc. 22nd ACM SIGKDD Int. Conf. Knowledge Discovery and Data Mining , 2016, pp. 785–794. [22] G. Ke et al. , “LightGBM: A highly efficient gradient boosting decision tree,” in Advances in Neural Information Processing Systems , vol. 30, 2017, pp. 3146–3154. [23] L. Prokhorenkova, G. Gusev, A. Vorobev, A. V. Dorogush, and A. Gulin, “CatBoost: Unbiased boosting with categorical features,” in Advances in Neural Information Processing Systems , vol. 31, 2018. [24] L. Breiman, “Random forests,” Machine Learning , vol. 45, no. 1, pp. 5– 32, 2001. [25] D. H. Wolpert, “Stacked generalization,” Neural Networks , vol. 5, no. 2, pp. 241–259, 1992. [26] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proc. IEEE Conf. Computer Vision and Pattern Recognition , 2016, pp. 770–778. [27] S. Ö. Arik and T. Pfister, “TabNet: Attentive interpretable tabular learning,” in Proc. AAAI Conf. Artificial Intelligence , vol. 35, no. 8, 2021, pp. 6679–6687. [28] R. Wang, B. Fu, G. Fu, and M. Wang, “Deep & cross network for ad click predictions,” in Proc. ADKDD’17 , 2017, pp. 1–7. [29] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollár, “Focal loss for dense object detection,” in Proc. IEEE Int. Conf. Computer Vision , 2017, pp. 2980–2988. [30] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,” in Proc. Int. Conf. Learning Representations , 2015. [31] S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network training by reducing internal covariate shift,” in Proc. Int. Conf. Machine Learning , 2015, pp. 448–456. [32] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhut-dinov, “Dropout: A simple way to prevent neural networks from overfit-ting,” Journal of Machine Learning Research , vol. 15, pp. 1929–1958, 2014. [33] P. Ramachandran, B. Zoph, and Q. V. Le, “Searching for activation functions,” arXiv preprint arXiv:1710.05941, 2017. [34] L. S. Shapley, “A value for n-person games,” in Contributions to the Theory of Games II , Princeton Univ. Press, 1953, pp. 307–317. [35] E. Štrumbelj and I. Kononenko, “Explaining prediction models and individual predictions with feature contributions,” Knowledge and In-formation Systems , vol. 41, pp. 647–665, 2014. [36] R. Guidotti, A. Monreale, S. Ruggieri, F. Turini, F. Giannotti, and D. Pedreschi, “A survey of methods for explaining black box models,” ACM Computing Surveys , vol. 51, no. 5, pp. 1–42, 2018. [37] A. B. Arrieta et al. , “Explainable Artificial Intelligence (XAI): Con-cepts, taxonomies, opportunities and challenges toward responsible AI,” 
+
+Information Fusion , vol. 58, pp. 82–115, 2020. [38] S. Wachter, B. Mittelstadt, and C. Russell, “Counterfactual explanations without opening the black box: Automated decisions and the GDPR,” 
+
+Harvard Journal of Law & Technology , vol. 31, no. 2, pp. 841–887, 2017. [39] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On calibration of modern neural networks,” in Proc. Int. Conf. Machine Learning , 2017, pp. 1321–1330. [40] A. Niculescu-Mizil and R. Caruana, “Predicting good probabilities with supervised learning,” in Proc. Int. Conf. Machine Learning , 2005, pp. 625–632. [41] M. Hardt, E. Price, and N. Srebro, “Equality of opportunity in super-vised learning,” in Advances in Neural Information Processing Systems ,vol. 29, 2016. [42] J. A. Hanley and B. J. McNeil, “The meaning and use of the area under a receiver operating characteristic (ROC) curve,” Radiology , vol. 143, no. 1, pp. 29–36, 1982. [43] E. R. DeLong, D. M. DeLong, and D. L. Clarke-Pearson, “Comparing the areas under two or more correlated receiver operating characteristic curves: A nonparametric approach,” Biometrics , vol. 44, no. 3, pp. 837– 845, 1988. [44] E. B. Wilson, “Probable inference, the law of succession, and statistical inference,” Journal of the American Statistical Association , vol. 22, no. 158, pp. 209–212, 1927. [45] Microsoft Research, “Phi-2: The surprising power of small language models,” 2023. [Online]. Available: https://www.microsoft.com/en-us/ research/blog/phi-2-the-surprising-power-of-small-language-models/

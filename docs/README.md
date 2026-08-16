@@ -6,31 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-15
-- 运行时间：2026-08-15 19:37:10 UTC
+- 最新运行日期：2026-08-16
+- 运行时间：2026-08-16 20:13:11 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：0
+- 本次总论文数：3
+- 精读区：1
 - 速读区：2
 
 ### 今日简报（AI）
-今日速读2篇，聚焦金融数学前沿：期权定价与投资组合优化双线推进。
-
-最值得关注的是《DYSANOS》提出的动态非参数期权曲面生成框架（7.0分），直接跳过平滑假设，兼顾无套利约束；另一篇则用随机Riccati方程求解多因子波动率下的均值-方差组合（6.0分），适合量化进阶。
-
-建议普通读者先消化期权曲面论文中的“动态无套利”思想，再看组合优化框架，避开繁琐推导，抓住模型适用场景即可。
-- 详情：[/202608/15/README](/202608/15/README)
+今日聚焦3篇AI金融与时间序列研究，其中1篇高价值精读，2篇速读覆盖生成式攻击与关系深度学习。最值得关注的是《Accurate Ensembles, Fragile Narratives》（9.0分）：多尺度堆叠提升信贷风险预测精度，但LLM解释的“准确性”与叙事可靠性可能存在裂痕。建议普通读者优先理解“高精度模型+可解释性”之间的张力，再关注生成对抗时间序列与增量学习的适用边界。
+- 详情：[/202608/16/README](/202608/16/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Accurate Ensembles, Fragile Narratives: Multi-Scale Stacking and a Fidelity Audit of LLM-Generated Explanations for Credit Risk](/202608/16/2608.08126v1-accurate-ensembles-fragile-narratives-multi-scale-stacking-and-a-fidelity-audit-of-llm-generated-explanations-for-credit-risk)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：人工智能应用于信用风险评分与LLM解释审计
 
 ### 速读区论文标签
-1. [DYSANOS Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces](/202608/15/2608.12587v1-dysanos-generative-dynamic-smooth-arbitrage-free-non-parametric-option-surfaces)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：用于无套利期权曲面的生成模型，是金融中的AI/ML方法
-2. [A Computable Stochastic Riccati Equations Framework for Mean--Variance Portfolio Selection with Multifactor Stochastic Volatility Model](/202608/15/2608.07977v1-a-computable-stochastic-riccati-equations-framework-for-mean--variance-portfolio-selection-with-multifactor-stochastic-volatility-model)  
+1. [GENADA: efficient generative time series adversarial attack framework](/202608/16/2608.12535v1-genada-efficient-generative-time-series-adversarial-attack-framework)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：具有随机波动率的投资组合选择框架，与自动化组合管理相关
+   evidence：面向时间序列深度学习模型的生成式对抗攻击框架，包含金融应用
+2. [Incremental Evaluation and Training in Relational Deep Learning](/202608/16/2608.13023v1-incremental-evaluation-and-training-in-relational-deep-learning)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：关系深度学习方法可应用于金融多表数据库，但本文为通用范式
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,782 @@
+Title: GENADA: efficient generative time series adversarial attack framework
+
+URL Source: https://arxiv.org/pdf/2608.12535v1
+
+Published Time: Fri, 14 Aug 2026 00:10:38 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# GENADA: efficient generative time series adversarial attack framework 
+
+# Michael Baronov ∗
+
+# Denis Vorobev ∗
+
+# Margarita Rusanova †
+
+m.baronov@applied-ai.ru vorobiyov2005@gmail.com mirusanova@gmail.com 
+
+> ∗
+
+Moscow Independent Research Institute of Artificial Intelligence 
+
+> †
+
+HSE University Moscow, Russia 
+
+# Petr Sokerin 
+
+Moscow Independent Research Institute of Artificial Intelligence Moscow, Russia sokerinpo@mail.ru 
+
+# Alexey Zaytsev 
+
+Moscow Independent Research Institute of Artificial Intelligence Moscow, Russia likzet@gmail.com 
+
+## Abstract 
+
+Deep learning models are widely used for time series analysis in domains such as healthcare, finance, energy systems, and environ-mental monitoring. However, these models remain vulnerable to adversarial attacks, where small input perturbations cause severe degradation in predictive performance. Commonly used gradient-based attacks, iterative first-order methods, are computationally burdensome, as they repeatedly backpropagate through the victim model to compute input gradients during a number of iterative refinement steps. We propose a GENerative ADversarial Attack (GENADA) that learns a generative model to produce deceptive perturbations directly in a single forward pass and a procedure to train it. Variants include single-step and iterative generative attack schemes. The validation considers attacks on several neu-ral models and datasets in the time-series domain, a controlled, low-dimensional setting. Empirically, GENADA achieves compara-ble attack quality to strong baselines while requiring less time to generate perturbations during inference. The code of our project is available in the anonymized github-repository: https://anonymous.4open.science/r/adversarial-gen-attacks-6690. 
+
+## CCS Concepts 
+
+• Computing methodologies → Neural networks ; Adversarial learning ; Supervised learning by classification; • Security and privacy → Software and application security. 
+
+## Keywords 
+
+Adversarial attacks, Generative attacks, Time series classification 
+
+## Acknowledgments 
+
+The work was supported by the grant for research centers in the field of AI provided by the Ministry of Economic Development of the Russian Federation in accordance with the agreement 000000C313925P4F0002 and the agreement №139-10-2025-033. 
+
+> ∗These authors contributed equally to this research.
+
+## 1 Introduction 
+
+Sequential data arise in a wide range of applications, including healthcare, finance, energy systems, and environmental monitor-ing [20]. One of the central problems in this domain is time series classification, which plays a crucial role in forecasting, anomaly de-tection, and medical diagnosis [16]. Neural networks are among the most effective model families for time series classification tasks [16]. Despite their strong predictive performance, neural networks are vulnerable to adversarial attacks: small, often imperceptible pertur-bations of the input may lead to significant drops in classification accuracy. While adversarial attacks have been extensively studied in computer vision [1] and natural language processing [11], time series data remain comparatively underexplored. At the same time, sequential signals possess specific structural properties—such as temporal correlations, smoothness constraints, and physical plausi-bility—that must be taken into account when designing attacks [28]. Adversarial attacks are commonly categorized into white-box attacks, where gradients of the target model are available, and black-box attacks [36], where such access is absent. Although white-box attacks typically achieve higher attack effectiveness, they require access to the internal model, which is often unrealistic in practice. Moreover, because differentiation of the model tends to be slow, gradient-based attacks can be computationally expensive. In this work, we propose a generative adversarial attack frame-work in which a separate neural network is trained to generate perturbations that maximize the target classifier’s loss. Importantly, once trained, the generator can produce adversarial perturbations without computing gradients of the target model at inference time. Our contributions are as follows: (1) We propose GENADA (GENerative ADversarial Attack), a generative adversarial attack that learns to produce valid perturbations directly. Once trained, the attacker outputs an adversarial perturbation by forward pass, avoiding per-example iterative optimization and eliminating the need for repeated gradient computations at inference time. The proposed attack is straightforward to train with standard learning pipelines and is substantially more efficient to run. (2) We propose a training procedure based on a frozen target model, enabling gradient-free inference. We train the gen-erator to create perturbations that worsen the generator’s arXiv:2608.12535v1 [cs.LG] 12 Aug 2026 Michael Baronov, Denis Vorobev, Margarita Rusanova, Petr Sokerin, and Alexey Zaytsev 
+
+predictions the most. We also provide the possibility of fine-tuning the training parameters, such as changing the number of trained iterations, the possibility of adding an additional step — distillation of iFGSM to our generator. (3) We validate the approach in the time-series domain, which provides a controlled low-dimensional setting for system-atic experimentation while still capturing structured, tem-porally dependent signals. Empirically, we observe that the GENADA attains superior computational efficiency to strong baselines (in terms of the task-relevant degradation metrics) with comparable attack quality. The experiments are conducted on PowerCons, GunPoint and Strawberry datasets with metrics achieved , compared to metrics for the strongest alternative. We provide an extensive empirical evaluation across multiple datasets and architectures (recur-rent, convolutional, and transformer-based models), com-paring against strong white-box baselines such as FGSM and iFGSM. (4) We demonstrate that the proposed approach achieves com-petitive performance while significantly reducing attack generation time. 
+
+## 2 Related works 2.1 Adversarial Attacks 
+
+Deep neural networks are known to be susceptible to adversarial perturbations [30]. Adversarial example generation methods are commonly categorized by attacker access (white-box vs. black-box), distortion measure (e.g., ℓ𝑝 -norms), and attack principle (gradient-based, optimization-based, or generative-based) [1]. In general, ad-versarial example generation aims to maximize the target model loss within an 𝜖 -ball around the original input. Classical white-box methods rely on gradients of the classifica-tion loss Lcls with respect to the input X. FGSM, iFGSM, and PGD remain standard first-order attack baselines. 
+
+## 2.2 Time series classification 
+
+Time series classification (TSC) is a central task in time series anal-ysis [35] and appears in many practical settings, including finance and healthcare. Standardized benchmark suites such as the UCR archive [5] and the multivariate UEA archive [2] have enabled reliable comparisons between TSC methods. Following this benchmarking landscape, we selected three diverse datasets for univariate TSC. Modern TSC employs a wide range of architectures, with no universal winner across datasets. Convolutional models such as ResCNN [38] use residual connections [14] to capture multi-scale patterns. Recurrent architectures including LSTMs [15] and attention-based variants such as RNNAttention [25] model temporal depen-dencies. More recently, Transformer-based models such as PatchTST [24] and state-space approaches such as S4 [12] have shown strong performance on long sequences. Before the rise of deep learning [23], TSC was dominated by methods based on Dynamic Time Warping [18] and feature-based ensembles such as COTE [3] and Weasel [27]. Hybrid ensembles remain competitive: HIVE-COTE 2.0 (HC2) [21, 22] combines mul-tiple complementary components and remains a strong non-deep baseline. 
+
+## 2.3 Adversarial Attacks for Sequential Data 
+
+While adversarial attacks are well studied in computer vision, they remain comparatively less explored in time series classification (TSC) despite the growing adoption of deep learning models [6]. A common starting point is gradient-based white-box attacks, which expose model vulnerabilities across domains [1, 31]. In the time-series context, Fawaz [8] shows that straightforward iterative methods such as iFGSM and BIM can be effective, motivating their use as baseline attacks. However, sequential data introduce constraints that are less prominent in images or text: temporal dependence, smoothness, and application-specific feasibility requirements. To address these issues, recent work [9] adapts iterative attacks to time series and evaluates imperceptibility with criteria beyond simple norm bounds, including smoothness and bounded variation. Several attacks have been designed specifically for time series. Adversarial transformation networks generate adversarial exam-ples with a dedicated neural generator [17], while subsequent work extends this approach to multivariate sequences [13]. Despite these advances, designing temporally consistent and transferable pertur-bations remains an active research direction. 
+
+## 2.4 Surrogate Models and Transferability 
+
+When gradients are unavailable, adversarial examples can be con-structed using surrogate models. This approach relies on the trans-ferability phenomenon [26] : models trained for the same task can exhibit similar gradient directions for increasing the loss function. Consequently, adversarial examples crafted for one model often transfer to other models trained to solve related tasks. The effectiveness of such attacks depends on the alignment be-tween the loss landscapes of surrogate and target models. Accord-ingly, a surrogate model should be trained on the same training set and, ideally, use a similar architecture, hyperparameters, and other design choices. Our approach differs in that we train a dedicated generative model to directly produce transferable perturbations for time se-ries data. 
+
+## 3 Methodology 3.1 Problem statement 
+
+Time Series Classification. Let 𝑓 (x) denote a target classifier operating on time series x. Here, the inference output 𝑓 (x) is the predicted binary class label 𝑦 for the input time series x. The dataset is given by D = {( x𝑖 , 𝑦 𝑖 )} 𝑛 𝑖 =1, where x𝑖 ∈ R𝑑 is an input sequence and 𝑦 𝑖 ∈ Y is the corresponding class label. The model 𝑓 is trained by minimizing cross-entropy loss Lcls (𝑓 (x), 𝑦 ).
+
+Adversarial Attacks. An adversarial attack constructs a per-turbed example x′ by adding perturbations 𝜹 to the original data object 
+
+x′ = x + 𝜹 ,GENADA: efficient generative time series adversarial attack framework 
+
+where the perturbation 𝜹 is constrained by 
+
+∥𝜹 ∥𝑝 ≤ 𝜖 
+
+and is optimized to induce incorrect or degraded predictions of the model 𝑓 . The problem is considered in a black-box scenario: we assume that the attacker has no access to the model 𝑓 or its weights and therefore cannot compute gradients with respect to the attacked model. The alternative white-box scenario, where the attacker has full access to the target model, is less realistic and is commonly used in classical gradient-based attacks such as FGSM. Another requirement is computational efficiency. The attack should be fast enough at inference time to be faster than, or at least comparable to, the classical attack methods considered in this work. This is necessary for the proposed attack to be practically applicable. 
+
+## 3.2 Gradient-Based Baselines 
+
+As a baseline, let’s consider classical attacks based on explicit gra-dients of the loss function of the target classifier [8]. 
+
+Fast Gradient Sign Method (FGSM). Given a constraint ∥𝜹 ∥∞ ≤ 𝜖 ,FGSM perturbs the input by taking a single step in the direction of the gradient sign: 
+
+x′ = x + 𝜖 sign (∇ x Lcls (x, 𝑦 )) .
+
+where x and x′ denote the original and the attacked time series, respectively. 
+
+Iterative FGSM (iFGSM). A multi-step version refines the pertur-bation over 𝑇 iterations with step size 𝜖 /𝑇 ≤ 𝛼 ≤ 𝜖 , keeping the cumulative distortion within an ℓ∞-ball of radius 𝜖 :
+
+x0 = x, x(𝑡 +1) = Clip (x,𝜖 )
+
+
+
+x(𝑡 ) + 𝛼 sign 
+
+
+
+∇x Lcls (x(𝑡 ) , 𝑦 )
+
+ 
+
+,
+
+where Clip (x,𝜖 ) (x′) := min {max {x′, x − 𝜖 }, x + 𝜖 }
+
+Problems with gradient attacks 
+
+Gradient-based attacks such as iFGSM or another strong attack PGD [7] are inefficient because they perform computationally ex-pensive backpropagation 𝑇 times over 𝑇 iterations. This cost grows even more quickly when the model is large, when the attack must satisfy structured constraints, or when many candidate perturba-tions must be generated to achieve desired quality [7, 10, 19]. In contrast, a generative attack after training is expected to produce strong attacks in a single forward pass, making inference much faster and more scalable [33, 34]. 
+
+x′ = x + 𝑎 (𝐺 (x)) 
+
+where 𝐺 (·) - generative model for adversarial perturbations, 𝑎 (·) -post-processing function. This efficiency becomes especially impor-tant for iterative or multi-start attack strategies, where the attack procedure has to be repeated many times, for example, under dif-ferent initial perturbations, random restarts, or candidate search procedures. In such settings, even a moderate per-iteration cost can make the overall attack prohibitively expensive. At the same time, a trained generator can amortize this cost and produce candidate perturbations much more efficiently. Moreover, fine-tuning a generative model enables the incorpo-ration of specific properties, such as learning perturbations that better respect domain structure, for example, temporal smoothness in time series [29, 32]. 
+
+## 3.3 GENADA 
+
+Generative attacks (GENADA). Our goal is to develop a genera-tive adversarial attack ℎ that manipulates the target model’s predic-tions. To achieve this, our method employs an additional trainable attacking model 𝐺 : R𝑑 → R𝑑 to generate adversarial perturbations. More formally, 𝜹 = ℎ(x) = 𝑎 (𝐺 (x)) , where 𝑎 is a post-processing of the model outputs. In Section 3.3.1, we provide a more detailed description of the generative attack and training procedures for generative models. 
+
+3.3.1 GENADA. The main idea of a generative adversarial attack is to perturbations 𝜹 not by using gradients of the target model, access to which may be limited, but by using a separate attacking model 𝐺 .In this work, we propose two types of generative adversarial attacks: the generative adversarial attack ℎ𝐺 and the iterative generative adversarial attack ℎ𝐺 iter .In the ℎ𝐺 attack, the attacking model takes the features as input and generates an e𝜹 perturbation vector of the same dimension as the original data. However, such a vector cannot be directly used as a perturbation, since its range is unlimited. To preserve the amplitude of the attack, we use the regularization mechanism 𝑎 (e𝜹 ):the output of the model 𝐺 (x) is placed in a non-linear function that limits the noise range. In our case, at the learning stage, we apply the differentiable hyperbolic tangent tanh (·) , which guarantees 
+
+ℓ∞-boundedness. Then multiply the noise by the 𝜖 attack force, as in FGSM. We use a generator network 𝐺 that produces perturbations [4]: 
+
+𝜹 = 𝜖 tanh (𝐺 (x)) .
+
+The generator is trained to minimize the classification loss with the inverted binary label of a frozen target model for its parameters 
+
+𝜽 𝐺 :
+
+Lcls 
+
+ 𝑓 (x + 𝜖 tanh (𝐺 𝜽 𝐺 (x)) , ¬𝑦  →𝜽 𝐺 min .
+
+The backpropagation algorithm and gradient descent with re-spect to the parameters of the generator model 𝐺 were used. A detailed attack scheme is shown in Figure 1. During inference, when evaluating attack metrics with a trained generator 𝐺 , the regularization function 𝑎 was replaced with sign (·) .This ensures that the ℓ∞ norm of the attack 𝜹 is scaled exactly to 𝜖 ,whereas tanh (·) merely constrains the attack within an ℓ∞ bound. During training, we opted for tanh (·) because, unlike sign (·) , it is smooth, which allows gradients to flow during training of the generator. 
+
+## 3.4 Iterative GENADA training 
+
+Analogous to iFGSM, we propose an iterative version in which perturbations are applied over 𝑇 steps. The attack noise generation step at each iteration corresponds to 𝜹 /𝑇 so that the resulting attack conforms to 𝜹 , while maintaining the total ℓ∞ constraint. Here, similarly, during training we used tanh (·) as the regular-ization function 𝑎 (·) to improve gradient flow, while at inference Michael Baronov, Denis Vorobev, Margarita Rusanova, Petr Sokerin, and Alexey Zaytsev +
+
+Figure 1: GENADA pipeline 
+
+with the trained generator we applied 𝑠𝑖𝑔𝑛 (·) to increase the attack strength in terms of the ℓ∞ norm. To reduce memory consumption during training, we avoid full backpropagation in all 𝑇 iterations. Instead, gradients are computed only for the last 𝑘 steps, whereas the first 𝑇 −𝑘 steps are kept frozen. In addition, we propose a new training strategy in which the model is first trained in the 𝑘 -step regime, and the number of trainable steps is gradually increased across epochs until it reaches 𝑇 . This allows the generator to first learn a low-iteration attack and then extend it to the full multi-step setting, thereby accelerating training and reducing memory overhead. An example of a training scheme is shown in Figure 3. +
+
+Figure 2: Iterative GENADA pipeline 
+
+The principle of an iterative attack is to attack data sequentially 
+
+𝑇 times, see Figure 2 and Algorithm 1. Similar to an iterative version of FGSM, we balance the performance drop after the attack and the computational cost by selecting 𝑇 .
+
+## 3.5 Theoretical Problem Setup 
+
+Let 𝑥 ∈ R𝑑 be an input and 𝑦 ∈ Y its label. Let 𝐶 : R𝑑 → R𝐾 be a fixed classifier and ℓ : R𝐾 × Y → R a loss function. 
+
+𝑓 𝑥 (𝛿 ) := ℓ (𝐶 (𝑥 + 𝛿 ), 𝑦 ), ∥𝛿 ∥ ≤ 𝜀. 
+
+We consider the maximization problem 
+
+𝑓 𝑥 (𝛿 ) → max s.t. ∥𝛿 ∥ ≤ 𝜖. 𝛿 ★ 
+
+> 𝑥
+
+= arg max   
+
+> ∥𝛿 ∥ ≤ 𝜀
+
+𝑓 𝑥 (𝛿 ).
+
+Let the generator be a parametric mapping 
+
+𝐺 𝜃 : R𝑑 → R𝑑 ,
+
+Figure 3: Example of an iterative attack during training with 
+
+𝑇 = 6 and 𝑘 = 2 unfrozen iterations at the end of the attack. In the first epoch, the 𝑘 = 2 iterative attack is used; with each subsequent epoch, the iterativity increases by 1. The blue steps are frozen, the gradient does not flow through them. Here, the classification classes 0 and 1 are indicated in red and green, respectively. Algorithm 1 Iterative GENADA inference 
+
+Require: Input time series x, label 𝑦 , frozen classifier 𝑓 , generator 
+
+𝐺 , attack budget 𝜖 , number of steps 𝑇 
+
+Ensure: x(𝑇 ) ⊲ adversarial example  
+
+> 1:
+
+x(0) ← x ⊲ initialize the iterative process from the original input  
+
+> 2:
+
+for 𝑡 = 0, 1, . . . ,𝑇 − 1 do ⊲ perform 𝑇 refinement steps  
+
+> 3:
+
+e𝜹 (𝑡 ) ← 𝐺 (x(𝑡 ) ) ⊲ the generator predicts a perturbation  
+
+> 4:
+
+𝜹 (𝑡 ) ← 𝜖 𝑇 𝑎 
+
+e𝜹 (𝑡 ) 
+
+⊲ scale the perturbation to control the total strength  
+
+> 5:
+
+x(𝑡 +1) ← x(𝑡 ) + 𝜹 (𝑡 ) ⊲ update the adversarial example by adding the generated perturbation  
+
+> 6:
+
+x(𝑡 +1) ← Clip (x,𝜖 )
+
+
+
+x(𝑡 +1)
+
+
+
+⊲ project x(𝑡 +1) into the allowed 
+
+ℓ∞-ball around x 
+
+> 7:
+
+end for  
+
+> 8:
+
+return x(𝑇 ) ⊲ output the final adversarial example and we train it by maximizing the objective 
+
+𝐽 (𝜃 ) := E𝑥 ∼D 𝑓 𝑥 (𝐺 𝜃 (𝑥 )) .
+
+This setup formalizes GENADA’s motivation: instead of solving a separate gradient-based maximization problem for each input 𝑥 ,we learn a generator 𝐺 𝜃 (𝑥 ) that directly produces perturbations. GENADA: efficient generative time series adversarial attack framework 
+
+Under the assumptions stated in Appendix A, the theorem shows that the quality gap is controlled by the generator approximation error and the remaining optimization error. The theoretical justification and proof are presented in the Ap-pendix A. 
+
+## 3.6 Distillation training 
+
+Motivation. The GENADA generator from Section 3.3.1 requires white-box access to the target classifier 𝑓 : every training step back-propagates Lcls through 𝑓 . In many practical settings the gradients of 𝑓 are unavailable, while a limited offline budget of expensive gradient-based queries (e.g., iFGSM) can still be afforded. We exploit this asymmetry by distilling an iterative teacher attack into a single-forward generative student. After a one-off offline rollout of the teacher, the student is trained without any further access to ∇𝑓 
+
+and at inference produces an attack in one forward pass through a small generator. We refer to this procedure as a distilled attack .
+
+Teacher. The teacher attack ℎT is iFGSM with 𝑇 T steps and an 
+
+ℓ∞-budget 𝜖 T:
+
+x(0) = x, x(𝑡 +1) = Clip (x,𝜖 T )
+
+
+
+x(𝑡 ) + 𝜖 T  
+
+> 𝑇 T
+
+sign  ∇x Lcls (𝑓 (x(𝑡 ) ), 𝑦 )
+
+.
+
+Given a training set D = {( x𝑖 , 𝑦 𝑖 )} 𝑛 𝑖 =1, we pre-compute and cache the teacher perturbations once: 
+
+𝜹 T 
+
+> 𝑖
+
+:= x(𝑇 T ) 
+
+> 𝑖
+
+− x𝑖 , 𝑖 = 1, . . . , 𝑛. 
+
+All subsequent updates of the student rely on this cache and never query ∇𝑓 again. Note that with 𝑇 T > 1 the entries of 𝜹 T 
+
+> 𝑖
+
+take multi-level values in [− 𝜖 T, +𝜖 T], not just the corners {± 𝜖 T } — a property that influences the choice of post-processing for the student. 
+
+Student. The student reuses the GENADA generator architecture 
+
+𝐺 𝜽 𝐺 of Section 3.3.1, but applies the smooth post-processing tanh (·) 
+
+at both training and inference: 
+
+𝜹 S (x) = 𝜖 S tanh  𝐺 𝜽 𝐺 (x).
+
+For an iterative student with 𝑇 S ≥ 1 steps the construction is fully analogous to Algorithm 1: 
+
+x(0) = x, x(𝑡 +1) = x(𝑡 ) + 𝜖 S  
+
+> 𝑇 S
+
+tanh  𝐺 𝜽 𝐺 (x(𝑡 ) ).
+
+Because each step contributes at most 𝜖 S/𝑇 S in ℓ∞ and tanh (·) is bounded by 1, the cumulative perturbation satisfies ∥𝜹 S ∥∞ ≤ 𝜖 S
+
+without explicit clipping. Throughout this paper we use 𝑇 S = 1unless stated otherwise, so the distilled attack costs a single forward pass at inference. The asymmetry with the white-box GENADA baseline (which uses sign (·) at inference) is deliberate. The distillation target 𝜹 T is produced by an iterative attack and lives in [− 𝜖 T, +𝜖 T]𝑑 with inter-mediate amplitudes, not only at the corners. A student quantized by sign (·) at inference can only output the two extreme values and is therefore structurally unable to reproduce intermediate ampli-tudes of the teacher, which raises the irreducible distillation MSE. Keeping the smooth tanh (·) at inference resolves this mismatch. 
+
+Algorithm 2 Distilled attack 
+
+Require: Dataset D = {( x𝑖 , 𝑦 𝑖 )} 𝑛 𝑖 =1; frozen classifier 𝑓 ; teacher attack ℎT with budget 𝜖 T and 𝑇 T steps; generator 𝐺 𝜽 𝐺 ; student budgets 𝜖 Strain , 𝜖 Seval ; student steps 𝑇 S; regularization weight 𝛼 ;number of distillation epochs 𝐸 ; learning rate 𝜂 .
+
+Ensure: Trained generator 𝐺 𝜽 ★ 
+
+> 𝐺
+
+. 
+
+> 1:
+
+Teacher rollout: compute and cache 𝜹 T 
+
+> 𝑖
+
+← ℎT (x𝑖 ) − x𝑖 for all 
+
+𝑖 = 1, . . . , 𝑛 . ⊲ requires ∇𝑓 ; performed once  
+
+> 2:
+
+for 𝑒 = 1, . . . , 𝐸 do  
+
+> 3:
+
+for mini-batch B ⊂ { 1, . . . , 𝑛 } do  
+
+> 4:
+
+x(0) 
+
+> 𝑖
+
+← x𝑖 for 𝑖 ∈ B  
+
+> 5:
+
+for 𝑡 = 0, . . . ,𝑇 S − 1 do  
+
+> 6:
+
+x(𝑡 +1) 
+
+> 𝑖
+
+← x(𝑡 ) 
+
+> 𝑖
+
++ 𝜖 Strain   
+
+> 𝑇 S
+
+tanh  𝐺 𝜽 𝐺 (x(𝑡 ) 
+
+> 𝑖
+
+) 
+
+> 7:
+
+end for  
+
+> 8:
+
+𝜹 S 
+
+> 𝑖
+
+← x(𝑇 S ) 
+
+> 𝑖
+
+− x𝑖  
+
+> 9:
+
+L ← 1
+
+|B| 
+
+Í𝑖 ∈ B 
+
+
+
+𝜹 S 
+
+> 𝑖
+
+− 𝜹 T 
+
+> 𝑖
+> 22
+
++ 𝛼 𝜹 S
+
+> 𝑖
+> 22
+
+ 
+
+> 10:
+
+𝜽 𝐺 ← 𝜽 𝐺 − 𝜂 ∇𝜽 𝐺 L ⊲ no gradient through 𝑓  
+
+> 11:
+
+end for  
+
+> 12:
+
+end for  
+
+> 13:
+
+Inference: for x set x(0) = x and iterate  
+
+> 14:
+
+x(𝑡 +1) = x(𝑡 ) + 𝜖 Seval   
+
+> 𝑇 S
+
+tanh  𝐺 𝜽 ★ 
+
+> 𝐺
+
+(x(𝑡 ) ) for 𝑡 = 0, . . . ,𝑇 S − 1.  
+
+> 15:
+
+return 𝐺 𝜽 ★ 
+
+> 𝐺
+
+.
+
+Distillation loss. The student is trained to mimic the cached teacher perturbations under a mean-squared error with an optional amplitude regularizer: 
+
+Ldist (𝜽 𝐺 ) = Ex∼D 𝜹 S (x) − 𝜹 T (x) 22
+
+| {z }
+
+> teacher matching
+
++𝛼 Ex∼D 𝜹 S (x) 22
+
+| {z }
+
+> amplitude penalty
+
+,
+
+where 𝛼 ≥ 0 controls how strongly the student is biased toward small perturbations, D is the original train dataset of non-attacked samples. The gradient ∇𝜽 𝐺 Ldist flows through 𝐺 𝜽 𝐺 and the smooth tanh (·) only — the target 𝑓 is never queried at training time. 
+
+Three ℓ∞ budgets. We distinguish three budgets and treat them as separate knobs: 𝜖 T — the teacher’s ℓ∞-budget that bounds the cached attack; 𝜖 Strain — the 𝜖 used inside 𝜹 S when computing Ldist ;
+
+𝜖 Seval — the 𝜖 applied to the trained student at inference. We always set 𝜖 Seval = 𝜖 T so that teacher and student are evaluated under the same constraint. The choice of 𝜖 Strain , by contrast, controls how strongly the post-processing tanh (·) is driven toward saturation during training: a small 𝜖 Strain pushes 𝐺 𝜽 𝐺 (x) to large magnitudes (saturated tanh, sharp signs), while a large 𝜖 Strain keeps 𝐺 𝜽 𝐺 (x) in the near-linear regime of tanh (soft, low-magnitude 𝜹 S). 
+
+Pipeline. The full procedure is summarized in Algorithm 2. The teacher is queried only in line 1 to populate {𝜹 T 
+
+> 𝑖
+
+}𝑛 𝑖 =1; thereafter back-propagation runs only through 𝐺 𝜽 𝐺 and the smooth tanh (·) ,so the per-epoch training cost is O( 𝑛 · 𝑐 𝐺 ), where 𝑐 𝐺 is the per-sample cost of one forward+backward pass through the generator — independent of the size and depth of 𝑓 .
+
+Remarks. The distilled attack has two practical advantages over the white-box training baseline of Section 3.3.1: (i) after the one-off Michael Baronov, Denis Vorobev, Margarita Rusanova, Petr Sokerin, and Alexey Zaytsev 
+
+teacher rollout, no further access to ∇𝑓 is required; we can complete the same step for a black-box attack to collect pairs of attack vectors and perturbed examples, so the procedure is compatible with a setup in which 𝑓 is exposed only through a fixed offline set of teacher perturbations; (ii) the per-epoch training cost is independent of the size and depth of 𝑓 , since back-propagation runs only through the much smaller generator 𝐺 𝜽 𝐺 . The structural cost is a hard upper bound on attack strength: a perfectly distilled student inherits the fooling rate of the teacher and cannot exceed it. The empirical gap between teacher and student fooling rates — and the architectural choices that close or widen it — is the central object of study in Section 4. 
+
+## 4 Experiments 4.1 Datasets 
+
+We evaluate on three binary classification datasets from the UCR archive [5]: PowerCons ( 𝐿 = 144, 180/180 train/test), Strawberry (𝐿 = 235, 613/370), and GunPoint ( 𝐿 = 150, 50/150). These datasets represent different application domains while sharing the same setting of univariate time-series classification. 
+
+## 4.2 Model Architectures 
+
+We consider three target classifier families: LSTM [15], ResCNN [37], and PatchTST [24]. Generators follow the corresponding backbone architecture and produce perturbations with the same dimensionality as the input series. In addition, we evaluate RNNA [25] and S4 [12] as generator architectures. 
+
+## 4.3 Evaluation Metrics 
+
+In our experiments, we used several evaluation metrics, calculated over a test sample: fooling rate, effectiveness [28], and target accu-racy. We also measure the inference time during attack generation. 
+
+Fooling Rate (FR) measures the proportion of instances that change their prediction after the attack: 
+
+𝐹𝑅 = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+1 𝑓 (x𝑖 ) ≠ 𝑓 (x′ 
+
+> 𝑖
+
+),
+
+where 𝑁 is the sample size, x𝑖 is the original instance, x′ 
+
+> 𝑖
+
+is the adversarial instance, and 𝑓 (·) is the target model. 
+
+Attack Effectiveness (E) : characterizes the degradation of the target model’s performance. It is defined as the difference between 1 and the 𝐹 1-score computed on the perturbed examples x′:
+
+𝐸 = 1 − 𝐹 1 (𝑦 true , 𝑓 (x′)) ,
+
+where 𝑦 true denotes the ground truth class labels. 
+
+Target Accuracy (TA) : measures the proportion of instances that remain correctly classified after the attack. It is essentially the standard accuracy metric computed on the perturbed examples: 
+
+𝑇 𝐴 = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+1(𝑓 (x′ 
+
+> 𝑖
+
+) = 𝑦 𝑖 ).
+
+where 𝑦 true  
+
+> 𝑖
+
+is the ground truth label for the 𝑖 -th instance. 
+
+Figure 4: Time vs efficiency scatter plot 
+
+## 4.4 Experimental setup 
+
+Experiments were run on a single NVIDIA RTX A5000 GPU. Datasets were normalized prior to training. We used Adam/AdamW with learning rates in {10 −3, 10 −4 } and batch size 64. The perturbation budget was set to 𝜀 ∈ [ 0.3, 0.4]. Target models were trained for up to 100 epochs. FGSM used a single step, while iFGSM used 𝑇 = 10 iterations. GENADA/iGENADA were trained for up to 200 epochs with number of iterations 𝑇 ≤ 20. The number of unfrozen attack steps at the end is set to 𝑘 = 3. 
+
+Iterative training strategy. . At epoch 0, the initial number of training steps is also equal to 𝑘 = 3. Then, it increases by one at each epoch until it reaches 𝑇 , and remains fixed afterward. In our experiments, we mainly use 𝑇 = 15 or 5. The source code is available in the anonymized GitHub reposi-tory: https://anonymous.4open.science/r/adversarial-gen-attacks-6690. 
+
+## 4.5 Main results 
+
+Trainability and generalization. All attacks reached a dataset-and architecture-specific performance plateau, typically within 10–100 epochs. Transferability experiments show that the learned generators remain effective even when the generator and target classifier architectures differ, supporting their applicability in black-box settings. 
+
+Inference-time efficiency. GENADA and iGENADA achieve the fastest inference while maintaining competitive attack quality (Fig-ure 4). Once trained, the generator produces perturbations using only forward passes and does not require backpropagation through the target classifier. 
+
+Distilled attacks. Distillation performance is determined by two factors: teacher strength and the amount of training data available to learn the regression target 𝜹 T (x). On Strawberry, the largest dataset, the best students nearly match the white-box teacher in fooling rate and achieve accuracy degradation comparable to iFGSM. On GunPoint, top students retain most of the teacher’s fooling rate, while weaker generators degrade substantially due to the limited training set size. On PowerCons, student performance is constrained either by a weak teacher (LSTM target) or by the small GENADA: efficient generative time series adversarial attack framework 
+
+Table 1: Best fooling rate (FR) achieved by each attack type across all generators. 
+
+Attack PowerCons GunPoint Strawberry LSTM PatchTST ResCNN LSTM PatchTST ResCNN LSTM PatchTST ResCNN FGSM 0.361 0.382 0.382 0.533 0.876 0.064 0.824 0.629 0.227 iFGSM 0.113 0.674 0.887 0.820 0.969 0.989 0.873 0.893 0.969 
+
+GENADA 0.185 0.661 0.456 0.713 0.773 0.873 0.789 0.951 0.973 
+
+iGENADA 0.674 0.572 0.744 0.773 0.907 0.773 0.757 0.9 0.53 
+
+dataset size, which limits distillation quality even when the teacher is stronger. 
+
+Generator hierarchy. A consistent ranking emerges across at-tack families. PatchTST is the most reliable backbone, achieving the strongest results under GENADA/iGENADA and remaining competitive under distillation. S4 dominates among distilled gen-erators on larger datasets and is the only architecture that sur-passes the iFGSM teacher on two Strawberry targets. RNNA oc-cupies an intermediate position, while LSTM and ResidualCNN are consistently the weakest. Overall, the observed ordering is 
+
+PatchTST , S4 ⪰ RNNA ≻ LSTM , ResidualCNN .
+
+Artifacts and attack stealthiness. FGSM and iFGSM often produce visible high-frequency artifacts (Appendix B, Figure 5). GENADA can also introduce artifacts, although their magnitude is limited by the attack budget 𝜀 . In some cases, generative attacks are vi-sually smoother than iFGSM, while in others the gradient-based attack remains more concealed. Improving attack stealthiness re-mains an important direction for future work, potentially through discriminator-based objectives [28]. 
+
+## 5 Conclusion 
+
+In this work, we introduced GENADA (GENerative ADversarial At-tack), a generative framework for adversarial attacks on time series classification models. Unlike classical gradient-based approaches such as FGSM or iFGSM, the proposed method learns to gener-ate perturbations directly using a dedicated neural generator. As a result, after the training stage, adversarial examples can be pro-duced using only a forward pass through the generator, without iterative optimization and without repeated gradient computations with respect to the target model during inference. This significantly reduces the computational cost of attack generation and makes the method attractive for practical scenarios where low latency or restricted model access is important. We proposed a training procedure based on a frozen target clas-sifier, allowing the generator to learn perturbations that maximize the degradation of the classifier’s predictions while preserving per-turbation constraints. We evaluated the proposed framework on multiple time series classification datasets, including PowerCons, GunPoint, and Strawberry, and considered several model architec-tures, including recurrent, convolutional, and transformer-based networks. The experiments demonstrate that GENADA achieves attack quality competitive with strong white-box baselines while substantially reducing adversarial example generation time. In par-ticular, the results show that generative attacks can successfully approximate the behavior of iterative optimization-based attacks while avoiding their high inference-time cost. The obtained results also indicate that generative approaches are capable of capturing these structures and producing effective perturbations even in tem-porally dependent signals. Overall, the proposed framework demonstrates that learned gen-erative attackers constitute a viable and efficient alternative to classical optimization-based adversarial attacks. 
+
+Limitations and future work. Despite the obtained results, this study has several limitations. First, the proposed attacks are eval-uated only in the binary classification setting, where the attack objective is to move the prediction toward the inverted class label. This setting is important as a first step, but multiclass classification is a more general and practically relevant scenario. Second, the quality and generalization ability of the learned at-tacks are still limited by the generator architecture and the training objective. In this work, we considered several neural architectures, including recurrent, convolutional, transformer-based, and state-space models. However, a more systematic analysis of new genera-tor architectures, as well as ensemble-based attacks, may further improve transferability and attack effectiveness across different target classifiers. 
+
+## References                             
+
+> [1] Naveed Akhtar and Ajmal Mian. 2018. Threat of adversarial attacks on deep learning in computer vision: a survey. IEEE Access 6 (2018), 14410–14430. [2] Anthony Bagnall, Hoang Anh Dau, Jason Lines, Michael Flynn, James Large, Aaron Bostrom, Paul Southam, and Eamonn Keogh. 2018. The UEA multivariate time series classification archive, 2018. arXiv preprint arXiv:1811.00075 (2018). [3] Anthony Bagnall, Jason Lines, Jon Hills, and Aaron Bostrom. 2015. Time-series classification with COTE: the collective of transformation-based ensembles. IEEE Trans. Knowl. Data Eng. 27, 9 (2015), 2522–2535. [4] Shumeet Baluja and Ian Fischer. 2018. Adversarial Transformation Networks: Learning to Generate Adversarial Examples. In AAAI .[5] Hoang Anh Dau, Anthony Bagnall, Kaveh Kamgar, Chin-Chia Michael Yeh, Yan Zhu, Shaghayegh Gharghabi, Chotirat Ann Ratanamahatana, and Eamonn Keogh. 2019. The UCR time series archive. IEEE/CAA Journal of Automatica Sinica 6, 6 (November 2019), 1293–1305. doi:10.1109/JAS.2019.1911747 [6] Daizong Ding, Mi Zhang, Fuli Feng, Yuanmin Huang, Erling Jiang, and Min Yang. 2023. Black-Box Adversarial Attack on Time Series Classification. Proc. AAAI Conf. Artif. Intell. 37, 6 (Jun. 2023), 7358–7368. doi:10.1609/aaai.v37i6.25896 [7] Yuxiao Dong et al. 2022. Momentum Iterative Gradient Sign Method Outperforms PGD Attacks. In Proceedings of the 12th International Conference on Computing and Artificial Intelligence . https://www.scitepress.org/Papers/2022/109384/109384. pdf [8] Hassan Ismail Fawaz, Germain Forestier, Jonathan Weber, Lhassane Idoumghar, and Pierre-Alain Muller. 2019. Adversarial attacks on deep neural networks for time series classification. In Proc. Int. Joint Conf. Neural Netw. (IJCNN) . IEEE, 1—8. [9] Germain Forestier and coauthors. 2022. Smooth Perturbations for Time Series Adversarial Attacks. (2022). PKDD / JDSA. [10] Ian J. Goodfellow, Jonathon Shlens, and Christian Szegedy. 2015. Explaining and Harnessing Adversarial Examples. In International Conference on Learning Representations (ICLR) .https://arxiv.org/abs/1412.6572 [11] Shreya Goyal et al. 2023. A survey of adversarial defenses and robustness in NLP. ACM Comput. Surv. 55, 14s (2023), 1–39.
+
+Michael Baronov, Denis Vorobev, Margarita Rusanova, Petr Sokerin, and Alexey Zaytsev 
+
+[12] Albert Gu, Karan Goel, and Christopher Ré. 2022. Efficiently Modeling Long Sequences with Structured State Spaces. In Proc. Int. Conf. Learn. Represent. (ICLR) .1–32. [13] Samuel Harford, Fazle Karim, and Houshang Darabi. 2020. Adversarial attacks on multivariate time series. arXiv preprint arXiv:2004.00410 (2020). [14] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016. Deep resid-ual learning for image recognition. In Proc. IEEE Conf. Comput. Vision Pattern Recognit. 770–778. [15] Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long Short-Term Memory. 
+
+Neural Comput. 9, 8 (Nov. 1997), 1735–1780. doi:10.1162/neco.1997.9.8.1735 [16] Hassan Ismail Fawaz et al. 2019. Deep learning for time series classification: a review. Data mining and knowledge discovery 33, 4 (2019), 917–963. [17] Fazle Karim, Somshubra Majumdar, and Houshang Darabi. 2020. Adversarial attacks on time series. IEEE Trans. Pattern Anal. Mach. Intell. 43, 10 (2020), 3309–3320. [18] Eamonn Keogh and Chotirat Ann Ratanamahatana. 2005. Exact indexing of dynamic time warping. Knowl. Inf. Syst. 7 (2005), 358–386. [19] Aleksander Madry, Adam Makelov, Ludwig Schmidt, Dimitris Tsipras, and Adrian Vladu. 2018. Towards Deep Learning Models Resistant to Adversarial Attacks. In International Conference on Learning Representations (ICLR) . https://arxiv.org/ abs/1706.06083 [20] Alexander E Marusov and Alexey Zaytsev. 2023. Noncontrastive Representation Learning for Intervals From Well Logs. IEEE Geosci. Remote Sens. Lett. 20 (2023), 1–5. [21] Matthew Middlehurst, James Large, Michael Flynn, Jason Lines, Aaron Bostrom, and Anthony Bagnall. 2021. HIVE-COTE 2.0: a new meta ensemble for time series classification. Mach. Learn. 110, 11-12 (2021), 3211–3243. [22] Matthew Middlehurst, Patrick Schäfer, and Anthony Bagnall. 2024. Correction: Bake off redux: a review and experimental evaluation of recent time series classification algorithms. Data Mining and Knowledge Discovery 38, 6 (2024), 4236–4237. doi:10.1007/s10618-024-01040-z [23] Navid Mohammadi Foumani, Lynn Miller, Chang Wei Tan, Geoffrey I Webb, Germain Forestier, and Mahsa Salehi. 2024. Deep learning for time series clas-sification and extrinsic regression: A current survey. ACM Comput. Surv. 56, 9 (2024), 1–45. [24] Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam. 2023. A Time Series is Worth 64 Words: Long-term Forecasting with Transformers. In 
+
+Proc. Int. Conf. Learn. Represent. (ICLR) . 1–24. [25] Ignacio Oguiza. 2023. tsai - A state-of-the-art deep learning library for time series and sequential data. Github. https://github.com/timeseriesAI/tsai [26] Nicolas Papernot et al. 2017. Practical Black-Box Attacks against Machine Learning. In ASIACCS . 506–519. [27] Patrick Schäfer and Ulf Leser. 2017. Fast and accurate time series classification with weasel. In Proc. ACM Conf. Inf. Knowl. Manage. 637–646. [28] Petr Sokerin, Dmitry Anikin, Sofia Krehova, and Alexey Zaytsev. 2025. Concealed Adversarial attacks on neural networks for sequential data. arXiv preprint arXiv:2502.20948 (2025). [29] Yuchen Su et al. 2026. Temporally Unified Adversarial Perturbations for Time Series Forecasting. arXiv preprint arXiv:2602.11940 (2026). https://arxiv.org/abs/ 2602.11940 [30] Christian Szegedy et al. [n. d.]. Intriguing Properties of Neural Networks. [31] Florian Tramèr, Alexey Kurakin, Nicolas Papernot, Ian Goodfellow, Dan Boneh, and Patrick McDaniel. 2018. Ensemble adversarial training: Attacks and defenses. In Proc. Int. Conf. Learn. Represent. (ICLR) . 1–22. [32] Junyu Wang et al. 2024. Temporal characteristics-based adversarial attacks on time series classification. Expert Systems with Applications 240 (2024), 122403. https://www.sciencedirect.com/science/article/abs/pii/S0957417424028173 [33] Chaoyi Xiao, Hossein Mobahi, Ran Chen, Binhui Yang, Paul Verzilli, Sijia Liu, and Chaowei La. 2018. Generating Adversarial Examples with Adversarial Networks. In International Conference on Learning Representations (ICLR) . https: //openreview.net/forum?id=HknbyQbC-[34] Chelin Xie, Zizhao Zhang, Han Zhou, Tianyi Bai, Junyu Wang, Zhou Zhou, and Sima Xu. 2023. Enabling Fast and Universal Audio Adversarial Attack Using Generative Model. In Proceedings of the AAAI Conference on Artificial Intelligence ,Vol. 37. 9674–9682. https://arxiv.org/abs/2004.12261 [35] Qiang Yang and Xindong Wu. 2006. 10 challenging problems in data mining research. Int. J. Inf. Technol. Decis. Making 5, 4(2006), 597–604. arXiv:https://doi.org/10.1142/S0219622006002258 doi:10.1142/S0219622006002258 [36] Chaoning Zhang et al. 2022. Investigating top-k white-box and transferable black-box attack. In CVPR . 15085–15094. [37] Xiaowu Zou, Zidong Wang, Qi Li, and Weiguo Sheng. 2019. Integration of residual network and convolutional neural network along with various activation functions and global pooling for time series classification. Neurocomputing 367 (2019), 39–45. doi:10.1016/j.neucom.2019.08.023 [38] Xiaowu Zou, Zidong Wang, Qi Li, Weiguo Sheng, and coauthors. 2019. In-tegration of residual network and convolutional neural network along with various activation functions and global pooling for time series classification. 
+
+Neurocomputing 367 (2019), 39–45. 
+
+## Appendix A Theoretical justification of convergence Theorem 
+
+Assumptions. The choice of these assumptions is motivated by a balance between mathematical tractability and the typical behavior observed in deep learning and adversarial robust optimization: We consider three assumptions: A1 𝐿 -smoothness of 𝑓 𝑥 (𝛿 ) with respect to 𝛿 :
+
+∀𝑥, 𝛿 1, 𝛿 2 : ∥𝛿 𝑖 ∥ ≤ 𝜀 ⇒ ∥∇ 𝑓 𝑥 (𝛿 1) − ∇ 𝑓 𝑥 (𝛿 2)∥ ≤ 𝐿 ∥𝛿 1 − 𝛿 2 ∥.
+
+This is a standard regularity assumption in non-convex op-timization. In the context of adversarial attacks (like FGSM or PGD), assuming Lipschitz continuity of the loss gradient w.r.t. the perturbation 𝛿 is standard practice for proving convergence bounds. While ReLU activations can make the loss non-smooth at specific points, smoothed variants (like GELU or Softplus) or empirical observation of local smooth-ness under small 𝜀 justify this assumption in practice. A2 Uniform approximation capacity of the generator: 
+
+∀𝜂 > 0 ∃𝜃 ★ : sup 
+
+> 𝑥
+
+∥𝐺 𝜃 ★ (𝑥 ) − 𝛿 ★ 
+
+> 𝑥
+
+∥ ≤ 𝜂. 
+
+This assumption relies on the Universal Approximation The-orems for neural networks. Since the perturbation space is bounded by ∥𝛿 ∥ ≤ 𝜀 and the input domain is typically compact (e.g., images in [0, 1]𝑑 ), a sufficiently wide or deep generator network 𝐺 𝜃 is theoretically capable of uniformly approximating the optimal perturbation mapping 𝛿 ★ 
+
+> 𝑥
+
+. Simi-lar expressivity assumptions are routinely used in the anal-ysis of GANs and neural operators. A3 Polyak–Łojasiewicz (PL) condition for 𝐽 (𝜃 ):
+
+∃𝜇 𝜃 > 0 : ∀𝜃 ⇒ 12 ∥∇ 𝜃 𝐽 (𝜃 )∥ 2 ≥ 𝜇 𝜃 
+
+ 𝐽 (𝜃 ★) − 𝐽 (𝜃 ).
+
+The PL condition is significantly weaker than strict concav-ity, as it allows for multiple local maxima and non-convex landscapes, which is exactly the case for neural network ob-jectives 𝐽 (𝜃 ). Recent deep learning theory literature shows that overparameterized neural networks often satisfy the PL condition locally or globally during gradient descent. Here, it elegantly captures the property that if the gradient of the generator’s objective is small ( 𝜀 grad ), the generator is close to the optimal achievable utility 𝐽 (𝜃 ★).Now we can formulate theorem, that proofs workability of our method. Theorem A.1. Suppose the assumptions [A1]-[A3] hold, and let 
+
+𝜃 𝑘 satisfy 
+
+∥∇ 𝜃 𝐽 (𝜃 𝑘 )∥ ≤ 𝜀 grad .
+
+Then 
+
+E𝑥 
+
+𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝑓 𝑥 (𝐺 𝜃 𝑘 (𝑥 ))  ≤ 𝐿 
+
+2 𝜂 2 +
+
+𝜀 2grad 
+
+2𝜇 𝜃 
+
+.
+
+Proof. GENADA: efficient generative time series adversarial attack framework 
+
+(a) Strawberry — GENADA (b) Strawberry — distilled 
+
+(c) PowerCons — GENADA (d) PowerCons — distilled 
+
+(e) GunPoint — GENADA (f) GunPoint — distilled 
+
+Figure 5: Adversarial perturbations on a single validation sample for PatchTST target. Left column: white-box GENADA; right column: distilled students. 
+
+I. Approximation error contribution. By the approximation capac-ity of the generator, for any 𝜂 > 0 there exists 𝜃 ★ such that 
+
+∥𝐺 𝜃 ★ (𝑥 ) − 𝛿 ★ 
+
+> 𝑥
+
+∥ ≤ 𝜂 ∀𝑥 . 
+
+By 𝐿 -smoothness of 𝑓 𝑥 , it admits the quadratic upper bound 
+
+∀𝛿 1, 𝛿 2 ⇒ 𝑓 𝑥 (𝛿 1) ≤ 𝑓 𝑥 (𝛿 2) + ⟨∇ 𝑓 𝑥 (𝛿 2), 𝛿 1 − 𝛿 2⟩ + 𝐿 
+
+2 ∥𝛿 1 − 𝛿 2 ∥2.
+
+Applying this inequality with 𝛿 1 = 𝐺 𝜃 ★ (𝑥 ) and 𝛿 2 = 𝛿 ★ 
+
+> 𝑥
+
+, we obtain 
+
+𝑓 𝑥 (𝐺 𝜃 ★ (𝑥 )) ≤ 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) + ⟨∇ 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+), 𝐺 𝜃 ★ (𝑥 ) − 𝛿 ★ 
+
+> 𝑥
+
+⟩ + 𝐿 
+
+2 𝜂 2.
+
+The first-order optimality condition for 𝛿 ★ 
+
+> 𝑥
+
+in the constrained maximization problem over the 𝜀 -ball yields 
+
+∀𝛿 ′ : ∥𝛿 ′ ∥ ≤ 𝜖 ⇒ ⟨∇ 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+), 𝛿 ′ − 𝛿 ★ 
+
+> 𝑥
+
+⟩ ≤ 0.
+
+Taking 𝛿 ′ = 𝐺 𝜃 ★ (𝑥 ) gives 
+
+⟨∇ 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+), 𝐺 𝜃 ★ (𝑥 ) − 𝛿 ★ 
+
+> 𝑥
+
+⟩ ≤ 0,
+
+and therefore 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝑓 𝑥 (𝐺 𝜃 ★ (𝑥 )) ≤ 𝐿  
+
+> 2
+
+𝜂 2.
+
+Taking expectation over 𝑥 : 𝐽 (𝜃 ★) ≥ E𝑥 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝐿  
+
+> 2
+
+𝜂 2.
+
+II. Optimization error contribution. From the PL condition for 
+
+𝐽 (𝜃 ) and ∥∇ 𝜃 𝐽 (𝜃 𝑘 )∥ ≤ 𝜀 grad ,12 𝜀 2grad ≥ 𝜇 𝜃 
+
+ 𝐽 (𝜃 ★) − 𝐽 (𝜃 𝑘 ),
+
+hence 𝐽 (𝜃 ★) − 𝐽 (𝜃 𝑘 ) ≤ 𝜀 2grad  
+
+> 2𝜇 𝜃
+
+.
+
+III. Final bound. 
+
+E𝑥 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝐽 (𝜃 𝑘 ) =  E𝑥 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝐽 (𝜃 ★) +  𝐽 (𝜃 ★) − 𝐽 (𝜃 𝑘 ).
+
+Using the bounds from Steps I and II, 
+
+E𝑥 𝑓 𝑥 (𝛿 ★ 
+
+> 𝑥
+
+) − 𝐽 (𝜃 𝑘 ) ≤ 𝐿 
+
+2 𝜂 2 +
+
+𝜀 2grad 
+
+2𝜇 𝜃 
+
+.
+
+□
+
+## B Visualization of distilled attacks 
+
+In this section, we present examples of samples attacked by different attacks, as shown in Figure 5.
