@@ -6,29 +6,53 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-16
-- 运行时间：2026-08-16 20:13:11 UTC
+- 最新运行日期：2026-08-17
+- 运行时间：2026-08-17 20:10:03 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 本次总论文数：11
+- 精读区：6
+- 速读区：5
 
 ### 今日简报（AI）
-今日聚焦3篇AI金融与时间序列研究，其中1篇高价值精读，2篇速读覆盖生成式攻击与关系深度学习。最值得关注的是《Accurate Ensembles, Fragile Narratives》（9.0分）：多尺度堆叠提升信贷风险预测精度，但LLM解释的“准确性”与叙事可靠性可能存在裂痕。建议普通读者优先理解“高精度模型+可解释性”之间的张力，再关注生成对抗时间序列与增量学习的适用边界。
-- 详情：[/202608/16/README](/202608/16/README)
+今日完成11篇金融AI论文筛选，精读6篇、速读5篇；其中《AI-Driven Multiscenario Interest Rate Forecasting》与《TIEM》以9.0分领跑，聚焦利率预测与事件驱动建模。速读方向中，光子量子计算选股和全球波动率网络预测也值得一览。建议普通读者优先关注AI在利率与事件驱动预测上的落地潜力，不必深入算法细节。
+- 详情：[/202608/17/README](/202608/17/README)
 
 ### 精读区论文标签
-1. [Accurate Ensembles, Fragile Narratives: Multi-Scale Stacking and a Fidelity Audit of LLM-Generated Explanations for Credit Risk](/202608/16/2608.08126v1-accurate-ensembles-fragile-narratives-multi-scale-stacking-and-a-fidelity-audit-of-llm-generated-explanations-for-credit-risk)  
+1. [AI-Driven Multiscenario Interest Rate Forecasting: A Proof of Concept for Banking Asset Management](/202608/17/2608.12424v2-ai-driven-multiscenario-interest-rate-forecasting-a-proof-of-concept-for-banking-asset-management)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：人工智能应用于信用风险评分与LLM解释审计
+   evidence：结合主题建模、情感分析对金融文档进行NLP处理，并融合计量模型进行利率预测。
+2. [TIEM: Temporal Integration of Hypergraph Evidence and Skill Memory for Event-Driven Financial Forecasting](/202608/17/2608.13024v2-tiem-temporal-integration-of-hypergraph-evidence-and-skill-memory-for-event-driven-financial-forecasting)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：融合时间超图证据与技能记忆的LLM金融预测
+3. [Dependence-Informed Sparse Neural Architecture for Stock Return Prediction](/202608/17/2608.14323v1-dependence-informed-sparse-neural-architecture-for-stock-return-prediction)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：基于依赖信息稀疏神经结构的股票收益预测
+4. [CLAIR-Fin: An Adversarial Multi-Agent Framework for Claim-Level Verification and Adaptive Debate in Cross-Modal Financial QA](/202608/17/2608.13706v1-clair-fin-an-adversarial-multi-agent-framework-for-claim-level-verification-and-adaptive-debate-in-cross-modal-financial-qa)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：跨模态金融问答中的声明级验证与自适应辩论
+5. [AlphaSeek: Trajectory-Level Self-Iterative Factor Mining Framework for Multi-Source Financial Data](/202608/17/2608.13913v1-alphaseek-trajectory-level-self-iterative-factor-mining-framework-for-multi-source-financial-data)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：基于LLM的因子挖掘与自迭代组合优化应用于智能投顾组合管理
+6. [Forecast Collapse in Time-Series Foundation Models](/202608/17/2608.14106v1-forecast-collapse-in-time-series-foundation-models)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：针对美股小时收益预测中深度学习模型的预测坍缩分析
 
 ### 速读区论文标签
-1. [GENADA: efficient generative time series adversarial attack framework](/202608/16/2608.12535v1-genada-efficient-generative-time-series-adversarial-attack-framework)  
+1. [Photonic Quantum Computing vs. Classical Solvers in Constrained Factor Portfolio Optimization](/202608/17/2608.14134v1-photonic-quantum-computing-vs-classical-solvers-in-constrained-factor-portfolio-optimization)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：比较光子量子退火器、Gurobi和深度强化学习在因子组合优化中的表现。
+2. [Spillover-Informed Network Architecture for Global Volatility Forecasting](/202608/17/2608.14171v1-spillover-informed-network-architecture-for-global-volatility-forecasting)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：基于网络的深度架构用于全球股票波动率预测
+3. [MINT: A Universal Zero-Shot Predictor for Transaction Data](/202608/17/2608.14198v1-mint-a-universal-zero-shot-predictor-for-transaction-data)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：用于金融交易预测的人工智能/深度学习基础模型
+4. [WIRED: Weighted Adaptive Prediction with Structured Dependence for Probabilistic Multiseries Forecasting](/202608/17/2608.12998v1-wired-weighted-adaptive-prediction-with-structured-dependence-for-probabilistic-multiseries-forecasting)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：面向时间序列深度学习模型的生成式对抗攻击框架，包含金融应用
-2. [Incremental Evaluation and Training in Relational Deep Learning](/202608/16/2608.13023v1-incremental-evaluation-and-training-in-relational-deep-learning)  
+   evidence：用Copula结构依赖的多序列概率预测，并在EuStockMarkets上验证
+5. [Model-agnostic Retrieval-Augmented Extended Forecasting for time series](/202608/17/2608.14054v1-model-agnostic-retrieval-augmented-extended-forecasting-for-time-series)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：关系深度学习方法可应用于金融多表数据库，但本文为通用范式
+   evidence：模型无关的检索增强时间序列预测，可迁移至金融领域
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,419 @@
+Title: MINT: A Universal Zero-Shot Predictor for Transaction Data
+
+URL Source: https://arxiv.org/pdf/2608.14198v1
+
+Published Time: Mon, 17 Aug 2026 00:43:29 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# MINT: A Universal Zero-Shot Predictor for Transaction Data 
+
+# Parameswaran Kamalaruban ∗
+
+Risk and Security AI Lab, Visa Inc. United Kingdom kaparame@visa.com 
+
+# Viktor Drobnyi ∗
+
+Risk and Security AI Lab, Visa Inc. United Kingdom vdrobnyi@visa.com 
+
+# Maeve Madigan 
+
+Risk and Security AI Lab, Visa Inc. United Kingdom mmadigan@visa.com 
+
+# Julia Rozanova 
+
+Risk and Security AI Lab, Visa Inc. United Kingdom yrozanov@visa.com 
+
+# David Sutton 
+
+Risk and Security AI Lab, Visa Inc. United Kingdom dsutton@visa.com 
+
+# Stuart Burrell 
+
+Risk and Security AI Lab, Visa Inc. United Kingdom sburrell@visa.com 
+
+## Abstract 
+
+Banks analyse sequential financial transaction data to perform many tasks, including fraud prevention, credit risk assessment and offer personalization. To improve the predictive accuracy of these tasks, Payments Foundation Models encode transaction sequence data as rich contextual embeddings, which can then be provided to task-specific models as features. However, these Foundation Mod-els are not designed for flexible zero-shot reasoning across novel downstream prediction tasks, limiting their adaptability and util-ity. Existing LLM-based approaches to zero-shot prediction often fail to fully exploit the predictive signal within transaction data, while relying on costly text serialization or task-specific architec-tures that scale poorly. To address these limitations, we present the Multimodal Instruction Network for Transactions (MINT), a framework that connects a pretrained transaction sequence encoder to a decoder-only LLM through lightweight embedding injection, transaction-language alignment, and instruction tuning. We find that MINT achieves state-of-the-art predictive question-answering performance in both in-distribution and out-of-distribution ques-tions, while substantially reducing input tokens, latency, and mem-ory consumption compared to text-serialization baselines. Through comprehensive analyses of representations, alignment strategies, training data, and history length, we establish that compact transac-tion embeddings are a superior approach to transaction representa-tion than text serialization for multimodal reasoning and zero-shot prediction tasks. 
+
+## 1 Introduction 
+
+Financial behavior is naturally represented as a sequence of discrete events. Each customer generates a temporally ordered history of transactions, where every transaction consists of heterogeneous categorical and numerical attributes (e.g., merchant, amount, chan-nel, and timestamp). Reasoning over such data requires modeling both relationships among fields within a transaction and temporal dependencies across transactions, often over long horizons. These challenges have made transaction understanding a central problem in domains such as customer analytics, risk assessment, financial planning, and fraud detection. Large language models (LLMs) provide a compelling interface for transaction understanding because they support natural-language interaction, instruction following, and explanation generation. A straightforward approach is to serialize transaction histories into 
+
+> ∗Both authors contributed equally to this research.
+
+Figure 1: Overview of MINT. Transaction histories are en-coded into compact transaction embeddings, enabling pre-dictive question answering and financial reasoning through a natural-language interface. Example applications include forecasting future customer behavior, such as transaction volume and average transaction amount over the next 30 days, alongside summarization, fraud-risk assessment, and financial analysis. 
+
+text and append them to prompts. While effective for some retrieval-style tasks, this strategy quickly becomes inefficient as histories arXiv:2608.14198v1 [cs.LG] 14 Aug 2026 Kamalaruban et al. 
+
+Figure 2: Accuracy-efficiency trade-off on predictive QA. The x-axis shows input token count and the y-axis shows accu-racy; filled and unfilled markers correspond to ID and OOD evaluation, respectively. MINT occupies a more favorable Pareto region than competing methods, with MINT ( ℎ = 1)providing the strongest predictive QA performance while balancing the performance and inference efficiency. MINT also shows the least degradation from ID to OOD among top performing methods. 
+
+grow longer and often struggles to exploit the structured numerical and temporal signals present in transaction data [11, 14, 28, 31]. Re-cent work has therefore explored multimodal transaction reasoning systems that combine transaction sequence encoders with LLMs, al-lowing models to condition on compact transaction representations rather than long textual serializations [1, 7, 15, 22, 25, 27]. At the same time, self-supervised pretraining on large-scale trans-action corpora has produced increasingly powerful transaction foundation models [20, 21, 23]. These encoders learn transferable representations from behavioral sequences and achieve strong per-formance across a variety of downstream financial tasks. Together, these developments suggest a natural modular design: use a pre-trained transaction sequence encoder to extract behavioral signals and reserve LLM capacity for language understanding, reasoning, and generation. Following this principle, we present the Multimodal Instruction Network for Transactions (MINT), a multimodal trans-action reasoning framework that couples a pretrained transaction sequence encoder with a decoder-only LLM through embedding injection. Transaction histories are first encoded into dense behav-ioral representations, which are projected into the LLM embedding space using a lightweight connector. The transaction sequence en-coder remains frozen throughout multimodal training, while LoRA adapters efficiently adapt the LLM for downstream reasoning. In-spired by modern vision-language model training pipelines, MINT combines transaction-language alignment on caption data with instruction tuning on question-answering and reasoning tasks, en-abling efficient conditioning on long transaction histories without costly textual serialization. Our main contributions are: 
+
+• Introduce MINT, a multimodal transaction reasoning frame-work that integrates a pretrained transaction sequence en-coder with a decoder-only LLM through embedding injec-tion, modality alignment, and parameter-efficient adaptation (see Figure 1). 
+
+• Validate that transaction embeddings provide a stronger rep-resentation than textual serialization for predictive reason-ing, achieving state-of-the-art predictive QA performance in both in-distribution (ID) and out-of-distribution (OOD) set-tings while reducing input tokens, latency, and GPU memory usage (see Figure 2). 
+
+• Present a comprehensive study of multimodal transaction reasoning, analyzing transaction representations, model ca-pacity, training-data mixtures, history length, robustness, and efficiency, yielding practical insights for the design of future transaction-language systems. 
+
+## 2 Related Work 
+
+Event sequence foundation models. Transaction histories can be represented as structured event sequences with heterogeneous at-tributes and timestamps. Prior work on tabular and event-sequence modeling has shown the importance of hierarchical architectures that separately encode field-level information within events and temporal dependencies across events [4, 21, 30]. More recently, large-scale self-supervised pretraining on transaction corpora has established pretrained transaction sequence encoders as strong foundation models for behavioral data [3, 6, 9, 16, 20, 23, 26]. In particular, Skalski et al. [23] showed that generative autoregres-sive pretraining yields highly effective transaction representations, outperforming both traditional feature-engineering approaches and alternative self-supervised objectives for transaction model-ing [5, 8, 13]. Their results demonstrated that autoregressively pre-trained transaction encoders transfer well across a diverse range of downstream tasks. This motivates our use of a pretrained transac-tion sequence encoder and makes the corresponding task-specific classifier a strong baseline throughout our evaluation. 
+
+Multimodal event sequence reasoning. Recent work has ex-plored adapting LLMs to time-series and event-sequence reasoning, highlighting challenges in long-context processing, numerical rea-soning, and faithful generation [11, 14, 28, 31]. To address these limitations, multimodal approaches combine specialized sequence encoders with LLMs through projection layers, cross-attention modules, or other fusion mechanisms [7, 15, 25, 27]. Transaction-focused reasoning systems extend this paradigm to financial event sequences [1, 22]. However, existing approaches typically omit one or more ingredients that have become standard in modern multi-modal reasoning systems, including explicit modality-alignment training, chain-of-thought supervision, and comprehensive evalua-tion across both in-distribution and out-of-distribution settings. A key distinction of our approach is the decoupling of transac-tion representation learning from reasoning-model training. Prior work either jointly optimizes the transaction sequence encoder, connector, and LLM [1] or employs more complex fusion architec-tures [22]. In contrast, following contemporary vision-language model training practices [18, 19], we first pretrain a transaction se-quence encoder on large-scale transaction data, then freeze it during MINT: A Universal Zero-Shot Predictor for Transaction Data 
+
+modality alignment and instruction tuning. This separation substan-tially simplifies training, allows transaction representations to be learned efficiently without repeatedly processing massive datasets through the LLM, and enables the use of a lightweight MLP projec-tor rather than more complex architectures such as Q-Former [17]. Furthermore, unlike approaches that rely on task identifiers, task embeddings, or task-specific control tokens [1, 22], our formulation treats transaction understanding as a unified instruction-following problem. As a result, the model is not tied to a fixed set of task defi-nitions and can naturally generalize to previously unseen question types and instructions. Beyond predictive accuracy, we also pro-vide a comprehensive evaluation spanning robustness, efficiency, latency, memory consumption, and detailed ablations of the major design choices. 
+
+Alignment of event-sequence and text representations. Acomplementary line of work aligns event-sequence representations with semantic text embeddings using contrastive objectives [10, 29]. These methods primarily aim to learn transferable representations for downstream predictive tasks. In contrast, we use transaction-language alignment as an intermediate stage in a multimodal rea-soning training pipeline, ultimately targeting generative tasks such as transaction captioning and question answering. 
+
+## 3 Model Architecture 
+
+Figure 3: MINT architecture: frozen transaction sequence encoder produces per-transaction embeddings, a trainable connector projects them into the LLM hidden space, and a decoder-only LLM adapted via LoRA generates text outputs conditioned on injected embeddings. 
+
+Our model comprises: (i) a frozen transaction sequence en-coder producing per-transaction sequence embeddings, (ii) a train-able connector mapping transaction embeddings into the LLM hidden space, and (iii) a decoder-only LLM adapted via parameter-efficient fine-tuning (LoRA). 
+
+Frozen Transaction Sequence Encoder. Let T = {( 𝑥 𝑖 , 𝑡 𝑖 )} 𝑁 𝑖 =1
+
+denote a customer’s transaction history, where 𝑥 𝑖 is a transaction record and 𝑡 𝑖 its timestamp. Following prior work on tabular time-series modeling [21, 23], we use a Transformer-based transaction sequence encoder. Numerical attributes are log-transformed, cate-gorical attributes are embedded via field-specific lookup tables, and a field-level Transformer models interactions within each transac-tion. A sequence-level Transformer then captures temporal depen-dencies across transactions, producing contextualized embeddings 
+
+𝑒 𝑖 = 𝐸 (𝑥 𝑖 | {( 𝑥 𝑗 , 𝑡 𝑗 )} 𝑖 𝑗 =1) ∈ R𝑑 𝑒 . The encoder is pretrained with an autoregressive next-event prediction objective, 
+
+LAR = −
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+log 𝑝 (𝑥 𝑖 | 𝑥 <𝑖 ),
+
+to learn customer behavioral patterns, where 𝑥 𝑖 = 𝐷 (𝑒 𝑖 −1) for a learnable decoder 𝐷 . During multimodal training, the encoder remains frozen and serves solely as a transaction feature extractor. 
+
+Connector (Modality Projector). The connector 𝑔 𝜙 (param-eterized by 𝜙 ) maps the transaction embedding 𝑒 𝑖 ∈ R𝑑 𝑒 into the LLM hidden space R𝑑 : 𝑧 𝑖 = 𝑔 𝜙 (𝑒 𝑖 ) ∈ R𝑑 . We use a multi-layer perceptron (MLP) with normalization: 
+
+𝑔 𝜙 (𝑒 ) = LN (𝑊 2 𝜎 (𝑊 1 LN (𝑒 ))) ,
+
+where 𝜎 is GELU, LN denotes layer norm, 𝑊 1 ∈ Rℎ×𝑑 𝑒 , 𝑊 2 ∈ R𝑑 ×ℎ ,and ℎ is the connector hidden size. We study the effect of connector capacity in the ablations presented in Section 6.4. 
+
+LLM Backbone and Low Rank Adaptation. We use instruction-tuned decoder-only LLMs and adapt them via LoRA [12]. Base LLM weights are frozen; gradients flow only through LoRA parameters and the connector parameters 𝜙 . This yields parameter-efficient specialization while preserving general linguistic competence. 
+
+Embedding Injection. Let H ∈ R𝐿 ×𝑑 denote the LLM input embeddings for a prompt containing 𝑁 <emb> placeholder tokens. Each placeholder is replaced with a projected transaction embed-ding 𝑧 𝑖 :
+
+H[𝜋 (𝑖 )] ← 𝑧 𝑖 , 𝑖 = 1, . . . , 𝑁 , 
+
+where 𝜋 (𝑖 ) denotes the position of the 𝑖 -th <emb> token. The result-ing embedding sequence is processed by the LLM for autoregressive generation. This approach enables long transaction histories to be injected as compact embeddings rather than serialized into text. 
+
+## 4 Datasets 
+
+We formulate transaction understanding as a unified instruction-following problem that combines transaction history embeddings with natural-language instructions. The model is trained on two task families: transaction captioning , which generates summaries of customer behavior (e.g., spending patterns, merchant preferences, and temporal trends), and transaction question answering (QA) ,which answers questions grounded in transaction history. We focus on multiple-choice QA, including both extractive questions, where the correct answer is directly supported by observed transactions, and predictive questions, which require inference or forecasting from historical behavior. Depending on the task, the model may additionally generate natural-language rationales alongside the selected answer. 
+
+Prompt Templates. We represent a transaction history using special tokens interleaved with injected transaction embeddings. We add <txn> , </txn> , and <emb> to the tokenizer vocabulary. The <emb> token is a placeholder whose embedding is replaced at runtime by projected transaction vectors. We use a fixed-length history of 𝑁 transactions per example.   
+
+> Input: Transaction history of a customer: Transaction at {time}: <txn><emb></txn>
+> Transaction at {time}: <txn><emb></txn> ...
+
+All tasks are expressed in a unified instruction-following format with structured output tags. Kamalaruban et al. 
+
+Captioning:  
+
+> Instruction: Write a structured report (or semantic description) of the transaction history. Provide your summary in this format: <summary>...</summary>
+> Response:
+
+QA with rationale:   
+
+> Instruction: Answer the following question based on the transaction history. Provide your answer in this format: <answer>...</answer>
+> Provide your reasoning in this format: <reason>...</reason>
+> Question: {question} Response:
+
+Transaction data. We use a large-scale proprietary dataset of anonymized card transactions collected from a real-world payment network. Each transaction record contains a customer identifier, timestamp, and a set of structured attributes comprising numerical features (e.g., transaction amount) and high-cardinality categorical features (e.g., merchant identity, merchant category, and location). Due to the sensitive nature of the data, specific attribute names cannot be disclosed. Transactions are grouped by customer and ordered chronologically to form behavioral histories that capture both short-term dynamics and long-term spending patterns. The transaction encoder is pre-trained on a substantially larger corpus spanning billions of transactions. For multimodal instruction tuning and evaluation, we construct customer-level train/validation/test splits (80%/10%/10%), corresponding to approximately 134k/14k/19k transactions. This demonstrates that, when initialized from large-scale pre-training, MINT can achieve strong multimodal reasoning performance with relatively limited supervision. To prevent infor-mation leakage, all splits are constructed at the customer level. 
+
+Caption data. We construct captioning data via programmatic generation and LLM-based synthesis. Structured reports are gener-ated from templates defined over transaction attributes and tempo-ral aggregates, while semantic captions are synthesized by prompt-ing a teacher LLM (Mistral-7B-Instruct-v0.3 [2]) with textualized transaction histories. The resulting dataset contains approximately 134k/14k/19k train/validation/test examples. 
+
+QA data. We generate QA datasets using programmatic tem-plates defined over transaction attributes and temporal aggregates. Ground-truth answers are computed via deterministic query ex-ecution (e.g., filtering, aggregation, and ranking operations), en-suring verifiability. The corpus comprises two task families: ex-tractive QA , containing 5.74M/605k/813k train/validation/test ex-amples spanning 43 question types, and predictive QA , containing 3.47M/366k/492k examples spanning 26 question types. To evaluate generalization, we additionally construct out of distribution (OOD) test sets with previously unseen question types, consisting of 170k extractive QA examples across 9 question types and 189k predictive QA examples across 10 question types. 
+
+Chain-of-thought data. To provide reasoning supervision, we synthesize chain-of-thought (CoT) rationales using a teacher LLM (Mistral-7B-Instruct-v0.3 [2]) conditioned on the transaction his-tory, question, and ground-truth answer. Specifically, the model receives the full transaction context together with the QA pair and generates a step-by-step explanation of the reasoning process. Generated rationales are filtered using answer-consistency checks, length constraints, and manual auditing of a subset of examples. The final CoT datasets comprise 94k/16k/26k extractive QA exam-ples spanning 8 question types and 362k/50k/80k predictive QA examples covering all 26 predictive question types. 
+
+## 5 Training 
+
+We train the model in two stages: (i) modality alignment, which trains the connector which maps transaction representations into the LLM token space, and (ii) supervised fine-tuning (SFT), which jointly optimizes the connector and LoRA adapters on a multi-task mixture. Let 𝑥 = (T, q, y) denote a training example, where T is a transac-tion history, q is an instruction or question, and y = (𝑦 1, . . . , 𝑦 |y| ) is the target response. The frozen encoder produces 𝑒 1: 𝑁 = 𝐸 (T),which is mapped by the connector 𝑔 𝜙 to injected embeddings 
+
+𝑧 1: 𝑁 = 𝑔 𝜙 (𝑒 1: 𝑁 ). Conditioning on q and the injected embeddings, the decoder-only LLM models 
+
+𝑝 𝜃, Δ (y | T, q) =
+
+> |y|
+
+Ö 
+
+> 𝑡 =1
+
+𝑝 𝜃, Δ (𝑦 𝑡 | y<𝑡 , 𝑧 1: 𝑁 , q), (1) where 𝜃 are frozen base parameters and Δ are LoRA parameters (when enabled). 
+
+Modality Alignment. The goal is to learn 𝑔 𝜙 such that injected transaction embeddings are compatible with the LLM token repre-sentations. We train the connector on captioning data Dcap using a completion-only autoregressive loss: 
+
+Lalign (𝜙 ) = E(T,q,y)∼D cap 
+
+"
+
+−∑︁  
+
+> 𝑡 ∈ M
+
+log 𝑝 𝜃, Δ=0 (𝑦 𝑡 | y<𝑡 , 𝑧 1: 𝑁 , q)
+
+#
+
+, (2) where M denotes the index set corresponding to response tokens (excluding prompt tokens). During alignment, 𝜃 is frozen and LoRA is disabled ( Δ = 0); only 𝜙 is updated. 
+
+Supervised Fine-Tuning (SFT). We then jointly optimize con-nector 𝜙 and LoRA Δ on a mixture of captioning and QA datasets, 
+
+D = Dcap ∪ D qa , using a completion-only autoregressive loss: 
+
+Lsft (𝜙, Δ) = E(T,q,y)∼D 
+
+"
+
+−∑︁  
+
+> 𝑡 ∈ M
+
+log 𝑝 𝜃, Δ (𝑦 𝑡 | y<𝑡 , 𝑧 1: 𝑁 , q)
+
+#
+
+. (3) We interleave captioning and QA to preserve generation quality while improving grounded reasoning. For QA examples with ra-tionales, y concatenates the reasoning trace and final answer; for answer-only examples, y contains only the short answer. 
+
+Decoupled Representation and Reasoning Learning. MINT separates transaction representation learning from language-model reasoning. The transaction sequence encoder is pretrained on large-scale unlabeled transaction sequences using a next-transaction prediction objective and remains frozen throughout multimodal training. Modality alignment and SFT then learn only the connector and LoRA adaptation parameters. This design treats transaction embeddings as reusable representations that can be injected directly MINT: A Universal Zero-Shot Predictor for Transaction Data 
+
+into the LLM, avoiding repeated processing of large transaction cor-pora during multimodal training. As a result, pretrained transaction representations can be aligned with the LLM using only a few hun-dred thousand supervised transaction captioning and QA examples, enabling efficient adaptation to domain-specific reasoning tasks. 
+
+## 6 Experiments 
+
+We evaluate on two task families: extractive QA and predictive QA. Each task family includes both in-distribution (ID) and out-of-distribution (OOD) question splits. Unless otherwise stated, we report results for a default MINT configuration using a Qwen3-1.7B instruction-tuned decoder-only LLM. To study scaling behavior, we additionally instantiate MINT with Qwen3 models at two other sizes (0.6B and 4B), enabling a controlled analysis of scaling across both the language backbone and the transaction sequence encoder. 
+
+## 6.1 Hyperparameters 
+
+Unless otherwise stated, all experiments use a Qwen3-1.7B instruc-tion tuned LLM, a 20M-parameter transaction sequence encoder, and a two-layer modality projector with hidden dimension 1024. The transaction sequence encoder produces 256-dimensional em-beddings, from which the final five transaction embeddings are projected into the 2048-dimensional LLM embedding space. For modality alignment, we use an equal mixture of structured report and semantic caption examples. During SFT, we adapt the LLM using LoRA (rank 𝑟 = 64, scaling 𝛼 = 2𝑟 , dropout = 0.05) applied to attention and MLP projections. The default SFT mixture consists of structured report (12.5%), semantic caption (12.5%), ex-tractive QA (25%), predictive QA (25%), extractive QA with CoT rationales (12.5%), and predictive QA with CoT rationales (12.5%). In the w/o CoT ablation, CoT examples are removed and the remaining tasks are reweighted proportionally. Both modality alignment and SFT are optimized with AdamW us-ing a learning rate of 10 −4, (𝛽 1, 𝛽 2) = (0.9, 0.95 ), weight decay 0 .01, warmup ratio 0 .03, gradient clipping of 1 .0, and mixed-precision bf16 training. We train on four A100 GPUs with an effective batch size of 128 samples per optimization step using gradient checkpoint-ing throughout. Modality alignment is performed for two epochs on 160k samples per epoch, whereas SFT is run for a maximum of five epochs on 320k samples per epoch, with early stopping based on validation performance. Unless otherwise specified in ablation studies, transaction em-beddings are extracted from the encoder’s final layer, timestamps are included in transaction prompts, and decoding uses determinis-tic greedy generation. 
+
+## 6.2 Baselines 
+
+Text-serialized LLM baselines. We serialize each transaction as a structured text record and prepend the full history to the prompt: 
+
+> Input: Transaction history of a customer: Transaction at {time}: amount={...}, merchant={...}, city={...}, ... Transaction at {time}: amount={...}, merchant={...}, city={...}, ...
+> ...
+
+Our primary text-only baseline is LLM SFT , which uses the same training data and LoRA rank as MINT but operates directly on serialized transaction records. We also evaluated the backbone LLM in a zero-shot setting; however, it frequently failed to produce outputs conforming to the required answer format, complicating reliable automatic evaluation, and performed substantially worse than the LLM SFT baseline. For all LLM-based models, we use a maximum training sequence length of 2048 tokens per input example. Due to context-length constraints and computational cost, the LLM SFT baseline cannot accommodate transaction histories of length ℎ ≥ 10, where ℎ de-notes the number of historical transactions provided as context. In contrast, MINT encodes transaction histories into a fixed-size representation, enabling efficient support for longer histories. To ensure a fair comparison, MINT and the LLM SFT baseline share the same architecture, training procedure, prompt template, and hyperparameter settings wherever applicable; the only differences are those inherent to multimodal modeling, such as the connector module and its associated parameters. In particular, the LLM SFT baseline operates directly on raw transaction features, whereas MINT consumes transaction embeddings produced by the transac-tion sequence encoder. 
+
+Additional baselines. To further contextualize performance, we include: (i) Prior sampling , which samples answers according to their empirical frequencies in the training data; (ii) task-specific classifiers , lightweight supervised heads trained on frozen transac-tion embeddings; and (iii) a contrastive alignment model , which aligns transaction embeddings with LLM-generated transaction summaries using frozen transaction and text encoders and modality-specific projection heads. Given transaction and text embeddings 
+
+(𝑧 txn  
+
+> 𝑖
+
+, 𝑧 text  
+
+> 𝑖
+
+), the model is trained using a symmetric InfoNCE loss, 
+
+Lalign = 12 (L txn →text + L text →txn ) ,
+
+Ltxn →text = − 1
+
+𝐵 
+
+> 𝐵
+
+∑︁ 
+
+> 𝑖 =1
+
+log exp (⟨ 𝑧 txn  
+
+> 𝑖
+
+, 𝑧 text  
+
+> 𝑖
+
+⟩/ 𝜏 )
+
+Í𝐵 𝑗 =1 exp (⟨ 𝑧 txn  
+
+> 𝑖
+
+, 𝑧 text  
+
+> 𝑗
+
+⟩/ 𝜏 ) ,
+
+where positives correspond to matched transaction-summary pairs and all other examples in the minibatch serve as negatives. 
+
+## 6.3 Main Results 
+
+Table 1 reports performance across extractive QA and predictive QA (ID and OOD), as well as inference metrics (latency and memory) to contextualize quality-efficiency trade-offs. 
+
+Predictive QA. Under both ID and OOD evaluation, MINT (ℎ = 1) clearly outperforms LLM SFT ( ℎ = 1, ℎ = 5). This is the central empirical result of the paper: a single injected transaction embedding is sufficient to outperform text-serialized histories on the harder, more consequential task of forecasting future behavior. 
+
+Extractive QA. Under ID evaluation, LLM SFT ( ℎ = 1, ℎ =
+
+5) is relatively stronger than MINT ( ℎ = 1), likely because the richer surface-level information in serialized text directly benefits extraction-style questions. Both MINT and LLM SFT exhibit mono-tonic performance gains with increasing history length ℎ. Under OOD evaluation, MINT ( ℎ = 1) surpasses LLM SFT ( ℎ = 1, ℎ = 5). Kamalaruban et al.                                                                               
+
+> Predictive QA Extractive QA Inference Metrics Model ID OOD ID OOD TTFT ms ↓Tok./sec ↑VRAM (GB) ↓Input tok. ↓
+> Prior sampling 0.724 0.622 †0.635 0.651 †––––Task-specific classifier 0.752 0.687 †0.756 0.741 †––––Contrastive alignment 0.461 0.509 0.418 0.225 ––––LLM SFT ( ℎ=1) 0.794 0.704 0.850 0.536 164.91 57.08 9.02 348.50 LLM SFT ( ℎ=5) 0.811 0.750 0.893 0.605 683.96 47.11 11.20 1370.12 MINT ( ℎ=1) 0.830 0.805 0.814 0.621 89.22 138.83 7.66 140.50
+> MINT ( ℎ=5) 0.832 0.696 0.861 0.600 134.69 136.80 8.00 258.12
+
+Table 1: Overall accuracy on extractive and predictive QA tasks, together with inference efficiency metrics (TTFT, decode throughput, peak VRAM, and input token count) measured on Predictive QA. Results marked with † are trained and evaluated on the same question set and are included for reference only. 
+
+Predictive QA Extractive QA Model ID OOD ID OOD 
+
+Transactions in the context prompt 
+
+with timestamp 0.832 0.696 0.861 0.600 without timestamp 0.826 0.805 0.824 0.607 
+
+Decoding strategy 
+
+deterministic decoding 0.832 0.696 0.861 0.600 
+
+stochastic decoding 0.814 0.700 0.858 0.595 
+
+Training data mixture 
+
+with CoT data 0.832 0.696 0.861 0.600 
+
+without CoT data 0.826 0.722 0.742 0.439 
+
+Number of transaction embeddings (final layer) 
+
+ℎ = 1 0.830 0.805 0.814 0.621 
+
+ℎ = 5 0.832 0.696 0.861 0.600 
+
+ℎ = 10 0.832 0.766 0.876 0.597 
+
+ℎ = 25 0.830 0.715 0.890 0.601 
+
+Number of transaction embeddings (second last layer) 
+
+ℎ = 1 0.834 0.688 0.855 0.553 
+
+ℎ = 5 0.839 0.659 0.897 0.609 
+
+ℎ = 10 0.836 0.698 0.907 0.591 
+
+ℎ = 25 0.838 0.696 0.916 0.578 
+
+LoRA rank 
+
+𝑟 = 32 0.834 0.749 0.862 0.583 
+
+𝑟 = 64 0.832 0.696 0.861 0.600 
+
+𝑟 = 128 0.825 0.657 0.858 0.609 
+
+Connector hidden layer size 
+
+ℓ = 512 0.830 0.731 0.867 0.629 
+
+ℓ = 1024 0.832 0.696 0.861 0.600 
+
+ℓ = 2048 0.831 0.699 0.866 0.606 
+
+Table 2: Ablation study of MINT. We analyze the effects of input representation, training data composition, decoding strategy, transaction embedding design, and model capacity on extractive and predictive QA performance (overall accu-racy) in both ID and OOD settings. 
+
+Predictive QA Extractive QA Model ID OOD ID OOD 
+
+Qwen3 0.6B 
+
+LTM 20M 0.832 0.675 0.858 0.362 LTM 120M 0.831 0.632 0.861 0.592 
+
+LTM 720M 0.835 0.640 0.859 0.545 
+
+Qwen3 1.7B 
+
+LTM 20M 0.832 0.696 0.861 0.600 LTM 120M 0.829 0.752 0.860 0.608 
+
+LTM 720M 0.825 0.727 0.853 0.592 
+
+Qwen3 4B 
+
+LTM 20M 0.827 0.738 0.874 0.597 LTM 120M 0.830 0.729 0.873 0.614 
+
+LTM 720M 0.828 0.678 0.871 0.613 
+
+Table 3: Impact of LLM-LTM pairing on MINT performance (overall accuracy). Results are reported for extractive and predictive QA under both ID and OOD evaluation settings across different Qwen3 backbone sizes and pretrained LTMs. Effect of history length. Across all tasks, LLM SFT perfor-mance increases monotonically with ℎ, at the cost of growing in-ference overhead. MINT does not exhibit this monotonic behavior except in extractive QA (ID); for predictive QA and OOD tasks, ad-ditional history embeddings provide no consistent benefit, and can even hurt performance, indicating that MINT extracts the relevant signal from very limited context. 
+
+Additional baselines. Both LLM SFT and MINT outperform prior sampling and task-specific classifiers on ID QA tasks. Prior sampling and task-specific classifiers are not directly applicable in the OOD setting, as they require training on the target ques-tions; the OOD results reported for these methods are therefore included for reference only. The substantially lower accuracy of the contrastive alignment baseline indicates that alignment alone is insufficient for effective QA, highlighting the importance of task-specific supervision beyond caption training. 
+
+Inference efficiency. We measure time-to-first-token (TTFT), decode throughput (tokens/sec), and peak VRAM at a fixed batch MINT: A Universal Zero-Shot Predictor for Transaction Data 
+
+size of 8 while varying history length ℎ, comparing embedding injec-tion (MINT) against tokenized serialization (LLM SFT). Although increasing ℎ increases computational cost for both approaches, MINT scales substantially more efficiently. Notably, MINT ( ℎ = 5) remains more efficient than LLM SFT ( ℎ = 1), achieving 18% lower TTFT, 2.4 × higher decode throughput, 11% lower peak VRAM, and 26% fewer input tokens. These results demonstrate that embedding injection effectively mitigates the token-length bottleneck inherent to text serialization. 
+
+## 6.4 Ablations and Analysis 
+
+We conduct ablations to understand the impact of architectural design, training strategy, and data composition (Tables 2 and 3). 
+
+Inclusion of transaction timestamps in the prompt. Includ-ing the timestamp alongside each transaction embedding in the context prompt considerably improves extractive QA (ID) perfor-mance, but considerably hurts predictive QA (OOD) performance. Extractive QA (OOD) and predictive QA (ID) are largely insensitive to this choice. 
+
+Decoding strategy. Deterministic (temperature 0) and stochas-tic (e.g., temperature 0 .7, top-𝑝 = 0.9) decoding yield roughly similar performance overall, with deterministic decoding slightly favored on predictive QA (ID) task. 
+
+Rationale supervision. Incorporating rationale-augmented QA data ( Dqa-cot ) alongside captioning ( Dcap ) and standard QA ( Dqa )considerably improves performance across tasks, underscoring the value of CoT supervision even when it is not used explicitly at inference time. 
+
+LoRA rank. Varying LoRA rank 𝑟 ∈ { 32 , 64 , 128 } has little effect on performance overall, except for predictive QA (OOD), where 
+
+𝑟 = 32 performs considerably better. This suggests moderate ranks offer the best capacity-efficiency trade-off. 
+
+Connector hidden size. Varying the connector’s hidden size 
+
+ℓ ∈ { 256 , 512 , 1024 } has minimal impact on ID performance, but 
+
+ℓ = 512 considerably improves both extractive and predictive QA (OOD), indicating a capacity sweet spot for out-of-distribution generalization. 
+
+Number of injected transaction embeddings (from the final encoder layer). Increasing ℎ (i) monotonically improves extractive QA (ID), (ii) leaves predictive QA (ID) largely unchanged, and (iii) is best at ℎ = 1 for both extractive and predictive OOD, with no clear benefit from larger ℎ. This suggests that history length should be adapted per task type rather than fixed globally. 
+
+Number of injected transaction embeddings (from the second-to-last encoder layer). Motivated by prior work showing that intermediate transformer layers can yield stronger represen-tations than the final layer for downstream tasks, we additionally evaluate embeddings from the second-to-last layer of the transac-tion sequence encoder [24]. Second-to-last-layer embeddings show the same qualitative trends as the final layer for ID tasks (monotonic gains for extractive QA, robustness for predictive QA), but no clear pattern for OOD tasks. Comparing layers directly: for a given ℎ,second-to-last-layer embeddings are consistently better on ID tasks but generally weaker on OOD tasks than final-layer embeddings, revealing a layer-depth trade-off between in-distribution precision and out-of-distribution robustness. 
+
+Encoder/LLM capacity scaling (Table 3). We jointly vary transaction sequence encoder size (20M / 120M / 720M) and LLM scale (0.6B-4B). On extractive QA (ID), the 4B LLM yields slightly better performance; on predictive QA (ID), all three LLM sizes perform similarly. For both ID tasks, performance is largely robust to transaction sequence encoder size at a given LLM size. On OOD tasks, the 0.6B LLM is noticeably weaker, while the 1.7B model performs best overall; for the 1.7B model specifically, the 120M transaction sequence encoder yields the best OOD performance. Taken together, Qwen3-1.7B offers the most favorable balance of quality and inference cost among the scales tested. As an additional analysis, we evaluated information loss intro-duced by modality projection using linear classifiers trained on pro-jected embeddings. The original transaction embeddings achieved accuracies of 0.756 on extractive QA and 0.752 on predictive QA. After projection, the contrastive alignment model retained similar performance (0.766 and 0.732), while the MINT projector achieved 0.724 and 0.74 accuracy on extractive and predictive QA, respec-tively. These results suggest that both projectors preserve most of the task-relevant signal in the transaction representations, with only modest degradation relative to the original embedding space. To assess retention of general-purpose reasoning capabilities, we evaluate the LoRA-adapted models on standard language-model benchmarks. Both MINT and LLM-SFT exhibit substantial perfor-mance degradation relative to the base Qwen3-1.7B model. For example, GSM8K accuracy drops from 0.412 to 0.026 (MINT) and 0.033 (LLM-SFT), while ARC-Challenge declines from 0.425 to 0.306/0.332 and BoolQ from 0.776 to 0.493/0.492. These results reflect the well-known trade-off between domain specialization and general-purpose reasoning. Importantly, the degradation is observed only with the LoRA adapters enabled. Since adaptation is performed via PEFT and leaves the underlying foundation model unchanged, users can simply disable the adapters to recover the original capabilities of the base LLM, enabling seamless switching between transaction-specialized and general-purpose modes. 
+
+## 7 Conclusion 
+
+We presented MINT, a multimodal transaction reasoning frame-work that integrates a pretrained transaction sequence encoder with a decoder-only LLM through embedding injection. Across extractive QA, predictive QA, and transaction captioning tasks, MINT demonstrates that compact transaction representations can support effective reasoning while maintaining favorable inference efficiency. Beyond task performance, we conducted a systematic study of the multimodal transaction reasoning design space, examining the effects of transaction-history representation, modality projection, training-data composition, prompt design, and inference-time trade-offs. Compared to prior work, MINT incorporates both captioning and chain-of-thought supervision during training, achieves state-of-the-art zero-shot predictive QA performance on a large-scale real-world transaction dataset, and provides one of the most com-prehensive evaluations of multimodal transaction reasoning to date, spanning predictive performance, robustness, latency, memory con-sumption, and detailed ablation analyses. Kamalaruban et al. 
+
+Our findings reveal complementary strengths between transac-tion embeddings and text serialization: embeddings excel at pre-dictive reasoning, whereas serialized histories remain highly ef-fective for extractive retrieval. We hypothesize that the predictive advantage arises from the encoder’s autoregressive self-supervised pretraining objective, which is naturally aligned with forecasting fu-ture behavior. Overall, our results highlight pretrained transaction foundation models as a powerful substrate for efficient multimodal transaction reasoning. 
+
+Limitations. Our study uses proprietary transaction data that cannot be publicly released due to privacy and regulatory con-straints. To support reproducibility, we provide detailed descrip-tions of the datasets, prompts, model architectures, training proce-dures, and hyperparameters. More broadly, transaction reasoning systems raise important concerns regarding privacy, profiling, fair-ness, and potential misuse. Any real-world deployment should incorporate robust privacy protections, access controls, auditing, bias assessment, and appropriate human oversight. 
+
+Future work. Several promising directions remain. First, we plan to extend beyond structured QA toward open-ended transac-tion reasoning and discovery tasks, including comparative anal-ysis of customer behavior, context-aware behavioral assessment, and fraud-pattern discovery. Second, improving reliability through confidence-aware reasoning, e.g., generating (answer, rationale, con-fidence) tuples, may lead to better calibrated decision-support sys-tems. Third, reinforcement-based post-training offers a promising avenue for improving reasoning quality while maintaining compact multimodal representations. Finally, we intend to explore hybrid approaches that combine transaction embeddings with selectively retrieved textual context and prompt-compression techniques, po-tentially improving both reasoning performance and scalability. 
+
+Key Findings 
+
+F1. Predictive reasoning benefits from transaction embed-dings. MINT consistently outperforms LLM SFT on predictive QA, suggesting that transaction embeddings capture predictive signals more effectively than textual serialization. 
+
+F2. Text serialization is strong for extractive retrieval. Se-rialized transaction histories provide rich contextual detail that benefits extractive QA, especially as the number of transactions included in the prompt increases. 
+
+F3. Embedding injection scales more efficiently than text se-rialization. MINT achieves comparable or stronger performance while requiring substantially fewer input tokens, lower latency, and less GPU memory. 
+
+F4. Additional transaction history is task dependent. Increas-ing history length consistently improves extractive QA but offers limited gains for predictive QA, suggesting that optimal context size for MINT should depend on the reasoning task. 
+
+F5. ID and OOD settings prefer different representations. 
+
+Earlier transaction sequence encoder layers (second-last layer) consistently improve ID performance, whereas final-layer embed-dings generally provide stronger OOD generalization. 
+
+F6. Chain-of-thought supervision improves performance. 
+
+Adding CoT data to the training mixture improves performance broadly across tasks, particularly for extractive QA. 
+
+## References 
+
+[1] Irina Abdullaeva et al. 2026. ESQA: Event Sequences Question Answering. IEEE Access (2026). [2] Mistral AI. 2024. Mistral-7B-Instruct-v0.3. https://huggingface.co/mistralai/ Mistral-7B-Instruct-v0.3. [3] Gholamali Aminian et al. 2025. FraudTransformer: Time-Aware GPT for Trans-action Fraud Detection. arXiv preprint arXiv:2509.23712 (2025). [4] Raphaël Azorin, Zied Ben-Houidi, Massimo Gallo, Alessandro Finamore, and Pietro Michiardi. 2024. Fine-grained Attention in Hierarchical Transformers for Tabular Time-series. arXiv preprint arXiv:2406.15327 (2024). [5] Dmitrii Babaev et al. 2022. CoLES: Contrastive Learning for Event Sequences with Self-Supervision. In SIGMOD .[6] DT Braithwaite et al. 2025. Your Spending Needs Attention: Modeling Financial Habits with Transformers. arXiv preprint arXiv:2507.23267 (2025). [7] Winnie Chow, Lauren Gardiner, Haraldur T Hallgrímsson, Maxwell A Xu, and Shirley You Ren. 2024. Towards Time-Series Reasoning with LLMs. arXiv preprint arXiv:2409.11376 (2024). [8] Kevin Clark, Minh-Thang Luong, Quoc V Le, and Christopher D Manning. 2020. ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators. In ICLR .[9] Yingtong Dou et al. 2025. TransactionGPT. arXiv preprint arXiv:2511.08939 
+
+(2025). [10] Egor Fadeev et al. 2025. LATTE: Learning Aligned Transactions and Textual Embeddings for Bank Clients. arXiv preprint arXiv:2508.10021 (2025). [11] Nate Gruver, Marc Finzi, Shikai Qiu, and Andrew G Wilson. 2023. Large Language Models Are Zero-Shot Time Series Forecasters. NeurIPS (2023). [12] Edward J Hu, , et al. 2022. LoRA: Low-Rank Adaptation of Large Language Models. ICLR (2022). [13] Sanjeev Jha, Montserrat Guillen, and J Christopher Westland. 2012. Employing transaction aggregation strategy to detect credit card fraud. Expert Systems with Applications (2012). [14] Yaxuan Kong et al. 2025. Time-MQA: Time Series Multi-Task Question Answering with Context Enhancement. arXiv preprint arXiv:2503.01875 (2025). [15] Patrick Langer et al. 2025. OpenTSLM: Time-Series Language Models for Rea-soning over Multivariate Medical Text- and Time-Series Data. arXiv preprint arXiv:2510.02410 (2025). [16] Guilin Li et al. 2025. PANTHER: Generative Pretraining Beyond Language for Sequential User Behavior Modeling. NeurIPS (2025). [17] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. 2023. BLIP-2: Boot-strapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models. In ICML .[18] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual Instruc-tion Tuning. NeurIPS (2023). [19] Andrés Marafioti et al. 2025. SmolVLM: Redefining small and efficient multimodal models. In COLM .[20] Maxim Ostroukhov et al. 2026. PRAGMA: Revolut Foundation Model. arXiv preprint arXiv:2604.08649 (2026). [21] Inkit Padhi et al. 2021. Tabular Transformers for Modeling Multivariate Time Series. In ICASSP .[22] Natraj Raman, Sumitra Ganesh, and Manuela Veloso. 2024. Scalable Rep-resentation Learning for Multimodal Tabular Transactions. arXiv preprint arXiv:2410.07851 (2024). [23] Piotr Skalski, David Sutton, Stuart Burrell, Iker Perez, and Jason Wong. 2023. Towards a Foundation Purchasing Model: Pretrained Generative Autoregression on Transaction Sequences. In ICAIF .[24] Oscar Skean et al. 2025. Layer by Layer: Uncovering Hidden Representations in Language Models. In ICML .[25] Zhe Xie et al. 2024. ChatTS: Aligning Time Series with LLMs via Synthetic Data for Enhanced Understanding and Reasoning. arXiv preprint arXiv:2412.03104 
+
+(2024). [26] Chin-Chia Michael Yeh et al. 2026. TREASURE: The Visa Payment Foundation Model for High-Volume Transaction Understanding. In KDD .[27] Fangxu Yu, Hongyu Zhao, and Tianyi Zhou. 2025. TS-Reasoner: Aligning Time Series Foundation Models with LLM Reasoning. arXiv preprint arXiv:2510.03519 
+
+(2025). [28] Junru Zhang et al. 2025. TimeMaster: Training Time-Series Multimodal LLMs to Reason via Reinforcement Learning. arXiv preprint arXiv:2506.13705 (2025). [29] Yuwei Zhang et al. 2025. SensorLM: Learning the Language of Wearable Sensors. 
+
+arXiv preprint arXiv:2506.09108 (2025). [30] Yunhao Zhang and Junchi Yan. 2023. Crossformer: Transformer Utilizing Cross-Dimension Dependency for Multivariate Time Series Forecasting. In ICLR .[31] Yitong Zhou et al. 2025. Time Series Forecasting as Reasoning: A Slow-Thinking Approach with Reinforced LLMs. arXiv preprint arXiv:2506.10630 (2025).
