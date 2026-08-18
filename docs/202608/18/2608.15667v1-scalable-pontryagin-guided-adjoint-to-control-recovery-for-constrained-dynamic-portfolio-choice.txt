@@ -1,0 +1,4834 @@
+Title: Scalable Pontryagin-Guided Adjoint-to-Control Recovery for Constrained Dynamic Portfolio Choice
+
+URL Source: https://arxiv.org/pdf/2608.15667v1
+
+Published Time: Tue, 18 Aug 2026 01:06:04 GMT
+
+Number of Pages: 57
+
+Markdown Content:
+# Scalable Pontryagin-Guided Adjoint-to-Control Recovery for Constrained Dynamic Portfolio Choice 
+
+Jaegi Jeon 1, Jeonggyu Huh ∗2 , Hyeng Keun Koo 3, and Byung Hwa Lim 41Graduate School of Data Science, Chonnam National University, Gwangju, Republic of Korea 
+
+> 2
+
+Department of Mathematics, Sungkyunkwan University, Suwon, Republic of Korea 
+
+> 3
+
+Department of Financial Engineering, Ajou University, Suwon, Republic of Korea 
+
+> 4
+
+Department of Fintech, SKK Business School, Sungkyunkwan University, Seoul, Republic of Korea 
+
+July 24, 2026 
+
+Abstract 
+
+We develop a scalable adjoint-to-control framework for continuous-time portfolio choice and consumption under smooth pointwise constraints. A feasible direct-policy-optimization (DPO) policy supplies rollouts; after training, its latent controls are detached before the state-dependent feasible chart is applied. Once- and twice-differentiated continuation payoffs on this fixed-latent open-loop BPTT (OL-BPTT) graph are conditionally projected to the vector first adjoint and matrix second adjoint, while a nested antithetic common-random-number regression estimates the shifted wealth-row martingale input. Conditional on the estimated adjoint tuple, deployment solves the local generalized-Hamiltonian problem by an exact QP for quadratic-affine blocks and by a log barrier otherwise. We prove an OL-BPTT–PMP correspondence retaining orthogonal projection residuals, a local barrier–KKT approximation, and a performance-to-adjoint bridge under local quadratic growth. In an 
+
+n = 100 borrowing-allowed no-short-sale Merton benchmark, the learned first adjoint has mean relative error 0.46% ; under the analytical policy, the first adjoint, wealth curvature, and Brownian coefficient have normalized errors 0.031% , 0.035% , and 0.326% , respectively. In a predictable-return benchmark, the analytical ZX coefficient is recovered within 0.260% 
+
+and 0.986% , and the corresponding decoded-policy RMSEs are 2.465 × 10 −3 and 8.429 ×
+
+10 −3. The direct P XY –VXY comparison, reported only as a numerical diagnostic rather than a PMP ground-truth error, is 0.318% and 0.350% . Across constraint, factor, barrier, and switching-region audits, recovery sharply reduces local KKT residuals; all final barrier runs converge, and the finite-barrier gap remains approximately first order in the barrier parameter. The implementation remains practical for portfolios with up to 100 risky assets. 
+
+Keywords: Constrained continuous-time portfolio optimization; Pontryagin’s Maximum Principle (PMP); Adjoint-to-control recovery; Karush–Kuhn–Tucker (KKT) conditions; Open-loop backpropaga-tion through time (OL-BPTT); Large-scale portfolio control 
+
+# 1 Introduction 
+
+Dynamic portfolio choice—how an investor allocates wealth across assets and consumes over time—has been central to financial economics since Samuelson (1969) and Merton (1969, 1971). Classical models admit closed-form or semi-analytic solutions under frictionless trading and unrestricted borrowing or short selling, including extensions with stochastic investment oppor-tunities (e.g., Kim and Omberg, 1996; Liu, 2007). Realistic portfolios, however, face short-sale 
+
+> ∗
+
+Corresponding Author: jghuh@skku.edu 
+
+1arXiv:2608.15667v1 [q-fin.PM] 16 Aug 2026 bans, leverage and sector limits, and pointwise consumption bounds. For the constraints studied here, the feasible control fiber is known once the current state is fixed; the difficulty is therefore not a classical unknown obstacle boundary, but the nonsmooth dependence of the constrained maximizer and its active set on the state and adjoint inputs. Genuine free-boundary, reflected, or singular-control formulations arise in related problems with state constraints, transaction costs, ratcheting, or path dependence (e.g., Karatzas et al., 1987; Cvitanić and Karatzas, 1993; Karatzas and Shreve, 1998; Xu and Shreve, 1992a,b; Fleming and Soner, 2006; Dybvig, 1995; Constantinides, 1990; Sundaresan, 1989). This distinction suggests a computational decomposition. Conditional on the current state and the required first- and second-order adjoints, the pointwise control problem is finite dimen-sional and can be handled by a standard constrained solver. The global dynamic task is to obtain the wealth-relevant blocks of those adapted adjoints over the deployment region. This is particularly relevant in portfolio models whose Markov state is low or moderate dimensional while the constrained action vector is large. Grid-based dynamic programming becomes costly as the state dimension grows, whereas enlarging the asset universe separately increases the local action block (Campbell and Viceira, 1999, 2001; Campbell et al., 2003; Balduzzi and Lynch, 1999; Lynch and Balduzzi, 2000; Lynch, 2001; Brandt et al., 2005; Buraschi et al., 2010; Gar-lappi and Skoulakis, 2010; Jurek and Viceira, 2011). The present paper is organized around adjoint acquisition followed by structure-appropriate local recovery. Deep backward stochastic differential equation (BSDE) methods (Han et al., 2018; E, 2017), physics-informed neural networks (PINNs) and related neural partial differential equation (PDE) methods (Raissi et al., 2019), and simulation-based policy learning have broadened the numerical toolkit for stochastic control; recent value-based extensions also accommodate jumps (Cheridito et al., 2025). Hard-constrained PINNs (hPINNs), improved constrained PINNs (ICPINNs), and activation-based direct policy optimization (DPO) can encode simplex, nonnegativity, box, and related feasibility restrictions directly (Lu et al., 2021; Tan and Zhang, 2026; Han and E, 2016; Hu and Laurière, 2024). Feasibility, however, does not imply that the deployed action satisfies the pointwise Pontryagin maximum principle (PMP) and Karush–Kuhn–Tucker (KKT) conditions. The method of Ji et al. (2022) is closest in spirit because it combines the stochastic maxi-mum principle with deep learning; Deep Hedging (Buehler et al., 2019) and the Deep Galerkin Method (DGM) (Sirignano and Spiliopoulos, 2018) provide complementary policy-based and PDE-residual perspectives. To our knowledge, existing work has not emphasized adapted first-and second-order costate acquisition as the organizing bottleneck for large pointwise-constrained control blocks. We build on the DPO/backpropagation-through-time (BPTT) policy-training paradigm of Huh et al. (2025). New to the present paper are fixed-latent open-loop BPTT adjoint harvesting, conditional projection to adapted adjoint inputs, an anchored nested estimator of the shifted martingale input, and a solver-neutral constrained recovery stage. The theory starts from the open-loop first- and second-order stochastic Pontryagin maximum principle (PMP), before any value-function identification. Because the portfolio enters the diffusion, the first-order Hamilto-nian is linear in the portfolio; the second-order adjoint supplies the quadratic curvature required for finite control comparison and local recovery. The method has two main stages. Stage 1 has two distinct passes: an activation-based feedback DPO warm-up, followed—after the net-work is frozen—by open-loop BPTT (OL-BPTT) adjoint harvesting. In the second pass, the network-generated latent controls are stop-gradiented before the feasible-fiber chart is applied. Thus actor-state derivatives are removed from the costate variation, while the structural state derivatives of a moving feasible fiber are retained. Once- and twice-differentiated continuation payoffs with respect to the full wealth–factor state provide raw vector and matrix sensitivi-ties, and conditional projection produces the adapted adjoints. Stage 2 then solves the local generalized-Hamiltonian problem with a solver chosen for its structure. We call the log-barrier re-alization B-PGDPO and the exact local quadratic-program (QP) realization QP-PGDPO. Both 2operate on the same supplied adjoint tuple and target the same local recovery correspondence, while the finite-barrier realization retains central-path bias. In the smooth Markov setting, the first adjoint and its martingale coefficient can be identified with value derivatives, whereas the second-order PMP adjoint is not, in general, identified with the value Hessian. Accordingly, the implementation does not impose a zero-shift identity, even in the CRRA benchmarks. When the wealth-component shifted input is required, we estimate it by a nested antithetic common-random-number regression around the algebraic anchor e⊤ 
+
+> X
+
+bP σS (t, S; u). This is the known P σS
+
+component of ZX, ref = e⊤ 
+
+> X
+
+P ref σS (t, Sref ; uref ) + ζX, ref , not an assumption that the residual van-ishes. The regression estimates the residual shift directly, and bZX is reconstructed only when needed. The analysis establishes five links in this architecture. First, regular smooth state-dependent control fibers are treated through local C2 charts on compact regions with a locally fixed reg-ular active set, with state derivatives taken at fixed latent coordinate. Second, a solver-neutral recovery map is specialized to a log-barrier central path and, in quadratic-affine blocks, to an exact QP/KKT solve without barrier bias. Third, exact discrete once- and twice-differentiated OL-BPTT identities are connected to the chart-reduced open-loop adjoint systems. The orthog-onal component of each one-step Brownian projection is retained rather than absorbed into a pointwise truncation error; we impose a Zhang-type intervalwise L2 condition directly on the relevant martingale-density families to control its aggregate energy (cf. Zhang, 2004). Fourth, a local quadratic-growth condition turns an εref -optimal DPO reference into O(√εref ) control, state, and first/second-adjoint mismatch on a common regular stratum. This endogenizes the reference-policy term in the recovery bounds and, for exact QP recovery, converts the square-root adjoint rate back into an O(εref ) integrated true local QP gap. Finally, finite-dimensional Markov augmentation is separated from approximate Markovization by adapted state compres-sion, whose error is outside the adjoint and local-solver bounds. The experiments follow a validate-then-extend design. The constrained Merton benchmark supplies analytical policies and wealth derivatives. At n = 100 , the learned first-adjoint level has mean relative error 0.46% ; under the analytical policy, the normalized errors of λX , P XX ,and ZX are 0.031% , 0.035% , and 0.326% . A one-factor affine special case of Liu (2007) then supplies analytical value derivatives, ZX , and optimal-policy targets. The analytical ZX coeffi-cient is recovered within 0.260% and 0.986% , and the corresponding decoded-policy RMSEs are 
+
+2.465 × 10 −3 and 8.429 × 10 −3. The direct P XY –VXY discrepancies, 0.318% and 0.350% , are re-tained only as numerical diagnostics rather than PMP ground-truth errors. A three-seed budget study shows that DPO’s local residual largely plateaus, whereas exact-QP and barrier recovery remove most of the remaining Hamiltonian gap. Separate consumption-cap, constrained-factor, edge/stress, estimator, and switching-region audits check moving-fiber differentiation, shifted-input estimation, and solver behavior. The constrained Liu–Kim–Omberg experiment is retained as an adjoint-conditional stress test in Appendix G.3. Because all reported portfolio blocks are quadratic-affine once the adjoints are fixed, QP-PGDPO is the exact local-QP reference condi-tional on the common estimated adjoint tuple, and the barrier results are central-path audits, not a separate nonquadratic benchmark. The remainder of the paper is organized as follows. Section 2 formulates the constrained portfolio–consumption problem and reviews comparison approaches. Section 3 develops the open-loop adjoint system and the solver-neutral recovery map. Section 4 presents DPO training, OL-BPTT harvesting, and the barrier and QP deployment rules. Section 5 reports the numerical experiments, Appendix G collects supplementary diagnostics, and Section 6 concludes. 32 Multi-Asset Portfolio Problems under Constraints 
+
+2.1 Model Setup 
+
+The primitive Markov state is 
+
+St = ( Xt, Y t) ∈ (0 , ∞) × RdY , dS := 1 + dY ,
+
+where Xt is wealth and Yt is a vector of observable investment-opportunity factors. Let W be a dW -dimensional Brownian motion on its augmented natural filtration. There is one locally risk-free asset with rate r(t, y ) and n risky assets with excess-return vector α(t, y ) ∈ Rn and return loading v(t, y ) ∈ Rn×dW . Define 
+
+Σ(t, y ) := v(t, y )v(t, y )⊤ ∈ Rn×n,
+
+and assume that Σ(t, y ) is uniformly positive definite on the working region. Let πt = ( π1,t , . . . , π n,t )⊤ ∈
+
+Rn denote the risky-asset weights, and let π0,t := 1 − 1⊤πt be the residual risk-free weight. Let 
+
+Ct denote the consumption rate, and define ut := ( π⊤ 
+
+> t
+
+, C t)⊤.
+
+The factor dynamics are exogenous in the portfolio models studied here. Here βY (t, y ) ∈ RdY
+
+and σY (t, y ) ∈ RdY ×dW . The joint wealth–factor dynamics are 
+
+dX t =
+
+h
+
+Xt{r(t, Y t) + π⊤ 
+
+> t
+
+α(t, Y t)} − Ct
+
+i
+
+dt + Xtπ⊤ 
+
+> t
+
+v(t, Y t) dWt, X0 = x0 > 0,dY t = βY (t, Y t) dt + σY (t, Y t) dWt, Y0 = y0.
+
+(1) Because both equations are driven by W, the model allows instantaneous return–factor corre-lation. The joint dynamics can be written compactly as 
+
+dSt = bS (t, St; ut) dt + σS (t, St; ut) dWt,
+
+where bS collects the drift terms in (1), and 
+
+σS (t, s; u) = 
+
+xπ⊤v(t, y )
+
+σY (t, y )
+
+
+
+∈ RdS ×dW , s = ( x, y ), u = ( π⊤, C )⊤.
+
+When dY = 0 , the factor equation and the lower block of σS are omitted, so that St = Xt and 
+
+dS = 1 .The objective is 
+
+J(u) = E
+
+Z T
+
+> 0
+
+e−ρt U (Ct) dt + Ke −ρT U (XT )
+
+
+
+, (2) where ρ > 0, K ≥ 0, and U : (0 , ∞) → R is C2, strictly increasing, and strictly concave. If zero consumption belongs to the closure of the feasible set, U (0) is understood in the extended-value sense as U (0) := lim c↓0 U (c) ∈ [−∞ , ∞).
+
+All pointwise portfolio and consumption inequalities are collected in a smooth constraint map 
+
+Γ( t, s; u) =  Γ1(t, s; u), . . . , ΓmΓ (t, s; u)⊤ ≥ 0, s = ( x, y ).
+
+For example, the borrowing-allowed no-short-sale benchmark imposes π ≥ 0 with no upper bound on 1⊤π, whereas the no-borrowing models additionally impose 1−1⊤π ≥ 0. Consumption bounds are represented by 
+
+C − Cmin (t, s) ≥ 0, Cmax (t, s) − C ≥ 0,
+
+where Cmin = 0 gives consumption nonnegativity and Cmax (t, s) = ¯mx gives a proportional upper bound. 4The feasible control fiber is 
+
+U(t, s) = u ∈ Rn+1 : Γ( t, s; u) ≥ 0 . (3) The restrictions are primitive and do not depend on the value function. When DsΓ̸ = 0 , the fiber moves with the state: the local recovery problem holds s fixed, whereas state differentiation in the adjoint system retains this dependence. A control is admissible if it is progressively measurable, belongs to U(t, St) almost surely, the state equation admits a unique solution with positive wealth, and the required integrability and moment conditions hold. 
+
+2.2 HJB Formulation and Motivation 
+
+For comparison with the open-loop formulation developed below, define 
+
+V (t, x, y ) = sup 
+
+> u
+
+E
+
+Z Tt
+
+e−ρs U (Cs) ds + Ke −ρT U (XT ) St = ( x, y )
+
+
+
+, (4) where the supremum is taken over admissible controls satisfying us ∈ U (s, Ss). The dynamic programming principle yields the HJB equation in the viscosity sense. When V is sufficiently smooth, it reads 
+
+0 = Vt + sup 
+
+> u∈U (t, s)
+
+(
+
+e−ρt U (C) + DsV ⊤bS (t, s; u) + 12 tr 
+
+h
+
+σS (t, s; u)σS (t, s; u)⊤D2
+
+> ss
+
+V
+
+i )
+
+. (5) Here all derivatives of V are evaluated at (t, s), and the terminal condition is V (T, x, y ) = 
+
+Ke −ρT U (x).
+
+For the portfolio model in Section 2.1, the part of the HJB control block that depends on the risky-asset weights is 
+
+x [VX α(t, y ) + ΣRY (t, y )∇yVX ]⊤ π + 12 x2VXX π⊤Σ(t, y )π, (6) where ΣRY (t, y ) := v(t, y )σY (t, y )⊤ ∈ Rn×dY is the instantaneous return–factor cross-covariance. The term ΣRY (t, y )∇yVX is the intertemporal hedging component. When dY = 0 , this mixed term disappears and the equation reduces to the classical Merton HJB, and the unconstrained risky allocation becomes 
+
+π∗ 
+
+> t
+
+= − VX (t, x )
+
+xV XX (t, x ) Σ(t)−1α(t), VXX (t, x ) < 0.
+
+Assumption 1 (Smooth Pointwise Constraint Geometry) . On the working domain: (i) Smoothness. Each Γj is C1 in time and jointly C2 in (s, u), with locally Lipschitz deriva-tives. (ii) Nonemptiness. The feasible fiber U(t, s) is nonempty for every (t, s) in the working domain. 
+
+Assumption 1 covers state-independent affine restrictions and smooth mixed state–control constraints such as C ≤ ¯mX . Throughout, Γ contains pointwise control constraints and mixed state–control constraints, but not pure state constraints independent of u. The feasible fibers may have corners, as in nonnegativity and polyhedral portfolio constraints; the local analysis is conducted on regular active-set strata specified in Section 3. Nonsmooth constraint functions, nonregular active-set intersections, reflected or measure-valued multipliers, and singular controls are outside the present framework. At a smooth local maximizer satisfying an appropriate constraint qualification, the HJB control block satisfies the standard KKT necessary conditions. Feasibility alone does not ensure stationarity or complementarity, which motivates the adjoint-based local recovery developed in Section 3. The construction starts from the open-loop state–adjoint system; value derivatives enter only through the optional smooth Markov identification. 53 Open-Loop Pontryagin Formulation and Constrained Recovery 
+
+Section 2.2 expresses the pointwise portfolio block in terms of derivatives of a smooth value function. We now formulate the same local control comparison using open-loop first- and second-order adjoints, without assuming that a globally smooth value function exists. Because the risky-asset weights enter the wealth diffusion, the relevant stochastic maximum principle is second order (Peng, 1990; Yong and Zhou, 1999). We first introduce a fixed-latent local chart and the corresponding chart-reduced adjoints, then define the generalized Hamiltonian and its portfolio specialization. We subsequently relate the adjoints to value derivatives in the smooth Markov case and formulate the constrained local recovery problem. The analysis is written for the full state S = ( X, Y ); setting dY = 0 gives the factor-free Merton specialization. 
+
+3.1 Local Chart Reduction and Open-Loop Adjoints 
+
+The pointwise constraints in Section 2.1 define a possibly state-dependent feasible fiber U(t, s).For adjoint differentiation, we work on a compact chart patch along the trajectory of a fixed admissible reference control or an optimal control. Let A ⊂ Rda be open, and write 
+
+u = Ψ( t, s, a), a ∈ A.
+
+The latent set A is independent of (t, s), and all state derivatives of chart-composed coefficients are taken with a fixed. The chart index is suppressed, and uniform statements are not intended across points at which the local chart loses regularity. 
+
+Assumption 2 (Local Chart Regularity and PMP Well-Posedness) . On each compact chart patch used for adjoint acquisition: (i) Chart regularity. The map Ψ is C1 in time and jointly C2 in (s, a). For each (t, s) on the patch, the map a 7 → Ψ( t, s, a) is a C2 embedding of A onto a relatively open subset of a smooth stratum of U(t, s) containing the charted control. The derivatives of Ψ through order two are bounded on the patch. (ii) Coefficient regularity. The primitive drift, diffusion, and running reward are C1 in time and jointly C2 in state and control, while the terminal reward is C2 in the state. The chart compositions of the drift, diffusion, and running reward have locally Lipschitz derivatives through order two and satisfy the required growth and moment bounds. On the localization used for the adjoint analysis, the wealth and consumption components remain in compact subsets of (0 , ∞).(iii) Well-posedness. The chart-reduced state equation and the corresponding first- and second-order adjoint systems admit unique adapted solutions. 
+
+Let 
+
+ℓ(t, s; u) := e−ρt U (C)
+
+denote the running reward. The primitive first-order Hamiltonian is 
+
+H(t, s, u, λ, Z) = ℓ(t, s; u) + λ⊤bS (t, s; u) + ⟨Z, σS (t, s; u)⟩F . (7) The fixed-latent chart compositions are 
+
+¯ℓ(t, s, a) := ℓ t, s, Ψ( t, s, a),
+
+¯b(t, s, a) := bS
+
+ t, s; Ψ( t, s, a),
+
+¯σ(t, s, a) := σS
+
+ t, s; Ψ( t, s, a).
+
+6The corresponding chart-reduced Hamiltonian is 
+
+¯H(t, s, a, λ, Z) = ¯ℓ + λ⊤¯b + ⟨Z, ¯σ⟩F , (8) where the barred quantities are evaluated at (t, s, a).Let at be a progressively measurable latent process and define 
+
+ut = Ψ( t, St, at).
+
+Under state perturbations, at is held fixed, while ut may still vary through the state dependence of Ψ. The associated chart-reduced state equation is 
+
+dSt = ¯b(t, St, at) dt + ¯ σ(t, St, at) dWt.
+
+The associated first-order adjoint is (λt, Zt), where 
+
+λt ∈ RdS , Zt ∈ RdS ×dW ,
+
+and 
+
+dλ t = −Ds ¯H(t, St, at, λ t, Zt) dt + Zt dWt, (9) with terminal condition 
+
+λT = Ke −ρT U ′(XT )eX , eX = (1 , 0, . . . , 0) ⊤.
+
+Let Pt ∈ SdS denote the second-order adjoint and let Rt = ( R1 
+
+> t
+
+, . . . , R dW 
+
+> t
+
+), with Rℓt ∈ SdS ,denote its martingale coefficients. For notational brevity, write 
+
+¯bt := ¯b(t, St, at), ¯σt := ¯ σ(t, St, at),
+
+and ¯Ht := ¯H(t, St, at, λ t, Zt).
+
+Let ¯σ ℓt denote the ℓth column of ¯σt. With the maximization convention, the second-order adjoint satisfies 
+
+−dP t =
+
+"
+
+D2 
+
+> ss
+
+¯Ht + ( Ds¯bt)⊤Pt + PtDs¯bt +
+
+> dW
+
+X
+
+> ℓ=1
+
+(Ds ¯σ ℓt )⊤PtDs ¯σ ℓt
+
++
+
+> dW
+
+X
+
+> ℓ=1
+
+h
+
+(Ds ¯σ ℓt )⊤Rℓt + Rℓt Ds ¯σ ℓt
+
+i #
+
+dt −
+
+> dW
+
+X
+
+> ℓ=1
+
+Rℓt dW ℓt ,PT = Ke −ρT U ′′ (XT )eX e⊤ 
+
+> X
+
+.
+
+(10) The fixed-latent derivatives retain the state dependence of the feasible chart. For directions 
+
+h, k ∈ RdS ,
+
+Ds ¯H[h] = Hs[h] + H⊤ 
+
+> u
+
+Ψsh, D2 
+
+> ss
+
+¯H[h, k ] = Hss [h, k ] + Hsu [h, Ψsk] + Hus [Ψ sh, k ]+ Huu [Ψ sh, Ψsk] + H⊤ 
+
+> u
+
+Ψss [h, k ].
+
+(11) All derivatives on the right-hand side are evaluated at u = Ψ( t, s, a), with (λ, Z) held fixed. Thus, fixing the latent coordinate removes derivatives through the latent policy output but retains the state derivatives of the feasible chart. The adjoint systems above are associated with any fixed admissible charted control. If the charted control is optimal, the resulting processes are the corresponding open-loop PMP adjoints. The next subsection uses the second-order adjoint to construct the generalized Hamiltonian required for finite control comparison. 73.2 Generalized Hamiltonian and Portfolio Specialization 
+
+For the portfolio model in Section 2.1, the primitive first-order Hamiltonian is affine in the risky-asset weights. It therefore does not contain the quadratic curvature required to compare finite changes in the diffusion control. This curvature is supplied by the second-order adjoint. For the adjoints associated with a fixed charted control ut = Ψ( t, St, at), define the shifted martingale adjoint by 
+
+ζt := Zt − Pt ¯σt = Zt − PtσS (t, St; ut) ∈ RdS ×dW . (12) For a generic state–control–adjoint tuple, define the generalized Hamiltonian by 
+
+H(t, s; u, λ, ζ, P ) := ℓ(t, s; u) + λ⊤bS (t, s; u)+ ⟨ζ, σS (t, s; u)⟩F
+
++ 12 tr 
+
+h
+
+σS (t, s; u)⊤P σS (t, s; u)
+
+i
+
+.
+
+(13) Although the adjoints are obtained from the chart-reduced system, the local control comparison is expressed in the original control coordinates at fixed (t, s). On a local chart patch, the comparison is restricted to the corresponding feasible branch. In the quadratic-affine portfolio specialization below, the risky-weight comparison may instead be carried out over the full convex risky-weight feasible set. The definition (12) yields the anchoring identity 
+
+∇uH(t, St; ut, λ t, ζt, P t) = ∇uH(t, St, ut, λ t, Zt). (14) At u = ut, the first derivatives of the shifted linear diffusion term and the quadratic diffusion term cancel. In the present portfolio model, where the wealth diffusion is affine in the risky-asset weights, the quadratic term supplies the missing risky-weight curvature. If the charted control is optimal, we use the corresponding starred notation. On the selected local feasible branch, the second-order stochastic maximum principle gives 
+
+H(t, S∗ 
+
+> t
+
+; u∗ 
+
+> t
+
+, λ ∗ 
+
+> t
+
+, ζ∗ 
+
+> t
+
+, P ∗ 
+
+> t
+
+) ≥ H(t, S∗ 
+
+> t
+
+; u, λ ∗ 
+
+> t
+
+, ζ∗ 
+
+> t
+
+, P ∗ 
+
+> t
+
+) (15) for every u ∈ U (t, S∗ 
+
+> t
+
+) sufficiently close to u∗ 
+
+> t
+
+, for dt ⊗ dP-almost every (t, ω ).Partition the adjoints according to S = ( X, Y ) and write P Y X = ( P XY )⊤. The part of (13) that depends on the risky-asset weights is 
+
+x
+
+h
+
+λX α(t, y ) + v(t, y )( ζX )⊤ + ΣRY (t, y )P Y X i⊤
+
+π
+
++ 12 P XX x2π⊤Σ(t, y )π.
+
+(16) Only the wealth row ζX enters because the factor diffusion is control independent. The term 
+
+ΣRY P Y X is the second-adjoint hedging term, whereas v(ζX )⊤ is the shifted martingale term. The consumption-dependent part is e−ρt U (C) − λX C. When portfolio and consumption constraints are separable, this scalar block can be optimized independently of the risky-weight block. If P XX < 0 and Σ(t, y ) ≻ 0, the risky-weight objective in (16) is strictly concave. With affine portfolio constraints, the corresponding recovery problem is a strictly concave quadratic program. This conclusion requires no definiteness condition on the full matrix P . When dY = 0 ,the mixed term ΣRY P Y X disappears, yielding the factor-free Merton block. The next subsection identifies these adjoint quantities with value derivatives when a suffi-ciently smooth Markov value function exists. This identification is used only as an interpretation and is not required for the open-loop formulation above. 83.3 Smooth Markov Identification 
+
+Suppose that, on the state region corresponding to the chart patch in Section 3.1, the value function V is sufficiently smooth for Itô’s formula to apply to DsV . Suppose also that a Markov latent selector a∗(t, s) ∈ A attains the local HJB maximum on the selected feasible branch. Define 
+
+u∗(t, s) := Ψ( t, s, a∗(t, s)) , u∗ 
+
+> t
+
+:= u∗(t, S∗ 
+
+> t
+
+), σ∗ 
+
+> t
+
+:= σS (t, S∗ 
+
+> t
+
+; u∗ 
+
+> t
+
+).
+
+Thus, u∗(t, s) is the locally optimal Markov feedback on the selected branch, and u∗ 
+
+> t
+
+is the corresponding control process. Along the optimal state, the smooth maximum-principle/dynamic-programming identifica-tion gives 
+
+λ∗ 
+
+> t
+
+= DsV (t, S∗ 
+
+> t
+
+), Z∗ 
+
+> t
+
+= D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+)σ∗ 
+
+> t
+
+, ζ∗ 
+
+> t
+
+= D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+) − P ∗
+
+> t
+
+ σ∗ 
+
+> t
+
+. (17) The first identity is the smooth maximum-principle/dynamic-programming identification. The second follows by applying Itô’s formula to the value gradient, and the third follows from (12). The matrix P ∗ 
+
+> t
+
+is the second-order PMP adjoint. In general, it is not identified with the value Hessian D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+). Consequently, smoothness and Markovianity alone do not imply ζ∗ 
+
+> t
+
+= 0.Such an identity may hold under additional model-specific structure, but it is not imposed here. Premultiplication by e⊤ 
+
+> X
+
+extracts the wealth component of a vector and the wealth row of a matrix. Applying it to (17) gives 
+
+λX, ∗ 
+
+> t
+
+:= e⊤ 
+
+> X
+
+λ∗ 
+
+> t
+
+= VX (t, S∗ 
+
+> t
+
+),
+
+ZX, ∗ 
+
+> t
+
+:= e⊤ 
+
+> X
+
+Z∗ 
+
+> t
+
+= e⊤ 
+
+> X
+
+D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+)σ∗ 
+
+> t
+
+,
+
+ζX, ∗ 
+
+> t
+
+:= e⊤ 
+
+> X
+
+ζ∗ 
+
+> t
+
+= e⊤
+
+> X
+
+D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+) − P ∗
+
+> t
+
+ σ∗ 
+
+> t
+
+.
+
+(18) Thus, the wealth row of Z∗ 
+
+> t
+
+is determined by the value Hessian in the smooth Markov represen-tation, whereas the wealth row of P ∗ 
+
+> t
+
+is obtained from the second-order PMP adjoint system. Their difference in the state-diffusion directions gives the shifted wealth-row input used in (16). At a Markov optimum that is interior with respect to the risky-weight constraints, the first-order condition for (16), together with (17), reduces to 
+
+0 = x [VX α(t, y ) + ΣRY (t, y )∇yVX ] + x2VXX Σ(t, y )π∗,
+
+where all derivatives of V in this display are evaluated at (t, x, y ). Hence, when VXX (t, x, y ) < 0,
+
+π∗(t, x, y ) = − 1
+
+xV XX (t, x, y ) Σ(t, y )−1 [VX (t, x, y )α(t, y ) + ΣRY (t, y )∇yVX (t, x, y )] . (19) Substituting (17) into (16) shows that the terms involving P ∗ 
+
+> t
+
+cancel. Thus, (19) does not require 
+
+P ∗ 
+
+> t
+
+= D2
+
+> ss
+
+V (t, S∗ 
+
+> t
+
+). When dY = 0 , the intertemporal-hedging term disappears and the formula reduces to the factor-free Merton rule. 
+
+Remark 1 (Exact Markovization and approximate state compression) . The identities in this subsection provide an optional smooth Markov interpretation of the open-loop adjoints. The adjoint systems in Sections 3.1 and 3.2, and the OL-BPTT correspondence developed below, do not require a smooth value function. A finite-dimensional Markov representation is exact when the relevant history admits an adapted finite-dimensional statistic with closed controlled dynamics and all model coefficients, rewards, and constraints factor through that statistic. Otherwise, replacing the history by a finite-dimensional state summary defines a surrogate control problem. The resulting Markovization error is separate from the discretization, conditional projection, shifted-input estimation, and local-recovery errors analyzed in this paper. 
+
+93.4 Constrained Local Recovery 
+
+Fix (t, s) and an adapted adjoint input 
+
+ϑ := ( λ, ζ, P ),
+
+and write 
+
+Hϑ(u) := H(t, s; u, λ, ζ, P ).
+
+Let R(t, s; ϑ) denote the set of local maximizers of Hϑ over the selected feasible branch of U(t, s).A selected recovered control therefore satisfies 
+
+u⋆(ϑ) ∈ R (t, s; ϑ).
+
+In general, R is a local set-valued correspondence. When ϑ = ϑ∗ 
+
+> t
+
+and s = S∗ 
+
+> t
+
+, the selected solution coincides with the optimal control u∗ 
+
+> t
+
+from (15). Because Section 2.1 uses risky-weight coordinates, full investment is already enforced through 
+
+π0 = 1 − 1⊤π, and no separate equality multiplier is needed. Explicit control equalities can be incorporated by adding their standard KKT multipliers. For a selected local maximizer u⋆, define the active set by 
+
+I⋆ := {j : Γ j (t, s; u⋆) = 0 } .
+
+A local KKT branch is called regular when its active set is locally constant and the active control gradients 
+
+{∇ uΓj (t, s; u⋆)}j∈I ⋆
+
+satisfy the linear independence constraint qualification (LICQ). At a smooth local maximizer on such a branch, there exists a multiplier vector ν⋆ ≥ 0 satisfying the KKT necessary conditions 
+
+∇uHϑ(u⋆) + DuΓ( t, s; u⋆)⊤ν⋆ = 0,
+
+Γ( t, s; u⋆) ≥ 0,ν⋆j Γj (t, s; u⋆) = 0 , j = 1 , . . . , m Γ.
+
+(20) At the optimal tuple, the gradient identity (14) implies that the same multipliers enter the first-order Hamiltonian and generalized-Hamiltonian stationarity conditions. Evaluated at the corresponding charted control, the fixed-latent first derivative therefore satisfies 
+
+Ds ¯H = DsH + DsΓ⊤ν⋆. (21) The second fixed-latent derivative is the chart pullback of the Hessian of 
+
+H + ν⋆⊤Γ
+
+with ν⋆ held fixed. Consequently, the moving-fiber correction includes the mixed chart terms in (11); it is not represented by P 
+
+> j
+
+ν⋆j D2
+
+> ss
+
+Γj alone. For the portfolio model, the risky-weight block requires only λX , ζX , P XX , and P Y X . The numerical estimation of these quantities is deferred to Section 4. We now give two realizations of the solver-neutral recovery correspondence. 
+
+3.4.1 Log-Barrier Realization on a Regular KKT Branch 
+
+Define the strict interior by 
+
+U◦(t, s) := u ∈ Rn+1 : Γ( t, s; u) > 0 .
+
+10 For εbar > 0, let uεbar denote a strict local maximizer, on the selected branch, of 
+
+uεbar ∈ loc 
+
+arg max 
+
+> u∈U ◦(t, s)
+
+Hϑ(u) + εbar 
+
+> mΓ
+
+X
+
+> j=1
+
+log Γ j (t, s; u)
+
+ . (22) Define the associated barrier multipliers by 
+
+νεbar ,j := εbar 
+
+Γj (t, s; uεbar ) .
+
+They satisfy the perturbed complementarity conditions 
+
+νεbar ,j Γj (t, s; uεbar ) = εbar , j = 1 , . . . , m Γ.
+
+Assumption 3 (Barrier/KKT Stagewise Regularity) . Fix (t, s, ϑ ) and a selected KKT solution 
+
+u⋆(ϑ). Locally: (i) Interior localization. The selected branch admits strict interior points, and the relevant local barrier superlevel sets remain in a common compact neighborhood for all sufficiently small εbar > 0.(ii) Strong KKT regularity. At u⋆(ϑ), LICQ, strict complementarity, and the strong second-order sufficient condition hold. Consequently, the bordered KKT Jacobian is nonsingular. For the quadratic portfolio block, P XX < 0 and Σ(t, y ) ≻ 0 provide the required curvature in the risky-weight directions. For a general nonlinear control block, the corresponding reduced-Hessian condition is imposed directly. 
+
+For fixed (t, s, ϑ ), define the stagewise Lagrangian 
+
+Lϑ(u, ν ) := Hϑ(u) + ν⊤Γ( t, s; u).
+
+Proposition 1 (Local barrier–KKT approximation) . Suppose Assumptions 1, 2, and 3 hold. Let uεbar be the strict local barrier maximizer on the central-path branch issuing from the selected KKT maximizer u⋆. There exist positive constants 
+
+Ccp , cint , CL, CH, 1, CH, 2, ε0,
+
+depending on the fixed stagewise state and adjoint input, such that for 0 < ε bar ≤ ε0,
+
+∥uεbar − u⋆∥ ≤ Ccp εbar , (23) 
+
+|L ϑ(u⋆, ν ⋆) − L ϑ(uεbar , ν ⋆)| ≤ CLε2bar , (24) 
+
+0 ≤ Hϑ(u⋆) − Hϑ(uεbar ) ≤ CH, 1εbar + CH, 2ε2bar . (25) 
+
+Moreover, 
+
+Γj (t, s; uεbar ) ≥ cint εbar , j = 1 , . . . , m Γ. (26) 
+
+If no inequality is active at u⋆, the linear term in (25) vanishes. Proof. See Appendix B. 11 3.4.2 Exact QP Realization of the Risky-Weight Block 
+
+For s = ( x, y ), define 
+
+g(t, s; ϑ) := x
+
+h
+
+λX α(t, y ) + v(t, y )( ζX )⊤ + ΣRY (t, y )P Y X i
+
+,Q(t, s; ϑ) := −x2P XX Σ(t, y ).
+
+(27) The exact risky-weight recovery is 
+
+πQP (t, s; ϑ) ∈ arg max 
+
+> π∈K (t, s)
+
+
+
+g(t, s; ϑ)⊤π − 12 π⊤Q(t, s; ϑ)π
+
+
+
+. (28) For the borrowing-allowed no-short-sale model, 
+
+K(t, s) = Rn
+
+> +
+
+.
+
+The no-borrowing model additionally imposes 
+
+1⊤π ≤ 1.
+
+More general affine portfolio restrictions can be incorporated into K(t, s).If P XX < 0 and Σ(t, y ) ≻ 0, then Q(t, s; ϑ) ≻ 0, so (28) has a unique solution. With affine portfolio constraints, it exactly evaluates the risky-weight component of R(t, s; ϑ) without barrier bias. When the portfolio and consumption constraints are separable, the scalar consumption block can be solved independently. When dY = 0 , the mixed term ΣRY P Y X is absent. Section 4 turns the preceding adjoint-to-control formulation into a numerical procedure by estimating the required adapted adjoint inputs from fixed-latent OL-BPTT rollouts. 
+
+# 4 Policy Training, Fixed-Latent OL-BPTT, and End-to-End Re-covery 
+
+Section 3 formulates constrained local recovery conditional on the adapted adjoint input ϑ =(λ, ζ, P ). This section constructs numerical estimates of that input from feasible policy rollouts and quantifies how adjoint-estimation, reference-policy, and numerical-solver errors propagate to the recovered control. Stage 1 first trains a feasible feedback policy and then freezes its latent outputs to harvest fixed-latent open-loop sensitivities. Conditional projection yields the first- and second-order ad-joints, while a separate anchored nested estimator recovers the shifted wealth-row input. Stage 2 substitutes bϑ = ( bλ, bζ, bP ) into the barrier or exact-QP recovery formulations of Section 3.4. We distinguish throughout between population conditional projections and their Monte Carlo or regression approximations. In the portfolio specialization, only the wealth-relevant blocks of the full tuple are passed to the local solver. 
+
+4.1 Feasible Feedback Training and Fixed-Latent Rollout 
+
+Stage 1a: feasible feedback training. Let Θ = ( θ, ϕ ) parameterize the portfolio and con-sumption outputs, and let ϖ be a sampling law for initial time–state pairs (tin , sin ). To remain consistent with the calendar-time objective in Section 2.1, define 
+
+Jtrain (Θ) := E(tin ,sin )∼ϖE
+
+Z Ttin 
+
+e−ρs U (CΘ(s, Ss)) ds + Ke −ρT U (XT )
+
+
+
+. (29) The state process starts from Stin = sin and is controlled by the feasible feedback 
+
+uΘ(t, s) = Ψ  t, s, aΘ(t, s). (30) 12 Ordinary automatic differentiation through this feedback graph updates Θ. The adjoints har-vested after training and the local solvers in Stage 2 do not enter the Stage-1 update. For numerical conditioning, an implementation may multiply each sample objective by eρt in 
+
+and use relative discounts e−ρ(s−tin ). For a fixed initial pair, this deterministic normalization does not change the optimizer, and calendar-normalized sensitivities are recovered by multiplying by e−ρt in . When tin is random, however, relative normalization reweights the initial-time law. Accordingly, all reference-performance statements below are understood with respect to the averaged objective actually used in training. The experiments use smooth feasible output maps. For a no-borrowing simplex model, full portfolio weights may be generated by 
+
+πi(t, s) = exp( oi(t, s)/τ sm )
+
+Pnj=0 exp( oj (t, s)/τ sm ) , i = 0 , . . . , n. 
+
+Although an implementation may retain all n + 1 logits, the theoretical latent coordinate in Section 3.1 is understood in a gauge-fixed, nonredundant form; for example, one may use logit differences relative to the cash logit. For borrowing-allowed no-short-sale models, the risky weights may instead be generated componentwise by 
+
+πi(t, s) = softplus( eoi(t, s)) , i = 1 , . . . , n, π0(t, s) = 1 −
+
+> n
+
+X
+
+> i=1
+
+πi(t, s).
+
+A smooth consumption box is 
+
+C(t, s) = Cmin (t, s) + [ Cmax (t, s) − Cmin (t, s)] 1 + tanh oC (t, s)2 .
+
+Let 
+
+0 = t0 < t 1 < · · · < t N = T, h := ∆ t = T /N, 
+
+be a uniform grid. The wealth component is advanced by exponential–Euler, while the factor component uses a model-appropriate transition: 
+
+Xk+1 = Xk exp 
+
+
+
+rk + π⊤ 
+
+> k
+
+αk − 12 π⊤ 
+
+> k
+
+Σkπk − Ck
+
+Xk
+
+
+
+h + π⊤ 
+
+> k
+
+vk∆Wk
+
+!
+
+,Yk+1 = Φ Y (tk, Y k, ∆Wk).
+
+(31) Here 
+
+αk = α(tk, Y k), vk = v(tk, Y k), Σk = Σ(tk, Y k).
+
+The map ΦY may be Euler–Maruyama in the general formulation and an exact transition in models such as the OU benchmark. Together, (31) defines 
+
+Sk+1 = Φ h(tk, Sk, uk, ∆Wk).
+
+Stage 1b: fixed-latent rollout. After training, the actor is frozen and its latent output is detached before the feasible chart is applied: 
+
+¯ak := sg( aΘ(tk, Sk)) , uref  
+
+> k
+
+:= Ψ( tk, Sk, ¯ak). (32) For a state derivative initiated at time tk, all later latent values {¯aℓ}ℓ≥k are held fixed. Thus derivatives through the actor output vanish, while the structural derivatives DsΨ and D2
+
+> ss
+
+Ψ
+
+remain. For example, under the proportional chart 
+
+C = Xc, 
+
+detaching c still leaves 
+
+Dol  
+
+> X
+
+C = c. 
+
+13 4.2 Pathwise Sensitivities and Adapted Projection 
+
+Consider a rollout initialized at grid index kin . For k ≥ kin , define the one-step and terminal payoffs by 
+
+rk := e−ρt k U (Ck)h, gN := Ke −ρT U (XN ),
+
+and define the continuation payoff 
+
+Jk :=  
+
+> N−1
+
+X
+
+> ℓ=k
+
+rℓ + gN . (33) Variable initial times may be implemented by padding trajectories to a common grid and masking contributions before kin ; this does not alter the derivatives of Jk for k ≥ kin .The raw fixed-latent pathwise sensitivities are 
+
+eλk := Dol  
+
+> Sk
+
+Jk, ePk := D2,ol   
+
+> SkSk
+
+Jk. (34) The risky-weight decoder requires only the wealth component and wealth row. Accordingly, define eλXk := e⊤ 
+
+> X
+
+eλk, eP XX k := e⊤ 
+
+> X
+
+ePkeX ,
+
+and let eP XY k denote the wealth–factor block of ePk. This block is harvested directly rather than inferred from a value-Hessian or zero-shift identity. Let 
+
+Ak := DSk Sk+1 , Bjk := D2  
+
+> SkSk
+
+Sjk+1 , j = 1 , . . . , d S ,
+
+where the derivatives are fixed-latent derivatives of the transition Φh. The multivariate pathwise chain rule gives the exact identities 
+
+eλk = Dol  
+
+> Sk
+
+rk + A⊤ 
+
+> k
+
+eλk+1 , (35) 
+
+ePk = D2  
+
+> SkSk
+
+rk + A⊤ 
+
+> k
+
+ePk+1 Ak +
+
+> dS
+
+X
+
+> j=1
+
+eλjk+1 Bjk. (36) Let 
+
+Ek[·] := E[· | F tk ].
+
+The population adapted projections are 
+
+λk := Ek[eλk], Pk := Ek[ ePk]. (37) Their numerical Monte Carlo or regression approximations are denoted by bλk and bPk.The Brownian coefficients associated with the interval [tk, t k+1 ] are 
+
+Zhk := 1
+
+h Ek
+
+h
+
+λk+1 ∆W⊤
+
+> k
+
+i
+
+, Rh,ℓ k := 1
+
+h Ek
+
+h
+
+Pk+1 ∆W ℓk
+
+i
+
+. (38) The corresponding one-step projections retain orthogonal residuals: 
+
+λk+1 = Ek[λk+1 ] + Zhk ∆Wk + ξk+1 ,Pk+1 = Ek[Pk+1 ] + 
+
+> dW
+
+X
+
+> ℓ=1
+
+Rh,ℓ k ∆W ℓk + ξPk+1 ,
+
+where ξk+1 and ξPk+1 are orthogonal to constants and to the first Brownian chaos over the interval. 14 4.3 OL-BPTT–PMP Correspondence 
+
+Assumption 4 (Regularity for the chart-reduced OL-BPTT–PMP correspondence) . In addition to Assumptions 1 and 2, assume: (i) The rollout remains in a common compact chart patch, and the frozen latent processes are uniformly square integrable. (ii) The states and raw vector/matrix sensitivities are uniformly square integrable, and the interval martingale densities have mesh-uniform L2 energy. (iii) The frozen latent processes, charted controls, states, barred coefficients, and their first two fixed-latent state derivatives converge in the corresponding L2 spaces. (iv) The interval martingale densities admit a Zhang-type piecewise-constant projection esti-mate with aggregate squared error O(h).
+
+The fixed-latent one-step expansion used below separates predictable order-h terms, first Brownian chaos, centered second chaos, and higher-order remainders. Its precise statement and proof are given in Lemma 1 of Appendix C. 
+
+Theorem 1 (Vector-state OL-BPTT sensitivities and chart-reduced PMP correspondence) .
+
+Suppose Assumptions 1, 2, and 4 hold on a common compact chart patch. 
+
+(a) Exact pathwise identities. The raw derivatives satisfy (35) –(36) exactly. Derivatives through the actor output vanish, while the state derivatives of the feasible chart remain. 
+
+(b) Adapted discrete recursions. Set 
+
+¯λk+1 := Ek[λk+1 ], ¯Pk+1 := Ek[Pk+1 ],
+
+and evaluate ¯bk := ¯b(tk, Sk, ¯ak), ¯σk := ¯ σ(tk, Sk, ¯ak),
+
+¯Hk := ¯H(tk, Sk, ¯ak, ¯λk+1 , Zhk ).
+
+All derivatives below are fixed-latent state derivatives. Define 
+
+D(2) ,ol  
+
+> k
+
+:= D2 
+
+> ss
+
+¯Hk + ( Ds¯bk)⊤ ¯Pk+1 + ¯Pk+1 Ds¯bk
+
++
+
+> dW
+
+X
+
+> ℓ=1
+
+(Ds ¯σℓk)⊤ ¯Pk+1 Ds ¯σℓk
+
++
+
+> dW
+
+X
+
+> ℓ=1
+
+h
+
+(Ds ¯σℓk)⊤Rh,ℓ k + Rh,ℓ k Ds ¯σℓk
+
+i
+
+.
+
+(39) 
+
+There exist remainder arrays {e(1)  
+
+> k
+
+, e(2)  
+
+> k
+
+} satisfying 
+
+Eh := E max  
+
+> kin ≤m≤N−1
+> m
+
+X
+
+> k=kin
+
+e(1) 
+
+> k
+> 2
+
++ E max  
+
+> kin ≤m≤N−1
+> m
+
+X
+
+> k=kin
+
+e(2) 
+
+> k
+> 2
+> F
+
+−→ 0 (h ↓ 0) ,
+
+(40) 
+
+such that 
+
+λk − λk+1 = Ds ¯Hkh − Zhk ∆Wk − ξk+1 + e(1)  
+
+> k
+
+, (41) 
+
+Pk − Pk+1 = D(2) ,ol  
+
+> k
+
+h −
+
+> dW
+
+X
+
+> ℓ=1
+
+Rh,ℓ k ∆W ℓk − ξPk+1 + e(2)  
+
+> k
+
+. (42) 15 (c) Continuous-time limit. Let (λh, Zh, P h, Rh) denote the standard adapted interpolants of the discrete adjoints and one-step Brownian coefficients, with 
+
+∥R∥2 
+
+> F
+
+:= 
+
+> dW
+
+X
+
+> ℓ=1
+
+∥Rℓ∥2 
+
+> F
+
+.
+
+Then 
+
+E sup 
+
+> tin ≤t≤T
+
+
+
+∥λht − λt∥2 + ∥P ht − Pt∥2
+
+> F
+
+
+
++ E
+
+Z Ttin 
+
+
+
+∥Zht − Zt∥2 
+
+> F
+
++ ∥Rht − Rt∥2
+
+> F
+
+
+
+dt −→ 0.
+
+(43) 
+
+The limit is the chart-reduced vector first-adjoint and matrix second-adjoint system associated with the limiting fixed-latent reference control. If that reference control is optimal, the limits are the corresponding open-loop PMP adjoints. 
+
+(d) Wealth-relevant blocks. For S = ( X, Y ), the conditional projections of eλX , eP XX , and 
+
+eP XY converge to λX , P XX , and P XY . These are the blocks entering the risky-weight coefficients in (27) . No identification of P XY with VXY is required. Proof. See Appendix C. The directly harvested population objects are the first-adjoint vector λ and the second-adjoint matrix P . The processes Z and R are their Brownian martingale coefficients generated by one-step conditional projection. The wealth row ZX is used in the shifted input estimator below, whereas R closes the second-order adjoint dynamics but is not an input to the local portfolio decoder. 
+
+4.4 Anchored Estimation of the Shifted Wealth Row 
+
+Let 
+
+ϑref = ( λref , ζref , P ref )
+
+denote the exact chart-reduced adjoint tuple associated with the frozen reference control. By (12), its wealth row satisfies 
+
+ZX, ref  
+
+> t
+
+= e⊤ 
+
+> X
+
+P ref  
+
+> t
+
+σS (t, Sref  
+
+> t
+
+; uref  
+
+> t
+
+) + ζX, ref  
+
+> t
+
+. (44) This identity supplies an algebraic anchor; it does not impose a zero-shift condition. A direct covariance estimate of ZX can be noisy because the next-step raw first sensitivity retains substantial future-shock variation. Fix a diagnostic state Sk = s and reference action 
+
+uref  
+
+> k
+
+. For i = 1 , . . . , M out , draw 
+
+di ∼ N (0 , hI dW )
+
+and pair it with −di. At the resulting two next states, use the same Min future Brownian continuations and form 
+
+¯λXi, ± := 1
+
+Min 
+
+> Min
+
+X
+
+> j=1
+
+eλX, (i, ±,j ) 
+
+> k+1
+
+, yi := ¯λXi, + − ¯λXi, −
+
+2 . (45) Let Dk be the matrix whose ith row is d⊤ 
+
+> i
+
+. Define the columnized anchor by 
+
+cX, anc  
+
+> k
+
+:= 
+
+h
+
+e⊤ 
+
+> X
+
+bPkσS (tk, Sk; uref  
+
+> k
+
+)
+
+i⊤
+
+∈ RdW , (46) and set 
+
+ri := yi − d⊤ 
+
+> i
+
+cX, anc  
+
+> k
+
+.
+
+16 The residual regression is 
+
+bζXk, col := ( D⊤ 
+
+> k
+
+Dk + κZ I)−1D⊤ 
+
+> k
+
+r, bζXk := ( bζXk, col )⊤, κZ ≥ 0. (47) Stage 2 uses the row vector bζXk directly. If the Brownian coefficient itself is required for validation or another downstream task, reconstruct 
+
+bZXk := 
+
+
+
+cX, anc  
+
+> k
+
++ bζXk, col 
+
+⊤
+
+. (48) When κZ = 0 and bPk is fixed, residual OLS is algebraically equivalent to estimating ZX by OLS and then subtracting the anchor. The stabilization comes from nested conditional averaging, common random numbers, antithetic differencing, and direct estimation of the residual shift. 
+
+Algorithm 1 Fixed-latent adjoint acquisition and constrained local recovery  
+
+> 1:
+
+Sample initial time–state pairs and Brownian increments, and train the feasible feedback policy by maximizing (29).  
+
+> 2:
+
+Freeze the actor and detach every latent output before applying the state-dependent feasible chart.  
+
+> 3:
+
+Differentiate each continuation payoff once and twice with respect to the full state to obtain 
+
+(eλk, ePk). 
+
+> 4:
+
+Approximate the conditional projections (λk, P k) by (bλk, bPk). 
+
+> 5:
+
+When required, estimate bζXk using (47).  
+
+> 6:
+
+Substitute the estimated wealth-relevant tuple into the barrier or exact-QP recovery formu-lation of Section 3.4. 
+
+4.5 From Reference Performance to Adjoint Proximity 
+
+Theorem 1 identifies the adjoints associated with a fixed reference control, but it does not compare that reference with the optimal control. We provide this link under a local quadratic-growth condition. For an adapted vector or matrix process χ and a Brownian-integrand process Z, define 
+
+∥χ∥S2 := E sup 
+
+> 0≤t≤T
+
+∥χt∥2
+
+!1/2
+
+, ∥Z∥H2 := 
+
+
+
+E
+
+Z T
+
+> 0
+
+∥Zt∥2dt 
+
+1/2
+
+,
+
+using the Frobenius norm for matrix-valued processes. For 1 ≤ p, q ≤ ∞ , define 
+
+∥f ∥Lq,p := 
+
+Z T
+
+> 0
+
+(E∥ft∥p)q/p dt 
+
+1/q 
+
+, (49) with the usual essential-supremum modifications. For every admissible control u in the localization below, let 
+
+(Su, λ u, Zu, P u, Ru)
+
+denote the corresponding state and exact chart-reduced adjoint systems. Define 
+
+ζu 
+
+> t
+
+:= Zu 
+
+> t
+
+− P u 
+
+> t
+
+σS (t, Su 
+
+> t
+
+; ut), ϑu := ( λu, ζu, P u). (50) 
+
+Assumption 5 (Reference-policy quadratic growth and coefficient-jet regularity) . Let u∗ be a locally optimal admissible control. There exist a localized admissible neighborhood U0 ⊂ H2 of 
+
+u∗, a common compact chart patch, and constants κqg , C jet > 0 such that: 
+
+17 (i) Common localization. Every u ∈ U0 and its state remain in the common chart localization. On this set, the chart-reduced drift, diffusion, and reward, their fixed-latent state deriva-tives through order two, and the first two derivatives of the terminal reward are bounded and Lipschitz with constant Cjet . The required forward and adjoint moments are uniform over U0. In addition, P u and Ru are uniformly essentially bounded on the localization. (ii) Local quadratic growth. For every u ∈ U0,
+
+J(u∗) − J(u) ≥ κqg ∥u − u∗∥2 
+
+> H2
+
+. (51) 
+
+Theorem 2 (Performance-to-adjoint stability for a near-optimal reference) . Suppose Assump-tions 1, 2, and 5 hold. Let uref ∈ U0 and define 
+
+εref := J(u∗) − J(uref ) ≥ 0.
+
+Then 
+
+∥uref − u∗∥H2 ≤
+
+r εref 
+
+κqg 
+
+. (52) 
+
+Moreover, there exists a constant Cstab > 0, independent of εref , such that 
+
+∥Sref − S∗∥S2 + ∥λref − λ∗∥S2 + ∥Zref − Z∗∥H2
+
++ ∥P ref − P ∗∥S2 + ∥Rref − R∗∥H2 + ∥ζref − ζ∗∥H2 ≤ Cstab 
+
+r εref 
+
+κqg 
+
+. (53) 
+
+In particular, for a constant Cref > 0,
+
+∥ϑref − ϑ∗∥L2,2 ≤ Cref 
+
+r εref 
+
+κqg 
+
+. (54) 
+
+Proof. See Appendix D. 
+
+Remark 2 (Scope of the quadratic-growth bridge) . The pointwise curvature conditions P XX <
+
+0 and Σ ≻ 0 make the fixed-adjoint risky-weight block strongly concave, but they do not by themselves imply (51) for the full dynamic objective. Quadratic growth is a coercivity condition for the stochastic second variation on the admissible process space. Theorem 2 is trajectory-wise and integrated in time. A uniform comparison of adjoint fields at identical off-trajectory deployment states additionally requires quadratic growth for the cor-responding restarted problems or an appropriate state-coverage/concentrability condition. The same distinction applies when (29) averages over a random initial law. A direct verification for the localized terminal-wealth Merton benchmark is given in Appendix D.2. 
+
+4.6 Estimated-Input Recovery and End-to-End Error Bounds 
+
+Fix a common deployment-state process S taking values in a compact deployment region, and consider a selected regular recovery branch. All adjoint inputs compared in this subsection are evaluated at the same (t, St). Let bϑt = ( bλt, bζt, bPt)
+
+denote the estimated input, ϑref  
+
+> t
+
+the exact input associated with the frozen reference control, and ϑ∗ 
+
+> t
+
+the target input on the selected branch. In the portfolio specialization, these symbols may be read as their wealth-relevant restrictions. 
+
+Assumption 6 (Uniform Recovery and Adjoint-Input Stability) . Assume the following condi-tions on the compact deployment region. 
+
+18 (i) Uniform recovery regularity. There exist an open neighborhood N of the compact range of ϑ∗, a closed convex set N0 ⋐ N , a number ε0 > 0, and constants ν, κ, C KKT > 0 such that, for every ϑ ∈ N and 0 < ε bar ≤ ε0, the selected KKT solution and local central path remain on a common regular branch. Active multipliers satisfy 
+
+ν∗ 
+
+> j
+
+(ϑ) ≥ ν, j ∈ I (ϑ),
+
+the reduced Hessian is bounded above by −κI on the feasible tangent space, and the inverse KKT Jacobian has norm at most CKKT . The estimated input is projected onto N0, and the numerical solver outputs remain in the associated localization neighborhood. (ii) Adjoint-input errors. Let 
+
+δol := δtime (h) + δMC (NMC ) + δreg ,
+
+where each component converges to zero under consistent refinement. Assume that 
+
+(bλ, bP ) − (λref , P ref ) Lq,p ≤ Col δol ,
+
+bζ − ζref  
+
+> Lq,p
+
+≤ δζ , ϑref − ϑ∗ 
+
+> Lq,p
+
+≤ δref .
+
+Define 
+
+δadj := δol + δζ + δref .
+
+By the triangle inequality, there is a constant Cin > 0 such that 
+
+∥bϑ − ϑ∗∥Lq,p ≤ Cin δadj . (55) With direct conditional averaging and uniformly bounded conditional variance, one may take 
+
+δMC (NMC ) = O(N −1/2MC ).
+
+No specific time-discretization rate is imposed beyond δtime (h) → 0.The term δref is distinct from discretization, Monte Carlo, and regression errors. Along the paired reference and optimal trajectories, Theorem 2 gives 
+
+δref ≤ Cref 
+
+r εref 
+
+κqg 
+
+. (56) For comparisons at common off-trajectory deployment states, (56) additionally requires the restarted-problem or state-coverage condition described in Remark 2. We call the numerical log-barrier realization B-PGDPO and the numerical quadratic-program realization QP-PGDPO. 
+
+4.6.1 B-PGDPO: Estimated-Input Barrier Recovery 
+
+For notational compactness, define 
+
+Ht(u; ϑ) := H(t, St; u, ϑ ), Γt(u) := Γ( t, St; u).
+
+The inequality-only perturbed KKT map is 
+
+Fbar (u, ν ; ϑ, ε ) := ∇uHt(u; ϑ) + DuΓt(u)⊤ν
+
+diag(Γ t(u)) ν − ε1
+
+!
+
+.
+
+19 Let (bubar  
+
+> t
+
+, bνbar  
+
+> t
+
+) be a strictly feasible numerical approximation to the estimated-input central path from (22). Define 
+
+rbar  
+
+> t
+
+:= Fbar (bubar  
+
+> t
+
+, bνbar  
+
+> t
+
+; bϑt, ε bar ) , ∥rbar ∥Lq,p ≤ δbar .
+
+The numerical output satisfies 
+
+Γt(bubar  
+
+> t
+
+) > 0, bνbar  
+
+> t
+
+> 0.
+
+Let 
+
+eadj  
+
+> t
+
+:= ∥bϑt − ϑ∗ 
+
+> t
+
+∥,
+
+and let u∗ 
+
+> t
+
+denote the selected local maximizer corresponding to ϑ∗ 
+
+> t
+
+at the common deployment state. Define 
+
+H∗ 
+
+> t
+
+(u) := Ht(u; ϑ∗ 
+
+> t
+
+), Gbar  
+
+> t
+
+:= H∗ 
+
+> t
+
+(u∗ 
+
+> t
+
+) − H∗ 
+
+> t
+
+(bubar  
+
+> t
+
+).
+
+Theorem 3 (Estimated-input policy-gap bound for B-PGDPO) . Suppose Assumptions 3 and 6 hold uniformly on the deployment region. For sufficiently small errors, the numerical output remains in the local maximality neighborhood of u∗ 
+
+> t
+
+. There exist constants, uniform on the deployment region, such that dt ⊗ dP-almost everywhere, 
+
+∥bubar  
+
+> t
+
+− u∗ 
+
+> t
+
+∥ ≤ Cbar 
+
+
+
+εbar + eadj  
+
+> t
+
++ rbar 
+
+> t
+
+
+
+, (57) 
+
+and 
+
+0 ≤ Gbar  
+
+> t
+
+≤ CH, 1εbar + CH, 2
+
+
+
+eadj  
+
+> t
+
++ rbar 
+
+> t
+
+
+
++ CH, 3
+
+
+
+εbar + eadj  
+
+> t
+
++ rbar 
+
+> t
+
+2
+
+.
+
+(58) 
+
+Consequently, 
+
+∥bubar − u∗∥Lq,p ≤ C′ 
+
+> bar
+
+(εbar + δadj + δbar ) . (59) 
+
+If p, q ≥ 2, then 
+
+∥Gbar ∥Lq/ 2,p/ 2 ≤ CH
+
+h
+
+εbar + δadj + δbar + ( εbar + δadj + δbar )2i
+
+. (60) 
+
+If no inequality is active at u∗ 
+
+> t
+
+, the linear terms vanish and the corresponding bounds are quadratic in εbar + eadj  
+
+> t
+
++ rbar  
+
+> t
+
+.Proof. See Appendix E.1. 
+
+Corollary 1 (Consistency of B-PGDPO) . If 
+
+δol , δζ , δref , δbar , εbar −→ 0,
+
+then 
+
+bubar −→ u∗ in Lq,p .
+
+For p, q ≥ 2, the true local Hamiltonian-gap process converges to zero in Lq/ 2,p/ 2. Under the conditions supporting (56) , the term δref may be replaced by the square-root reference-performance rate. 
+
+20 4.6.2 QP-PGDPO: Estimated-Input Quadratic Recovery 
+
+Let 
+
+bgt := g(t, St; bϑt), bQt := Q(t, St; bϑt),
+
+where g and Q are defined in (27). Let 
+
+Kt := K(t, St)
+
+be the convex risky-weight feasible set. For a closed convex set K, define the normal cone by 
+
+NK(π) := {v : ⟨v, w − π⟩ ≤ 0 for all w ∈ K} , π ∈ K .
+
+Let bπQP  
+
+> t
+
+be a numerical solution of the estimated QP, and define its stationarity residual by 
+
+rqp  
+
+> t
+
+:= dist 
+
+
+
+0, bQt bπQP  
+
+> t
+
+− bgt + NKt (bπQP  
+
+> t
+
+)
+
+
+
+, ∥rqp ∥Lq,p ≤ δqp .
+
+Let π∗ 
+
+> t
+
+denote the exact QP solution obtained from ϑ∗ 
+
+> t
+
+and define 
+
+Gqp  
+
+> t
+
+:= Qloc (π∗ 
+
+> t
+
+; ϑ∗ 
+
+> t
+
+) − Q loc (bπQP  
+
+> t
+
+; ϑ∗ 
+
+> t
+
+),
+
+where 
+
+Qloc (π; ϑ) := g(ϑ)⊤π − 12 π⊤Q(ϑ)π.
+
+Proposition 2 (Estimated-input stability of QP-PGDPO) . Suppose that Kt is a closed convex polyhedron and that, on the input localization in Assumption 6, 
+
+Q(ϑ) ⪰ λQI
+
+uniformly for some λQ > 0. Suppose also that (g, Q ) are locally Lipschitz in ϑ and that the exact and numerical QP solutions remain in a common bounded localization. Then, dt ⊗ dP-almost everywhere, 
+
+∥bπQP  
+
+> t
+
+− π∗ 
+
+> t
+
+∥ ≤ Cqp 
+
+
+
+eadj  
+
+> t
+
++ rqp 
+
+> t
+
+
+
+, (61) 
+
+and therefore 
+
+∥bπQP − π∗∥Lq,p ≤ C′ 
+
+> qp
+
+(δadj + δqp ) . (62) 
+
+Moreover, 
+
+0 ≤ Gqp  
+
+> t
+
+≤ CQ
+
+
+
+eadj  
+
+> t
+
++ rqp 
+
+> t
+
+2
+
+. (63) 
+
+If p, q ≥ 2, then 
+
+∥Gqp ∥Lq/ 2,p/ 2 ≤ C′ 
+
+> Q
+
+(δadj + δqp )2 . (64) 
+
+Proof. See Appendix E.2. 
+
+Corollary 2 (Consistency and end-to-end rate of QP-PGDPO) . For an exact QP solve, δqp = 0 .Hence 
+
+δol , δζ , δref −→ 0
+
+implies 
+
+bπQP −→ π∗ in Lq,p ,
+
+and, for p, q ≥ 2, the true local QP-gap process converges to zero in Lq/ 2,p/ 2.If Assumption 5 holds and the common-state comparison is supported by the restarted-problem or state-coverage condition in Remark 2, then for p = q = 2 ,
+
+∥bπQP − π∗∥L2,2 ≤ eCqp 
+
+
+
+δol + δζ + δqp +
+
+r εref 
+
+κqg 
+
+
+
+, (65) 21 and 
+
+∥Gqp ∥L1,1 ≤ eCQ
+
+
+
+δol + δζ + δqp +
+
+r εref 
+
+κqg 
+
+2
+
+. (66) 
+
+Thus, when adjoint acquisition, shifted-input estimation, and the QP solve are exact, the recov-ered risky-weight error is O(√εref ) and the integrated true local QP gap is O(εref ).
+
+Remark 3 (Interpretation of the QP end-to-end rate) . The recovery step does not generally improve the policy-distance order: both the reference control and the recovered risky weights remain O(√εref )-close to their targets. The O(εref ) conclusion concerns the integrated true local QP value loss and follows from strong concavity and the squared stationarity error. It is not a pointwise Hamiltonian statement or a matching rate for the unrecovered DPO action. 
+
+# 5 Numerical Experiments: Adjoint Validation and Constrained Recovery 
+
+We compare three deployment rules. Activation-based DPO deploys the feasible network output directly. B-PGDPO and QP-PGDPO use the same full estimated wealth-relevant adjoint tuple and differ only in the Stage 2 solver: a log-barrier method and an exact quadratic-programming (QP) solve, respectively. The portfolio-only benchmark imposes u := π1: n ≥ 0 and allows the residual cash weight π0 = 1 − 1⊤u to be negative; the cap models additionally impose no borrowing and 0 ≤ Ct ≤ ¯mX t. All adjoints are harvested on the fixed-latent OL-BPTT graph. The shifted wealth-row input is estimated by the anchored nested regression in (47); no reported recovery table fixes this input ex ante. All portfolio blocks are quadratic-affine after the adjoints are fixed, so QP-PGDPO is the exact local-QP reference conditional on the common estimated adjoint tuple. The barrier experiments therefore audit the central path and solver modularity rather than a separate nonquadratic benchmark. 
+
+5.1 Experimental Scope and Diagnostics 
+
+The Merton experiments provide analytical constrained policies and wealth adjoints. Section 5.6 adds a predictable-return model with analytical value derivatives, a martingale-coefficient target, and an optimal-policy target, while the constrained Liu–Kim–Omberg recovery stress test is reported in Appendix G.3. Diagnostic states are independent of the training minibatches. Paired method comparisons use common Brownian continuations, and shifted-input replication uses a second, independent outer–inner Brownian bank. For a du-dimensional control, coordinatewise RMSE is 
+
+RMSE u =
+
+"
+
+1
+
+Ntest duNtest X
+
+> i=1
+
+∥bui − uref  
+
+> i
+
+∥22
+
+#1/2
+
+.
+
+For a generic analytical target Ai, normalized RMSE is 
+
+nRMSE( A) := 
+
+h
+
+N −1test 
+
+P 
+
+> i
+
+∥ bAi − Ai∥22
+
+i1/2
+
+N −1test 
+
+P 
+
+> i
+
+∥Ai∥22
+
+1/2 .
+
+At state i, let bHi denote the unregularized generalized Hamiltonian formed from the common estimated adjoint input. For a deployment rule M , define 
+
+Gain i(M ) := bHi(uMi ) − bHi(uDPO  
+
+> i
+
+), QPGap i(M ) := bHi(uQP  
+
+> i
+
+) − bHi(uMi ).
+
+These are conditional local generalized-Hamiltonian diagnostics under the common estimated adjoint input; they are not direct estimates of global expected-utility improvement. The tables 22 report statewise averages of these quantities. The shifted-input signal-to-noise ratio is also formed statewise, 
+
+SNR i := ∥bζXi ∥2
+
+∥ bse( bζXi )∥2
+
+, SNR := N −1test 
+
+X
+
+> i
+
+SNR i,
+
+where the denominator is the norm of the estimated Monte Carlo standard-error vector. Hence the reported mean SNR is not, in general, the ratio of the reported mean shift norm to the reported mean standard error. It is a Monte Carlo resolution diagnostic rather than a formal hypothesis-test statistic. Local optimality is summarized by the KKT–projected-gradient (KKT–PG) residual of the unregularized estimated Hamiltonian, together with the gain and QP gap just defined. The projected-gradient formula and the IID/edge/OOD sampling ranges are in Appendix G.1; in models without analytical constrained policies, these are conditional local-recovery diagnostics rather than ground-truth policy errors. Table 1: Deployment rules. All methods share the activation- or chart-based Stage 1 rollout; B-PGDPO and QP-PGDPO differ only in the Stage 2 solver. 
+
+Method Stage 1 feasible rollout Stage 2 recovery Barrier term DPO activation/chart none no B-PGDPO activation/chart log-barrier solve yes QP-PGDPO activation/chart exact KKT/QP solve no 
+
+Conditional averaging and evaluation budgets. Unless stated otherwise, evaluation uses seed 12345. At state zi, each level-adjoint estimate averages M raw pathwise derivatives, 
+
+bA(zi) = M −1
+
+> M
+
+X
+
+> m=1
+
+eA(zi, ξ im ).
+
+The shifted-input estimator separately uses Mout antithetic outer pairs and Min common-random-number inner continuations. Table 2 collects the main budgets. State and continu-ation sub-batches only partition a fixed indexed Brownian bank and hence do not change the estimator. Table 2: Main checkpoint and Monte Carlo evaluation budgets. Ns is the number of held-out states, M is the level-adjoint continuation count, and Mout ×Min is the shifted-input projection budget.                                               
+
+> Experiment NsMMout ×Min Checkpoint/grid and recovery specification No-short-sale recovery, Table 3 128 8,192 512 ×8or 1,024 ×8500 epochs; B-PGDPO εbar = 10 −6
+> Adjoint validation, Table 4 128 2,048 512 ×8Same n= 100 checkpoint; learned- and exact-policy estimators Training-budget study, Table 5 128 128 512 ×4Three seeds; checkpoints at 250/500/1,000 epochs; B-PGDPO 3×10 −6
+> Merton cap, Table 6 128 8,192 512 ×8or 1,024 ×8500 epochs; exact portfolio QP plus scalar con-sumption clipping Predictable-return validation, Table 7 128 8,192 512 ×16 Analytical policy, 128 rollout steps, antithetic continuations Barrier/switching audits, Tables 8–9 64/split 8,192 1,024 ×8n= 100 ; double-precision central path
+
+The no-short-sale comparison uses εbar = 10 −6 to make barrier bias negligible in its well-conditioned orthant block. The multiseed and cap/factor audits use the common intermediate value 3 × 10 −6. These are Stage 2 solver specifications, not trained hyperparameters; the fixed-state sweeps are paired central-path diagnostics. 23 5.2 No-Short-Sale Constraint with Borrowing Allowed 
+
+We use terminal CRRA utility with r = 0 .03 , γ = 2 , T = 1 .5, and ∆t = 0 .075 . A two-layer width-200 LeakyReLU network with softplus outputs enforces u ≥ 0. Every reported result uses the intended orthant K = Rn 
+
+> +
+
+with no cap on 1⊤u, so the residual cash weight may be negative; the analytical reference is the constrained Merton rule of Xu and Shreve (1992a,b). Table 3: No-short-sale benchmark with borrowing allowed. Policy RMSE is measured against the analytical orthant-constrained Merton rule; KKT–PG, gain, and QP gap use the full estimated generalized Hamiltonian.                                                                               
+
+> nMethod Coordinatewise u-RMSE Mean KKT–PG Hgain vs DPO Hgap to QP 10 DPO 9.0657 ×10 −21.9777 ×10 −204.260 ×10 −3
+> 10 B-PGDPO 1.667 ×10 −35.810 ×10 −44.256 ×10 −34.77 ×10 −6
+> 10 QP-PGDPO 1.99 ×10 −45.52 ×10 −18 4.260 ×10 −30
+> 100 DPO 1.0852 ×10 −22.2022 ×10 −203.895 ×10 −3
+> 100 B-PGDPO 9.059 ×10 −33.571 ×10 −43.889 ×10 −36.26 ×10 −6
+> 100 QP-PGDPO 2.86 ×10 −41.45 ×10 −17 3.895 ×10 −30
+
+DPO is feasible but leaves a substantial local residual. B-PGDPO reduces it sharply and has positive pointwise gain at all 128 states in both dimensions; at n = 100 its mean QP gap is 
+
+6.26 × 10 −6. QP-PGDPO solves the estimated orthant block to numerical tolerance and remains within 2.86 × 10 −4 coordinatewise RMSE of the analytical n = 100 policy. KKT–PG and Hamiltonian gap are the primary recovery diagnostics because the full-shift input is estimated rather than analytically supplied. 
+
+5.3 Direct First- and Second-Order Adjoint Validation 
+
+The Merton benchmark supplies analytical wealth derivatives. Its terminal CRRA reward and wealth-homogeneous fixed-latent controls give the benchmark-specific pathwise factorization 
+
+eJ at (x) = x1−γ
+
+1 − γ eF at , eP at = − γx eλat , P at = − γXt
+
+λat . (67) This identity is used only as a graph-contract check; the shifted input is estimated independently by the anchored nested regression. We evaluate 128 held-out time–wealth states with 2,048 continuations per state under the learned and analytical constrained policies. Table 4: Direct adjoint validation in the n = 100 borrowing-allowed no-short-sale Merton bench-mark. The learned row’s target-based errors combine finite-reference mismatch and numerical estimation. The analytical ZX target is reported only for the exact-policy row.                  
+
+> Estimator
+> λX
+> mean rel.
+> λX
+> nRMSE
+> PXX
+> nRMSE
+> ZX
+> nRMSE mean ∥bζX∥
+> /∥bZX∥
+> Shift SNR Learned-policy OL-BPTT 0.4565% 0.6775% 0.7312% –0.529% 23 .48
+> Exact-policy OL-BPTT 0.0139% 0.0312% 0.0347% 0.3264% 0.235% 1.18
+
+The exact-policy row isolates continuation, discretization, and projection error and validates all three wealth-relevant objects: the first-adjoint level, the fixed-latent curvature, and the Brownian coefficient. The learned policy has a small but clearly resolved shifted component: its mean magnitude is about 0.53% of ∥ bZX ∥, with mean statewise SNR 23 .5. Under the analytical policy, by contrast, the estimated residual is comparable to its Monte Carlo uncertainty. This contrast shows that the estimator does not impose a zero shift; it is not interpreted as a general monotone relation between policy optimality and shift magnitude. Equation (67) explains the close agreement between the first- and second-level diagnostics but is not used to construct bζX .24 5.4 Training-Budget and Seed Robustness 
+
+Three seeds share one market realization and nested checkpoints at 250, 500, and 1,000 epochs. Each checkpoint uses the same 128 states, coefficients, and indexed Brownian banks. Table 5: DPO training-budget and seed robustness in the corrected n = 100 no-short-sale benchmark with borrowing allowed. Parentheses in the policy RMSE column are across-seed standard deviations; the remaining entries are across-seed means.               
+
+> Epochs Coordinatewise u-RMSE Mean KKT–PG Hgap to QP 250 0.013561 (0 .000851) 0.043879 0.022969
+> 500 0.011251 (0 .000171) 0.024108 0.004467
+> 1,000 0.011190 (0 .000118) 0.023945 0.004501
+
+Most DPO improvement occurs by 500 epochs; thereafter the policy RMSE, KKT–PG, and QP gap largely plateau. At 1,000 epochs, B-PGDPO has coordinatewise policy RMSE 
+
+9.29 × 10 −3, KKT–PG 8.06 × 10 −4, and QP gap 1.73 × 10 −5. QP-PGDPO has coordinatewise RMSE 1.37 × 10 −4 and solves the estimated QP to numerical tolerance. The result is a finite-budget robustness statement, not a claim that no other architecture or substantially larger budget could improve DPO. 
+
+5.5 Consumption Cap as a Fraction of Wealth 
+
+For 0 ≤ Ct ≤ ¯mX t, the chart 
+
+Ct = Xtct, ct ∈ [0 , ¯m] (68) converts the moving bound to a fixed latent box. OL-BPTT holds ct fixed while differentiating the decoder, so Dol  
+
+> Xt
+
+Ct = ct. At a fixed state, consumption is recovered by 
+
+C∗ 
+
+> t
+
+= min max (U ′)−1(eρt λXt ), 0 , ¯mX t . (69) The risky portfolio is recovered by the full-shift exact local QP. The comparison uses 128 states and 8,192 continuations per state. The full-shift portfolio recovery lowers the DPO portfolio error by more than an order of magnitude at every dimension while solving the estimated KKT system to numerical tolerance. Consumption tests the absolute first-adjoint level. At n = 100 , QP-PGDPO lowers consumption RMSE from 1.250 × 10 −1 to 1.795 × 10 −3; the analytical-policy pipeline gives 2.788 × 10 −3. The small reversal is not interpreted as learned-policy superiority because finite-grid continuation and reference mismatch remain in the comparison. Finite-barrier performance is audited separately below. 25 Table 6: Consumption-cap benchmark. QP-PGDPO combines the full-shift exact portfolio QP with scalar KKT clipping. Panel C applies the same pipeline under the analytical policy to display its finite-grid numerical baseline. 
+
+Panel A. RMSE against analytical KKT reference 
+
+u-RMSE C-RMSE 
+
+n DPO QP-PGDPO DPO QP-PGDPO 2 5.0345 × 10 −2 2.318 × 10 −3 1.3108 × 10 −1 1.333 × 10 −3
+
+10 2.3940 × 10 −2 8.88 × 10 −4 1.2759 × 10 −1 1.285 × 10 −3
+
+100 8.450 × 10 −3 1.93 × 10 −4 1.2502 × 10 −1 1.795 × 10 −3
+
+Panel B. Local KKT–PG residuals Portfolio KKT–PG Consumption KKT–PG 
+
+n DPO QP-PGDPO DPO QP-PGDPO 2 1.0673 × 10 −2 9.31 × 10 −18 4.3405 × 10 −1 3.61 × 10 −17 
+
+10 8.292 × 10 −3 2.28 × 10 −17 4.1917 × 10 −1 7.18 × 10 −17 
+
+100 1.0901 × 10 −2 1.10 × 10 −16 4.1299 × 10 −1 3.49 × 10 −17 
+
+Panel C. Exact-policy pipeline at n = 100 
+
+Estimator u RMSE C RMSE Port. KKT–PG Cons. KKT–PG Exact-policy pipeline 1.02 × 10 −4 2.788 × 10 −3 1.11 × 10 −16 1.34 × 10 −16 
+
+5.6 Analytical Adjoint-Input and Policy Diagnostics in a Predictable-Return Model 
+
+To assess the nontrivial factor-state inputs and validate the analytical Brownian-coefficient and policy targets, we use a one-factor affine special case of Liu (2007): 
+
+dY t = κ(θ − Yt)dt + ν dB Yt , dPt
+
+Pt
+
+= {r + a0 + a1Yt}dt + σ dB Rt , d⟨BR, B Y ⟩t = ϱ dt. 
+
+With terminal CRRA utility and τ = T − t, the exact value is 
+
+V (t, x, y ) = x1−γ
+
+1 − γ exp 
+
+
+
+A(τ ) + B(τ )y + 12 D(τ )y2
+
+
+
+,
+
+where (A, B, D ) solve the associated Riccati system. Writing Φ = A+By + 12 Dy 2, the analytical targets are 
+
+VX = x−γ eΦ, VXX = −γx −γ−1eΦ, VXY = VX {B(τ ) + D(τ )y}, (70) and the exact risky weight is 
+
+π∗(t, y ) = a0 + a1y + ϱσν {B(τ ) + D(τ )y}
+
+γσ 2 . (71) The smooth Markov identity also supplies 
+
+ZX, ∗ = e⊤ 
+
+> X
+
+D2
+
+> ss
+
+V (t, X t, Y t) σ∗ 
+
+> S
+
+(t, X t, Y t). (72) The fixed-latent estimator harvests P XX and P XY directly. The CRRA wealth scaling gives 
+
+P XX = −(γ/X )λX = VXX in this benchmark, whereas the P XY –VXY comparison is retained only as a numerical diagnostic. The shifted input is estimated by (47), and ZX is reconstructed through (48). 26 Both calibrations use r = 0 .03 , θ = 0 .2, ν = 0 .3, σ = 0 .2, and a1 = 0 .2. The canonical tuple 
+
+(γ, T, κ, ϱ, a 0) is (2 , 1, 2, 0.1, 0) ; the predeclared hedging-relevant tuple is (3 , 1.5, 0.5, −0.5, 0.02) .Each row uses 128 held-out states, 8,192 antithetic continuations, 128 rollout steps, and an independent shifted-input replication bank. Table 7: Predictable-return analytical diagnostics. Entries are normalized L2 errors over 128 held-out states. The P XY –VXY column is a numerical comparison rather than a general identi-fication.                    
+
+> Calibration
+> λX
+> nRMSE
+> PXX
+> nRMSE
+> PXY –VXY
+> nRMSE
+> ZX
+> nRMSE Shift SNR Decoded-policy RMSE Canonical 0.1161% 0.1345% 0.3179% 0.2601% 0.92 2.465 ×10 −3
+> Hedging-relevant 0.1826% 0.1693% 0.3502% 0.9863% 0.79 8.429 ×10 −3
+
+The residual shift is estimated rather than imposed. Its mean norm and mean standard error are respectively 6.25 × 10 −4 and 7.53 × 10 −4 in the canonical calibration, and 4.33 × 10 −3
+
+and 5.65 × 10 −3 in the hedging-relevant calibration. Thus the residual is not resolved above its Monte Carlo uncertainty in either exact-policy experiment, while ZX is recovered below 1% 
+
+nRMSE. The reported SNR is the average of the statewise norm ratios defined in Section 5.1, rather than the ratio of the two displayed means. This benchmark-specific observation does not imply a general zero-shift identity or a monotone relation between policy optimality and shift magnitude. The hedging-relevant calibration has a VXY signal about seven times larger than the canonical one; omitting its hedging component changes the policy by RMSE 5.465 × 10 −2,substantially exceeding the full-input decoded-policy RMSE 8.429 × 10 −3. The constrained factor recovery and graph ablation are reported in Appendix G.3. 
+
+5.7 Barrier-Parameter Audit and Held-Out Recovery 
+
+We audit B-PGDPO in the n = 100 Merton- and Liu–Kim–Omberg-cap models using 64 states per split and 8,192 continuations per state. The reported εbar = 3 × 10 −6 runs use double precision, an analytic center, at most 120 Newton iterations, and stop when one half of the squared Newton decrement falls below 10 −8. All barrier values use the same states, adjoint inputs, and Brownian banks as their exact-QP references. Table 8: Final n = 100 B-PGDPO cap-model barrier audit at εbar = 3 × 10 −6. Gain and QP gap use the unregularized full estimated generalized Hamiltonian.                                                                                     
+
+> Model Split Portfolio KKT–PG Hgain vs DPO Hgap to QP Converged Merton cap IID 2.611 ×10 −32.5730 ×10 −22.22 ×10 −41.000
+> Merton cap Wealth edge 3.545 ×10 −35.0066 ×10 −22.22 ×10 −41.000
+> Merton cap Stress 4.027 ×10 −32.0401 ×10 −12.22 ×10 −41.000
+> Liu–Kim–Omberg cap IID 2.597 ×10 −35.3598 ×10 −22.58 ×10 −41.000
+> Liu–Kim–Omberg cap Wealth edge 3.212 ×10 −31.1618 ×10 −12.58 ×10 −41.000
+> Liu–Kim–Omberg cap Factor edge 1.508 ×10 −32.5182 ×10 −12.84 ×10 −41.000
+> Liu–Kim–Omberg cap Stress 1.293 ×10 −36.9836 ×10 −12.83 ×10 −41.000
+
+Every evaluated cap-model state satisfies the stopping rule and has positive unregularized joint gain. Mean gaps to exact QP are approximately 2.22 × 10 −4 in the Merton-cap splits and 2.58 –2.84 × 10 −4 in the factor-cap splits. Appendix G.6 shows their approximately linear decline with εbar . This validates the central path against an exact QP reference, not a separate nonquadratic benchmark. 27 5.8 Active-Set and Near-Switching Diagnostics 
+
+Using the common full-input QP reference, define the normalized upper slack 
+
+sup := Cmax − CQP 
+
+Cmax − Cmin 
+
+.
+
+We classify states as upper-active, near-switching ( 0 < s up ≤ 0.05 ), or far-interior. Because every method uses the same partition, comparisons do not relabel states endogenously. The near-switching cells are an empirical stress test: uniform strong-regularity constants are not claimed on an active-set switching surface. Table 9: Region-stratified B-PGDPO recovery at εbar = 3 × 10 −6. Counts aggregate nonempty IID, edge, and stress cells.                                                                                 
+
+> Model QP-reference region NMean Hgain Minimum gain Mean gap to QP Negative frac. Merton cap Upper-active 95 6.7479 ×10 −22.19 ×10 −42.22 ×10 −40
+> Merton cap Near-switching 82.913 ×10 −35.21 ×10 −42.21 ×10 −40
+> Merton cap Far-interior 89 1.2892 ×10 −12.255 ×10 −32.22 ×10 −40
+> Liu–Kim–Omberg cap Upper-active 132 1.5740 ×10 −14.57 ×10 −42.72 ×10 −40
+> Liu–Kim–Omberg cap Near-switching 20 1.2240 ×10 −14.494 ×10 −32.68 ×10 −40
+> Liu–Kim–Omberg cap Far-interior 104 4.6589 ×10 −16.405 ×10 −32.69 ×10 −40
+
+All regions have positive pointwise gain and similar mean QP gaps, so the benefit is not concentrated on the estimated binding surface. Further counts, barrier sensitivity, initialization checks, graph diagnostics, estimator ablation, and timing are in Appendix G. 
+
+# 6 Conclusion 
+
+We developed a solver-neutral adjoint-to-control framework for constrained continuous-time portfolio choice with wealth and observable investment opportunity factors. A feasible feed-back policy supplies reference rollouts; fixed-latent OL-BPTT then harvests vector first-order and matrix second-order open-loop sensitivities while retaining the state derivatives of a mov-ing feasible-fiber chart. Conditional projection produces the adapted level adjoints, an anchored nested regression estimates the shifted wealth-row martingale input, and a structure-appropriate local solver evaluates the resulting generalized Hamiltonian. B-PGDPO is the smooth log-barrier realization and QP-PGDPO the exact quadratic-affine local-solver specialization conditional on the supplied adjoint tuple. Analytical benchmarks validate complementary parts of the adjoint tuple. In the n = 100 
+
+constrained Merton model, the learned first-adjoint level has mean relative error 0.46% ; un-der the analytical policy, the normalized errors of λX , P XX , and ZX are 0.031% , 0.035% , and 
+
+0.326% . In the predictable-return benchmark, the analytical Brownian coefficient is recovered within 0.260% and 0.986% , and the decoded-policy RMSEs are 2.465 × 10 −3 and 8.429 × 10 −3.The direct P XY –VXY discrepancies, 0.318% and 0.350% , are reported only as numerical diagnos-tics. Across training-budget, consumption-cap, constrained-factor, barrier, and switching-region audits, DPO remains feasible but leaves non-negligible local residuals, QP-PGDPO solves the estimated quadratic-affine blocks to numerical tolerance, and B-PGDPO retains positive mean local generalized-Hamiltonian gains under the common estimated inputs with a small, approxi-mately first-order central-path gap. All final barrier runs satisfy the squared-Newton-decrement stopping rule. The performance-to-adjoint bridge clarifies the role of the reference policy. On a common regular stratum, local quadratic growth converts an εref -optimal reference into O(√εref ) control and first/second-adjoint mismatch. Exact QP recovery does not improve that policy-distance 28 order, but its strongly concave local value loss is O(εref ) after squaring the adjoint-input per-turbation, up to acquisition and numerical errors. This conclusion is local and integrated rather than pointwise, and quadratic growth must be verified rather than inferred from portfolio-block curvature alone. The scope is deliberately targeted. The method avoids a global value-function grid and re-mains practical for large constrained action blocks, but it does not claim dimension-free state complexity or universal dominance over PDE-, BSDE-, or PINN-based methods. The general recovery map retains a nonzero shifted martingale adjoint; no value-Hessian or zero-shift iden-tification is imposed. The fixed-latent CRRA scaling relation is used only as a benchmark wealth–wealth curvature check, while the residual wealth-component shift is estimated directly and ZX is reconstructed only when it is itself of interest. All reported portfolio blocks become quadratic-affine once the adjoints are fixed. Genuinely nonquadratic smooth blocks are covered by the general barrier formulation but are not separately tested in the present numerical study. Pure state constraints, nonsmooth fibers, reflected multipliers, and singular controls require separate analysis. 
+
+# Acknowledgments 
+
+This work was supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (RS-2025-00562904 and RS-2024-00355646). 
+
+# References 
+
+Balduzzi, P. and Lynch, A. W. (1999). Transaction costs and predictability: Some utility cost calculations. Journal of Financial Economics , 52(1):47–78. 1 Brandt, M. W., Goyal, A., Santa-Clara, P., and Stroud, J. R. (2005). A simulation approach to dynamic portfolio choice with an application to learning about return predictability. The Review of Financial Studies , 18(3):831–873. 1 Buehler, H., Gonon, L., Teichmann, J., and Wood, B. (2019). Deep hedging. Quantitative Finance , 19(8):1271–1291. 1 Buraschi, A., Porchia, P., and Trojani, F. (2010). Correlation risk and optimal portfolio choice. 
+
+The Journal of Finance , 65(1):393–420. 1 Campbell, J. Y., Chan, Y. L., and Viceira, L. M. (2003). A multivariate model of strategic asset allocation. Journal of Financial Economics , 67(1):41–80. 1 Campbell, J. Y. and Viceira, L. M. (1999). Consumption and portfolio decisions when expected returns are time varying. The Quarterly Journal of Economics , 114(2):433–495. 1 Campbell, J. Y. and Viceira, L. M. (2001). Who should buy long-term bonds? American Economic Review , 91(1):99–127. 1 Cheridito, P., Dupret, J.-L., and Hainaut, D. (2025). Deep learning for continuous-time stochas-tic control with jumps. In Advances in Neural Information Processing Systems . Also available as arXiv:2505.15602. 1 Constantinides, G. M. (1990). Habit formation: A resolution of the equity premium puzzle. 
+
+Journal of Political Economy , 98(3):519–543. 1 Cvitanić, J. and Karatzas, I. (1993). Hedging contingent claims with constrained portfolios. The Annals of Applied Probability , 3(3):652–681. 1 29 Dybvig, P. H. (1995). Dusenberry’s ratcheting of consumption: Optimal dynamic consumption and investment given intolerance for any decline in standard of living. The Review of Economic Studies , 62(2):287–313. 1 E, W. (2017). A proposal on machine learning via dynamical systems. Communications in Mathematics and Statistics , 5(1):1–11. 1 Fleming, W. H. and Soner, H. M. (2006). Controlled Markov Processes and Viscosity Solutions ,volume 25. Springer, New York, 2 edition. 1 Garlappi, L. and Skoulakis, G. (2010). Solving consumption and portfolio choice problems: The state variable decomposition method. The Review of Financial Studies , 23(9):3346–3400. 1 Han, J. and E, W. (2016). Deep learning approximation for stochastic control problems. arXiv preprint arXiv:1611.07422 . 1 Han, J., Jentzen, A., and E, W. (2018). Solving high-dimensional partial differential equations using deep learning. Proceedings of the National Academy of Sciences , 115(34):8505–8510. 1 Hu, R. and Laurière, M. (2024). Recent developments in machine learning methods for stochas-tic control and games. Numerical Analysis and Control Optimization . Also available as arXiv:2303.10257. 1 Huh, J., Jeon, J., Koo, H. K., and Lim, B. H. (2025). Breaking the dimensional barrier: Apontryagin-guided direct policy optimization for continuous-time multi-asset portfolio. arXiv preprint arXiv:2504.11116 . 1 Ji, S., Peng, S., Peng, Y., and Zhang, X. (2022). Solving stochastic optimal control problem via stochastic maximum principle with deep learning method. Journal of Scientific Computing ,93(1):30. 1 Jurek, J. W. and Viceira, L. M. (2011). Optimal value and growth tilts in long-horizon portfolios. 
+
+Review of Finance , 15(1):29–74. 1 Karatzas, I., Lehoczky, J. P., and Shreve, S. E. (1987). Optimal portfolio and consumption decisions for a “small investor” on a finite horizon. SIAM Journal on Control and Optimization ,25(6):1557–1586. 1 Karatzas, I. and Shreve, S. E. (1998). Methods of Mathematical Finance . Springer, New York. 1 Kim, T. S. and Omberg, E. (1996). Dynamic nonmyopic portfolio behavior. The Review of Financial Studies , 9(1):141–161. 1 Liu, J. (2007). Portfolio selection in stochastic environments. The Review of Financial Studies ,20(1):1–39. 1, 5.6 Lu, L., Pestourie, R., Yao, W., Wang, Z., Verdugo, F., and Johnson, S. G. (2021). Physics-informed neural networks with hard constraints for inverse design. SIAM Journal on Scientific Computing , 43(6):B1105–B1132. 1 Lynch, A. W. (2001). Portfolio choice and equity characteristics: Characterizing the hedging demands induced by return predictability. Journal of Financial Economics , 62(1):67–130. 1 Lynch, A. W. and Balduzzi, P. (2000). Predictability and transaction costs: The impact on rebalancing rules and behavior. The Journal of Finance , 55(5):2285–2309. 1 Merton, R. C. (1969). Lifetime portfolio selection under uncertainty: The continuous-time case. 
+
+The Review of Economics and Statistics , 51(3):247–257. 1 30 Merton, R. C. (1971). Optimum consumption and portfolio rules in a continuous-time model. 
+
+Journal of Economic Theory , 3(4):373–413. 1 Peng, S. (1990). A general stochastic maximum principle for optimal control problems. SIAM Journal on Control and Optimization , 28(4):966–979. 3 Raissi, M., Perdikaris, P., and Karniadakis, G. E. (2019). Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. Journal of Computational Physics , 378:686–707. 1 Samuelson, P. A. (1969). Lifetime portfolio selection by dynamic stochastic programming. The Review of Economics and Statistics , 51(3):239–246. 1 Sirignano, J. and Spiliopoulos, K. (2018). DGM: A deep learning algorithm for solving partial differential equations. Journal of Computational Physics , 375:1339–1364. 1 Sundaresan, S. M. (1989). Intertemporally dependent preferences and the volatility of consump-tion and wealth. The Review of Financial Studies , 2(1):73–89. 1 Tan, J. and Zhang, X. (2026). Improved constrained physics-informed neural networks (ICPINNs) to solve PDE and its application to option pricing. Mathematics and Comput-ers in Simulation , 241:908–924. Available online in 2025. 1 Xu, G.-L. and Shreve, S. E. (1992a). A duality method for optimal consumption and invest-ment under short-selling prohibition. I. general market coefficients. The Annals of Applied Probability , 2(1):87–112. 1, 5.2 Xu, G.-L. and Shreve, S. E. (1992b). A duality method for optimal consumption and invest-ment under short-selling prohibition. II. constant market coefficients. The Annals of Applied Probability , 2(2):314–328. 1, 5.2 Yong, J. and Zhou, X. Y. (1999). Stochastic Controls: Hamiltonian Systems and HJB Equations ,volume 43 of Applications of Mathematics . Springer, New York. 3 Zhang, J. (2004). A numerical scheme for BSDEs. The Annals of Applied Probability , 14(1):459– 488. 1 31 A Notation and Coordinate Conventions 
+
+The primitive state is S = ( X, Y ), and dY = 0 gives the factor-free Merton specialization. Controls are represented in reduced risky-weight coordinates, 
+
+u = ( π⊤, C )⊤, π0 = 1 − 1⊤π,
+
+so no separate full-investment equality multiplier is used. The following conventions are used throughout. A superscript ∗ denotes an optimal or target object, whereas ⋆ denotes a selected local KKT/recovery solution for a fixed stagewise input. The superscript ref denotes the frozen reference-policy object. A tilde denotes a raw pathwise sensitivity, and a hat denotes a numerical estimate. Barred coefficients are composed with the feasible chart and differentiated at fixed latent coordinate; ¯ak specifically denotes the detached latent output. Premultiplication by e⊤ 
+
+> X
+
+extracts the wealth component of a vector or the wealth row of a matrix. Tables 10–12 list the recurring notation. Symbols used only locally within an individual proof are defined where they appear. Table 10: Model, chart, Hamiltonian, adjoint, and recovery notation. 
+
+Symbol Meaning 
+
+S = ( X, Y ), dS = 1 + dY Wealth–factor state and its dimension. The factor-free specialization has dY = 0 
+
+and S = X.
+
+W, dW Brownian motion and the number of Brownian risk drivers. 
+
+α, v, Σ = vv ⊤ Risky-asset excess-return vector, return loading, and risky-return covariance matrix. 
+
+ΣRY = vσ ⊤ 
+
+> Y
+
+Instantaneous return–factor cross-covariance matrix. 
+
+bS , σS Joint state drift and dS × dW state diffusion matrix. 
+
+π, π0, C, u = ( π⊤, C )⊤ Risky-asset weights, residual risk-free weight, consumption rate, and the reduced control vector; π0 = 1 − 1⊤π.
+
+Γ( t, s; u), U(t, s), ν Pointwise inequality map, feasible control fiber, and inequality-multiplier vector. The convention is Γ ≥ 0.
+
+a ∈ A, Ψ Nonredundant latent coordinate, its state-independent local domain, and the state-dependent feasible-fiber chart u = Ψ( t, s, a).
+
+Θ = ( θ, ϕ ), ϖ, J, Jtrain Policy parameters, initial time–state sampling law, the control objective, and the initial-law-averaged policy-training objective. 
+
+ℓ, H, ¯H, H Running reward, primitive first-order Hamiltonian, fixed-latent chart-reduced Hamiltonian, and second-order generalized Hamiltonian. 
+
+λ ∈ RdS , Z ∈ RdS ×dW First-order adjoint and its Brownian martingale coefficient. 
+
+P ∈ SdS , R = ( R1, . . . , R dW ) Matrix second-order adjoint and its matrix-valued Brownian martingale coeffi-cients, with Rℓ ∈ SdS .
+
+ζ = Z − P σS Shifted martingale adjoint used in the generalized Hamiltonian. 
+
+eX ; λX , ZX , ζX
+
+P XX , P XY , P Y X eX = (1 , 0, . . . , 0) ⊤ selects the wealth component or wealth row: λX = e⊤ 
+
+> X
+
+λ,
+
+ZX = e⊤ 
+
+> X
+
+Z, ζX = e⊤ 
+
+> X
+
+ζ, and P XX = e⊤ 
+
+> X
+
+P e X . The mixed blocks satisfy P Y X =(P XY )⊤.
+
+ϑ = ( λ, ζ, P ), bϑ Exact stagewise adjoint input and its numerical estimate. In the portfolio spe-cialization, only the wealth-relevant components may be passed to the solver. 
+
+R(t, s; ϑ), u⋆(ϑ) Local set-valued recovery correspondence on the selected feasible branch and a selected local KKT/recovery solution. 
+
+g(t, s; ϑ), Q(t, s; ϑ), K(t, s) Linear coefficient, quadratic matrix, and convex risky-weight feasible set of the local QP. Under P XX < 0 and Σ ≻ 0, Q ≻ 0.
+
+32 Table 11: Discrete OL-BPTT sensitivities, projections, and shifted-input estimation. 
+
+Symbol Meaning 
+
+h, tk , ∆Wk Uniform time step, grid point, and Brownian increment over [tk , t k+1 ].
+
+sg , ¯ak , uref  
+
+> k
+
+, Dol  
+
+> Sk
+
+Stop-gradient operator, detached latent output, corresponding reference control, and fixed-latent open-loop state derivative. 
+
+M (m) 
+
+> ℓ
+
+, rk , gN , Jk Activity mask for rollout m, one-step reward, terminal reward, and continuation payoff. 
+
+eλk , ePk Raw pathwise gradient and Hessian of the fixed-latent continuation payoff. They depend on future simulated shocks. 
+
+Ak , Bjk Fixed-latent state-transition Jacobian and Hessian of the jth component of the next state. 
+
+Ek [·], λk , Pk Conditional expectation given Ftk and the population adapted projections λk =
+
+Ek [eλk ], Pk = Ek [ ePk ].
+
+bλk , bPk Monte Carlo or regression approximations of the population projections λk and 
+
+Pk .
+
+Zhk , Rh,ℓ k Intervalwise first-chaos projection coefficients associated with [tk , t k+1 ] for the first- and second-adjoint processes. 
+
+ξk+1 , ξPk+1 One-step components orthogonal to constants and to the first Brownian chaos. They are retained explicitly in the discrete adjoint recursions. 
+
+D(2) ,ol  
+
+> k
+
+, e(1)  
+
+> k
+
+, e(2)  
+
+> k
+
+, Eh Discrete second-adjoint driver, first- and second-order remainder arrays, and their aggregate maximal-error criterion. 
+
+Mout , Min , Dk , κZ Number of outer antithetic Brownian pairs, number of inner common-random-number continuations, Brownian design matrix, and ridge parameter in the shifted-input regression. 
+
+cX, anc  
+
+> k
+
+Columnized wealth-row anchor, 
+
+cX, anc  
+
+> k
+
+=
+
+h
+
+e⊤ 
+
+> X
+
+bPk σS (tk , Sk ; uref  
+
+> k
+
+)
+
+i⊤
+
+.
+
+bζXk , bZXk Estimated shifted wealth row and, when required, the reconstructed wealth-row Brownian coefficient. 
+
+Table 12: Norms, perturbation parameters, and recovery errors. 
+
+Symbol Meaning 
+
+S2, H2, Lq,p Supremum-in-time state/adjoint norm, time-integrated Brownian-integrand/control norm, and mixed time–probability norm. 
+
+εref , κqg Reference-policy performance loss and the local quadratic-growth modulus. 
+
+εbar Log-barrier parameter. The exact central-path quantities are uεbar and νεbar .
+
+bubar , bνbar , bπQP Numerical barrier primal–dual output and numerical estimated-input QP solu-tion. 
+
+eadj  
+
+> t
+
+= ∥ bϑt − ϑ∗ 
+
+> t
+
+∥ Pointwise error between the estimated adjoint input and the target adjoint input at the same deployment state. 
+
+rbar  
+
+> t
+
+, rqp  
+
+> t
+
+Pointwise numerical residuals of the perturbed barrier KKT system and the QP normal-cone stationarity condition. 
+
+Gbar  
+
+> t
+
+, Gqp  
+
+> t
+
+True-input local generalized-Hamiltonian gap and true-input local QP gap of the numerical recovered actions. 
+
+δtime , δMC , δreg 
+
+δol Time-discretization, conditional Monte Carlo, and projection/regression errors, and their aggregate δol = δtime + δMC + δreg .
+
+δζ , δref , δadj Shifted-input estimation error, reference-policy adjoint mismatch, and aggregate adjoint-input error δadj = δol + δζ + δref .
+
+δbar , δqp Lq,p bounds on the numerical barrier and QP residual processes. 
+
+The mixed norm is defined in (49). Uniform chart statements are understood on common compact chart patches, and uniform recovery statements are understood on selected regular 33 KKT branches separated from active-set switching surfaces. 
+
+# B Local Barrier–KKT Analysis 
+
+This appendix proves Proposition 1. The numerical Newton–CG system, fraction-to-the-boundary rule, line search, and stopping criterion are described separately in Appendix F. Fix the stagewise state and adjoint input (t, s, ϑ ), where 
+
+ϑ = ( λ, ζ, P ),
+
+and suppress these arguments throughout. Write 
+
+Hϑ(u) := H(t, s; u, λ, ζ, P ), Γ( u) := Γ( t, s; u).
+
+The control is represented in the reduced coordinates 
+
+u = ( π⊤, C )⊤.
+
+The risk-free weight is π0 = 1 − 1⊤π, and all pointwise restrictions, including the no-borrowing condition when imposed, are included among the components of Γ( u) ≥ 0. Hence no separate full-investment equality or equality multiplier is needed. Although the feasible fiber may depend on the state, the state is fixed in this stagewise problem. Accordingly, the KKT map below contains only control derivatives. State derivatives of the feasible chart enter the adjoint system, not the fixed-state recovery problem. For 
+
+z := ( u, ν )
+
+and ε ≥ 0, define the perturbed KKT map 
+
+Fcp (z; ε) := ∇uHϑ(u) + DuΓ( u)⊤ν
+
+diag(Γ( u)) ν − ε1
+
+!
+
+. (73) For ε > 0, a solution satisfying 
+
+Γ( u) > 0, ν > 0
+
+is equivalent to a stationary point of the logarithmic-barrier problem in (22), with 
+
+νj = ε
+
+Γj (u) .
+
+At ε = 0 , (73) reduces to the KKT stationarity and complementarity system. For later use, define the stagewise Lagrangian 
+
+Lϑ(u, ν ) := Hϑ(u) + ν⊤Γ( u). (74) 
+
+Proof of Proposition 1. Let 
+
+z⋆ := ( u⋆, ν ⋆)
+
+denote the selected KKT solution from Assumption 3. Set 
+
+ε := εbar 
+
+for notational brevity. 
+
+Step 1: local central-path branch. 
+
+At (z⋆, 0) ,
+
+Fcp (z⋆; 0) = 0 .
+
+34 The Jacobian of (73) with respect to z = ( u, ν ) is 
+
+Dz Fcp (z; ε) = ∇2
+
+> uu
+
+Lϑ(u, ν ) DuΓ( u)⊤
+
+diag( ν)DuΓ( u) diag(Γ( u)) 
+
+!
+
+. (75) Partition the constraints into the active and inactive sets at u⋆:
+
+I⋆ := {j : Γ j (u⋆) = 0 }, I⋆c := {1, . . . , m Γ} \ I ⋆.
+
+For j ∈ I ⋆c ,
+
+Γj (u⋆) > 0, ν⋆j = 0 ,
+
+so the inactive multiplier block of (75) is nonsingular. For j ∈ I ⋆, strict complementarity gives 
+
+ν⋆j > 0.
+
+After eliminating the inactive block and rescaling the active complementarity rows by diag( ν⋆ 
+
+> I⋆
+
+)−1,the remaining Jacobian has the same nonsingularity structure as the bordered KKT matrix 
+
+∇2
+
+> uu
+
+Lϑ(u⋆, ν ⋆) DuΓI⋆ (u⋆)⊤
+
+DuΓI⋆ (u⋆) 0
+
+!
+
+.
+
+LICQ and the strong second-order sufficient condition therefore imply that 
+
+Dz Fcp (z⋆; 0) 
+
+is nonsingular. The Implicit Function Theorem gives a unique local C1 branch 
+
+ε 7 −→ zε = ( uε, ν ε)
+
+satisfying 
+
+Fcp (zε; ε) = 0 , z0 = z⋆,
+
+for all sufficiently small ε ≥ 0. Hence, after reducing ε0 if necessary, 
+
+∥zε − z⋆∥ ≤ Ccp ε, (76) and in particular, 
+
+∥uε − u⋆∥ ≤ Ccp ε. 
+
+This proves (23). 
+
+Step 2: strict local maximality and slack bounds. 
+
+The Hessian of the barrier objective at uε can be written as 
+
+∇2
+
+> uu
+
+"
+
+Hϑ(u) + ε
+
+> mΓ
+
+X
+
+> j=1
+
+log Γ j (u)
+
+#
+
+> u=uε
+
+= ∇2
+
+> uu
+
+Lϑ(uε, ν ε)
+
+−
+
+> mΓ
+
+X
+
+> j=1
+
+ε
+
+Γj (uε)2 ∇uΓj (uε)∇uΓj (uε)⊤.
+
+(77) On the tangent space of the active constraints, the first term converges to the negative-definite reduced Hessian at (u⋆, ν ⋆). In the active normal directions, the second term in (77) supplies negative curvature of order ε−1. Hence, for sufficiently small ε > 0, the branch uε consists of strict local maximizers of the barrier problem. 35 For every active constraint j ∈ I ⋆,
+
+Γj (uε) = ενε,j 
+
+, νε,j −→ ν⋆j > 0.
+
+Thus there exists a constant cact > 0 such that 
+
+Γj (uε) ≥ cact ε, j ∈ I ⋆.
+
+For every inactive constraint j ∈ I ⋆c , continuity and Γj (u⋆) > 0 give a constant cinact > 0 such that 
+
+Γj (uε) ≥ cinact 
+
+for all sufficiently small ε. Reducing ε0 and choosing a common constant cint > 0 therefore yields 
+
+Γj (uε) ≥ cint ε, j = 1 , . . . , m Γ.
+
+This proves (26). 
+
+Step 3: Lagrangian and Hamiltonian gaps. 
+
+At the true multipliers, 
+
+∇uLϑ(u⋆, ν ⋆) = 0 .
+
+Because the Lagrangian Hessian is locally bounded, Taylor’s theorem and (76) give 
+
+|L ϑ(u⋆, ν ⋆) − L ϑ(uε, ν ⋆)| ≤ CLε2.
+
+This proves (24). Both u⋆ and uε are feasible for the original inequalities, and u⋆ is a strict local constrained maximizer. Since uε → u⋆,
+
+0 ≤ Hϑ(u⋆) − Hϑ(uε)
+
+for all sufficiently small ε.KKT complementarity gives 
+
+ν⋆⊤Γ( u⋆) = 0 .
+
+Using (74), 
+
+Hϑ(u⋆) − Hϑ(uε) = Lϑ(u⋆, ν ⋆) − L ϑ(uε, ν ⋆)+ ν⋆⊤Γ( uε).
+
+Only active multipliers contribute to the final term. Therefore, 
+
+ν⋆⊤Γ( uε) = X
+
+> j∈I ⋆
+
+ν⋆j
+
+ενε,j 
+
+≤ Cε. 
+
+Combining this estimate with the quadratic Lagrangian bound gives 
+
+0 ≤ Hϑ(u⋆) − Hϑ(uε) ≤ CH, 1ε + CH, 2ε2.
+
+This proves (25). If no inequality is active at u⋆, then 
+
+ν⋆ = 0.
+
+The complementarity term vanishes, and the Hamiltonian gap is bounded solely by the quadratic Lagrangian term: 
+
+0 ≤ Hϑ(u⋆) − Hϑ(uε) ≤ Cε 2.
+
+Hence the linear term in (25) vanishes. 36 Remark 4 (Degeneracy and active-set switching) . Strict complementarity is used to obtain the smooth central-path branch and the O(εbar ) control rate. Without strict complementarity, the linear rate need not hold and can deteriorate to O(√εbar ) in degenerate cases. At an active-set switch, a constraint may satisfy 
+
+Γj (u⋆) = 0 , ν⋆j = 0 ,
+
+which can destroy strong regularity of a single KKT branch. The local estimates in Proposition 1 are therefore not asserted uniformly across such switching points. 
+
+# C Technical Results for Fixed-Latent OL-BPTT 
+
+This appendix states the fixed-latent one-step expansion used in Section 4.3 and proves The-orem 1. The proof has two layers. The algebraic layer consists of the one-step expansion and the exact first- and second-order pathwise chain rules. The probabilistic layer consists of con-ditional projection, control of the orthogonal projection residuals and higher-order remainders, identification of the discrete adjoint drivers, and stability of the limiting vector/matrix BSDE system. 
+
+C.1 Fixed-Latent Setup and Variable Initial Times 
+
+Work on the common compact chart patch from Assumptions 2 and 4. On the uniform grid 
+
+0 = t0 < t 1 < · · · < t N = T, h := T /N, 
+
+the frozen actor generates 
+
+¯ak := sg( aΘ(tk, Sk)) , uref  
+
+> k
+
+:= Ψ( tk, Sk, ¯ak).
+
+For a state derivative initiated at time tk, all later latent values {¯aℓ}ℓ≥k are held fixed. Thus derivatives through the actor output vanish, while the state derivatives of the chart remain. The fixed-latent state transition is 
+
+Sk+1 = Φ h(tk, Sk, uref  
+
+> k
+
+, ∆Wk). (78) Define its first and second state derivatives by 
+
+Ak := Dol  
+
+> Sk
+
+Sk+1 , Bjk := D2,ol   
+
+> SkSk
+
+Sjk+1 , j = 1 , . . . , d S .
+
+For completeness, consider a rollout m with sampled initial index k(m)in . Define the activity mask 
+
+M (m) 
+
+> ℓ
+
+:= 1{ℓ≥k(m)in },
+
+the calendar-discounted one-step payoff 
+
+r(m) 
+
+> ℓ
+
+:= M (m) 
+
+> ℓ
+
+e−ρt ℓ U (C(m) 
+
+> ℓ
+
+)h, 
+
+and the terminal payoff 
+
+g(m) 
+
+> N
+
+:= Ke −ρT U (X(m) 
+
+> N
+
+).
+
+For k ≥ k(m)in , the continuation payoff is 
+
+J (m) 
+
+> k
+
+= 
+
+> N−1
+
+X
+
+> ℓ=k
+
+r(m) 
+
+> ℓ
+
++ g(m) 
+
+> N
+
+. (79) 37 Leading entries before k(m)in are padding only and do not contribute to the objective or its derivatives. We suppress the rollout index below. If the implementation uses relative discounts, its samplewise continuation payoff satisfies 
+
+J rel  
+
+> k
+
+= eρt in Jk.
+
+Since tin is fixed within a rollout, the corresponding calendar-normalized sensitivities are 
+
+eλk = e−ρt in eλrel  
+
+> k
+
+, ePk = e−ρt in eP rel  
+
+> k
+
+.
+
+Thus the first- and second-order recursions below may be written directly in calendar-time normalization, as in Section 4.2. At the terminal index, 
+
+eλN = Ke −ρT U ′(XN )eX , ePN = Ke −ρT U ′′ (XN )eX e⊤ 
+
+> X
+
+.
+
+C.2 Fixed-Latent One-Step Expansion 
+
+Lemma 1 (Fixed-latent one-step expansion) . Suppose Assumptions 2 and 4(i)–(ii) hold. For each fixed-latent one-step object 
+
+Xk ∈
+
+n
+
+Sk+1 − Sk, A k − I, B 1 
+
+> k
+
+, . . . , B dS
+
+> k
+
+o
+
+,
+
+there exist uniformly bounded Ftk -measurable coefficient arrays μk, Σℓk, and Cℓm k such that 
+
+Xk = μkh +
+
+> dW
+
+X
+
+> ℓ=1
+
+Σℓk∆W ℓk + χk+1 + Rem k+1 ,χk+1 := 
+
+> dW
+
+X
+
+> ℓ,m =1
+
+Cℓm k
+
+
+
+∆W ℓk ∆W mk − δℓm h
+
+
+
+.
+
+(80) 
+
+The centered second-chaos term satisfies 
+
+Ek[χk+1 ] = 0 , Ek[χk+1 ∆W⊤ 
+
+> k
+
+] = 0 , Ek∥χk+1 ∥2 ≤ Ch 2. (81) 
+
+The higher-order remainder satisfies 
+
+∥Ek[Rem k+1 ]∥ ≤ Ch 2, Ek∥ Rem k+1 ∥2 ≤ Ch 3. (82) 
+
+The bounds hold uniformly over the common compact chart patch, with the Euclidean or Frobe-nius norm according to the object under consideration. Proof. For the exponential–Euler wealth update in (31), write 
+
+Xk+1 = Xkeqk ,
+
+where 
+
+qk =
+
+
+
+rk + π⊤ 
+
+> k
+
+αk − 12 π⊤ 
+
+> k
+
+Σkπk − Ck
+
+Xk
+
+
+
+h + π⊤ 
+
+> k
+
+vk∆Wk. (83) Here the risky weights and consumption are evaluated through the fixed-latent chart. In partic-ular, their state derivatives retain the dependence of Ψ on Sk, while ¯ak is held fixed. The Taylor expansion 
+
+eqk = 1 + qk + 12 q2 
+
+> k
+
++ Rem( qk)
+
+38 separates the predictable order-h term, the first Brownian chaos, and the centered quadratic term 
+
+π⊤ 
+
+> k
+
+vk∆Wk
+
+2
+
+− π⊤ 
+
+> k
+
+Σkπk h. (84) The term in (84) has conditional mean zero, is orthogonal to each component of ∆Wk, and has conditional second moment O(h2).Products of an order-h drift term with a first-chaos term, together with the terms of order three and higher in the exponential expansion, have conditional mean O(h2) and conditional second moment O(h3). Uniform bounds follow from the compact chart localization and the bounded derivatives of the chart-composed coefficients. The Euler–Maruyama factor update is affine in ∆Wk. The exact OU transition used in the corresponding experiments is also a predictable term plus a linear Gaussian innovation and admits the same first-chaos representation, with higher-order coefficient corrections absorbed into the remainder. Hence the factor transition satisfies (80)– (82). Finally, differentiate these expansions once and twice with respect to Sk, holding ¯ak fixed. Assumption 2 gives uniformly bounded derivatives of the chart and chart-composed coefficients through order two. The same chaos decomposition and moment orders therefore hold for Ak − I
+
+and each Bjk. This proves the lemma. 
+
+C.3 Martingale Projections and Orthogonal Residuals 
+
+Under the augmented Brownian filtration, martingale representation gives 
+
+λk+1 − Ek[λk+1 ] = 
+
+Z tk+1 
+
+> tk
+
+Zλ,k +1  
+
+> s
+
+dWs (85) for a matrix-valued interval density Zλ,k +1 , and 
+
+Pk+1 − Ek[Pk+1 ] = 
+
+> dW
+
+X
+
+> ℓ=1
+
+Z tk+1 
+
+> tk
+
+ZP,k +1 ,ℓ s dW ℓs (86) for matrix-valued densities ZP,k +1 ,ℓ .Their best Ftk -measurable, intervalwise constant projections are 
+
+Zhk = 1
+
+h Ek
+
+Z tk+1 
+
+> tk
+
+Zλ,k +1  
+
+> s
+
+ds 
+
+
+
+= 1
+
+h Ek
+
+h
+
+λk+1 ∆W⊤
+
+> k
+
+i
+
+,
+
+and 
+
+Rh,ℓ k = 1
+
+h Ek
+
+Z tk+1 
+
+> tk
+
+ZP,k +1 ,ℓ s ds 
+
+
+
+= 1
+
+h Ek
+
+h
+
+Pk+1 ∆W ℓk
+
+i
+
+.
+
+The orthogonal residuals are therefore 
+
+ξk+1 =
+
+Z tk+1 
+
+> tk
+
+
+
+Zλ,k +1  
+
+> s
+
+− Zhk
+
+
+
+dWs (87) and 
+
+ξPk+1 =
+
+> dW
+
+X
+
+> ℓ=1
+
+Z tk+1 
+
+> tk
+
+
+
+ZP,k +1 ,ℓ s − Rh,ℓ k
+
+
+
+dW ℓs . (88) They satisfy 
+
+Ek[ξk+1 ] = 0 , Ek[ξk+1 ∆W⊤ 
+
+> k
+
+] = 0 ,
+
+with the analogous componentwise identities for ξPk+1 .39 By Itô isometry and Assumption 4(iv),  
+
+> N−1
+
+X
+
+> k=kin
+
+E ∥ξk+1 ∥2 + ∥ξPk+1 ∥2
+
+> F
+
+ ≤ Cproj h. (89) Since the residuals form martingale-difference arrays, Doob’s inequality gives 
+
+E max  
+
+> kin ≤m≤N−1
+> m
+
+X
+
+> k=kin
+
+ξk+1 
+
+> 2
+
++ E max  
+
+> kin ≤m≤N−1
+> m
+
+X
+
+> k=kin
+
+ξPk+1 
+
+> 2
+> F
+
+−→ 0.
+
+(90) A centered second-chaos term is orthogonal to constants and first Brownian increments, but it need not be orthogonal to the residual ξk+1 . This interaction must therefore be controlled rather than set equal to zero. By conditional Cauchy–Schwarz and (81), 
+
+E ∥Ek[χk+1 ξk+1 ]∥2 ≤ Ch 2E∥ξk+1 ∥2, (91) where products are understood componentwise or through the compatible matrix contraction arising in the adjoint recursion. Consequently,  
+
+> N−1
+
+X
+
+> k=kin
+
+1
+
+h E ∥Ek[χk+1 ξk+1 ]∥2 ≤ Ch  
+
+> N−1
+
+X
+
+> k=kin
+
+E∥ξk+1 ∥2 −→ 0. (92) The same estimate holds for the contractions involving ξPk+1 . Thus no pointwise order is assigned to either residual; only their aggregate energy and their interactions with the one-step expansion are used below. 
+
+C.4 Proof of Theorem 1
+
+Proof of Theorem 1. Step 1: exact pathwise identities. 
+
+For k ≥ kin ,
+
+Jk = rk + Jk+1 .
+
+Under fixed-latent differentiation, Jk+1 depends on Sk only through the transition Sk+1 . The multivariate chain rule therefore gives 
+
+eλk = Dol  
+
+> Sk
+
+rk + A⊤ 
+
+> k
+
+eλk+1 ,
+
+and 
+
+ePk = D2,ol   
+
+> SkSk
+
+rk + A⊤ 
+
+> k
+
+ePk+1 Ak +
+
+> dS
+
+X
+
+> j=1
+
+eλjk+1 Bjk.
+
+These are exactly (35) and (36). They use neither stationarity nor optimality. Because Ak and Bjk are Ftk+1 -measurable, the tower property gives 
+
+Ek[A⊤ 
+
+> k
+
+eλk+1 ] = Ek[A⊤ 
+
+> k
+
+λk+1 ],
+
+Ek[A⊤ 
+
+> k
+
+ePk+1 Ak] = Ek[A⊤ 
+
+> k
+
+Pk+1 Ak],
+
+and 
+
+Ek[eλjk+1 Bjk] = Ek[λjk+1 Bjk].
+
+40 Thus conditional projection converts the raw pathwise identities into exact adapted one-step identities. 
+
+Step 2: first-adjoint driver. 
+
+Write ¯λk+1 = Ek[λk+1 ]
+
+and use the decomposition 
+
+λk+1 = ¯λk+1 + Zhk ∆Wk + ξk+1 .
+
+Insert this decomposition and the fixed-latent expansion of Ak from Lemma 1 into the adapted first-order identity. The predictable order-h terms consist of the state derivative of the one-step reward, the drift-Jacobian term multiplied by ¯λk+1 , and the diffusion-Jacobian term contracted with Zhk .They combine into 
+
+Ds ¯Hkh. 
+
+The first-chaos term gives 
+
+Zhk ∆Wk,
+
+which is subtracted when λk+1 − ¯λk+1 is moved to the left-hand side. The orthogonal component remains explicitly as ξk+1 .All centered second-chaos, higher-order Taylor, coefficient-consistency, and projection-interaction terms are collected in e(1)  
+
+> k
+
+. Lemma 1, (89), and (92) imply the required cumulative control. Hence 
+
+λk − λk+1 = Ds ¯Hkh − Zhk ∆Wk − ξk+1 + e(1)  
+
+> k
+
+,
+
+which proves (41). 
+
+Step 3: second-adjoint driver. 
+
+Write ¯Pk+1 = Ek[Pk+1 ]
+
+and use 
+
+Pk+1 = ¯Pk+1 +
+
+> dW
+
+X
+
+> ℓ=1
+
+Rh,ℓ k ∆W ℓk + ξPk+1 .
+
+Insert this decomposition and the one-step expansions of Ak and Bjk into the adapted second-order identity. The predictable order-h terms in 
+
+Ek[A⊤ 
+
+> k
+
+Pk+1 Ak]
+
+are 
+
+(Ds¯bk)⊤ ¯Pk+1 + ¯Pk+1 Ds¯bk,
+
+> dW
+
+X
+
+> ℓ=1
+
+(Ds ¯σℓk)⊤ ¯Pk+1 Ds ¯σℓk,
+
+and dWX
+
+> ℓ=1
+
+h
+
+(Ds ¯σℓk)⊤Rh,ℓ k + Rh,ℓ k Ds ¯σℓk
+
+i
+
+.
+
+The last line arises from the product of the first-chaos component of the transition Jacobian with the first-chaos projection of Pk+1 .41 The reward Hessian and the transition-Hessian contraction produce 
+
+D2 
+
+> ss
+
+¯ℓk +
+
+> dS
+
+X
+
+> j=1
+
+¯λjk+1 D2
+
+> ss
+
+¯bjk
+
++
+
+> dS
+
+X
+
+> j=1
+> dW
+
+X
+
+> ℓ=1
+
+(Zhk )jℓ D2 
+
+> ss
+
+¯σjℓ k = D2 
+
+> ss
+
+¯Hk.
+
+Together, these terms give the discrete second-order driver D(2) ,ol  
+
+> k
+
+in (39). All nonleading terms are collected in e(2)  
+
+> k
+
+. The one-step remainder estimates, the aggregate projection-energy bound, and the residual–second-chaos estimate imply  
+
+> N−1
+
+X
+
+> k=kin
+
+1
+
+h E
+
+h
+
+∥e(1)  
+
+> k
+
+∥2 + ∥e(2)  
+
+> k
+
+∥2
+
+> F
+
+i
+
+−→ 0. (93) By Cauchy–Schwarz and the discrete maximal inequality, (93) implies (40). Therefore, 
+
+Pk − Pk+1 = D(2) ,ol  
+
+> k
+
+h −
+
+> dW
+
+X
+
+> ℓ=1
+
+Rh,ℓ k ∆W ℓk − ξPk+1 + e(2)  
+
+> k
+
+,
+
+which proves (42). 
+
+Step 4: continuous-time limit. 
+
+Define the piecewise-constant interpolants, for t ∈ [tk, t k+1 ), by 
+
+λht := λk, P ht := Pk, Zht := Zhk , Rh,ℓ t := Rh,ℓ k .
+
+Summing (41) and (42) over the grid gives approximate integral forms of the chart-reduced first-and second-adjoint BSDEs. By (90) and (40), the cumulative orthogonal residuals and collected remainders vanish in S2.Assumption 4(iii) gives convergence of the frozen latent processes, charted controls, states, barred coefficients, and their first two fixed-latent state derivatives. The terminal data converge because the terminal state remains in the common compact localization and the terminal reward is C2 there. Standard stability estimates for Lipschitz vector and matrix BSDEs therefore yield 
+
+E sup 
+
+> tin ≤t≤T
+
+
+
+∥λht − λt∥2 + ∥P ht − Pt∥2
+
+> F
+
+
+
++ E
+
+Z Ttin 
+
+
+
+∥Zht − Zt∥2 
+
+> F
+
++ ∥Rht − Rt∥2
+
+> F
+
+
+
+dt −→ 0.
+
+The limiting processes solve (9) and (10) along the limiting fixed-latent reference control. If that reference control is optimal, the limiting processes are the corresponding open-loop PMP adjoints. This proves (43). 
+
+Step 5: wealth-relevant blocks. 
+
+Conditional projection and the preceding convergence hold for the full vector and matrix. Premultiplication by e⊤ 
+
+> X
+
+, postmultiplication by eX , and extraction of the wealth–factor block are continuous linear operations. Consequently, 
+
+eλX −→ λX , eP XX −→ P XX , eP XY −→ P XY 
+
+after conditional projection and interpolation. These are precisely the blocks entering (27). No identification of P XY with VXY is used. 42 Remark 5 (Filtration and recovery separation) . The Brownian-filtration assumption ensures the martingale-representation property used in (85) and (86) . Under a larger filtration, the adjoint systems and discrete projections must retain the corresponding orthogonal martingale components. No barrier term enters either adjoint recursion; constrained recovery is applied only after the adapted adjoints have been estimated. 
+
+# D Reference-Policy Stability and Quadratic Growth 
+
+D.1 Proof of Theorem 2
+
+The proof is stated for the objective J appearing in Assumption 5. If J is instead the objective averaged over the random initial time–state law in (29), the same argument applies condition-ally on the initial pair and then after integration, provided that the localization and stability constants below are uniform over its support. For each u ∈ U0, let au denote its unique latent representation on the common chart patch, so that 
+
+ut = Ψ( t, Su 
+
+> t
+
+, au 
+
+> t
+
+).
+
+The embedding property in Assumption 2 and compact localization imply uniform local Lipschitz control of the latent coordinates by the corresponding state and control variables. For compactness, write 
+
+∆u := uref − u∗, ∆S := Sref − S∗,
+
+and use analogous notation for the adjoint processes. All constants below depend only on the common localization in Assumption 5 and may change from line to line. 
+
+Proof of Theorem 2. Step 1: performance loss to control distance. 
+
+Evaluating the quadratic-growth condition (51) at uref gives 
+
+κqg ∥∆u∥2 
+
+> H2
+
+≤ J(u∗) − J(uref ) = εref .
+
+Hence 
+
+∥∆u∥H2 ≤
+
+r εref 
+
+κqg 
+
+,
+
+which proves (52). 
+
+Step 2: forward-state stability. 
+
+Under a generic admissible control u ∈ U0, the state satisfies 
+
+dSu 
+
+> t
+
+= bS (t, Su 
+
+> t
+
+; ut) dt + σS (t, Su 
+
+> t
+
+; ut) dWt.
+
+Subtracting the equations for uref and u∗ and using the uniform Lipschitz bounds on the common localization gives 
+
+bS (t, Sref  
+
+> t
+
+; uref  
+
+> t
+
+) − bS (t, S∗ 
+
+> t
+
+; u∗ 
+
+> t
+
+)
+
++ σS (t, Sref  
+
+> t
+
+; uref  
+
+> t
+
+) − σS (t, S∗ 
+
+> t
+
+; u∗ 
+
+> t
+
+) F
+
+≤ C (∥∆St∥ + ∥∆ut∥) .
+
+The Burkholder–Davis–Gundy inequality and Gronwall’s lemma therefore yield 
+
+∥∆S∥S2 ≤ C∥∆u∥H2 . (94) 
+
+Step 3: first-adjoint stability. 
+
+43 Let 
+
+g(s) := Ke −ρT U (x), s = ( x, y ),
+
+denote the terminal reward. For a generic control u ∈ U0, define the chart-reduced first-adjoint driver by 
+
+F u 
+
+> 1
+
+(t, λ, Z) := Ds ¯H (t, Su 
+
+> t
+
+, au 
+
+> t
+
+, λ, Z) .
+
+The first-adjoint BSDE is 
+
+−dλ u 
+
+> t
+
+= F u 
+
+> 1
+
+(t, λ u 
+
+> t
+
+, Zu 
+
+> t
+
+) dt − Zu 
+
+> t
+
+dWt, λu 
+
+> T
+
+= Dsg(Su 
+
+> T
+
+).
+
+Assumption 5(i), together with the common chart localization, implies 
+
+F ref 1 (t, λ ref  
+
+> t
+
+, Zref  
+
+> t
+
+) − F ∗ 
+
+> 1
+
+(t, λ ∗ 
+
+> t
+
+, Z∗ 
+
+> t
+
+)
+
+≤ C (∥∆St∥ + ∥∆ut∥ + ∥∆λt∥ + ∥∆Zt∥F ) .
+
+The terminal-gradient Lipschitz condition similarly gives 
+
+Dsg(Sref  
+
+> T
+
+) − Dsg(S∗ 
+
+> T
+
+) ≤ C∥∆ST ∥.
+
+Applying Itô’s formula to eβt ∥∆λt∥2, choosing β sufficiently large, and using Young’s in-equality and the standard BSDE estimate yield 
+
+∥∆λ∥S2 + ∥∆Z∥H2 ≤ C (∥∆S∥S2 + ∥∆u∥H2 ) . (95) 
+
+Step 4: second-adjoint stability. 
+
+For a generic control u, let 
+
+F u 
+
+> 2
+
+(t, λ, Z, P, R)
+
+denote the matrix driver in (10), evaluated at 
+
+(t, Su 
+
+> t
+
+, au 
+
+> t
+
+, λ, Z, P, R) .
+
+Then 
+
+−dP u 
+
+> t
+
+= F u 
+
+> 2
+
+(t, λ u 
+
+> t
+
+, Zu 
+
+> t
+
+, P u 
+
+> t
+
+, Ru 
+
+> t
+
+) dt −
+
+> dW
+
+X
+
+> ℓ=1
+
+Ru,ℓ t dW ℓt ,
+
+with terminal condition 
+
+P u 
+
+> T
+
+= D2
+
+> ss
+
+g(Su 
+
+> T
+
+).
+
+The driver is linear in (P, R). Assumption 5(i) provides uniform bounds and Lipschitz continuity for all coefficient jets through order two, as well as uniform essential bounds for P u
+
+and Ru. Consequently, 
+
+F ref 2
+
+
+
+t, λ ref  
+
+> t
+
+, Zref  
+
+> t
+
+, P ref  
+
+> t
+
+, Rref 
+
+> t
+
+
+
+− F ∗ 
+
+> 2
+
+(t, λ ∗ 
+
+> t
+
+, Z∗ 
+
+> t
+
+, P ∗ 
+
+> t
+
+, R∗ 
+
+> t
+
+) F
+
+≤ C
+
+
+
+∥∆St∥ + ∥∆ut∥ + ∥∆λt∥ + ∥∆Zt∥F + ∥∆Pt∥F + ∥∆Rt∥F
+
+
+
+.
+
+The terminal-Hessian Lipschitz condition gives 
+
+D2
+
+> ss
+
+g(Sref  
+
+> T
+
+) − D2
+
+> ss
+
+g(S∗ 
+
+> T
+
+) F ≤ C∥∆ST ∥.
+
+Applying the corresponding matrix-valued BSDE stability estimate and using (95) yield 
+
+∥∆P ∥S2 + ∥∆R∥H2 ≤ C
+
+
+
+∥∆S∥S2 + ∥∆u∥H2
+
++ ∥∆λ∥S2 + ∥∆Z∥H2
+
+
+
+.
+
+(96) 44 Step 5: shifted-adjoint stability. 
+
+Define 
+
+σref  
+
+> t
+
+:= σS (t, Sref  
+
+> t
+
+; uref  
+
+> t
+
+), σ∗ 
+
+> t
+
+:= σS (t, S∗ 
+
+> t
+
+; u∗ 
+
+> t
+
+).
+
+From (50), 
+
+∆ζt = ∆ Zt − ∆Pt σref  
+
+> t
+
+− P ∗
+
+> t
+
+
+
+σref  
+
+> t
+
+− σ∗
+
+> t
+
+
+
+.
+
+The diffusion coefficient is bounded and Lipschitz on the common localization, and P ∗ is uni-formly essentially bounded. Hence 
+
+σref − σ∗ 
+
+> H2
+
+≤ C (∥∆S∥S2 + ∥∆u∥H2 ) ,
+
+and therefore 
+
+∥∆ζ∥H2 ≤ C
+
+
+
+∥∆Z∥H2 + ∥∆P ∥S2
+
++ ∥∆S∥S2 + ∥∆u∥H2
+
+
+
+.
+
+(97) 
+
+Step 6: combination of the estimates. 
+
+Combining (94)– (97) gives 
+
+∥∆S∥S2 + ∥∆λ∥S2 + ∥∆Z∥H2 + ∥∆P ∥S2
+
++ ∥∆R∥H2 + ∥∆ζ∥H2 ≤ Cstab ∥∆u∥H2 .
+
+Using (52) proves (53). Finally, for any level process χ,
+
+∥χ∥L2,2 ≤ √T ∥χ∥S2 ,
+
+while 
+
+∥ζ∥L2,2 = ∥ζ∥H2 .
+
+Since 
+
+ϑ = ( λ, ζ, P ),
+
+we obtain 
+
+∥ϑref − ϑ∗∥L2,2 ≤ Cref 
+
+r εref 
+
+κqg 
+
+,
+
+which proves (54). 
+
+D.2 Benchmark Verification of Quadratic Growth in the Terminal-Wealth Merton Model 
+
+This subsection shows that the quadratic-growth condition in Assumption 5 is nonvacuous in a localized terminal-wealth Merton benchmark. The argument is specific to this benchmark and is not asserted for the joint portfolio–consumption problem or for general state-dependent feasible fibers. Consider the constant-coefficient Merton model without intermediate consumption, with CRRA utility 
+
+U (x) = x1−γ
+
+1 − γ , γ > 1,
+
+and objective 
+
+JM(π) := EKe −ρT U (Xπ 
+
+> T
+
+) , K > 0.
+
+45 Let UM ⊂ H2 be a convex localized neighborhood of admissible risky-weight processes. Assume that 
+
+Σ ⪰ σI 
+
+for some σ > 0, and that every control in UM, together with every convex mixture of two such controls, remains in the common wealth localization 
+
+0 < x ≤ Xt ≤ x < ∞, 0 ≤ t ≤ T. 
+
+Proposition 3 (Quadratic growth in the localized Merton benchmark) . Under the preceding conditions, JM is strongly concave on UM in the H2 norm. In particular, if π∗ is a local maximizer in this neighborhood, then there exists κM > 0 such that 
+
+JM(π∗) − JM(π) ≥ κM∥π − π∗∥2 
+
+> H2
+
+(98) 
+
+for every π in a sufficiently small convex neighborhood of π∗.Proof. Let π, q ∈ UM and define 
+
+πθ := θπ + (1 − θ)q, θ ∈ [0 , 1] .
+
+For controls driven by the same Brownian path, the log-wealth dynamics give the pathwise identity 
+
+log Xπθ 
+
+> T
+
+= θ log Xπ 
+
+> T
+
++ (1 − θ) log Xq
+
+> T
+
++ θ(1 − θ)2
+
+Z T
+
+> 0
+
+(πt − qt)⊤Σ(πt − qt) dt. (99) Define 
+
+F (z) := Ke −ρT U (ez ).
+
+For CRRA utility, 
+
+F ′(z) = Ke −ρT e(1 −γ)z > 0, F ′′ (z) = (1 − γ)Ke −ρT e(1 −γ)z < 0.
+
+Hence F is increasing and strictly concave. Moreover, on the localized log-wealth interval, 
+
+mF := inf    
+
+> z∈[log x, log x]
+
+F ′(z) > 0.
+
+Set 
+
+Lπ := log Xπ 
+
+> T
+
+, Lq := log Xq 
+
+> T
+
+,
+
+and 
+
+∆θ := θ(1 − θ)2
+
+Z T
+
+> 0
+
+(πt − qt)⊤Σ(πt − qt) dt. 
+
+Equation (99) gives 
+
+log Xπθ 
+
+> T
+
+= θL π + (1 − θ)Lq + ∆ θ.
+
+Because the two endpoints and their mixture remain in the common localization, the mean-value theorem and the lower bound on F ′ imply 
+
+F (θL π + (1 − θ)Lq + ∆ θ) ≥ F (θL π + (1 − θ)Lq) + mF ∆θ.
+
+Concavity of F further gives 
+
+F (θL π + (1 − θ)Lq) ≥ θF (Lπ) + (1 − θ)F (Lq).
+
+46 Taking expectations and using Σ ⪰ σI yield 
+
+JM(πθ) ≥ θJ M(π) + (1 − θ)JM(q)+ κMθ(1 − θ)∥π − q∥2 
+
+> H2
+
+, (100) where one may take 
+
+κM := mF σ
+
+2 .
+
+Now let q = π∗ and let π lie in a sufficiently small convex neighborhood of π∗. Local optimality gives 
+
+JM(π∗) ≥ JM
+
+ θπ + (1 − θ)π∗
+
+for all sufficiently small θ > 0. Combining this inequality with (100) gives 
+
+JM(π∗) − JM(π) ≥ κM(1 − θ)∥π − π∗∥2 
+
+> H2
+
+.
+
+Letting θ ↓ 0 proves (98). The verification above applies to a convex static portfolio constraint set as long as the compared controls and their mixtures remain in the common localization. It does not establish quadratic growth for models with intermediate consumption, control-coupled factor dynamics, or general state-dependent feasible fibers. 
+
+# E Estimated-Input Recovery Proofs 
+
+This appendix proves the estimated-input recovery bounds for B-PGDPO and QP-PGDPO. The analysis is carried out at a fixed deployment state. State dependence of the feasible chart has already been incorporated into the adjoint input; the stagewise KKT systems below therefore contain only control derivatives. 
+
+E.1 Proof of Theorem 3
+
+Fix a deployment point (t, ω ) and suppress it throughout. Write 
+
+Hϑ(u) := H(t, St; u, ϑ ), Γ( u) := Γ( t, St; u).
+
+For 
+
+z = ( u, ν ),
+
+define the inequality-only perturbed KKT map 
+
+Fbar (z; ϑ, ε ) := ∇uHϑ(u) + DuΓ( u)⊤ν
+
+diag(Γ( u)) ν − ε1
+
+!
+
+. (101) Let 
+
+zcp (ε; ϑ) = ( ucp (ε; ϑ), ν cp (ε; ϑ)) 
+
+denote the exact central-path solution on the selected regular branch, and let 
+
+bzbar =
+
+bubar , bνbar 
+
+denote the numerical primal–dual output. The true KKT pair is denoted by 
+
+z∗ = ( u∗, ν ∗).
+
+47 Proof of Theorem 3. Step 1: numerical residual and central-path sensitivity. 
+
+By definition, 
+
+Fbar 
+
+bzbar ; bϑ, ε bar 
+
+
+
+= rbar .
+
+Uniform strong metric regularity in Assumption 6(i) therefore gives 
+
+bzbar − zcp (εbar ; bϑ) ≤ Cres rbar . (102) The same uniform inverse bound and the smooth dependence of (101) on ϑ imply 
+
+zcp (εbar ; bϑ) − zcp (εbar ; ϑ∗) ≤ Csens ∥bϑ − ϑ∗∥ = Csens eadj . (103) Finally, Proposition 1 gives 
+
+∥ucp (εbar ; ϑ∗) − u∗∥ ≤ Ccp εbar . (104) Combining (102)– (104) and retaining the primal components yields 
+
+bubar − u∗ ≤ Cbar 
+
+
+
+εbar + eadj + rbar 
+
+.
+
+This proves (57). Taking the Lq,p norm and using (55) together with 
+
+∥rbar ∥Lq,p ≤ δbar 
+
+gives 
+
+bubar − u∗ 
+
+> Lq,p
+
+≤ C′ 
+
+> bar
+
+(εbar + δadj + δbar ) ,
+
+which is (59). 
+
+Step 2: true-input Hamiltonian gap. 
+
+Define the true-input Hamiltonian and Lagrangian by 
+
+H∗(u) := Hϑ∗ (u), L∗(u) := H∗(u) + ν∗⊤ Γ( u).
+
+The KKT stationarity condition gives 
+
+∇uL∗(u∗) = 0 .
+
+Since bubar is feasible and remains in the local maximality neighborhood, 
+
+Gbar = H∗(u∗) − H∗(bubar ) ≥ 0.
+
+Local boundedness of the Lagrangian Hessian and Taylor’s theorem give 
+
+L∗(u∗) − L ∗(bubar ) ≤ C bubar − u∗ 2
+
+. (105) By complementarity at the true KKT point, 
+
+ν∗⊤ Γ( u∗) = 0 ,
+
+and therefore 
+
+Gbar = L∗(u∗) − L ∗(bubar )+ ν∗⊤ Γ( bubar ). (106) Set 
+
+u∗ 
+
+> cp
+
+:= ucp (εbar ; ϑ∗).
+
+48 For every active constraint j ∈ I ∗, the true-input central path satisfies 
+
+Γj (u∗
+
+> cp
+
+) = εbar 
+
+νcp ,j (εbar ; ϑ∗) .
+
+Strict complementarity and the uniform localization imply that the denominators are bounded away from zero. Since inactive true multipliers vanish, 
+
+ν∗⊤ Γ( u∗
+
+> cp
+
+) ≤ Cε bar . (107) The residual and input-sensitivity estimates give 
+
+bubar − u∗ 
+
+> cp
+
+≤ C
+
+
+
+eadj + rbar 
+
+.
+
+Using local Lipschitz continuity of Γ and boundedness of ν∗,
+
+ν∗⊤ Γ( bubar ) ≤ C
+
+
+
+εbar + eadj + rbar 
+
+. (108) Combining (105), (106), (108), and (57) yields 
+
+0 ≤ Gbar ≤ CH, 1εbar + CH, 2
+
+
+
+eadj + rbar 
+
++ CH, 3
+
+
+
+εbar + eadj + rbar 2
+
+.
+
+This proves (58). 
+
+Step 3: process-level Hamiltonian bound. 
+
+Suppose p, q ≥ 2. On the finite measure space [0 , T ] × Ω,
+
+Lq,p ,→ Lq/ 2,p/ 2.
+
+Moreover, 
+
+|f |2 
+
+> Lq/ 2,p/ 2
+
+= ∥f ∥2 
+
+> Lq,p
+
+.
+
+Minkowski’s inequality, (55), and the numerical-residual bound therefore give 
+
+∥Gbar ∥Lq/ 2,p/ 2 ≤ CH
+
+h
+
+εbar + δadj + δbar 
+
++ ( εbar + δadj + δbar )2 i
+
+,
+
+which is (60). 
+
+Step 4: inactive-constraint case. 
+
+If no inequality is active at u∗, then 
+
+ν∗ = 0.
+
+The point u∗ is an interior stationary point of H∗, so 
+
+∇uH∗(u∗) = 0 .
+
+Consequently, 
+
+0 ≤ Gbar ≤ C bubar − u∗ 2
+
+≤ C
+
+
+
+εbar + eadj + rbar 2
+
+.
+
+Thus all linear terms vanish, and the corresponding process-level bound is quadratic. 49 E.2 Proof of Proposition 2
+
+Fix a deployment point and suppress (t, ω ) throughout. Write 
+
+g∗ := g(ϑ∗), Q∗ := Q(ϑ∗),
+
+and define the true-input optimality operator 
+
+T ∗(π) := Q∗π − g∗ + NK(π). (109) The exact true-input solution satisfies 
+
+0 ∈ T ∗(π∗).
+
+Proof of Proposition 2. Step 1: transfer of the estimated-input residual. 
+
+Let 
+
+bg := g(bϑ), bQ := Q(bϑ),
+
+and let bπQP ∈ K be the numerical QP output. By the definition of rqp , for every ϵ > 0 there exists bv ∈ NK(bπQP ) such that 
+
+bQbπQP − bg + bv ≤ rqp + ϵ. 
+
+Using the same normal vector in the true-input operator gives 
+
+dist 
+
+
+
+0, T ∗(bπQP )
+
+
+
+≤ rqp + ϵ + (Q∗ − bQ)bπQP + ∥bg − g∗∥ .
+
+The common bounded localization and the local Lipschitz dependence of (g, Q ) on ϑ imply 
+
+(Q∗ − bQ)bπQP + ∥bg − g∗∥ ≤ Ce adj .
+
+Letting ϵ ↓ 0 yields 
+
+dist 
+
+
+
+0, T ∗(bπQP )
+
+
+
+≤ C
+
+
+
+eadj + rqp 
+
+. (110) 
+
+Step 2: pointwise and process-level policy bounds. 
+
+Because Q∗ ⪰ λQI and the normal-cone mapping is monotone, T ∗ is λQ-strongly monotone. Thus, for any w ∈ T ∗(bπQP ),
+
+λQ bπQP − π∗ 2
+
+≤
+
+D
+
+w, bπQP − π∗E
+
+.
+
+Taking the infimum over w and using Cauchy–Schwarz give 
+
+bπQP − π∗ ≤ 1
+
+λQ
+
+dist 
+
+
+
+0, T ∗(bπQP )
+
+
+
+.
+
+Combining this estimate with (110) proves (61). Taking the Lq,p norm and using (55) and 
+
+∥rqp ∥Lq,p ≤ δqp yield (62). 
+
+Step 3: true-input QP gap. 
+
+Let IK be the convex indicator of K and define 
+
+ϕ∗(π) := 12 π⊤Q∗π − g∗⊤ π + IK(π). (111) Then 
+
+∂ϕ ∗(π) = T ∗(π),
+
+50 and ϕ∗ is λQ-strongly convex. For any w ∈ ∂ϕ ∗(bπQP ), strong convexity gives 
+
+ϕ∗(π∗) ≥ ϕ∗(bπQP ) + 
+
+D
+
+w, π∗ − bπQP E
+
++ λQ
+
+2 bπQP − π∗ 2
+
+.
+
+Maximizing the resulting upper bound over the distance to π∗ yields the standard subgradient estimate 
+
+0 ≤ ϕ∗(bπQP ) − ϕ∗(π∗) ≤ 12λQ
+
+dist 
+
+
+
+0, ∂ϕ ∗(bπQP )
+
+2
+
+.
+
+Both controls are feasible, so the left-hand side equals the true-input concave-QP loss Gqp .Applying (110) therefore gives 
+
+0 ≤ Gqp ≤ CQ
+
+
+
+eadj + rqp 2
+
+,
+
+which proves (63). If p, q ≥ 2, then 
+
+|f |2 
+
+> Lq/ 2,p/ 2
+
+= ∥f ∥2 
+
+> Lq,p
+
+.
+
+Using the aggregate input and numerical-residual bounds gives 
+
+∥Gqp ∥Lq/ 2,p/ 2 ≤ C′ 
+
+> Q
+
+(δadj + δqp )2 ,
+
+which is (64). 
+
+Remark 6 (Uniformity and dimension dependence) . The constants in the barrier and QP re-covery bounds are uniform only on the specified compact deployment localization. The barrier estimates require a uniform KKT inverse, strict-complementarity and reduced-Hessian margins, and separation from active-set switching points. The QP estimates require a uniform lower eigen-value bound for Q and bounded local Lipschitz constants for (g, Q ). These constants may depend on the portfolio dimension and on covariance conditioning. The framework avoids a state grid but does not imply dimension-free linear algebra. 
+
+# F Numerical Solver and Implementation Details 
+
+This appendix records the numerical realizations used for B-PGDPO and QP-PGDPO. The analysis in Appendices B and E is stated in reduced control coordinates 
+
+u = ( π⊤, C )⊤, π0 = 1 − 1⊤π.
+
+Thus no explicit full-investment equality or equality multiplier is used below. When no borrowing is imposed, the inequality 1 − 1⊤π ≥ 0 is included as a component of Γ.
+
+F.1 Barrier Newton–CG Realization 
+
+Fix (t, s, ϑ ) and define the barrier objective 
+
+Bε(u; ϑ) := H(t, s; u, ϑ ) + ε
+
+> mΓ
+
+X
+
+> j=1
+
+log Γ j (t, s; u). (112) At a strictly feasible iterate, let 
+
+gbar := ∇uBε(u; ϑ).
+
+51 The Hessian–vector operator is 
+
+Bbar [v] := ∇2
+
+> uu
+
+H(t, s; u, ϑ )v
+
++ ε
+
+> mΓ
+
+X
+
+> j=1
+
+ ∇2
+
+> uu
+
+Γj (t, s; u)v
+
+Γj (t, s; u) − ∇uΓj (t, s; u)∇uΓj (t, s; u)⊤v
+
+Γj (t, s; u)2
+
+
+
+. (113) A Newton ascent direction satisfies 
+
+Bbar [d] = −gbar . (114) On the selected local maximal branch, −B bar is positive definite for sufficiently small barrier parameter. We therefore solve the equivalent positive-definite system 
+
+−B bar [d] = gbar 
+
+by conjugate gradients, using Hessian–vector products rather than forming a dense Hessian. For a nonnegativity component Γi(u) = πi, the corresponding portfolio contribution is 
+
+− επ2
+
+> i
+
+vi. (115) Affine constraints have no second-derivative term; their barrier curvature is therefore the negative rank-one term in (113). If portfolio and consumption constraints are coupled, the same system is formed in the complete control coordinates (π, C ).
+
+F.2 Strict Feasibility and Globalization 
+
+Let d be an ascent direction. For affine inequalities, the fraction-to-the-boundary predictor is 
+
+αmax = min 
+
+
+
+1, min    
+
+> j:DΓj(u)[ d]<0
+
+−τfb 
+
+Γj (u)
+
+DΓj (u)[ d]
+
+
+
+, τfb ∈ (0 , 1) . (116) For nonlinear constraints, this predictor is shortened until the exact slacks at u + αd are all positive. Starting from αmax , backtracking decreases the step until the Armijo sufficient-increase condition 
+
+Bε(u + αd ; ϑ) ≥ B ε(u; ϑ) + cAαg⊤
+
+> bar
+
+d, cA ∈ (0 , 1) , (117) holds. The accepted step therefore preserves strict interiority and yields monotone ascent of the barrier objective. The reported barrier runs start from a model-specific strict interior point obtained by the analytic-center or phase-I initialization used for that constraint set. They terminate according to the squared Newton decrement 
+
+δ2N := g⊤
+
+> bar
+
+d, (118) with a prescribed numerical tolerance. The perturbed KKT residual rbar from Section 4.6.1 is evaluated separately as a solver audit. When the consumption and portfolio blocks are separable, the unregularized consumption maximizer is 
+
+C∗ = min max (U ′)−1(eρt λX ), C min (t, s) , C max (t, s) . (119) Under a barrier realization, the scalar stationarity equation is 
+
+e−ρt U ′(C) − λX + εbar 
+
+C − Cmin 
+
+− εbar 
+
+Cmax − C = 0 ,
+
+and may be solved by the same damped Newton and line-search logic. 52 F.3 QP Realization and Residual Audit 
+
+For fixed estimated input, QP-PGDPO solves the strongly concave risky-weight problem in (28). Equivalently, it minimizes 12 π⊤ bQπ − bg⊤π
+
+over the convex feasible set K. When bQ ≻ 0, the solution is unique and does not depend on a supplied initialization. Numerical accuracy is measured by the normal-cone residual rqp defined in Section 4.6.2. The implementation is a direct constrained QP solve; it is not batched or otherwise optimized in the reported timing comparison. 
+
+# G Supplementary Numerical Diagnostics 
+
+Unless otherwise stated, all adjoint-dependent diagnostics below use the fixed-latent OL-BPTT graph and the anchored shifted-input estimator. The B-PGDPO results use the barrier globaliza-tion and squared-Newton-decrement stopping rule described in Appendix F. DPO, B-PGDPO, and QP-PGDPO are compared at common diagnostic states and, when simulation is required, with common indexed Brownian paths. 
+
+G.1 Diagnostic Definitions and Sampling Protocol 
+
+The default evaluation seed is 12345. For a diagnostic state si, graph g, and Brownian continu-ation ωim , the conditional Monte Carlo estimate of a raw pathwise adjoint quantity is 
+
+bAgi = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+eAg(si, ω im ). (120) Method comparisons use common diagnostic states and indexed Brownian paths. Shifted-input estimation and its replication audit use independent outer–inner Brownian banks. The graph audit reports 
+
+dnRMSE (A) = 
+
+h
+
+N −1
+
+> s
+
+P 
+
+> i
+
+∥ bAol  
+
+> i
+
+− bAfb  
+
+> i
+
+∥22
+
+i1/2
+
+h
+
+N −1
+
+> s
+
+P 
+
+> i
+
+∥ bAol  
+
+> i
+
+∥22
+
+i1/2 . (121) This quantity measures a discrepancy between two conditional estimates, not an error relative to analytical truth. State and continuation sub-batches only partition the same fixed estimator. For a dπ-dimensional risky-weight vector, define 
+
+RMSE π =
+
+"
+
+1
+
+Ntest dπNtest X
+
+> i=1
+
+∥bπi − πref  
+
+> i
+
+∥22
+
+#1/2
+
+.
+
+At state i, let 
+
+Qi(π) = g⊤ 
+
+> i
+
+π − 12 π⊤Qiπ, spg  
+
+> i
+
+= λmax (Qi)−1.
+
+The projected-gradient residual is 
+
+Gpg  
+
+> i
+
+(π) = π − ΠKi {π + spg  
+
+> i
+
+(gi − Qiπ)}
+
+spg 
+
+> i
+
+, KKT -PG = 1
+
+Ntest 
+
+X
+
+> i
+
+∥G pg  
+
+> i
+
+(πi)∥∞.
+
+Here Ki = Rn 
+
+> +
+
+for borrowing-allowed no-short-sale recovery, whereas no borrowing adds 1⊤π ≤ 1.B-PGDPO is evaluated with the unregularized generalized Hamiltonian. For consumption, the corresponding scalar gradient is 
+
+gCi = e−ρt i U ′(Ci) − bλXi ,
+
+53 with projection onto the admissible consumption interval. The statewise shifted-input signal-to-noise ratio is the norm of bζXi divided by the norm of its estimated Monte Carlo standard-error vector. The reported SNR is the average of these statewise ratios, not the ratio of the corresponding sample means. It is a Monte Carlo resolution diagnostic rather than a formal hypothesis-test statistic. Replication error is the L2 distance between estimates obtained from the estimation and independent holdout banks. IID states are independent draws from the training law. The no-short-sale run uses X ∈
+
+[0 .1, 3.0] and T − t ∈ [0 , 1.5] ; the cap and factor runs use X ∈ [0 .3, 3.0] and T − t ∈ [0 , 1] . The default scalar-factor range is 
+
+Y ∈
+
+
+
+¯y − 2.5 σY
+
+√2κ , ¯y + 2 .5 σY
+
+√2κ
+
+
+
+.
+
+Wealth/time edge samples remain near these endpoints. Factor-edge and factor-stress samples use Y = ±1.5 and are deliberate out-of-distribution diagnostics, not a uniform extrapolation guarantee. 
+
+G.2 Shifted-Input Estimator Ablation 
+
+Table 13: Brownian-coefficient estimation under analytical policies. The selected estimator is the anchored nested OLS control-variate estimator used throughout the reported recovery results.                 
+
+> Model Raw-moment
+> ZXnRMSE Anchored OLS
+> ZXnRMSE Anchored
+> ζXRMSE Merton exact 59 .95% 0.326% 2.30 ×10 −4
+> Merton cap exact 43 .87% 1.313% 6.16 ×10 −4
+> Affine exact canonical 8.812% 0.260% –
+
+Raw and merely centered covariance estimates remain noisy because the next-step pathwise adjoint contains substantial future-shock variation. Nested conditional averaging, antithetic common random numbers, and the anchor 
+
+e⊤ 
+
+> X
+
+P σS
+
+reduce ZX error by one to two orders of magnitude at the same analytical targets. This is why the anchored estimator is used in all reported recovery tables. 
+
+G.3 Constrained Liu–Kim–Omberg Recovery and Graph Ablation 
+
+To complement the analytical unconstrained validation in Section 5.6, we retain a constrained Liu–Kim–Omberg-style factor experiment as an adjoint-conditional recovery stress test. A scalar OU predictor drives affine excess returns and is correlated with risky-return shocks. The no-borrowing risky-weight block is 
+
+max  
+
+> π≥0,1⊤π≤1
+
+
+
+g(t, x, y )⊤π − 12 π⊤Q(t, x, y )π
+
+
+
+,
+
+where 
+
+g = x
+
+hbλX α(y) + ΣRY (y) bP Y X + v(y)( bζX )⊤i
+
+, Q = x2[− bP XX ]Σ(y).
+
+The mixed block is harvested directly and the shifted wealth row is estimated by (47). Each dimension uses 128 held-out states and 8,192 continuations per state. The n = 10 , 50 checkpoints use 16 rollout steps and training batch size 1024; the n = 100 checkpoint uses 12 steps and batch size 512. B-PGDPO uses εbar = 3 × 10 −6.54 Table 14: Constrained Liu–Kim–Omberg-style recovery with the anchored shifted input. Resid-uals and gains are conditional on the harvested adjoint tuple.                                                               
+
+> Mean KKT–PG residual Reduced-Hamiltonian gain Shift diagnostics
+> nDPO B-PGDPO QP-PGDPO B-PGDPO QP-PGDPO ∥bζX∥/∥bZX∥SNR 10 1.6205 ×10 −22.66 ×10 −41.27 ×10 −17 5.482 ×10 −35.499 ×10 −30.319% 2.27
+> 50 2.2639 ×10 −21.105 ×10 −33.54 ×10 −17 1.0977 ×10 −21.1096 ×10 −20.474% 2.21
+> 100 2.4702 ×10 −22.006 ×10 −35.74 ×10 −17 1.5725 ×10 −21.5979 ×10 −20.308% 1.63
+
+QP-PGDPO has positive pointwise gain at every state and solves the estimated local QP to numerical tolerance. B-PGDPO has positive mean gain at all three dimensions. At n = 100 ,three of 128 states have small negative barrier gains, with minimum −5.55 × 10 −5, reflecting finite central-path bias. The estimated shift is small relative to ZX but reproducible: the mean independent-bank replication errors are 5.81 × 10 −4, 8.03 × 10 −4, and 6.65 × 10 −4 for 
+
+n = 10 , 50 , 100 , respectively. 
+
+Alternative frozen-feedback graph. Using common states and Brownian banks, we com-pare the fixed-latent estimates with an alternative graph that freezes the network parameters but retains the actor’s state derivatives. The nRMSE discrepancies in (121) are 0.108% for λX ,
+
+0.168% for P XX , 40 .9% for P XY , 0.127% for ZX , and 62 .4% for ζX . Thus the two graphs produce similar scalar wealth levels in this calibration but materially different mixed and shifted blocks. These are graph-to-graph discrepancies, not errors relative to analytical truth. 
+
+G.4 Decoder Initialization 
+
+We report only constraint-matched decoder comparisons. Once the estimated adjoint input determines the local QP coefficients, the exact QP output is independent of a supplied ini-tialization. Table 15 also reports a separate 2,000-iteration projected-gradient check from four initializations. Table 15: Decoder initialization diagnostic under the anchored shifted-input adjoints. Model N Exact QP uses init Exact max diff PGD mean diff Liu–Kim–Omberg 64 no 0 6.68 × 10 −16 
+
+Merton cap 64 no 0 6.19 × 10 −16 
+
+Liu–Kim–Omberg cap 32 no 0 5.49 × 10 −16 
+
+The four initializations are the DPO output, equal risky weights, a cash-only/zero-risky allocation, and a random feasible allocation. The maximum PGD differences from exact QP are below 1.80 × 10 −15 in all three models. 55 G.5 Full Training-Budget Results 
+
+Table 16: Full three-seed training-budget results for the n = 100 borrowing-allowed no-short-sale benchmark. 
+
+Panel A. DPO across training budgets 
+
+Epochs Policy RMSE KKT–PG H gap to QP Across-seed RMSE s.d. 250 0.013561 0.043879 0.022969 0.000851 
+
+500 0.011251 0.024108 0.004467 0.000171 
+
+1,000 0.011190 0.023945 0.004501 0.000118 
+
+Panel B. Deployment rules after 1,000 epochs 
+
+Method Policy RMSE KKT–PG H gain vs DPO H gap to QP DPO 1.1190 × 10 −2 2.3945 × 10 −2 0 4.501 × 10 −3
+
+B-PGDPO 9.291 × 10 −3 8.062 × 10 −4 4.484 × 10 −3 1.729 × 10 −5
+
+QP-PGDPO 1.374 × 10 −4 2.31 × 10 −13 4.501 × 10 −3 0
+
+The fixed-latent CRRA identity is a graph-contract check rather than an optimization-budget diagnostic. Recovery removes nearly all of the local QP gap left by the finite DPO checkpoints. 
+
+G.6 Barrier and Switching-Region Details 
+
+Table 17: IID barrier-parameter sensitivity at n = 100 under the anchored shifted-input adjoints (64 held-out states, 8,192 continuations per state).                                                                                   
+
+> Model εbar Mean gain Min. gain Neg. share Gap to QP Converged Merton cap 10 −52.5234 ×10 −2−1.78 ×10 −40.1719 7.18 ×10 −41.000
+> Merton cap 3×10 −62.5730 ×10 −22.91 ×10 −402.22 ×10 −41.000
+> Merton cap 10 −62.5877 ×10 −24.35 ×10 −407.5×10 −51.000
+> Liu–Kim–Omberg cap 10 −55.3009 ×10 −21.33 ×10 −408.47 ×10 −41.000
+> Liu–Kim–Omberg cap 3×10 −65.3598 ×10 −26.09 ×10 −402.58 ×10 −41.000
+> Liu–Kim–Omberg cap 10 −65.3769 ×10 −27.55 ×10 −408.6×10 −51.000
+
+The QP gap decreases approximately proportionally to εbar . The same fixed states and adjoint inputs are reused throughout. At 10 −5, the Merton-cap mean gain remains positive but 17 .19% 
+
+of states have a small negative pointwise gain. The common 3 × 10 −6 specification has positive gain at every IID state. Using the common QP reference, the Merton-cap aggregate region counts are (95 , 8, 89) for upper-active, near-switching, and far-interior states, respectively; the corresponding Liu–Kim– Omberg counts are (132 , 20 , 104) . Stress samples contain active and far-interior states but no observations in the 5% near-switching band. All reported regional joint gains are positive. 
+
+G.7 External Neural Diagnostic and Runtime 
+
+The adapted hPINN-style baseline trains a value network and feasible control head using HJB, terminal, and soft projected-KKT residuals, without local QP/KKT recovery. It is included only as an illustrative external diagnostic; the matched DPO and analytical KKT comparisons remain primary. The supplementary affine-factor model uses diagonal OU predictors Y ∈ RdY and 
+
+μ(Y ) − r1 = diag( σasset )Aload Y. 
+
+The hPINN and PGDPO entries use the same model calibration; the PGDPO entries use the anchored shifted-input estimator. 56 Table 18: Representative hPINN-style diagnostics at n = 100 .
+
+Panel A. Mean KKT–PG residuals 
+
+Benchmark DPO hPINN B-PGDPO QP-PGDPO Liu–Kim–Omberg factor 
+
+2.470 × 10 −2 3.78 × 10 −2 2.006 × 10 −3 5.74 × 10 −17 
+
+Supplementary affine factor 
+
+(dY = 3) 4.233 × 10 −2 1.17 × 10 −1 – 1.53 × 10 −16 
+
+Panel B. Auxiliary diagnostics 
+
+Liu–Kim–Omberg factor hPINN gain −8.63 × 10 −3 QP-PGDPO gain 1.598 × 10 −2
+
+Supplementary affine factor 
+
+(dY = 3) 
+
+hPINN time 74 .9 min DPO+OL-BPTT +shift+QP time 5.02 min 
+
+Table 19: Representative timing profile for the supplementary n = 100 affine-factor benchmark. The independent holdout column is an audit cost, not part of a single deployment pass. Times are wall-clock minutes. 
+
+dY DPO warm-up OL-BPTT +shift+QP Primary total Holdout audit QP KKT 1 1.883 2.334 4.217 2.286 2.65 × 10 −16 
+
+3 2.225 2.791 5.016 2.758 1.53 × 10 −16 
+
+5 2.200 3.482 5.682 3.361 1.70 × 10 −16 
+
+The hPINN numbers are not a method ranking: architectures, objectives, and tuning bud-gets differ. They illustrate only that hard feasibility and global residual minimization need not reproduce the same pointwise local recovery condition. The QP implementation is neither batched nor optimized. 57
