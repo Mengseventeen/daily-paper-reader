@@ -1,0 +1,1447 @@
+Title: Multi-Level Market Making with Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2608.18195v1
+
+Published Time: Thu, 20 Aug 2026 00:04:31 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Multi-Level Market Making with Reinforcement Learning ∗
+
+Patrick Cheridito and Moritz Weiss †
+
+Department of Mathematics, ETH Zurich, Switzerland 
+
+Keywords : Trading, market making, limit order book, reinforcement learning 
+
+JEL Classification : C45, C61, C63, G17 
+
+Abstract 
+
+We introduce a reinforcement learning framework for market making in a limit order book. Our algorithm aims to maximize trading revenue by dynamically submitting market and limit orders of varying sizes across multiple price levels while controlling inventory size. We use multivariate logistic-normal distributions to model order allocations and employ a deep-set encoder to aggregate features from variable-length order sets into a fixed-dimensional latent representation. Additionally, we incor-porate potential-based reward shaping to accelerate learning without altering the optimal policy. We illustrate the performance of the method in three simulated market environments consisting of noise traders who submit random trades, tactical traders who respond to instantaneous volume imbalance, and strategic traders who trade in the direction of an exponentially weighted volume imbalance signal. 
+
+# 1 Introduction 
+
+Market makers operate by placing orders in a limit order book to maximize expected revenue. Unlike directional traders, who accumulate exposure to price trends, market makers capture the bid-ask spread while actively trying to keep their inventory small to reduce their market risk. The market-making problem has been studied extensively in the mathematical finance literature, but typically under stylized models of asset price dynamics and fill probabilities as well as simplified action spaces to keep the problem analytically tractable. E.g. Ho and Stoll (1981); Avellaneda and Stoikov (2008); Gu´ eant et al. (2013); Guilbaud and Pham (2013); Cartea and Wang (2020) model the mid-price together with fill probabilities and consider a market maker who only uses one limit buy and sell order; see also Cartea et al. (2015) for a review of the market-making and trade-execution literature. The market-making problem has also been tackled with reinforcement learning (RL). But most ap-proaches to date have worked with simplified action spaces. In Gaˇ sperov and Kostanjˇ car (2021), the market maker attempts to find the optimal distance from the mid-price of a single limit buy and sell order. Similarly, in Guo et al. (2023), the market maker chooses the distance of limit orders from a reservation price and places a single unit on each side of the book. In Shi et al. (2024), the market maker chooses the distance of limit orders from the mid-price, places unit-size limit orders and learns a separate hedging rate. In Beysolow II (2019); Sun et al. (2022); Chung et al. (2022); Kumar (2023); Zheng and Ding (2024), the market maker chooses discrete actions, which correspond to different order placements. Some works use more complex action spaces. E.g. in Abergel et al. (2022), the market maker controls the prices of a fixed number of limit orders across multiple order book levels, but their optimization method is computationally expensive. The work Wang et al. (2024) employs a Beta distribution to parameterize 
+
+> ∗Support from Swiss NSF Grant 10003723 is gratefully acknowledged.
+> †Corresponding author: moritz.tilmann.weiss@gmail.com
+
+1arXiv:2608.18195v1 [q-fin.TR] 18 Aug 2026 the allocation of limit order volume across price levels, but the market maker posts the same volume on both sides of the book. One of the main challenges in applying RL to trading is designing realistic simulation environments. Backtesting with historical data requires researchers to artificially inject order fills, and this still fails to capture feedback loops caused by other market participants’ responses to the agent’s submitted limit orders. To overcome this limitation, recent literature has leveraged stochastic market simulators that organically interact with the RL agent and provide a controlled training as well as testing environment. While several works have adopted this paradigm to train market-making RL agents (Xiong et al., 2015; Lu and Abergel, 2018; Gaˇ sperov and Kostanjˇ car, 2022; Lalor and Swishchuk, 2025), our approach uses a multi-agent simulation based on Poisson order-flow modeling (Cont et al., 2010; Cheridito and Weiss, 2026). The main contributions of our paper are: 
+
+• The formulation of the market-making problem with a general state space and action space. The state space incorporates the full limit order book, queue positions, as well as past order flows. The action space allows the market maker to post market and limit orders of varying sizes across multiple price levels. 
+
+• The development of an actor-critic RL algorithm for market making. The algorithm uses a multivari-ate logistic-normal distribution enabling flexible placement, a deep-set encoder to handle variable-length features, and potential-based reward shaping to accelerate learning. 
+
+• Detailed numerical experiments evaluating the performance of the algorithm in three simulated market environments populated by noise, tactical, and strategic trading agents, exhibiting adverse selection behavior. 
+
+# 2 Limit order books 
+
+Most modern exchanges use limit order books (LOBs) to match buyers and sellers. They record all outstanding limit orders, which represent commitments to buy or sell a given quantity at a stated price. Quantities are quoted in multiples of a lot , the smallest tradable unit, and prices move on a discrete grid whose increment is called a tick . Buy orders (bids) queue on one side of the book and sell orders (asks) on the other. The best quotes at time t are given by the highest bid pbt and lowest ask pat . They are separated by the spread pat − pbt > 0. The mid-price pt = ( pbt + pat )/2 is usually used as the reference price of the asset. A trade occurs when someone submits a market order, which is immediately matched with the best limit orders on the other side of the book. Submitted limit orders are not guaranteed to be executed and can also be cancelled. The dynamics of the LOB are described by 
+
+vbt = ( vb, 1 
+
+> t
+
+, . . . , v b,D t ) ∈ ND 
+
+> 0
+
+and vat = ( va, 1 
+
+> t
+
+, . . . , v a,D t ) ∈ ND 
+
+> 0
+
+, (1) where D ∈ N, vb,k t is the number of lots k − 1 ticks below the best bid price and va,k t the number of lots k − 1 ticks above the best ask price. By definition, the volumes vb, 1 
+
+> t
+
+and va, 1 
+
+> t
+
+at the best quotes are always positive, but the other volumes could also be zero. Orders at each price level form queues and are executed on a first-come, first-served basis. The price level l of a limit order is its distance from the best price in ticks, using a one-tick index shift (so l = 1 corresponds to the best price). The queue position q
+
+at a given price level is the number of lots with higher priority on the same queue, also indexed with a one-unit shift (so q = 1 denotes the highest-priority order, which will be matched first if a market order reaches that price level). A limit sell (buy) order at a given price level is filled by a market buy (sell) order if the market order’s volume is large enough to consume all limit orders at more aggressive price levels and those ahead in the queue at that price level. Partial fills occur when the remaining market order volume is insufficient to fully fill the limit order; a partially filled order stays in the book with its volume 2reduced accordingly. Both price level and queue position determine a limit order’s fill probability and are therefore critical for market-making strategies. In principle, there is no fixed price limit for submitting limit orders, but in our simulation, we observe only the first D levels on the bid and ask sides of the book. The volume vector (1) reflects supply and demand in the market and can indicate short-term price pressure. For example, more volume on the bid than ask side indicates buying pressure resulting in an increased likelihood that the next price movement is upward. For a more detailed discussion of limit order books, we refer to the review paper by Gould et al. (2013). 
+
+# 3 The market-making problem 
+
+We train a market-making algorithm to trade during a given time interval [0 , T ]. The algorithm acts at the discrete times tn = n∆t for n = 0 , 1, . . . , N − 1, where N ∈ N and ∆ t = T /N. At each time tn,
+
+the algorithm observes a market state sn, takes an action an and receives a reward rn(sn, a n). In the following, we drop the subscript n from rn and write r(sn, a n) since in our setting, tn is contained in the state sn together with other information available at tn. Actions an are taken immediately after tn and consist of cancellations of old limit orders together with placements of new market and limit orders. We constrain the algorithm to allocate at most M ∈ N lots to market and limit orders at each decision time 
+
+tn. The reward r(sn, a n) comprises the cash flows from market and limit order fills during ( tn, t n+1 ]. The algorithm starts with an inventory Q0 = 0. Qn is the difference of the total number of the algorithm’s buy and sell order fills in the interval [0 , t n] measured in lots. At terminal time tN = T , the algorithm receives a terminal reward g(sN ) depending on the terminal state sN . The inventory Q can change by at most M lots from time tn to tn+1 . For example, if the algorithm sends M market buy orders, the inventory increases by M . The algorithm’s goal is to learn a stochastic policy, modeled as a conditional density π on the action space, that maximizes the expected reward 
+
+J(π) = Ea∼πs0∼ρ
+
+"N −1X
+
+> n=0
+
+r(sn, a n) + g(sN )
+
+#
+
+. (2) The subscript s0 ∼ ρ indicates that the initial state s0 is sampled from a distribution ρ, while a ∼ π means that each action an in the sequence a = ( a0, a 1, . . . , a N −1) is sampled from a conditional distribution with density π(· | sn). Avellaneda and Stoikov (2008) have studied both finite- and infinite-horizon formulations of the market-making problem. Here, we focus on the finite-horizon version (2). 
+
+3.1 State space 
+
+At each decision time tn, n = 0 , 1, . . . , N − 1, the algorithm observes market states that are visible to all market participants and private states only known to the algorithm. 
+
+Market states The market states consist of the following quantities: 
+
+• the best bid and ask prices pbn and pan,
+
+• the first K ∈ N entries of the two volume vectors defined in (1), 
+
+• the mid-price drift over ( tn−1, t n] given by ∆ pn = pn − pn−1,
+
+• the market order flow ∆ Mn defined as the difference between the total volume of market buy and sell orders in the interval ( tn−1, t n], 
+
+• the limit order flow ∆ Ln defined as the difference between the total volume of limit buy and sell orders placed during the interval ( tn−1, t n], 
+
+• the cancellation order flow ∆ Cn defined as the difference between the total volume of limit buy and sell orders cancelled during the interval ( tn−1, t n]. 3Private states The private states contain the quantities: 
+
+• the current decision time tn during the algorithm’s trading interval [0 , T ], 
+
+• the algorithm’s inventory Qn,
+
+• the numbers mbn and man of the algorithm’s remaining buy and sell limit orders at time tn,
+
+• the levels, queue positions and sizes (lb,i n , q b,i n , w b,i n ) ∈ N × N × N, i = 1 , . . . , m bn, (la,j n , q a,j n , w a,j n ) ∈ N × N × N, j = 1 , . . . , m an, (3) of the algorithm’s remaining limit orders at time tn, where ( lb,i n , q b,i n , w b,i n ) = ( l, q, w ) means that the 
+
+i-th limit buy order consists of w lots, is resting l − 1 ticks below the best bid, and there are q − 1other lots on the same price level with higher priority. Similarly, ( la,j n , q a,j n , w a,j n ) = ( l, q, w ) means that the j-th limit sell order consists of w lots, is resting l − 1 ticks above the best ask, and there are q − 1 other lots on the same price level with higher priority. 
+
+• the algorithm’s remaining limit orders at time tn expressed as fractions of Mκn =
+
+
+
+κb, 1 
+
+> n
+
+, . . . , κ b,K +1  
+
+> n
+
+, κ a, 1 
+
+> n
+
+, . . . , κ a,K +1 
+
+> n
+
+
+
+∈ [0 , 1] 2( K+1) . (4) Here, κb,k n (or κa,k n ), k = 1 , . . . , K , are the fractions of M lots sitting k − 1 ticks below the best bid (or above the best ask) and κb,K +1  
+
+> n
+
+(or κa,K +1  
+
+> n
+
+) is the fraction of M lots at least K ticks below (or above) the best bid (or ask) price. We normalize the features above to speed up the learning, as explained in Appendix A.2. In principle, the feature (4) is redundant, as the information is already contained in (3), but we add it since we must compute it to allocate orders, as explained in the following section, and including this feature helps with the training of the algorithm. 
+
+3.2 Action space 
+
+The algorithm’s actions an live in the simplex 
+
+S2( K+1) =
+
+a = ( a0, a 1, . . . , a 2( K+1) ) : 
+
+> 2( K+1)
+
+X
+
+> k=0
+
+ak = 1 , a k ≥ 0
+
+ .
+
+The components of the vector an describe the market and limit order allocation of the algorithm right after time tn. Remaining limit orders from ( tn−1, t n] are cancelled and reallocated only when necessary. When reallocating, the algorithm first cancels orders with lower priority. a0 denotes the fraction of M lots that is not placed in the market, while a1 is the fraction allocated to market buy orders. For k = 2 , . . . , K + 1, 
+
+ak denotes the fraction of M lots allocated to buy limit orders placed k − 2 ticks below the best bid price. 
+
+aK+2 is the fraction allocated to market sell orders. For k = K + 3 , . . . , 2( K + 1), ak denotes the fraction allocated to sell limit orders placed k − K − 3 ticks above the best ask price. The quantities akM have to be rounded to integer values. We do this with the Hamilton apportionment method (Balinski and Young, 2010). That is, we first reduce akM to their integer parts akM . This typically results in a total allocated volume less than M . The remaining volume is then distributed sequentially to the component with the largest fractional remainder, then to the component with the second-largest remainder and so on until the total allocated volume equals M .4In Figure 1, we illustrate how the algorithm’s actions act on the order book. For simplicity, we assume the algorithm has M = 5 lots available to allocate as market or limit orders at the first K = 3 levels on both sides of the book. Suppose that at time tn, the order book volumes are (vb, 1 
+
+> n
+
+, v b, 2 
+
+> n
+
+, v b, 3 
+
+> n
+
+) = (2 , 4, 5) and (va, 1 
+
+> n
+
+, v a, 2 
+
+> n
+
+, v a, 3 
+
+> n
+
+) = (1 , 4, 4) ,
+
+and the algorithm’s own limit buy and sell orders are given by (lb, 1 
+
+> n
+
+, q b, 1 
+
+> n
+
+, w b, 1 
+
+> n
+
+) = (1 , 2, 1) , (lb, 2 
+
+> n
+
+, q b, 2 
+
+> n
+
+, w b, 2 
+
+> n
+
+) = (2 , 1, 1) , (lb, 3 
+
+> n
+
+, q b, 3 
+
+> n
+
+, w b, 3 
+
+> n
+
+) = (2 , 3, 1) ,
+
+(la, 1 
+
+> n
+
+, q a, 1 
+
+> n
+
+, w a, 1 
+
+> n
+
+) = (2 , 1, 2) .
+
+Then, the algorithm takes the action 
+
+an = (0 .0, 0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.2, 0.2) ∈ S8,
+
+that is, it sends no market orders and reallocates the limit orders so that it has one lot on each of the first three levels of the bid side and levels 2 and 3 of the ask side. So, right after time tn, the volumes in the book are (vb, 1
+
+> n+
+
+, v b, 2
+
+> n+
+
+, v b, 3
+
+> n+
+
+) = (2 , 3, 6) and (va, 1
+
+> n+
+
+, v a, 2
+
+> n+
+
+, v a, 3
+
+> n+
+
+) = (1 , 3, 5) ,
+
+and the algorithm’s orders are given by (lb, 1
+
+> n+
+
+, q b, 1
+
+> n+
+
+, w b, 1
+
+> n+
+
+) = (1 , 2, 1) , (lb, 2
+
+> n+
+
+, q b, 2
+
+> n+
+
+, w b, 2
+
+> n+
+
+) = (2 , 1, 1) , (lb, 3
+
+> n+
+
+, q b, 3
+
+> n+
+
+, w b, 3
+
+> n+
+
+) = (3 , 6, 1) ,
+
+(la, 1
+
+> n+
+
+, q a, 1
+
+> n+
+
+, w a, 1
+
+> n+
+
+) = (2 , 1, 1) , (la, 2
+
+> n+
+
+, q a, 2
+
+> n+
+
+, w a, 2
+
+> n+
+
+) = (3 , 5, 1) .Ask Bid 5432167Lots 0100 101 99 98 102 103 100 101 99 98 102 103 an = (0 .0, 0.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.2, 0.2) Bid Ask 
+
+Figure 1: Order book before and after the action an has been taken. The blue boxes indicate limit buy orders, the red boxes indicate limit sell orders, and orange boxes represent the algorithm’s orders. 
+
+3.3 Rewards 
+
+Let ¯ r(sn, a n) be the cash flows from the market and limit order fills in the interval ( tn, t n+1 ], and write 
+
+pn and Qn for the mid-price and inventory at time tn. Then, we define the reward function by 
+
+r(sn, a n) = 1
+
+M (¯ r(sn, a n) + ( Qn+1 pn+1 − Qnpn) − γ |Qn+1 |) for n = 0 , 1, . . . , N − 1, (5) with an inventory risk parameter γ ≥ 0. At terminal time tN , we impose the position limit |QN +| ≤ ⌈ νM ⌉
+
+for ν ∈ [0 , 1] , where ⌈νM ⌉ denotes the smallest integer greater than or equal to νM. Any inventory beyond this limit is liquidated by a market order. More precisely, the algorithm sends a market sell order or market 5buy order of size max( |QN | − ⌈ νM ⌉, 0), depending on whether QN is positive or negative. The cash flow from this market order is denoted by MO ν (sN ), which depends on the full terminal state sN because the market order walks through the limit order volumes resting in the book at tN . Let us denote the left-over inventory at time tN + right after sending the market order by QN +, which is given by 
+
+QN + = sign( QN ) min ( |QN |, ⌈νM ⌉) .
+
+We value the left-over inventory at the mid-price and define the terminal reward by 
+
+g(sN ) = 1
+
+M
+
+ pN (QN + − QN ) + MO ν (sN ). (6) Then, we have  
+
+> N−1
+
+X
+
+> n=0
+
+r(sn, a n) + g(sN ) = 1
+
+M 
+
+> N−1
+
+X
+
+> n=0
+
+ ¯r(sn, a n) − γ|Qn+1 | + QN +pN + MO ν (sN )
+
+!
+
+. (7) The expression Qn+1 pn+1 − Qnpn evaluates the change of the algorithm’s wealth from time tn to time 
+
+tn+1 , where the algorithm’s inventory is valued at the mid-price. Although this term cancels when rewards are summed over the episode (7), we include it in the reward because it helps the algorithm to learn the optimal policy faster. This is a form of potential-based reward shaping (Ng et al., 1999), which preserves optimal policies while providing denser learning signals. If we were to use only the cash flows together with the inventory penalty as a reward, the price movements affecting held inventory would contribute to the reward only at terminal time tN , leading to delayed and sparse feedback and making credit assignment difficult. The expression −γ|Qn+1 | penalizes inventory holdings, which is common in the market-making literature (Cartea et al., 2015). Including such an inventory penalty leads to a lower standard deviation of profits, at the cost of lower expected profits, as discussed in Appendix C.2. 
+
+# 4 Actor-critic policy gradient algorithm 
+
+We use an actor-critic algorithm to find an optimal stochastic policy, called actor , by estimating the gradient of the objective function J(·), defined in (2), with respect to the policy parameters. A value function estimate, called critic , is used to reduce the variance of the gradient estimate. In our algorithm, we also use an encoder that can handle variable-length queue position features. Therefore, our actor-critic algorithm consists of three components: the encoder, the actor, and the critic. Each component will be explained in more detail in this section. 
+
+4.1 Encoder 
+
+The order features (3) represent the level, queue position, and size of the algorithm’s resting limit orders. The number of resting limit orders varies over time, but neural networks need fixed-dimensional inputs. One way to obtain a fixed-dimensional representation is to use a vector of triples (level, queue position, and size) of length 2 M , where the entries 1 , . . . , M correspond to the mbn active limit buy orders and the entries M + 1 , . . . , 2M to the man active limit sell orders. Any entries beyond mbn and man are padded with zeros. To illustrate this representation, we consider an example. Suppose that the algorithm has M = 5 lots available and places them on up to K = 3 price levels. Furthermore, we suppose that the buy and sell order features are given by [(1 , 1, 1) , (3 , 1, 1) , (0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0)] and [(1 , 1, 3) , (0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0)] .
+
+Now we suppose that the algorithm decides to allocate two lots to the best bid and one lot to the second-best bid, by cancelling the sell order resting on the best ask, while keeping the remaining order allocations 6the same. Furthermore, we suppose that the order queues on the best and second-best bid each contain three lots. After reallocation, the buy and sell order features are given by [(1 , 1, 1) , (1 , 4, 2) , (2 , 4, 1) , (3 , 1, 1) , (0 , 0, 0)] and [(0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0) , (0 , 0, 0)] .
+
+Importantly, this changes the ordering of the buy orders. The order with level, queue position, and size (3 , 1, 1) was originally in the second slot of the buy order features, but after reallocation it is now in the fourth slot. The orders with level, queue position, and size (1 , 4, 2) and (2 , 4, 1) were not present in the original order features, but they are now in the second and third slots. For a standard feed-forward net-work, each parameter at the first layer is associated with a specific input coordinate. Consequently, when an unchanged order moves from one coordinate to another, the network encounters the same information at a different input coordinate. To avoid this issue, we use a deep-set encoder to represent limit orders. Deep-set encoders (Zaheer et al., 2017) operate on set-valued inputs by applying a shared embedding function to each element and aggregating the resulting embeddings using a permutation-invariant operation such as summation or averaging. Let f oϕ be a neural network with parameters ϕ. For k ∈ { 1, . . . , K }, we define the index sets 
+
+Ib,k n = i ∈ { 1, . . . , m bn} : lb,i n = k , Ia,k n = i ∈ { 1, . . . , m an} : la,i n = k .
+
+Then, we define the encoded order features on the buy and sell side at price level k by 
+
+f e,b,k n,ϕ = 1
+
+|Ib,k n |
+
+X
+
+> i∈Ib,k n
+
+f oϕ
+
+
+
+qb,i n , w b,i n
+
+
+
+and f e,a,k n,ϕ = 1
+
+|Ia,k n |
+
+X
+
+> i∈Ia,k n
+
+f oϕ
+
+
+
+qa,i n , w a,i n
+
+
+
+.
+
+If Ib,k n or Ia,k n is empty, the corresponding encoded feature is set equal to zero. Since averaging is invariant to permutations, the representation does not depend on the way in which individual limit orders are stored. At the same time, queue priority is retained because the queue position q enters the order-level network f oϕ. By averaging, we lose information about the total volume of orders at each price level, but this is already captured by the feature (4). We denote by f eϕ(sn) the encoded state vector, which contains the encoded order features f e,b,k n,ϕ and f e,a,k n,ϕ for k = 1 , . . . , K together with the remaining features from Section 3.1. Continuing with our example, the encoded buy and sell features before and after reallocation are given by [f e,b, 1 
+
+> n,ϕ
+
+, f e,b, 2 
+
+> n,ϕ
+
+, f e,b, 3 
+
+> n,ϕ
+
+] and [f e,a, 1 
+
+> n,ϕ
+
+, f e,a, 2 
+
+> n,ϕ
+
+, f e,a, 3 
+
+> n,ϕ
+
+].
+
+Before reallocation, the first and third entries of the buy features are non-zero, while the second entry is zero, and the first entry of the sell features is non-zero, while the last two entries are zero. After reallocation, all three entries of the buy features are non-zero, and all three entries of the sell features are zero. Crucially, the interpretation of the entries does not change. The first entry always describes orders at the first price level, the second entry always describes orders at the second price level, and the third entry always describes orders at the third price level, on the buy and sell side. The encoder therefore converts a variable-size collection of orders into a fixed-dimensional representation, where the k-th slot on the buy or sell side always corresponds to order information on the k-th price level. 
+
+4.2 Actor 
+
+In our application, the actions must be contained in the simplex. A natural choice for the distribution parameterizing the actions is the logistic-normal distribution , which has support in S2( K+1) . The logistic transformation h maps vectors x = ( x1, x 2, . . . , x 2( K+1) ) in R2( K+1) to actions a = ( a0, a 1, . . . , a 2( K+1) ) in 7S2( K+1) , where 
+
+ak = exk
+
+1 + P2( K+1)  
+
+> l=1
+
+exl , for k = 1 , . . . , 2( K + 1) ,a0 = 11 + P2( K+1)  
+
+> l=1
+
+exl .
+
+Let X be a random variable with multivariate normal distribution on R2( K+1) with mean vector μ = μ1, . . . , μ 2( K+1)  ∈ R2( K+1) and covariance matrix Σ = (Σ ij )i,j =1 ,..., 2( K+1) ∈ R2( K+1) ×2( K+1) . Then, the random variable h(X) has a logistic-normal distribution, which admits a closed-form density (Aitchison and Shen, 1980). We choose a policy (or actor) that is given by a logistic-normal distribution with conditional density πϕ,θ (· | s) for each state s, where ϕ are the parameters of the encoder network and 
+
+θ = ( θm, θ v) are the weights specifying the mean and variance of the distribution. More precisely, θm are the weights of a neural network f mθm that maps encoded states f eϕ(s) to the mean of the normal distribution 
+
+μθm = f mθm (f eϕ(s)) , and we model the covariance matrix as a state-independent diagonal matrix given by Σθv = Diag 
+
+
+
+exp  θv, 1 , exp  θv, 2 , . . . , exp 
+
+
+
+θv, 2( K+1)  
+
+∈ R2( K+1) ×2( K+1) . (8) The mean of the logistic-normal distribution is not known in closed form. However, if an action a
+
+has logistic-normal distribution with density πϕ,θ (· | s), where μθm is the mean of the underlying normal distribution, we have 
+
+E
+
+
+
+log 
+
+ aj
+
+ak
+
+ 
+
+= μjθm − μkθm , for j, k ∈ { 0, 1, 2, . . . , 2( K + 1) }, (9) with the convention μ0 
+
+> θm
+
+= 0 . At initialization, we set the parameters of the final layer of the network 
+
+f mθm close to zero, except for the bias term b ∈ R2( K+1) . Then, the bias b controls the policy’s initial allocations via (9). 
+
+4.3 Critic 
+
+The value function (or critic) V πϕ,θ and the advantage function Aπϕ,θ corresponding to the actor πϕ,θ are defined by 
+
+V πϕ,θ (s′) = E
+
+> a∼πϕ,θ
+
+"N −1X
+
+> l=n
+
+r(sl, a l) + g(sN ) | sn = s′
+
+#
+
+,Aπϕ,θ (s′, a ′) = E
+
+> a∼πϕ,θ
+
+"N −1X
+
+> l=n
+
+r(sl, a l) + g(sN ) | sn = s′, a n = a′
+
+#
+
+− V πϕ,θ (s′), (10) where s′ is a state and a′ an action at time step n. The advantage function is estimated based on an estimate of the value function. Let f Vϑ be a neural network with weights ϑ. Then, the value function estimate for a state s′ is given by V πϕ,θ  
+
+> ϕ,ϑ
+
+(s′) = f Vϑ (f eϕ(s′)) . For a given episode {(sn, a n) : n ∈ { 0, 1, . . . , N − 1}} ∪ { sN },
+
+we estimate the advantage function by 
+
+Aπϕ,θ  
+
+> ϕ,ϑ
+
+(sn, a n) =  
+
+> N−1
+
+X
+
+> l=n
+
+r(sl, a l) + g(sN ) − V πϕ,θ  
+
+> ϕ,ϑ
+
+(sn), for n = 0 , 1, . . . , N − 1, (11) replacing the expected value in (10) by the returns-to-go in this episode and the value function with its estimate. 84.4 Training process 
+
+By the policy gradient theorem (Sutton et al., 1999), the gradient of the objective (2) with respect to the parameters of the policy is given by 
+
+∇ϕ,θ J(πϕ,θ ) = Ea∼πϕ,θ 
+
+> s0∼ρ
+
+"N −1X
+
+> n=0
+
+Aπϕ,θ (sn, a n)∇ϕ,θ log ( πϕ,θ (an | sn)) 
+
+#
+
+. (12) In practice, we replace the true advantage Aπϕ,θ by the estimator Aπϕ,θ  
+
+> ϕ,ϑ
+
+from (11). Since the density of the logistic-normal distribution is known in closed form, the gradient with respect to the parameters of the logistic-normal distribution can be computed efficiently (Cheridito and Weiss, 2026). The expected value in (12) is not known in closed form, and we estimate it by sampling trajectories from the policy. The encoder and policy parameters ( ϕ, θ ) are updated using gradient descent and an empirical estimate of the gradient expression (12). Additionally, the parameters ϑ of the critic are updated in each gradient step. We make H ∈ N gradient steps with respect to the encoder, actor, and critic parameters ϕ, θ, ϑ. 
+
+At the beginning of the training cycle, the parameters are initialized as ϕ1, θ 1, ϑ 1. In each training step 
+
+i ∈ { 1, . . . , H }, we collect τ ∈ N trajectories 
+
+TN,τ =
+
+(sn,k , a n,k , r (sn,k , a n,k )) : n ∈ { 0, . . . , N − 1} ∪ (sN,k , g (sN,k )) : k ∈ { 1, . . . , τ }
+
+
+
+, (13) where the actions an,k are sampled from a logistic-normal distribution which has conditional density 
+
+πϕi,θ i (· | sn,k ). For each state-action pair ( sn,k , a n,k ), the advantage function Aπϕi,θ i 
+
+> ϕi,ϑ i
+
+(sn,k , a n,k ) is estimated via (11) using the value function estimate V πϕi,θ i 
+
+> ϕi,ϑ i
+
+(sn,k ). The encoder, actor, and critic parameters are updated from ϕi, θ i, ϑ i to ϕi+1 , θ i+1 , ϑ i+1 by making a gradient step with learning rate η > 0 using the combined loss function (ϕ, θ, ϑ ) 7 → − 1
+
+τ N 
+
+> τ
+
+X 
+
+> k=1
+> N−1
+
+X
+
+> n=0
+
+Aπϕi,θ i 
+
+> ϕi,ϑ i
+
+(sn,k , a n,k ) log πϕ,θ (an,k | sn,k )+ cV
+
+1
+
+τ N 
+
+> τ
+
+X 
+
+> k=1
+> N−1
+
+X
+
+> n=0
+
+V πϕi,θ i 
+
+> ϕ,ϑ
+
+(sn,k ) − 
+
+> N−1
+
+X
+
+> l=n
+
+r(sl,k , a l,k ) − g(sN,k )
+
+> 2
+
+, (14) for a parameter cV ∈ R+ . Alternatively, the parameters can be updated in two separate gradient steps: one for the encoder and actor parameters ( ϕ, θ ) and one for the encoder and critic parameters ( ϕ, ϑ ). However, we found that the combined loss function (14) yields good results, while being computationally more efficient. Algorithm 1 summarizes the whole training process. 
+
+Algorithm 1 Actor-critic algorithm with logistic-normal distribution and order encoding. 
+
+Initialize encoder weights ϕ, actor weights θ, critic weights ϑ, bias b, number of iterations H, number of trajectories τ, learning rate η, inventory parameter γ, loss function parameter cV .
+
+for i = 1 , . . . , H do Collect trajectories TN,τ by sampling actions from policy πϕi,θ i .
+
+Update weights ϕ, θ, ϑ with a gradient step using learning rate η, the loss function (14), and the samples TN,τ .
+
+end for 
+
+95 Market simulation 
+
+We test our algorithm in a market environment populated by three types of traders: noise traders who place and cancel orders randomly, tactical traders who react to volume imbalance, and strategic traders who trade in the direction of a smoothed volume imbalance signal. Tactical traders cause abrupt price jumps, while strategic traders cause sustained price drifts. Both effects make the market-making problem harder. All traders submit orders in the interval [ −∆t, T ]. The market simulation is similar to the one in Cheridito and Weiss (2026). Trading agents whose order arrivals follow Poisson processes have been used extensively in the literature (see, e.g., Cont et al., 2010). 
+
+5.1 Noise traders 
+
+The noise traders submit market, limit, and cancellation orders according to independent Poisson pro-cesses. The intensities of market and limit orders are state-independent, and cancellation intensities scale linearly with the volume at each price level. 
+
+• Market buy and sell orders arrive with intensity λM .
+
+• For k ∈ { 1, . . . , D }, limit buy and sell orders arrive k ticks below the best ask price or k ticks above the best bid price with intensity λL,k .
+
+• If the spread is j ticks, then for k ∈ { j, . . . , D }, cancellations of limit buy orders arrive k ticks below the best ask price with intensity λC,k vb,k −j+1 , and cancellations of limit sell orders arrive k ticks above the best bid price with intensity λC,k va,k −j+1 .
+
+5.2 Tactical traders 
+
+The intensities of the tactical traders’ order arrivals depend on volume imbalance. We define exponentially weighted volumes on the bid and ask sides by 
+
+V bt =
+
+> D
+
+X
+
+> k=1
+
+vb,k t e−c(k−1) and V at =
+
+> D
+
+X
+
+> k=1
+
+va,k t e−c(k−1) , (15) where c ∈ R+ is a damping factor. The weighted volume imbalance is then defined by 
+
+It = V bt − V at
+
+V bt + V at
+
+. (16) The damping factor c controls how sensitive the imbalance is to volumes posted at deeper levels in the book. Let I+ 
+
+> t
+
+and I− 
+
+> t
+
+be the positive and negative parts of the imbalance. The intensities for different order types are defined as follows: 
+
+• For dM ∈ R+, market buy orders arrive with intensity dM I+ 
+
+> t
+
+and market sell orders arrive with intensity dM I− 
+
+> t
+
+.
+
+• For k ∈ { 1, 2, . . . , D } and dL,k ∈ R+, limit buy orders arrive k ticks below the best ask price with intensity dL,k I+ 
+
+> t
+
+, and limit sell orders arrive k ticks above the best bid price with intensity dL,k I− 
+
+> t
+
+.
+
+• If the spread is j ticks, then for k ∈ { j, . . . , D } and dC,k ∈ R+, cancellations of limit buy orders arrive k ticks below the best ask price with intensity dC,k I− 
+
+> t
+
+vb,k −j+1 , and cancellations of limit sell orders arrive k ticks above the best bid price with intensity dC,k I+ 
+
+> t
+
+va,k −j+1 .
+
+10 5.3 Strategic traders 
+
+The strategic traders trade in the direction of a smoothed volume imbalance signal. More precisely, let the volume imbalance It be defined as in (16), with the same damping factor c. Then, the exponentially weighted volume imbalance signal is defined by ¯It = e−β(t+∆ t) I−∆t + β
+
+Z t
+
+> −∆t
+
+e−β(t−s) Is ds, t ≥ − ∆t, (17) with a parameter β ∈ R+ that controls the degree of smoothing in the signal. With a high value for β, 
+
+the signal ¯It tracks It closely, and with a low value for β, the signal ¯It is a heavily smoothed version of the past values of It. The strategic traders’ order arrivals then have the following intensities: 
+
+• For zM ∈ R+, market buy orders arrive with intensity zM ¯I+ 
+
+> t
+
+and market sell orders arrive with intensity zM ¯I− 
+
+> t
+
+.
+
+• For k ∈ { 1, 2, . . . , D } and zL,k ∈ R+, limit buy orders arrive k ticks below the best ask price with intensity zL,k ¯I+ 
+
+> t
+
+, and limit sell orders arrive k ticks above the best bid price with intensity zL,k ¯I− 
+
+> t
+
+.
+
+• If the spread is j ticks, then for k ∈ { j, . . . , D } and zC,k ∈ R+, cancellations of limit buy orders arrive k ticks below the best ask price with intensity zC,k ¯I− 
+
+> t
+
+vb,k −j+1 , and cancellations of limit sell orders arrive k ticks above the best bid price with intensity zC,k ¯I+ 
+
+> t
+
+va,k −j+1 .
+
+The introduction of tactical and strategic traders increases the difficulty of the market-making problem. In markets containing only noise traders, order flow is largely symmetric and not directional. When tactical and strategic traders are present, the market exhibits directional pressure. This exposes the market maker to the risk of limit orders being filled immediately before an unfavorable price move, a phenomenon known as adverse selection , which we study in more detail in Section 6.3. 
+
+5.4 Order sizes 
+
+The order sizes of noise, tactical, and strategic traders follow a half-normal distribution. Let Z be a random variable with standard normal distribution. For k ∈ { 1, . . . , D }, market orders, limit orders, and cancellations of the noise traders arrive with sizes 1 + δM
+
+> noise
+
+|Z|, 1 + δL,k 
+
+> noise
+
+|Z|, and 1 + δC,k 
+
+> noise
+
+|Z|. Orders of the tactical traders arrive with sizes 1 + δM
+
+> tactical
+
+|Z|, 1 + δL,k 
+
+> tactical
+
+|Z| and 1 + δC,k 
+
+> tactical
+
+|Z|. Finally, orders of the strategic traders arrive with sizes 1 + δM
+
+> strategic
+
+|Z|, 1 + δL,k 
+
+> strategic
+
+|Z| and 1 + δC,k 
+
+> strategic
+
+|Z|. Order sizes are always rounded to the closest integer, and we draw a separate realization of Z for each order arrival. All types of traders cancel orders with the highest queue positions first and cannot cancel more orders than are currently resting on that price level. 
+
+# 6 Numerical experiments 
+
+We compare the logistic-normal (LN) actor-critic algorithm with three heuristic benchmark algorithms in three market environments consisting of the traders described in Section 5. In this section, we describe all aspects of the numerical experiments in detail. 
+
+6.1 Benchmark algorithms 
+
+We compare the performance of the LN algorithm against the following heuristic benchmarks, which place limit orders at times tn for n = 0 , 1, . . . , N − 1.
+
+• The TOP1 algorithm places M/ 2 lots on the best bid and the best ask at each time tn.
+
+11 • The TOP2 algorithm places M/ 2 lots one tick below the best bid price and one tick above the best ask price at each time tn.
+
+• The INV algorithm places orders at the best prices but skews the order sizes as a function of current inventory. Let Qn be the inventory at time tn and define ¯Qn = max 
+
+
+
+min 
+
+ αQ n
+
+M , 1
+
+
+
+, −1
+
+
+
+, (18) for a parameter α > 0, which controls the aggressiveness of the algorithm’s response to inventory deviations. Then, the algorithm posts M 
+
+> 2
+
+(1 − ¯Qn) lots at the best bid price and M 
+
+> 2
+
+(1 + ¯Qn) lots at the best ask price at each time tn. We round volumes to integers with the method described in Section 3.2. To mirror the terminal reward in (6), the benchmark algorithms send a market order at terminal time tN
+
+that reduces their absolute inventory to at most ⌈νM ⌉, generating the cash flow MO ν (sN ). Furthermore, the algorithms only cancel resting orders when necessary to place new ones, in order to retain queue positions. 
+
+6.2 Simulation setup 
+
+We test all algorithms in three different market environments: one with only noise traders, one with noise and tactical traders, and one with noise, tactical, and strategic traders. The algorithms make decisions at intervals of ∆ t = 30 s until the terminal time T = 600 s , for a total of N = 20 decision steps. At terminal time tN = T, the algorithms must liquidate their entire inventory by sending a market order, which corresponds to ν = 0 in (6). In Appendix C.3, we also test the performance of the algorithm when the terminal inventory constraint is relaxed to ν = 0 .5.
+
+To illustrate the market simulation, Figure 2 shows the evolution of the order book from time t = 0 s until time t = 600 s for the market consisting solely of noise traders. All simulation parameters and 0 60 120 180 240 300 360 420 480 540 600  
+
+> Time
+> 994 996 998 1000 1002 1004 1006
+> Price
+> Best bid/ask prices Market buy Market sell
+> 40
+> 30
+> 20
+> 10
+> 010 20 30 40 Volume
+
+Figure 2: Evolution of the order book over time. Red colors indicate limit sell orders, while blue colors indicate limit buy orders. The black lines represent the best bid and ask prices. The triangles indicate market buy and sell orders. Larger sizes of the triangles correspond to larger order sizes. Deeper color tones correspond to larger volumes. implementation details are provided in Appendix B.1. 12 6.3 Markouts 
+
+Before comparing the performance of the algorithms, we first analyze the market environments in more detail. The tactical traders only react to the instantaneous volume imbalance It. Because of the order-book shape shown in Figure 8, the imbalance tends to mean-revert after a price level is removed. Therefore, the tactical traders trade in short directional bursts. In contrast, because the strategic traders observe a smoothed imbalance signal, their directional trades are longer-lasting, leading to sustained price moves. In a market populated by both tactical and strategic traders, market making becomes more challenging. Passive limit orders may be executed just before a price move triggered by tactical or strategic traders, exposing the market maker to adverse selection. To evaluate the degree of adverse selection across environments, we compute the markouts of the limit orders for the TOP1 and TOP2 algorithms when they place M = 2 or M = 20 lots in the book. Amarkout of a limit order fill at time t at price pft is defined by markout t =
+
+(
+
+pft − pt+∆ t if limit sell ,pt+∆ t − pft if limit buy , (19) where ∆ t > 0 is some time interval and pt is the mid-price. Markouts measure the extent of adverse selection for limit order fills. A limit sell order is adversely selected if the mid-price rises after the order is filled, so that a better selling price could have been achieved later. A limit buy order is adversely selected if the mid-price moves lower after the order is filled, so that a lower buying price could have been achieved later. Here, we choose ∆ t = 30 s in line with the decision frequency of the market-making algorithms. In our simulations, the spread is usually one tick. Therefore, expected markouts of limit order fills at the best prices are around 0.5 ticks in an environment where prices are stable with few adverse selection effects. Table 1 and Figure 3 summarize expected markouts and histograms of markouts for the TOP1 and TOP2 algorithms, placing M = 2 or M = 20 lots. The markout statistics are based on 10,000 limit order fills per algorithm, number of lots, and market environment. We deliberately restrict this analysis to the benchmark algorithms, whose placement is fixed and identical across the three environments, which isolates the effect of the environment on adverse selection. The LN algorithm adapts its placement to each environment, as we show in Section 7, so that its markouts would confound the properties of the market with the response of the policy. We observe that markouts for the TOP2 algorithm are better than for the TOP1 algorithm. This is clear from the definition (19), as the distance from the current mid-price pt at fill time is higher than for the TOP1 algorithm. However, limit fills deeper in the book are also less likely. So, a higher markout per limit order does not necessarily mean the algorithm will be more profitable, since those fills are less frequent. We observe that the markouts for both algorithms deteriorate once strategic traders are introduced, meaning that the orders are adversely selected more often. It is not always the case that placing more lots leads to better markouts. For the TOP1 algorithm, markouts of the algorithm placing 20 lots are better than when it is placing two lots in the market with noise traders. But in all other markets, the markouts when it is placing 20 lots are worse because placing more lots also means that more orders are affected by adverse price moves. The same effect does not hold for the TOP2 algorithm, as placing at the second-best prices shields the limit order fills against adverse price moves. 
+
+6.4 Evaluation and reinforcement learning setup 
+
+We compare the LN algorithm with the three heuristic benchmark algorithms TOP1, TOP2, and INV, where we set the inventory sensitivity parameter of the INV algorithm in (18) to α = 1 .0. We assess each algorithm’s performance by computing the following normalized cash flow 1
+
+M 
+
+> N−1
+
+X
+
+> n=0
+
+¯r(sn, a n) + QN +pN + MO ν (sN )
+
+!
+
+, (20) 13 4 2 0 2 40.0 0.1 0.2 0.3     
+
+> Density  noise tactical strategic 42024
+> Markout
+> 0.0 0.2 0.4 0.6
+> Density
+
+(a) Markouts for TOP1. 4 2 0 2 40.0 0.1 0.2 0.3 4 2 0 2 4 
+
+> Markout
+> 0.0 0.2 0.4
+
+(b) Markouts for TOP2. 
+
+Figure 3: The upper row corresponds to markouts of the algorithms posting M = 2 lots. The lower row corresponds to markouts of the algorithms posting M = 20 lots. Color shades correspond to market environments. Dark-blue corresponds to the noise market, mid-blue corresponds to the market consisting of noise and tactical traders, and light-blue corresponds to the market consisting of noise, tactical, and strategic traders. 
+
+Lots E[MO-TOP1 ] σ[MO-TOP1 ] E[MO-TOP2 ] σ[MO-TOP2 ]
+
+noise 2 0.33 1.17 0.68 1.21 20 0.45 0.75 0.90 1.07 noise & tactical 2 0.36 1.03 0.78 0.92 20 0.26 0.99 0.88 0.86 noise & tactical 2 0.23 1.18 0.60 1.05 & strategic 20 −0.06 1.27 0.59 1.00 
+
+Table 1: Expected value and standard deviation of the markouts defined in (19) for the TOP1 and TOP2 algorithms’ limit order fills, and for M = 2 and M = 20 lots. 14 where ¯ r(sn, a n) are the cash flows from market and limit order fills and MO ν (sN ) is the cash flow from the terminal market order, as defined in Section 3.3. In contrast to the training objective (7), the metric (20) excludes the running inventory penalty −γ|Qn+1 |, so that the reported cash flows remain comparable across different values of γ. Table 2 shows the empirical expected values and standard deviations of (20), and Figure 4 shows the histograms of (20). The values are based on 10,000 test samples. We use separate random seeds for training and testing, to evaluate on out-of-sample episodes. In Appendix C.1, we compare the performance of the logistic-normal distribution with a Dirichlet distribution, which also has support on the simplex, and find that the logistic-normal distribution performs better than the Dirichlet distribution. For the LN algorithm, we choose an inventory risk parameter γ = 0 .01 in (5) and K = 3 for the dimension of the simplex S2( K+1) . In Appendix C.2, we also conduct an experiment with γ = 0 , which corresponds to no inventory penalty. The encoder network f oϕ, mean network f mθm , and the value network 
+
+f Vϑ are implemented as standard feed-forward neural networks. We initialize the bias of the output layer of the network f mθm to b = (1 , 1, . . . , 1) ∈ R2( K+1) and set the remaining weights of this layer close to zero. Then, we obtain from (9) that 
+
+E
+
+
+
+log 
+
+ ak
+
+a0
+
+ 
+
+≈ 1, k = 1 , 2, . . . , 2( K + 1) .
+
+Thus, action a0 is initially less likely than actions a1, a 2, . . . , a 2( K+1) , which reduces the risk of early inactivity and of converging to a degenerate local optimum in which the algorithm never trades. The log-variance parameters are initialized as ( θv, 1, . . . , θ v, 2( K+1) ) = (0 , 0, . . . , 0) ∈ R2( K+1) . After training, we evaluate the algorithm by sampling actions a ∼ πϕ,θ (· | s), where ϕ and θ are the trained weights. Further implementation details are provided in Appendix A.1. 
+
+6.5 Market with noise traders 
+
+The results for the market with noise traders are displayed in the first two rows of Table 2. In this environment, market and limit order arrivals do not depend on the state of the book; only the cancellation intensities scale linearly with the resting volume. We observe that the TOP1 algorithm achieves higher expected cash flows than TOP2, with both algorithms showing similar standard deviations, for both 
+
+M = 2 and M = 20 . The INV algorithm performs better than the TOP1 algorithm, achieving similar expected cash flows but with lower standard deviations, indicating a positive effect of the inventory skewing. The LN algorithm outperforms the INV algorithm, with higher expected values and comparable standard deviations.                                                             
+
+> Lots E[TOP1 ]σ[TOP1 ]E[TOP2 ]σ[TOP2 ]E[INV ]σ[INV ]E[LN ]σ[LN ]
+> noise 24.40 3.87 2.91 3.69 4.83 2.40 6.03 2.81 20 3.84 2.62 1.48 2.82 4.26 1.59 4.66 1.41 noise & tactical 25.47 2.38 4.31 2.42 5.11 2.20 9.11 2.20 20 2.88 2.21 2.55 1.82 1.22 1.92 5.68 1.03 noise & tactical 23.95 2.76 3.83 2.35 3.24 2.32 8.55 2.40 & strategic 20 0.73 2.73 2.05 1.95 −1.44 2.12 4.99 1.07
+
+Table 2: Expected value and standard deviation of the normalized cash flow (20) for the TOP1, TOP2, INV, and LN algorithms, for all markets, and for M = 2 and M = 20 lots. 
+
+6.6 Market with noise & tactical traders 
+
+The results are summarized in the third and fourth rows of Table 2. The performance of the TOP2 algorithm is now closer to the performance of the TOP1 algorithm, because tactical traders induce price 15 Cash Flow (a) Noise Cash Flow  (b) Noise & Tactical Cash Flow  (c) Noise, Tactical & Strategic 
+
+Figure 4: Histograms of the normalized cash flow (20) for the TOP1, TOP2, INV, and LN algorithms, for all markets, and for M = 2 and M = 20 lots. jumps. In this environment, the TOP1 algorithm has the best expected cash flows among the benchmark algorithms, although with higher standard deviations. For M = 2 lots, the INV algorithm has the second-best performance, with lower standard deviations than TOP1. For M = 20 lots, it has the worst performance. This indicates that simple inventory skewing is no longer effective in this market, likely because inventory rebalancing occurs more frequently during adverse price moves. This suggests that inventory control must be complemented with predictive signals derived from the limit order book. Consistent with this interpretation, the performance of the LN algorithm is much stronger than that of the benchmark algorithms, with higher expected cash flows and lower standard deviations, as it integrates inventory risk management with predictive order-book signals. 
+
+6.7 Market with noise & tactical & strategic traders 
+
+When the strategic traders are present in the market, order flow becomes both state-dependent and persistent, leading to pronounced price trends that drive adverse selection and increase inventory risk for liquidity providers. This is also visible in the lower markouts in the fifth and sixth rows of Table 1. For 
+
+M = 2 lots, the performance of the TOP2 algorithm is close to the performance of the TOP1 algorithm, measured in expected value and standard deviation. The expected cash flows of the INV algorithm are the worst, although with the lowest standard deviation. For M = 20 lots, the TOP2 algorithm performs best because it is less likely to be picked off by adverse fills on the first level, to which the TOP1 algorithm is more vulnerable. The expected cash flows of the INV algorithm are the worst among the three benchmarks, with lower standard deviations than TOP1 and higher standard deviations than TOP2. The poor performance is likely driven by adverse executions when skewing inventory. The LN algorithm performs best with high expected cash flows and low standard deviations, particularly for M = 20. The performance gap between LN and the benchmarks is largest in this environment, demonstrating the benefit of adaptive, state-dependent policies that integrate inventory control with predictive order-book signals when adverse selection effects are most severe. 16 7 Analyzing trading behavior 
+
+In this section, we analyze the algorithm’s trading behavior in more detail, by studying its actions, order placement, and inventory management. As in Section 6, the results are based on the same 10,000 test episodes. Furthermore, the simulation and the LN algorithm are configured with the same hyperparam-eters as in Section 6. 
+
+7.1 Actions 
+
+Figure 5 shows a bar plot of the average components of the actions. The bars correspond to actions averaged over all time steps and episodes. The columns correspond to different market environments. The upper panel shows M = 2 lots, while the lower panel shows M = 20 lots. We recall that the action 
+
+a0 denotes the fraction of the total number of lots M that is not placed in the book, while the actions 
+
+a1, a 2, a 3, a 4 correspond to the fractions of M allocated to market buy and limit buy orders, and the actions a5, a 6, a 7, a 8 correspond to the fractions of M allocated to market sell and limit sell orders. Across all markets and both choices of M , the allocations to inactivity  a0, market buy  a1, and market sell  a5 are negligible, and the algorithm’s actions mostly correspond to limit order placements. Furthermore, we notice that the action distributions are not completely symmetric across all markets and for M = 2 and M = 20 . The buy and the sell side receive nearly the same total allocation, but the split across price levels differs slightly, as for instance in the market with noise and tactical traders and M = 2 lots, where the second-best price is used on the bid side but hardly on the ask side. These residual asymmetries do not lead to one-sided trading: as shown in Section 7.3, the algorithm maintains a balanced inventory over time. For the market consisting of noise traders and for M = 2 lots, we observe that the volume is placed almost exclusively at the best bid and ask prices, using actions a2 and a6, while for M = 20 lots the algorithm splits its volume between the best and the second-best prices, using in addition the actions a3
+
+and a7.
+
+In the market consisting of noise and tactical traders, the algorithm starts to use the second-best bid price already for M = 2 lots, and for M = 20 lots the allocations to the best and second-best prices are of comparable size, with a small allocation to the third price level, mainly through the action a8.Once the strategic traders are added, the shift away from the best prices is most pronounced. For 
+
+M = 2 lots, a visible share of the volume is placed at the second-best prices, and for M = 20 lots the volume is distributed over all three price levels, with a clearly larger allocation to the third-best levels than in the previous market. This progression is consistent with the increasing degree of adverse selection. In the market with noise, tactical, and strategic traders, adverse price moves become more persistent, making orders at the top of the book more exposed to being picked off right before a price move. In Figure 6, we evaluate the algorithm’s average actions at all time steps tn conditional on Qn ≥ M/ 2.
+
+In these states, the algorithm carries a substantial one-sided inventory, and we expect it to place more sell orders, as a large inventory contributes negatively to the reward function in (5). Indeed, for M = 2 lots, the placement behavior is strongly asymmetric across all markets, with the large majority of the volume allocated to the sell side through the actions a6 and a7, and only a small residual allocation to the best bid. For M = 20 lots, the behavior is more balanced, but the ask side of the book still receives the larger share of the volume in all three markets. The comparison across markets also shows that the limit order skewing is achieved in different ways. In the markets with noise and with noise and tactical traders, the sell volume is concentrated at the best ask, whereas in the market with strategic traders it is spread more evenly across order-book levels. 
+
+7.2 Limit orders, cancellations, and market orders 
+
+In Table 3, we analyze the limit orders, cancellations, and market orders of the LN algorithm in more detail. The table consists of three blocks, reporting the limit order fills, the limit order cancellations, and 17 a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 
+
+> Allocation(%)
+
+a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 
+
+> Allocation(%)
+
+(a) Noise a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 
+
+a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 (b) Noise & Tactical a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 
+
+a0 a1 a2 a3 a4 a5 a6 a7 a8
+
+010 20 30 40 50 60 (c) Noise, Tactical & Strategic 
+
+Figure 5: Average action allocations of the LN algorithm, averaged over all time steps and episodes. Actions for M = 2 lots correspond to the upper panel, while actions for M = 20 lots correspond to the lower panel. The columns represent different market environments. a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100 
+
+> Allocation (%)
+
+a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100 
+
+> Allocation (%)
+
+(a) Noise a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100 
+
+a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100  (b) Noise & Tactical a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100 
+
+a 0 a 1 a 2 a 3 a 4 a 5 a 6 a 7 a 8
+
+020 40 60 80 100  (c) Noise, Tactical & Strategic 
+
+Figure 6: Average action allocations of the LN algorithm, conditional on Qn ≥ M/ 2, averaged over all time steps and episodes satisfying this condition. Actions for M = 2 lots correspond to the upper panel, while actions for M = 20 lots correspond to the lower panel. The columns represent different market environments. 18 the market orders. The column Rate of the fill block reports the share of the limit order volume placed in the book that is eventually filled, the column Rate of the cancellation block reports the share of limit order volume that is cancelled, and the column Rate of the market order block reports the share of the algorithm’s total placed volume that is executed with market orders. This share includes the market order that liquidates the remaining inventory at the terminal time, which is imposed by the terminal inventory constraint in (6) with ν = 0 . Every placed order is eventually either filled or cancelled, so that the limit fill and cancellation rates add up to 100% . Within each block, the columns L1, L2, and L3 decompose the corresponding volume by the price level at which the order was inserted: L1 corresponds to the best price, L2 to the second-best price, and L3 to the third-best price. We report the insertion level rather than the level at the time of the fill, because limit orders are filled almost exclusively at the best price, so that the level at fill time would carry little information. For the cancellations, the two conventions do not differ, since the algorithm cancels its resting orders immediately after making a trading decision. The table refines the picture obtained from the action allocations in Figure 5, which show how the algorithm distributes its volume across the price levels. The level columns of the fill block instead show how the volume that is eventually filled was distributed at insertion. This distribution is tilted towards the best prices, because orders inserted there are filled with a higher probability. In the market with noise traders and M = 2 lots, essentially the entire filled volume was inserted at the best prices, whereas for M = 20 lots a quarter of it was inserted at the second-best prices. Adding the tactical traders moves the insertion level of the filled volume further away from the top of the book, and the shift is most pronounced when the strategic traders are present as well. In that market, roughly a quarter of the filled volume was inserted at the second-best prices for M = 2 lots, and 8 .30% was inserted at the third-best prices for M = 20 lots, compared to 2 .10% in the market with noise and tactical traders. The cancelled volume shows the same shift towards deeper insertion levels across the three markets. In addition, for M = 20 lots it sits at deeper levels than the filled volume, which is expected, since orders inserted at the best prices are more likely to be filled before they are cancelled. The fill rate decreases as tactical and strategic traders enter the market, from 74 .65% to 59 .16% for 
+
+M = 2 lots and from 59 .65% to 43 .99% for M = 20 lots, and it decreases likewise when the algorithm quotes more lots. Because fill and cancellation rates add up to 100% , the cancellation rate increases when tactical and strategic traders are present, and reaches 56 .01% in the market with strategic traders for 
+
+M = 20 lots. Cancellations are necessary to move resting volume to a different price level, so this reflects a more active management of resting orders in the markets where the order flow is more informed. The algorithm barely uses market orders by its own choice, in line with the negligible allocations to the actions a1 and a5 in Figure 5. This is because market orders require crossing the spread, whereas limit orders earn it. The share reported in the market order block lies between 1 .90% and 2 .74% across all markets and both lot sizes, and it is driven almost entirely by the terminal market order, which is imposed by the terminal inventory constraint. 
+
+7.3 Inventory evolution 
+
+Figure 7 presents the average inventories across all episodes and market environments, with shaded regions indicating the corresponding standard deviations. In all three markets, and for both M = 2 and M = 20 lots, the average inventory stays essentially flat at zero over the entire episode, and the standard-deviation bands are almost symmetric around it. The remaining deviations of the mean from zero are an order of magnitude smaller than the width of the bands, so that we do not observe a systematic tilt towards long or short positions in any of the markets. The bands widen over the first few decision times, stay roughly constant during the episode, and contract at the terminal time, where the algorithm is forced to flatten its position, since we set ν = 0 in (6). The width of the bands depends on the number of lots. For M = 2 lots, the inventory stays within roughly one lot of zero, whereas for M = 20 lots the bands extend to around six lots. The algorithm therefore does not generate its cash flows by leaning to one side of the market, but by 19 Limit order fills (%) Limit order cancellations (%) Market orders (%) Lots Rate L1 L2 L3 Rate L1 L2 L3 Rate noise 2 74.65 99.71 0.29 0.01 25.35 97.96 1.80 0.24 2.67 20 59.65 74.64 25.36 0.00 40.35 49.29 50.68 0.04 2.10 noise & tactical 2 63.93 91.76 8.24 0.00 36.07 88.76 10.76 0.48 2.73 20 52.88 65.35 32.55 2.10 47.12 49.15 45.20 5.65 2.60 noise & tactical 2 59.16 73.39 26.59 0.02 40.84 75.10 24.03 0.87 2.74 & strategic 20 43.99 61.80 29.89 8.30 56.01 42.15 35.33 22.52 1.90 
+
+Table 3: Limit order fills, cancellations, and market order executions of the LN algorithm, for all markets, and for M = 2 and M = 20 lots. In each of the two limit order blocks, the column Rate reports the share of the placed limit order volume that is filled, respectively cancelled, and the columns L1, L2, and 
+
+L3 decompose that volume into the shares that were inserted at the best, second-best, and third-best prices. The column Rate of the market order block reports the share of the total placed volume that is executed with market orders. quoting on both sides while keeping its inventory centered at zero. This does not mean that it quotes symmetrically in every state, as the allocations conditional on a long position in Figure 6 show. 0 120 240 360 480 600      
+
+> −101
+> Inventory
+> 0120 240 360 480 600
+> −10
+> −50510
+> Inventory
+
+(a) Noise 0 120 240 360 480 600       
+
+> −1010120 240 360 480 600
+> −10
+> −50510
+
+(b) Noise & Tactical 0 120 240 360 480 600       
+
+> −1010120 240 360 480 600
+> −10
+> −50510
+
+(c) Noise, Tactical & Strategic 
+
+Figure 7: Average inventory paths from time t = 0 s to time t = 600 s of the LN algorithm for three market environments. The upper panels correspond to M = 2 lots, while the lower panels correspond to 
+
+M = 20 lots. The shaded regions indicate standard deviations. 
+
+# 8 Conclusion 
+
+We introduce a novel RL algorithm that combines deep-set encoders with a logistic-normal distribution to model limit order allocations. The algorithm observes general market states and the levels, queue positions, and sizes of resting limit orders, enabling flexible volume allocation across market and limit orders with varying price levels. It outperforms competitive benchmarks across three simulated market environments, demonstrating intelligent placement behavior and effective inventory risk management. While we work in a simulated market environment, the algorithm can be trained on any market simulator. More broadly, our method can be used for any dynamic allocation task with variable-length feature sets. 20 References 
+
+Fr´ ed´ eric Abergel and Aymen Jedidi. A mathematical approach to order book modeling. International Journal of Theoretical and Applied Finance , 16(05):1350025, 2013. Fr´ ed´ eric Abergel, Cˆ ome Hur´ e, and Huyˆ en Pham. Algorithmic trading in a microstructural limit order book model. In Commodities , pages 691–730. Chapman and Hall/CRC, 2022. John Aitchison and Sheng M Shen. Logistic-normal distributions: Some properties and uses. Biometrika ,67(2):261–272, 1980. Marco Avellaneda and Sasha Stoikov. High-frequency trading in a limit order book. Quantitative Finance ,8(3):217–224, 2008. Michel L Balinski and H Peyton Young. Fair Representation: Meeting the Ideal of One Man, One Vote .Rowman & Littlefield, 2010. Taweh Beysolow II. Market making via reinforcement learning. In Applied Reinforcement Learning with Python: With OpenAI Gym, Tensorflow, and Keras , pages 77–94. Springer, 2019. ´Alvaro Cartea and Yixuan Wang. Market making with alpha signals. International Journal of Theoretical and Applied Finance , 23(03):2050016, 2020. ´Alvaro Cartea, Sebastian Jaimungal, and Jos´ e Penalva. Algorithmic and High-Frequency Trading . Cam-bridge University Press, 2015. Patrick Cheridito and Moritz Weiss. Reinforcement learning for trade execution with market and limit orders. Quantitative Finance , pages 1–21, 2026. Guhyuk Chung, Munki Chung, Yongjae Lee, and Woo Chang Kim. Market making under order stacking framework: A deep reinforcement learning approach. In Proceedings of the Third ACM International Conference on AI in Finance , pages 223–231, 2022. Rama Cont, Sasha Stoikov, and Rishi Talreja. A stochastic model for order book dynamics. Operations Research , 58(3):549–563, 2010. Bruno Gaˇ sperov and Zvonko Kostanjˇ car. Market making with signals through deep reinforcement learning. 
+
+IEEE Access , 9:61611–61622, 2021. Bruno Gaˇ sperov and Zvonko Kostanjˇ car. Deep reinforcement learning for market making under a Hawkes process-based limit order book model. IEEE Control Systems Letters , 6:2485–2490, 2022. Martin D Gould, Mason A Porter, Stacy Williams, Mark McDonald, Daniel J Fenn, and Sam D Howison. Limit order books. Quantitative Finance , 13(11):1709–1742, 2013. Olivier Gu´ eant, Charles-Albert Lehalle, and Joaquin Fernandez-Tapia. Dealing with the inventory risk: a solution to the market making problem. Mathematics and Financial Economics , 7(4):477–507, 2013. Fabien Guilbaud and Huyen Pham. Optimal high-frequency trading with limit and market orders. Quan-titative Finance , 13(1):79–94, 2013. Hong Guo, Jianwu Lin, and Fanlin Huang. Market making with deep reinforcement learning from limit order books. In 2023 International Joint Conference on Neural Networks (IJCNN) , pages 1–8. IEEE, 2023. Thomas Ho and Hans R Stoll. Optimal dealer pricing under transactions and return uncertainty. Journal of Financial Economics , 9(1):47–73, 1981. 21 Diederik P Kingma and Jimmy Lei Ba. Adam: A method for stochastic optimization. arXiv Preprint arXiv:1412.6980 , 2014. Pankaj Kumar. Deep reinforcement learning for high-frequency market making. In Asian Conference on Machine Learning , pages 531–546. PMLR, 2023. Luca Lalor and Anatoliy Swishchuk. Event-based limit order book simulation under a neural Hawkes process: Application in market-making. arXiv Preprint arXiv:2502.17417 , 2025. Xiaofei Lu and Fr´ ed´ eric Abergel. Order-book modeling and market making strategies. Market Microstruc-ture and Liquidity , 4(01n02):1950003, 2018. Andrew Y Ng, Daishi Harada, and Stuart J Russell. Policy invariance under reward transformations: Theory and application to reward shaping. In Proceedings of the Sixteenth International Conference on Machine Learning , ICML ’99, pages 278–287, San Francisco, CA, USA, 1999. Morgan Kaufmann Publishers Inc. Andrew M Saxe, James L McClelland, and Surya Ganguli. Exact solutions to the nonlinear dynamics of learning in deep linear neural networks. arXiv Preprint arXiv:1312.6120 , 2013. Jiayu Shi, Siu Hin Tang, and Chao Zhou. Market-making and hedging with market impact using deep reinforcement learning. In Proceedings of the 5th ACM International Conference on AI in Finance ,pages 652–659, 2024. Tianyuan Sun, Dechun Huang, and Jie Yu. Market making strategy optimization via deep reinforcement learning. IEEE Access , 10:9085–9093, 2022. Richard S Sutton, David McAllester, Satinder Singh, and Yishay Mansour. Policy gradient methods for reinforcement learning with function approximation. Advances in Neural Information Processing Systems , 12, 1999. Yongzhao Wang, Rahul Savani, Anri Gu, Chris Mascioli, Theodore Turocy, and Michael Wellman. Market making with learned beta policies. In Proceedings of the 5th ACM International Conference on AI in Finance , pages 643–651, 2024. Yibing Xiong, Takashi Yamada, and Takao Terano. Comparison of different market making strategies for high frequency traders. In 2015 Winter Simulation Conference (WSC) , pages 324–335. IEEE, 2015. Manzil Zaheer, Satwik Kottur, Siamak Ravanbakhsh, Barnabas Poczos, Russ R Salakhutdinov, and Alexander J Smola. Deep sets. Advances in Neural Information Processing Systems , 30, 2017. Yuheng Zheng and Zihan Ding. Reinforcement learning in high-frequency market making. arXiv Preprint arXiv:2407.21025 , 2024. 
+
+# A Reinforcement learning algorithm details 
+
+A.1 Parameters 
+
+Neural network architecture For the value function neural network f Vϑ , we use a network with two hidden layers, 128 nodes per hidden layer, tanh activations, and an output layer with one node. For the network f mθm , specifying the mean of the normal distribution, we use a network with two hidden layers, 128 nodes per hidden layer, tanh activations, and an output layer with 2( K + 1) nodes. For the encoder network f oϕ, we use a one-layer neural network with two nodes and a ReLU activation function. 22 Initialization For the output layer of f mθm , we set the bias to b = (1 , 1, . . . , 1) ∈ R2( K+1) and initialize the other weights using orthogonal initialization with a gain factor 10 −5; see, e.g., Saxe et al. (2013). Therefore, the weights of the output layer of f mθm are close to zero, except for the bias term, and the output is determined by the bias term. We initialize the weights of all other layers of f Vϑ , f mθm , and 
+
+f oϕ with an orthogonal initialization scheme with a gain factor of √2 and a bias term set to zero. The parameters of the covariance matrix in (8) are initialized as θv, 1 = θv, 2 = · · · = θv, 2( K+1) = 0 .
+
+Learning To update the encoder, actor, and critic parameters, we collect a batch of τ = 1,280 episodes (13). We use the Adam optimizer (Kingma and Ba, 2014) with a learning rate of η = 0 .0005 . We update the parameters for a total of H = 800 gradient steps using the loss function (14) together with the parameter cV = 0 .5. We use the inventory risk parameter γ = 0 .01 in (5). All parameters related to the algorithm are summarized in Table 4. 
+
+Computational resources The experiments were conducted on a workstation equipped with 128 CPUs and a single NVIDIA GeForce RTX GPU with 24 GB VRAM. Table 4: Parameters of the RL algorithm.                             
+
+> Gradient steps H800
+> Number of trajectories τ1,280 Learning rate η0.0005
+> Number of hidden layers fVϑ2Nodes fVϑ128 Number of hidden layers fmθm2Nodes fmθm128 Number of hidden layers foϕ1Nodes foϕ2Loss parameter cV0.5
+> Inventory parameter γ0.01
+
+A.2 Feature normalization 
+
+The features described in Section 3.1 are normalized. We transform the features so that they are approx-imately contained in the interval [ −1, 1] or [0 , 1]. 
+
+Market states 
+
+• We use the best bid and ask price returns 100 × (pbn − pb
+
+> 0
+
+)/p b 
+
+> 0
+
+and 100 × (pan − pa
+
+> 0
+
+)/p a
+
+> 0
+
+.
+
+• According to Figure 8, the average queue sizes are always smaller than 100. Therefore, we use the normalized volumes vb,k n /100 ∈ R+ and va,k n /100 ∈ R+ for k ∈ { 1, 2, . . . , K }.
+
+• We normalize the market order flow ∆ Mn in ( tn−1, t n] by dividing it by the total volume of market buy and sell orders in ( tn−1, t n].
+
+• We normalize the limit order flow ∆ Ln in ( tn−1, t n] by dividing it by the total volume of limit buy and sell orders in ( tn−1, t n]. 
+
+• We normalize the cancellation order flow ∆ Cn in ( tn−1, t n] by dividing it by the total volume of limit buy and sell order cancellations in ( tn−1, t n].
+
+• We use the mid-price returns relative to the last mid-price 100 × (pn − pn−1)/p n−1.23 Private states 
+
+• We normalize the current time relative to the terminal time by considering tn/T ∈ [0 , 1] .
+
+• We normalize the inventory by Qn/M ∈ R .
+
+• For i ∈ { 1, 2, . . . , m bn}, we use the following normalized queue positions and sizes of the resting limit buy orders 
+
+qb,i n
+
+100 , wb,i n
+
+M
+
+!
+
+∈ R+ × R+ .
+
+We normalize qb,i n by 100 , because Figure 8 indicates that average queue sizes are less than 100 .
+
+Finally, order sizes cannot be larger than M, which justifies the normalization wb,i n 
+
+> M
+
+.
+
+• Similarly, for i ∈ { 1, 2, . . . , m an}, we use the following normalized queue positions and sizes of the resting limit sell orders 
+
+qa,i n
+
+100 , wa,i n
+
+M
+
+!
+
+∈ R+ × R+ .
+
+# B Simulation details 
+
+B.1 Simulation parameters 
+
+In this section, we discuss all parameters related to the trading agents. Noise, tactical, and strategic traders submit orders up to level D = 30 . The order sizes of the trading agents have a half-normal distribution with the same standard deviations δM 
+
+> noise
+
+= δL,k  
+
+> noise
+
+= δC,k  
+
+> noise
+
+= 2 , δ M 
+
+> tactical
+
+= δL,k  
+
+> tactical
+
+= δC,k  
+
+> tactical
+
+= 2 and δM 
+
+> strategic
+
+= δL,k  
+
+> strategic
+
+= δC,k  
+
+> strategic
+
+= 2 for k ∈ { 1, 2, . . . , D }. The agents start trading at time −∆t =
+
+−30 s , where the best bid price is pb 
+
+> −∆t
+
+= 1000 and the best ask price is pa 
+
+> −∆t
+
+= 1001 , and the order book is populated with limit orders. We start each trading simulation from its corresponding average shape, which is displayed in Figure 8. More precisely, at −∆t, we set the volume k − 1 ticks below or above the best prices to ¯ vk, for k = 1 , . . . , D, where ¯ vk is the average volume, defined in (21) below. All simulation parameters are summarized in Table 5. 
+
+Average shapes We start the market simulation from an equilibrium state of the limit order book. The equilibrium states are described by the average volumes relative to the best price ¯v = (¯ v1, . . . , ¯vD) ∈ RD 
+
+> +
+
+. (21) Here, for k ∈ { 1, . . . , D } the quantity ¯ vk is the average volume k − 1 ticks below or above the best prices. The average shapes are obtained by running simulations for a long time and averaging the volumes at each price level. In our simulations we always start with initial prices pb 
+
+> −∆t
+
+= 1000 and pa 
+
+> −∆t
+
+= 1001 . The initial volumes at the best prices are then ¯ v1, the initial volumes at the second-best prices are ¯ v2, and so on. The average shape for each market is summarized in Figure 8. 
+
+Market with noise traders The intensities of limit order λL,k and cancellation λC,k arrivals for the noise traders are presented in Table 6. The market order intensity is given by λM = 0 .1237 . The intensities are taken from the paper Abergel and Jedidi (2013), but we increase the cancellation intensities by a factor of 100 . This leads to smaller queue sizes, which makes the simulation more efficient. At −∆t, the order book is populated with limit buy and sell orders, such that the shape of the order book matches its average shape, shown in Figure 8a. 24 Table 5: Parameters for the market simulation. 
+
+start time for simulation −∆t −30 s 
+
+end time for simulation T 600 s 
+
+initial bid price pb 
+
+> −∆t
+
+1000 initial ask price pa 
+
+> −∆t
+
+1001 initial volumes Figure 8 order size δM 
+
+> noise
+
+= δL,k  
+
+> noise
+
+= δC,k  
+
+> noise
+
+2order size δM 
+
+> tactical
+
+= δL,k  
+
+> tactical
+
+= δC,k  
+
+> tactical
+
+2order size δM 
+
+> strategic
+
+= δL,k  
+
+> strategic
+
+= δC,k  
+
+> strategic
+
+2market order intensity λM 0.1237 
+
+Limit/Cancel intensities λL,k , λ C,k Table 6 Tactical trader factor dM = dL,k = dC,k 4Strategic trader factor zM = zL,k = zC,k 2Imbalance smoothing factor β 0.1 damping factor c 0.65 start time for RL and benchmark algorithms t = 0 
+
+small maximum lots M 2large maximum lots M 20 1 10 20 30 40 50 
+
+Price level 
+
+> 010 20 30
+> Volume
+
+(a) Noise 1 10 20 30 40 50 
+
+Price level  
+
+> 010 20 30
+
+(b) Noise & Tactical 1 10 20 30 40 50 
+
+Price level  
+
+> 010 20 30
+
+(c) Noise, Tactical & Strategic 
+
+Figure 8: Average order book shapes for the three market environments. 25 Table 6: Intensities of limit orders and cancellations. 
+
+k (ticks) λL,k 10 λC,k 
+
+1 0.2842 0.8636 2 0.5255 0.4635 3 0.2971 0.1487 4 0.2307 0.1096 5 0.0826 0.0402 6 0.0682 0.0341 7 0.0631 0.0311 8 0.0481 0.0237 9 0.0462 0.0233 10 0.0321 0.0178 11 0.0178 0.0127 12 0.0015 0.0012 13 0.0001 0.0001 14 0.0000 0.0000 ... ... ...30 0.0000 0.0000 
+
+Market with noise & tactical traders The intensities of the order arrivals from the tactical traders depend on the exponentially weighted volumes defined in (15). We set the damping factor to c = 0 .65 .
+
+We set the parameters that control the sensitivity of the order arrivals to the weighted volume imbalance to dL,k = dC,k = dM = 4 for k ∈ { 1, 2, . . . , D }. To compensate for the presence of tactical traders, we reduce the intensities of the noise traders by 30%. At the initial time −∆t, the order book is populated with limit orders, such that its shape matches the equilibrium state, displayed in Figure 8b. 
+
+Market with noise & tactical & strategic traders The intensities of the order arrivals from the strategic traders depend on the smoothed imbalance signal, defined in (17). We set the smoothing parameter to β = 0 .1 and the sensitivity parameters, which control how strongly the strategic traders react to the smoothed imbalance signal, to zL,k = zC,k = zM = 2 for k ∈ { 1, 2, . . . , D }. To compensate for the additional flow from tactical and strategic traders, we reduce the intensities of the noise traders by 40%. At the initial time −∆t, the order book is populated with limit orders, such that its shape matches the equilibrium state, displayed in Figure 8c. 
+
+# C Additional numerical experiments 
+
+C.1 Dirichlet vs. logistic-normal distribution 
+
+An alternative to the logistic-normal distribution is the Dirichlet (DR) distribution, which is also de-fined on the probability simplex S2( K+1) . It has also been used in Cheridito and Weiss (2026) for a trade-execution problem. Let us define α = ( α0, α 1, α 2, . . . , α 2( K+1) ) ∈ R2K+3 with αk > 0, for 
+
+k = 0 , 1, . . . , 2( K + 1) , and ¯ α = P2( K+1)  
+
+> k=0
+
+αk. The density of the Dirichlet distribution is given by 
+
+ψ(a0, a 1, . . . , a 2( K+1) ) = 1
+
+B(α)
+
+> 2( K+1)
+
+Y
+
+> k=0
+
+(ak)αk −1 with B(α) = 
+
+Q2( K+1)  
+
+> k=0
+
+Γ( αk)Γ (¯ α) .
+
+26 If a is a random variable with a Dirichlet distribution, then the expected value for each component is given by 
+
+E[ak] = αk
+
+¯α , for k = 0 , . . . , 2( K + 1) .
+
+Instead of using the logistic-normal distribution to parameterize the policy, we can use the Dirichlet distribution. The resulting algorithm is trained with the same hyperparameters as the LN algorithm. We also use the same encoder architecture and the same value function architecture as in the LN algorithm. The policy network again has two hidden layers, 128 nodes per hidden layer, and tanh activations. The only difference is the output layer: the network (which we called f mθm above) has 2 K + 3 nodes, corresponding to the parameters α0, α 1, . . . , α 2( K+1) of the Dirichlet distribution. To ensure that the parameters are positive, we use the softplus function as an activation function in the output layer. We use an orthogonal initialization scheme using a gain factor of 10 −5, leading to small weights. We set the bias of the final layer to b = softplus −1(1 , 10 , . . . , 10 , 10) ∈ R2K+3 , where the inverse is applied to each component. Therefore, after applying the softplus activation, we have 
+
+E[ak] ≈ 10 E[a0] for k = 1 , 2, . . . , 2( K + 1) .
+
+This means that the actions ak for k = 1 , 2, . . . , 2( K + 1) , which correspond to placing market or limit orders, are initially more likely than action a0, which corresponds to not placing any order. The results of the experiment are reported in Table 7. We use the same evaluation procedure as described in Section 6.4. In particular, we use 10,000 test episodes per environment and per value of M
+
+to compute expected values and standard deviations of the normalized cash flow (20). We use the trained policy network to produce parameters ( α0, α 1, . . . , α 2( K+1) ) at each state, and sample actions from the resulting Dirichlet distribution. Across both values M = 2 and M = 20 , the LN algorithm has higher expected cash flow than the DR algorithm in all three market environments. For the market with noise traders, the LN algorithm also has higher standard deviation than the DR algorithm. For the other two markets, the LN algorithm has notably lower standard deviation than DR for M = 20, while for M = 2 the standard deviations are close in the market with noise and tactical traders and higher for LN in the market with noise, tactical, and strategic traders. The gap in expected cash flow is large in the latter environment. Overall, we see strong outperformance of the LN algorithm compared to the DR algorithm, especially in the more complex market environments with tactical and strategic traders.                                 
+
+> Lots E[DR ]σ[DR ]E[LN ]σ[LN ]
+> noise 24.87 2.20 6.03 2.81 20 3.99 1.33 4.66 1.41 noise & tactical 26.72 2.27 9.11 2.20 20 1.63 1.88 5.68 1.03 noise & tactical 24.87 1.77 8.55 2.40 & strategic 20 −6.18 1.60 4.99 1.07
+
+Table 7: Expected value and standard deviation of the normalized cash flow (20) under the Dirichlet (DR) and logistic-normal (LN) policies, across three market environments and for the two cases M = 2 and M = 20 lots. The highest expected value in each row is highlighted in bold. Figure 9 shows the average normalized cash flow (20) per gradient step for the LN and DR algorithms across three market environments, where the average is computed across the batch of trajectories used for one gradient step. The upper panels correspond to M = 2 lots, while the lower panels correspond to 
+
+M = 20 lots. We see that the LN algorithm converges faster and to a higher value than the DR algorithm across all three market environments and both values of M . Furthermore, the DR algorithm suffers from instabilities that are especially pronounced in the more complex market environments with tactical and strategic traders. In contrast, the LN algorithm is stable in training across all three market environments. 27 Cash Flows  Cash Flows (a) Noise 0 100 200 300 400 500 600 700 800 6         
+
+> 4
+> 2
+> 0246810 0100 200 300 400 500 600 700 800
+> Gradient Step
+> 0246
+
+(b) Noise & Tactical 0 100 200 300 400 500 600 700 800 024680 100 200 300 400 500 600 700 800  
+
+> Gradient Step
+> 12.5
+> 10.0
+> 7.5
+> 5.0
+> 2.5
+> 0.0 2.5 5.0
+
+(c) Noise, Tactical & Strategic 
+
+Figure 9: Average normalized cash flow (20) per gradient step for the LN and DR algorithms across three market environments. The upper panels correspond to M = 2 lots, while the lower panels correspond to 
+
+M = 20 lots. 
+
+C.2 Effect of inventory penalty 
+
+In this section, we analyze the effect of the inventory penalty parameter γ, used in (5), on the performance of the LN algorithm. We compare the performance of the LN algorithm with inventory penalty ( γ = 0 .01) and without ( γ = 0 .0). The results are reported in Table 8 and Figure 10, where the two algorithms are denoted by LN( γ = 0 .01) and LN( γ = 0 .0). Note that in Section 6, we denoted the LN algorithm with inventory penalty γ = 0 .01 simply as LN, thereby suppressing the dependence on γ. We see that across all three market environments and both values of M , the LN( γ = 0 .0) algorithm has higher expected cash flows together with higher standard deviations than the LN( γ = 0 .01) algorithm. Interestingly, the inventory penalty does not have the same effect across all market environments. The difference in standard deviations for the LN( γ = 0 .01) and LN( γ = 0 .0) algorithms is more pronounced in the market consisting solely of noise traders than in the other two markets. This effect is most striking at low inventory capacity ( M = 2), where the standard deviation drops from 8 .20 to 2 .81 once the penalty is applied, whereas for M = 20 the reduction is comparatively modest. This suggests that in a market in which trade intensities are state-dependent, a static inventory penalty is not effective in controlling inventory. An interesting research direction is to explore a state-dependent inventory risk parameter that can adapt to market states.                                     
+
+> Lots E[LN (γ= 0 .01)] σ[LN (γ= 0 .01)] E[LN (γ= 0 .0)] σ[LN (γ= 0 .0)]
+> noise 26.03 2.81 7.95 8.20 20 4.66 1.41 5.35 2.39 noise & tactical 29.11 2.20 9.55 3.05 20 5.68 1.03 5.72 1.28 noise & tactical 28.55 2.40 9.05 3.55 & strategic 20 4.99 1.07 5.16 1.35
+
+Table 8: Expected value and standard deviation of the normalized cash flow (20) under the logistic-normal policy with and without inventory penalty parameter, across three market environments and for the two cases M = 2 and M = 20 lots. The highest expected value in each row is highlighted in bold. 28 Cash Flow (a) Noise Cash Flow  (b) Noise & Tactical Cash Flow  (c) Noise, Tactical & Strategic 
+
+Figure 10: Histograms of normalized cash flows (20) for the LN algorithm with and without inventory penalty. The upper panels correspond to M = 2 lots, while the lower panels correspond to M = 20 lots. 
+
+C.3 Effect of terminal inventory constraint 
+
+In this section, we analyze the effect of the terminal inventory parameter ν, which was defined in (6). We compare two cases. The first case is ν = 0 .0, which requires the algorithm to have zero inventory at terminal time. Any non-zero inventory at terminal time must be bought back or sold with a market order, such that QN + = 0 . The second case is ν = 0 .5, which means that the algorithm is allowed to have a terminal inventory of absolute size up to ⌈0.5M ⌉. Any inventory that is larger in absolute value than the limit must be bought back or sold with a market order, such that |QN +| ≤ ⌈ 0.5M ⌉. Furthermore, the remaining inventory, of absolute size at most ⌈0.5M ⌉, is valued at the mid-price at time tN . This mid-price valuation yields a higher terminal value than liquidating the inventory with a market order, because when using a market order, the algorithm must pay the spread and additional costs from walking the limit order book. We set the running inventory penalty defined in (5) to γ = 0 .0, in order to isolate the effect of the terminal inventory parameter ν.The results are reported in Table 9 and Figure 11, where the two algorithms are denoted by LN( ν = 0 .0) and LN( ν = 0 .5). Technically, we should use the notation LN( ν = 0 .0, γ = 0 .0) and LN( ν = 0 .5, γ = 0 .0), but we suppress the dependence on γ for brevity. We see from Table 9 that the LN( ν = 0 .5) algorithm has higher expected cash flows than the LN( ν = 0 .0) algorithm, while the standard deviations are comparable, though slightly higher for the LN( ν = 0 .5) algorithm. This confirms the effect described above: by retaining part of the terminal inventory at the mid-price instead of forcing a full liquidation with spread-paying market orders, the LN( ν = 0 .5) algorithm avoids the associated transaction costs. Since the algorithm is not forced to flatten its inventory at terminal time, it carries a larger terminal position, whose mark-to-mid valuation is exposed to price fluctuations, explaining the slightly higher standard deviations. In line with the numerical values in the table, we see in Figure 11 that the cash flow distribution for the LN( ν = 0 .5) algorithm is shifted to the right compared to the LN( ν = 0 .0) algorithm. 29 Lots E[LN (ν = 0 .0)] σ[LN (ν = 0 .0)] E[LN (ν = 0 .5)] σ[LN (ν = 0 .5)]                             
+
+> noise 27.95 8.20 8.36 8.36 20 5.35 2.39 5.67 2.59 noise & tactical 29.55 3.05 9.94 3.06 20 5.72 1.28 6.23 1.29 noise & tactical 29.05 3.55 9.65 3.73 & strategic 20 5.16 1.35 5.73 1.37
+
+Table 9: Expected value and standard deviation of the normalized cash flow (20) under the logistic-normal policy with running inventory penalty γ = 0 .0 and terminal inventory parameter ν = 0 .0 and ν = 0 .5,
+
+across three market environments and for the two cases M = 2 and M = 20 lots. The highest expected value in each row is highlighted in bold. Cash Flow 
+
+(a) Noise Cash Flow  (b) Noise & Tactical Cash Flow  (c) Noise, Tactical & Strategic 
+
+Figure 11: Histograms of normalized cash flow (20) for the LN algorithm with running inventory penalty 
+
+γ = 0 .0 and terminal inventory parameter ν = 0 .0 and ν = 0 .5. The upper panels correspond to M = 2 lots, while the lower panels correspond to M = 20 lots. 30
