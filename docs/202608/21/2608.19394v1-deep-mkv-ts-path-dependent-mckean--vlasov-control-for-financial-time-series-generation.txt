@@ -1,0 +1,1426 @@
+Title: Deep-MKV-TS: Path-Dependent McKean–Vlasov Control for Financial Time Series Generation
+
+URL Source: https://arxiv.org/pdf/2608.19394v1
+
+Published Time: Fri, 21 Aug 2026 00:10:04 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Deep-MKV-TS: Path-Dependent McKean–Vlasov Control for Financial Time Series Generation 
+
+## Samer El Boustany 
+
+Murex SAS selboustany@murex.com 
+
+## Théo Basseras 
+
+Murex SAS tbasseras@murex.com 
+
+## Samy Mekkaoui 
+
+École Polytechnique samy.mekkaoui@polytechnique.edu 
+
+## Alexandre Alouadi 
+
+BNP-PAR and Ecole Polytechnique alexandre.alouadi@polytechnique.edu 
+
+## Yadh Hafsi 
+
+École Polytechnique yadh.hafsi@polytechnique.edu 
+
+## Huyên Pham 
+
+École Polytechnique huyen.pham@polytechnique.edu 
+
+## Abstract 
+
+We introduce Deep-MKV-TS, a path-dependent McKean–Vlasov framework for financial scenario generation. The stochastic dynam-ics are chosen by matching selected path and volatility features of generated scenarios to those observed in the data. Starting from an interpretable reference model, Deep-MKV-TS preserves the refer-ence drift and adjusts its volatility, while a regularization penalty limits unnecessary departures from the calibrated dynamics. We solve the resulting control problem using a neural, sample-based implementation of the stochastic maximum principle. We validate the method against an exactly computable oracle. On Heston and Heston-mixture models, Deep-MKV-TS substantially reduces path-dependent and volatility-related deficiencies of the reference model. In delayed-volatility experiments, the correction remains effective as the forecasting horizon increases, while direct training becomes less reliable. On held-out intraday equity-index futures, the corrected model improves conditional forecasts relative to the reference and reaches a level of performance comparable to flexible generative and historical baselines. The resulting scenarios also support greater exposure than the reference under a fixed drawdown-risk target. These results show that path-dependent McKean–Vlasov control can enrich an interpretable reference model without replacing it. 
+
+## Keywords 
+
+financial scenario generation, McKean–Vlasov control, stochastic maximum principle, path-dependent control, volatility, synthetic financial data 
+
+## 1 Introduction 
+
+Financial time series are central to many quantitative applications, including risk management, portfolio allocation, derivative pric-ing, stress testing, and optimal execution. They are also used to generate training data for data-driven trading strategies, such as reinforcement-learning methods [10, 13, 21]. In these settings, deci-sions depend on how prices and volatility evolve over time, not only on one-step returns. Realistic scenarios should therefore capture drawdowns, tail risk, and changing market conditions, making tem-poral dependence and persistent risk dynamics essential features of financial time-series models. Financial decisions depend not only on individual returns but also on their path-dependent structure. Two sets of scenarios can have similar short-term returns and still imply very different risks if one produces stronger volatility clustering, longer drawdowns, or a closer link between early losses and future uncertainty [4, 9]. A useful scenario generator must therefore reproduce both local price changes and the way risk develops across an entire path. Flexible generative models learn full path distributions directly and can be powerful. They must, however, learn a high-dimensional path distribution from finite data. Training can be demanding, and improving selected features may come at the expense of dynamics that are already well calibrated. Because the complete mechanism is learned jointly, it can also be difficult to control how the model changes and explain the resulting paths. We study a complementary strategy. Rather than learning the complete generation mechanism again, we retain a reference model and formulate a path-dependent McKean–Vlasov control problem around it. Its drift remains fixed, while volatility is adjusted to im-prove selected path features. A penalty limits unnecessary changes to the reference. The correction is also traceable: at each time step, one can inspect how much the controlled volatility departs from the reference and which parts of the path trigger the adjustment. The stochastic maximum principle (SMP) provides the resolution method. This leads to the central question of the paper: can a path-dependent McKean–Vlasov correction substantially improve the path behavior of an imperfect financial model? Our objective is therefore to measure how much a structured path-dependent correction can improve a given reference model; flexible generators serve only to contextualize the quality reached after correction. We call the method Deep-MKV-TS : MKV refers to the McKean– Vlasov dependence on the generative stochastic dynamics. The resulting forward-backward system arising from the SMP traces these future effects back to the decision time, and a neural network learns the resulting correction from the history observed so far. Training repeatedly generates scenarios, compares their path and volatility features with the data, converts the remaining differences into correction targets, and fits the network. The evidence is progressive. A small scenario tree provides a known optimum for checking the exact and sampled calculations. A Heston mixture tests hidden and regime-dependent volatility. A delayed-volatility task studies reliability as paths grow in number of steps. Finally, frozen models for large-capitalization U.S. equity-index futures are evaluated on unseen sessions, and a drawdown-risk decision. arXiv:2608.19394v1 [q-fin.CP] 19 Aug 2026 The experiments support the correction at each level. Deep-MKV-TS approaches the exact tree solution, substantially reduces the reference errors on Heston and Heston-mixture data, and preserves long-range dependence more reliably than direct training in the delayed-volatility task. On held-out ES (S&P 500), NQ (Nasdaq-100), and YM (Dow Jones) sessions, it improves all conditional-forecast scores over the reference and reaches the range of flexible generative and historical baselines. Its ES scenarios also support greater exposure under the prescribed drawdown-risk limit. 
+
+Our contributions . The paper makes three main contributions. First, we introduce a path-dependent McKean–Vlasov formulation for financial time-series generation in which a calibrated reference model is corrected rather than replaced. The controlled process preserves the reference drift, while its volatility is adjusted to reduce discrepancies in selected path and volatility features. A running penalty limits departures from the reference, while the resulting volatility corrections remain directly traceable along generated paths. Second, we derive the associated stochastic maximum-principle conditions and turn the resulting forward–backward system into a practical learning algorithm. A recurrent neural network approx-imates the backward signal, allowing the volatility correction at each time to depend only on the observed history and to capture long-range path-dependent effects. Third, we evaluate the method on both synthetic and real fi-nancial data. The experiments test hidden, regime-dependent, and delayed volatility effects, and assess performance on held-out in-traday equity-index futures through conditional forecasts, and a downstream drawdown-risk decision. Across these settings, Deep-MKV-TS improves important path-dependent properties while pre-serving the structure of the reference model. 
+
+Related works. Financial path generation includes adversar-ial and signature-based models, neural state-space models, neural stochastic differential equations, diffusion methods and optimal transport [1, 2, 7, 17, 22, 23, 26–28, 30]. These flexible models learn a complete generator directly and provide important comparisons for Deep-MKV-TS. Relaxing the hard constraint in the optimal transport problem leads to a mean-field game or a mean-field con-trol formulation; see, e.g., [16, 29]. The computational resolution of such formulations for generative modeling has recently been in-vestigated in [5] using SMP and Deep BSDE solver. Mean-field and path-dependent extensions allow the objective to depend on the generated distribution and the complete history [6]. Deep-MKV-TS combines these features in a discrete-time framework and uses a neural network to estimate the conditional expectations arising in the optimality system associated with the SMP. This leads to a fully sample-based implementation that can be trained directly from observed trajectories. 
+
+## 2 A path-dependent generative model 2.1 The reference model 
+
+Deep-MKV-TS starts from an interpretable reference process provid-ing a conditional drift and volatility matrix. We use a multivariate price-only extension of the path-dependent volatility model of [11], in which past returns are summarized through short- and long-memory trend and activity signals. Let Πobs = {𝑡 1 < · · · < 𝑡 𝑁 = 𝑇 } and, for each path 𝑝 , let 𝑆 𝑝 𝑡 𝑖 ∈ R𝑑 
+
+> +
+
+for any 1 ≤ 𝑖 ≤ 𝑁 . We work with componentwise normalized log-prices and returns 
+
+𝑋 𝑝 𝑡 𝑖 = log 𝑆 𝑝 𝑡 𝑖 
+
+𝑆 𝑝 𝑡 1
+
+!
+
+∈ R𝑑 , Δ𝑋 𝑝 𝑖 = 𝑋 𝑝 𝑡 𝑖 +1 − 𝑋 𝑝 𝑡 𝑖 , Δ𝑡 𝑖 = 𝑡 𝑖 +1 − 𝑡 𝑖 .
+
+We first fit the conditional mean of the next return. Given vectors 
+
+𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑁 ∈ R𝑑 , we set 𝒙 1: 𝑖 = (𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑖 ), 1 ≤ 𝑖 ≤ 𝑁 . Let 
+
+𝑞 ref  
+
+> 𝑖
+
+(𝒙 1: 𝑖 ) =  1,𝜓 ref  
+
+> 𝑖
+
+(𝒙 1: 𝑖 )
+
+where 𝜓 ref  
+
+> 𝑖
+
+is a fixed (non-learned) map encoding the path history through the short and long-memory trend signals of (2) below, 
+
+𝜓 ref  
+
+> 𝑖
+
+(𝒙 1: 𝑖 ) =  𝑇 (1) 
+
+> 𝑖
+
+,𝑇 (2)
+
+> 𝑖
+
+ ∈ R2𝑑 , (1) each component standardized on the training set. We set for any 1 ≤ 𝑖 ≤ 𝑁 
+
+b𝐵 𝑖 = arg min 
+
+> 𝐵 𝑃
+
+∑︁ 
+
+> 𝑝 =1
+
+Δ𝑋 𝑝 𝑖 
+
+Δ𝑡 𝑖 
+
+− 𝐵 ⊤𝑞 ref  
+
+> 𝑖
+
+(𝑋 𝑝  
+
+> 1: 𝑖
+
+)
+
+> 2
+
++ 𝜌 𝑏 ∥𝐵 ∥2 
+
+> 𝐹
+
+,
+
+where ∥·∥ 𝐹 denotes the Frobenius norm for matrices and 𝜌 𝑏 > 0 is a ridge parameter. The fitted conditional mean and residual are 
+
+𝑚 ref  
+
+> 𝑖
+
+(𝑥 1: 𝑖 ) = b𝐵 ⊤ 
+
+> 𝑖
+
+𝑞 ref  
+
+> 𝑖
+
+(𝑥 1: 𝑖 ), 𝑒 𝑝 𝑖 = Δ𝑋 𝑝 𝑖 − 𝑚 ref  
+
+> 𝑖
+
+(𝑋 𝑝  
+
+> 1: 𝑖
+
+)Δ𝑡 𝑖 .
+
+The forward drift 𝑏 ref  
+
+> 𝑖
+
+is either 𝑚 ref  
+
+> 𝑖
+
+or zero, as specified by the experiment. For volatility, we maintain vector-valued trend and activity mem-ories 𝑇 (𝑎 ) 
+
+> 𝑖
+
+, 𝑉 (𝑎 ) 
+
+> 𝑖
+
+∈ R𝑑 , 𝑎 ∈ { 1, 2}. Their short- and long-memory components are combined as 
+
+𝑇 𝑖 = (1 − 𝜃 𝑇 )𝑇 (1) 
+
+> 𝑖
+
++ 𝜃 𝑇 𝑇 (2) 
+
+> 𝑖
+
+, 𝑉 𝑖 = (1 − 𝜃 𝑉 )𝑉 (1) 
+
+> 𝑖
+
++ 𝜃 𝑉 𝑉 (2) 
+
+> 𝑖
+
+.
+
+The vector of marginal reference volatilities is 
+
+𝑣 ref  
+
+> 𝑖
+
+= 𝛽 0 + 𝛽 1 ⊙ 𝑇 𝑖 + 𝛽 2 ⊙√︁ 𝑉 𝑖 ,
+
+where ⊙ and the square root act componentwise. The memories are updated componentwise according to 
+
+𝑇 (𝑎 ) 
+
+> 𝑖 +1
+
+= 𝑒 −𝜆 𝑇 ,𝑎 Δ𝑡 𝑖 
+
+
+
+𝑇 (𝑎 ) 
+
+> 𝑖
+
++ 𝜆 𝑇 ,𝑎 Δ𝑋 𝑖 
+
+
+
+, (2) 
+
+𝑉 (𝑎 ) 
+
+> 𝑖 +1
+
+= 𝑒 −𝜆 𝑉 ,𝑎 Δ𝑡 𝑖 
+
+
+
+𝑉 (𝑎 ) 
+
+> 𝑖
+
++ 𝜆 𝑉 ,𝑎 (𝑣 ref  
+
+> 𝑖
+
+)⊙2Δ𝑡 𝑖 
+
+
+
+,
+
+for 𝑎 ∈ { 1, 2}. To account for contemporaneous dependence across coordinates, let 𝑅 ∈ S𝑑  
+
+> ++
+
+be a correlation matrix and define 
+
+𝐷 ref  
+
+> 𝑖
+
+= Diag (𝑣 ref  
+
+> 𝑖
+
+), 𝐶 ref  
+
+> 𝑖
+
+= 𝐷 ref  
+
+> 𝑖
+
+𝑅𝐷 ref  
+
+> 𝑖
+
+.
+
+The reference volatility matrix used in the dynamics is the symmet-ric positive-definite square root 
+
+𝜎 ref  
+
+> 𝑖
+
+=
+
+
+
+𝐶 ref 
+
+> 𝑖
+
+1/2
+
+∈ S𝑑 
+
+> ++
+
+.
+
+Thus 𝜎 ref  
+
+> 𝑖
+
+(𝜎 ref  
+
+> 𝑖
+
+)⊤ = 𝐶 ref  
+
+> 𝑖
+
+. The diagonal specification is recovered by taking 𝑅 = 𝐼 𝑑 , and the scalar model used in the experiments corresponds to 𝑑 = 1. The parameters are estimated from returns by minimizing the Gaussian negative log-likelihood                
+
+> Lref =1
+> 𝑃 (𝑁 −1)
+> 𝑃 ∑︁
+> 𝑝 =1
+> 𝑁 −1∑︁
+> 𝑖 =1
+> 
+> log det 𝜎 ref ,𝑝 𝑖 +12Δ𝑡 𝑖
+> (𝑒 𝑝 𝑖 )⊤
+> 𝜎 ref ,𝑝 𝑖 (𝜎 ref ,𝑝 𝑖 )⊤−1
+> 𝑒 𝑝 𝑖
+> 
+> ,
+
+up to an additive constant. We fit the parameters on 80% of the training paths and select them on the remaining 20%. After calibra-tion, all reference parameters are frozen. Marginal volatilities are clipped to [𝜎 min , 𝜎 max ] for numerical stability where 𝜎 min and 𝜎 max 
+
+are precised in Appendix C. 
+
+## 2.2 McKean-Vlasov problem formulation 
+
+Let 𝑀 ≥ 𝑁 ∈ N★. Over [0,𝑇 ], we construct a finer grid Πdisc 
+
+Πdisc := (𝑠 𝑘 )𝑘 ∈⟦ 0,𝑀 ⟧ : 0 ≤ 𝑠 0 < 𝑠 1 < 𝑠 2 < . . . < 𝑠 𝑀 = 𝑇 ,
+
+containing Πobs , and used for the simulation of our generative stochastic dynamics in R𝑑 . We define 
+
+𝜂 (𝑠 ) := sup 𝑖 ∈ ⟦ 1, 𝑁 ⟧ : 𝑡 𝑖 ≤ 𝑠 , 𝑠 ∈ Πdisc ,
+
+so that 𝑡 𝜂 (𝑠 ) is the largest observation point in Πobs not exceeding 𝑠 .Given vectors 𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑁 ∈ R𝑑 , we define 𝒙 1: 𝑖 = (𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑖 ) for any 1 ≤ 𝑖 ≤ 𝑁 and we set Δ𝑠 𝑘 = 𝑠 𝑘 +1 − 𝑠 𝑘 for any 𝑘 ∈ ⟦ 0, 𝑀 − 1⟧.On a filtered probability space (Ω, F , P), we are given a sequence of independent standard gaussian random variables (𝜖 𝑠 𝑘 )𝑘 ∈⟦ 1,𝑀 ⟧.We denote by F = (F 𝑠 𝑘 )𝑘 ∈⟦ 1,𝑀 ⟧ the filtration generated by the se-quence of random variables (𝜖 𝑠 𝑘 )𝑘 ∈⟦ 1,𝑀 ⟧, and eventually a uniform random variable used for randomization of the initial condition of the forward process 𝑋 . we denoted E𝑠 𝑘 [ · ] := E[ · | F 𝑠 𝑘 ] for the conditional expectation given the 𝜎 − algebra F𝑠 𝑘 and by A
+
+the class of volatility controls valued in S𝑑  
+
+> ++
+
+the space of definite positive matrices of R𝑑 . Given 𝜎 ∈ A , our controlled state process 
+
+(𝑋 𝑠 𝑘 )𝑘 ∈⟦ 0,𝑀 ⟧ is given by the following stochastic dynamics 
+
+𝑋 𝑠 𝑘 +1 =𝑋 𝑠 𝑘 + 𝑏 ref    
+
+> 𝜂 (𝑠 𝑘 )
+
+(𝑿 1: 𝜂 (𝑠 𝑘 ) )Δ𝑠 𝑘 (3) 
+
++ 𝜎 𝑠 𝑘 √︁ Δ𝑠 𝑘 𝜖 𝑠 𝑘 +1 , 𝑘 ∈ ⟦ 0, 𝑀 − 1⟧,
+
+where the family of maps (𝑏 ref  
+
+> 𝑖
+
+)1≤𝑖 ≤𝑁 −1 has been defined in Sub-section 2.1. In the following, we denote P𝑿 1: 𝑖 the law of 𝑿 1: 𝑖 under 
+
+P. We now turn to the criterion to be optimized. Given some tar-get path law 𝜈 ∈ P 2
+
+ (R𝑑 )𝑁  representing the joint distribution of normalized log-prices paths   log ( 𝑆 𝑡 2
+
+> 𝑆 𝑡 1
+
+), . . . , log ( 𝑆 𝑡 𝑁 
+
+> 𝑆 𝑡 1
+
+), we aim to minimize the following cost functional 
+
+A ∋ 𝜎 ↦ → 𝐽 (𝜎 ) = E
+
+h 𝑀 −1∑︁ 
+
+> 𝑘 =0
+
+𝑓 𝑘 (𝑿 1: 𝜂 (𝑠 𝑘 ) , 𝜎 𝑠 𝑘 )Δ𝑠 𝑘 
+
+i
+
+(4) 
+
++ 𝐺 (P𝑿 1: 𝑵 |𝜈 ),
+
+Here, 𝐺 (·| 𝜈 ) : P2 (( R𝑑 )𝑁 ) → R and 𝐺 (𝜇 |𝜈 ) represents the discrepancy between 𝜇 and 𝜈 , i.e. satisfies 𝐺 (𝜇 |𝜈 ) ≥ 0 for any 
+
+𝜇, 𝜈 ∈ P 2
+
+ (R𝑑 )𝑁  with equality iff 𝜇 = 𝜈 . In the following, we shall take 
+
+𝐺 (P𝑿 1: 𝑁 |𝜈 ) := 𝑤 path 
+
+2 MMD 2 (P𝑿 1: 𝑁 |𝜈 ) (5) 
+
++ 𝑤 vol 
+
+2 MMD 2 (𝜑 vol ♯P𝑿 1: 𝑁 |𝜑 vol ♯𝜈 ),
+
+for some penalty parameters 𝑤 path and 𝑤 vol and some map 𝜑 vol 
+
+which specifies the targeted stylized facts , namely we choose de-pending on the set of experiments, a customized vector of features 
+
+(R𝑑 )𝑁 ∋ 𝒙 ↦ → 𝜑 vol (𝒙 ) ∈ ( R𝑑 )𝑁 ×𝑛 features , see Appendix A for more details. We also recall that ♯ denotes the pushforward measure. We recall that the maximum mean discrepancy (MMD) is defined as MMD 2 (𝜌 1 |𝜌 2) = E(𝑈 1,𝑈 2 )∼ 𝜌 ⊗21
+
+[𝜅 (𝑈 1, 𝑈 2)] + E(𝑈 1,𝑈 2 )∼ 𝜌 ⊗22
+
+[𝜅 (𝑈 1, 𝑈 2)] − 2E(𝑈 ,𝑉 )∼ 𝜌 1 ⊗𝜌 2 [𝜅 (𝑈 , 𝑉 )] ,
+
+where 𝜅 : (R𝑑 )𝑁 × ( R𝑑 )𝑁 → R is a symmetric positive kernel. The use of the MMD is particularly convenient in our setting, as it pro-vides a sample-based discrepancy between probability distributions that does not require estimating their densities. Moreover, when the kernel 𝜅 is characteristic (see [25] for its rigorous definition), the MMD defines a metric on probability measures P2
+
+ (R𝑑 )𝑁 ).The interpretation of (5) is as follows: the first term enforces the generated path distribution to match the target path distri-bution, while the second term matches the distributions of the corresponding volatility features through the pushforward map 
+
+𝜑 vol . The weights 𝑤 path , 𝑤 vol > 0 balance the relative importance of these two objectives. Moreover, for any 𝑘 ∈ ⟦ 0, 𝑀 − 1⟧, the running cost 𝑓 𝑘 : (R𝑑 )𝜂 (𝑠 𝑘 ) × Σ is defined as 
+
+(R𝑑 )𝜂 (𝑠 𝑘 ) × S𝑑  
+
+> ++
+
+∋ ( 𝒙 , 𝜎 ) ↦ → 𝑓 𝑘 (𝒙 , 𝜎 ) = E
+
+
+
+𝜎, 𝜎 ref    
+
+> 𝜂 (𝑠 𝑘 )
+
+(𝒙 )
+
+
+
+.
+
+where the family of maps (𝜎 ref  
+
+> 𝑖
+
+)1≤𝑖 ≤𝑁 −1 has been defined in Sub-section 2.1 and where E is the specific entropy defined as 
+
+E ( 𝜎, ¯𝜎 ) := Tr   ¯𝜎 −1 (𝜎 − ¯𝜎 ) − log 
+
+ det (𝜎 )
+
+det ( ¯𝜎 )
+
+
+
+,
+
+for any 𝜎, ¯𝜎 ∈ S𝑑 
+
+> ++
+
+.The running cost 𝑓 𝑘 penalizes deviations of the controlled volatil-ity from the prescribed reference volatility 𝜎 ref    
+
+> 𝜂 (𝑠 𝑘 )
+
+(𝒙 ). The deviation is measured through the specific entropy, see [3]. Geometrically, this divergence is naturally adapted to the space of positive definite volatility matrices. It compares the controlled and reference volatil-ities through their relative deformation, rather than through an entrywise Euclidean distance. In particular, it accounts jointly for changes in the principal directions and magnitudes of the volatility matrices, while respecting their underlying matrix structure. 
+
+## 2.3 The generative model and its associated optimal forward-backward system 
+
+In order to solve the optimal control problem (3)-(4), we shall rely on a probabilistic method which has been extensively studied in the literature called Pontryagin’s maximum principle, based on a calculus of variation, see [8] . This allows to characterize the optimal control as the solution of a forward-backward system of stochastic equations which we shall derive in the following. Namely, for some small perturbation 𝜖 > 0 of the control process 𝜎 denoted by 𝜎 𝜖 ,we are looking on a Gâteaux derivative of the cost functional 𝐽 ,namely for some limit, if it exists, of lim 
+
+> 𝜖 →01
+> 𝜖
+
+ 𝐽 (𝜎 𝜖 ) − 𝐽 (𝜎 ). Since, the cost functional 𝐽 depends on the law of the process 𝑿 1: 𝑁 , we need to introduce some calculus over the space P2 (( R𝑑 )𝑁 ), and we decided to focus on the linear functional derivative. Formally, for any function 𝐺 : P2 (( R𝑑 )𝑚 → R which admits a linear functional derivative, we denote by 𝛿 𝛿𝑚 𝐺 (𝜇 )( 𝒙 ) : P2 (( R𝑑 )𝑁 ) × ( R𝑑 )𝑁 → R,its linear functional derivative; see [8] for a rigorous definition. It is simple to verify that 
+
+𝜕 𝑥 
+
+𝛿 𝛿𝑚 MMD 2 (𝜇, 𝜈 )( 𝒙 ) = 2
+
+∫
+
+(R𝑑 )𝑁 
+
+𝜕 𝑥 𝜅 (𝒙 , 𝒚 ) ( 𝜇 − 𝜈 )( d𝒚 ).
+
+We now characterize the optimality system of a potential optimal control. We do not provide the full derivation of the associated system given below. We refer to [12] and [19] for full details. 
+
+
+
+𝑋 ★
+
+𝑠 𝑘 +1 = 𝑋 ★
+
+𝑠 𝑘 + 𝑏 ref 
+
+𝜂 (𝑠 𝑘 )
+
+
+
+𝑿 ★
+
+1: 𝜂 (𝑠 𝑘 )
+
+
+
+Δ𝑠 𝑘 + 𝜎 ★
+
+𝑠 𝑘 √︁ Δ𝑠 𝑘 𝜖 𝑠 𝑘 +1 ,𝐴 ★
+
+𝑠 𝑘 =
+
+𝑁 ∑︁ 
+
+𝑗 =1,𝑡 𝑗 ≥𝑠 𝑘 
+
+ 𝑀 −1∑︁ 
+
+𝑙 =0,𝑠 𝑙 ≥𝑡 𝑗 
+
+
+
+𝜕 𝑥 𝑗 𝑓 𝜂 (𝑠 𝑙 ) (𝑿 ★
+
+1: 𝜂 (𝑠 𝑙 ) , 𝜎 ★
+
+𝑠 𝑙 )+ 𝜕 𝑥 𝑗 𝑏 ref 
+
+𝜂 (𝑠 𝑙 ) (𝑿 ★
+
+1: 𝜂 (𝑠 𝑙 ) )𝐴 ★
+
+𝑠 𝑙 +1
+
+
+
+Δ𝑠 𝑙 + Γ𝐺 𝑗 (𝑿 ★
+
+1: 𝑁 , ˆ𝜇 𝑃 )
+
+
+
+,𝐴 ★
+
+𝑠 𝑀 = Γ𝐺 𝑁 (𝑿 ★
+
+1: 𝑁 , ˆ𝜇 𝑃 )
+
+𝑍 ★
+
+𝑠 𝑘 = E𝑠 𝑘 
+
+𝐴 ★
+
+𝑠 𝑘 +1 𝜖 ⊤
+
+𝑠 𝑘 +1
+
+ ,𝜎 ★
+
+𝑠 𝑘 =
+
+ 𝜎 ref 
+
+𝜂 (𝑠 𝑘 )
+
+ −1 + 1
+
+√Δ𝑠 𝑘 
+
+𝑍 ★
+
+𝑠 𝑘 
+
+ −1
+
+(6) for 𝑘 ∈ ⟦ 0, 𝑀 − 1⟧, and where we set 
+
+Γ𝐺 𝑗 (𝒙 , 𝜇 ) : = 𝜕 𝑥 𝑗 
+
+𝛿 𝛿𝑚 𝐺 (𝜇 |𝜈 )( 𝒙 ),
+
+= 𝑤 path 
+
+∫
+
+(R𝑑 )𝑁 
+
+𝜕 𝑥 𝑗 𝑘 (𝒙 , 𝒚 )( 𝜇 − 𝜈 )( d𝒚 )+ 𝑤 vol 
+
+∫
+
+(R𝑑 )𝑁 
+
+𝜕 𝑥 𝑗 𝑘 (𝜑 vol (𝒙 ), 𝜑 vol (𝒚 ))( 𝜇 − 𝜈 )( d𝒚 ),
+
+for any (𝒙 , 𝜇 ) ∈ ( R𝑑 )𝑁 × P 2 (( R𝑑 )𝑁 ) and any 𝑗 ∈ ⟦ 1, 𝑁 ⟧.
+
+## 2.4 Data sample-based implementation of Deep-MKV-TS 
+
+Starting from the forward–backward optimality system (6), we aim to simulate the optimal forward process 𝑋 ★. This requires the optimal controls (𝜎 ★
+
+𝑠 𝑘 )𝑘 , hence the adjoint component (𝑍 ★
+
+𝑠 𝑘 )𝑘 , which we approximate by a recurrent neural network GRU 𝜃 . Starting from the initial hidden state ℎ(𝑚 ),𝑝 𝑠 −1 = 0 and initial condition 𝑋 (𝑚 ),𝑝 𝑠 0 = 𝜉 
+
+for all 𝑝 ∈ ⟦ 1, 𝑃 ⟧, where 𝜉 is a reference value or 0, we iterate the following steps for 𝑚 = 0, . . . , 𝐾 − 1, with 𝐾 the total number of iterations. (1) Forward simulation. For any path 𝑝 ∈ ⟦ 1, 𝑃 ⟧, we compute 
+
+𝑋 (𝑚 ),𝑝 𝑠 𝑘 +1 = 𝑋 (𝑚 ),𝑝 𝑠 𝑘 + 𝑏 ref 
+
+𝜂 (𝑠 𝑘 )
+
+ 𝑿 (𝑚 ),𝑝 
+
+1: 𝜂 (𝑠 𝑘 )
+
+Δ𝑠 𝑘 
+
++ 𝜎 (𝑚 ),𝑝 𝑠 𝑘 √︁ Δ𝑠 𝑘 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1 ,
+
+where 𝜎 (𝑚 ),𝑝 𝑠 𝑘 is obtained from the last equation of (6) eval-uated at 𝑍 (𝑚 ),𝑝 𝑠 𝑘 = ( ˆ𝑍 𝜃 (𝑚 )
+
+)𝑝 𝑠 𝑘 , the output of a recurrent net-work, 
+
+ ( ˆ𝑍 𝜃 (𝑚 )
+
+)𝑝 𝑠 𝑘 , ℎ (𝑚 ),𝑝 𝑠 𝑘 
+
+ = GRU 𝜃 (𝑚 )
+
+ 𝑋 (𝑚 ),𝑝 𝑠 𝑘 , ℎ (𝑚 ),𝑝 𝑠 𝑘 −1
+
+,
+
+whose hidden state ℎ𝑠 𝑘 ∈ R96 is a 96-dimensional learned summary of the path up to 𝑠 𝑘 and is how the model represents memory. (2) Ridge proxy. We approximate a proxy target (𝑍 proxy ,(𝑚 +1),𝑝 𝑠 𝑘 )𝑘,𝑝 
+
+by a ridge regression on the realized adjoint observations 
+
+𝐴 (𝑚 ),𝑝 𝑠 𝑘 +1 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1 , where the pathwise adjoint 𝐴 (𝑚 ),𝑝 is computed by automatic differentiation. Namely, we solve 
+
+𝛽 (𝑚 +1)
+
+𝑠 𝑘 = arg min 
+
+𝛽 
+
+h 𝑃 ∑︁ 
+
+𝑝 =1
+
+𝐴 (𝑚 ),𝑝 𝑠 𝑘 +1 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1 − 𝛽 ⊤𝑢 (𝑚 ),𝑝 𝑠 𝑘 
+
+2 + 𝛾 |𝛽 |2 i
+
+,
+
+where 𝑢 (𝑚 ),𝑝 𝑠 𝑘 = Φref 
+
+𝑘 
+
+ 𝑿 (𝑚 ),𝑝 
+
+1: 𝑠 𝑘 
+
+, the map Φref 
+
+𝑘 turning the simu-lated prefix into regression inputs on the fine grid Πdisc ex-actly as 𝜓 ref 
+
+𝑖 does in (1) on the observation grid Πobs . Hence, we have 
+
+𝑍 proxy ,(𝑚 +1),𝑝 𝑠 𝑘 ≈  𝛽 (𝑚 +1)
+
+𝑠 𝑘 
+
+⊤𝑢 (𝑚 ),𝑝 𝑠 𝑘 .
+
+(3) Neural projection. We approximate (𝑍 (𝑚 +1),𝑝 𝑠 𝑘 )𝑘,𝑝 by minimiz-ing the loss 
+
+L (𝑚 +1)
+
+adj (𝜃 ) = 1
+
+𝑃𝑀 
+
+𝑃 ∑︁ 
+
+𝑝 =1
+
+𝑀 −1∑︁ 
+
+𝑘 =0
+
+( ˆ𝑍 𝜃 )𝑝 𝑠 𝑘 − 𝑍 proxy ,(𝑚 +1),𝑝 𝑠 𝑘 
+
+2.
+
+Then, we set 𝜃 (𝑚 +1) = arg min 
+
+𝜃 ∈Θ
+
+L (𝑚 +1)
+
+adj (𝜃 ) and iterate. We then get the following algorithm for our implementation: 
+
+Algorithm 1 Deep-MKV-TS training 
+
+Require: data paths ( ˆ𝑿 𝑙  
+
+> 1: 𝑁
+
+)1≤𝑙 ≤𝑃 ; frozen reference (𝑏 ref , 𝜎 ref ); grid (𝑠 𝑘 )𝑀 𝑘 =0; batch size 𝑃 ; iterations 𝐾 ; ridge penalty 𝛾 
+
+Ensure: trained parameters 𝜃 (𝐾 )
+
+1: initialize 𝜃 (0) with a zero final layer 2: for 𝑚 = 0, . . . , 𝐾 − 1 do 
+
+3: set ℎ(𝑚 ),𝑝 𝑠 −1 = 0, 𝑋 (𝑚 ),𝑝 𝑠 0 = 𝜉 for all 𝑝 ∈ ⟦ 1, 𝑃 ⟧, where 𝜉 a reference value or 0 4: for 𝑘 = 0, . . . , 𝑀 − 1 do 
+
+5:   ˆ𝑍 (𝑚 ),𝑝 𝑠 𝑘 , ℎ (𝑚 ),𝑝 𝑠 𝑘 
+
+ ← GRU 𝜃 (𝑚 )
+
+ 𝑋 (𝑚 ),𝑝 𝑠 𝑘 , ℎ (𝑚 ),𝑝 𝑠 𝑘 −1
+
+
+
+6: 𝑍 (𝑚 ),𝑝 𝑠 𝑘 ← ˆ𝑍 (𝑚 ),𝑝 𝑠 𝑘 ; ¯𝜎 (𝑚 ),𝑝 𝑘 ← 𝜎 ref   
+
+> 𝜂 (𝑠 𝑘 )
+
+ 𝑿 (𝑚 ),𝑝   
+
+> 1: 𝜂 (𝑠 𝑘 )
+
+
+
+7: 𝜎 (𝑚 ),𝑝 𝑠 𝑘 ←
+
+  ¯𝜎 (𝑚 ),𝑝 𝑘 
+
+ −1 + 1√Δ𝑠 𝑘 
+
+𝑍 (𝑚 ),𝑝 𝑠 𝑘 
+
+ −1
+
+8: draw 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1 ∼ N ( 0, 1)
+
+9: 𝑋 (𝑚 ),𝑝 𝑠 𝑘 +1 ← 𝑋 (𝑚 ),𝑝 𝑠 𝑘 + 𝑏 ref   
+
+> 𝜂 (𝑠 𝑘 )
+
+ 𝑿 (𝑚 ),𝑝   
+
+> 1: 𝜂 (𝑠 𝑘 )
+
+Δ𝑠 𝑘 
+
++ 𝜎 (𝑚 ),𝑝 𝑠 𝑘 
+
+√Δ𝑠 𝑘 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1
+
+10: end for 
+
+11: We compute (𝐴 (𝑚 ),𝑝 𝑠 𝑘 +1 )𝑘 =0,...,𝑀 −1 with Eq. (6), 12: for 𝑘 = 0, . . . , 𝑀 − 1 do 
+
+13: 𝑢 (𝑚 ),𝑝 𝑠 𝑘 ← Φref 
+
+> 𝑘
+
+ 𝑿 (𝑚 ),𝑝 
+
+> 1: 𝑠 𝑘
+
+
+
+14: 𝛽 (𝑚 +1) 
+
+> 𝑠 𝑘
+
+← arg min 
+
+> 𝛽
+
+Í𝑃 𝑝 =1 𝐴 (𝑚 ),𝑝 𝑠 𝑘 +1 𝜖 (𝑚 ),𝑝 𝑠 𝑘 +1 − 𝛽 ⊤𝑢 (𝑚 ),𝑝 𝑠 𝑘  
+
+> 2
+
++ 𝛾 |𝛽 |2
+
+15: 𝑍 proxy ,(𝑚 +1),𝑝 𝑠 𝑘 ←  𝛽 (𝑚 +1)
+
+> 𝑠 𝑘
+
+⊤𝑢 (𝑚 ),𝑝 𝑠 𝑘 
+
+16: end for 
+
+17: detach the paths, replay the GRU, and set 
+
+Ladj (𝜃 ) = 1
+
+𝑃𝑀 
+
+> 𝑃
+
+∑︁  
+
+> 𝑝 =1
+> 𝑀 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+ˆ𝑍 𝜃,𝑝 𝑠 𝑘 − 𝑍 proxy ,(𝑚 +1),𝑝 𝑠 𝑘 
+
+> 2
+
+18: 𝜃 (𝑚 +1) ← AdamW  𝜃 (𝑚 ) , ∇𝜃 Ladj 
+
+
+
+19: end for 
+
+20: return 𝜃 (𝐾 )3 Experiments 
+
+In the following experiments, we set Πobs = Πdisc , i.e. 𝑁 = 𝑀 , and 
+
+𝑑 = 1. 
+
+## 3.1 Benchmark generators and evaluation strategy 
+
+Our primary comparison is between the frozen reference and its Deep-MKV-TS correction. SBTS [1, 14], LS4 [30], and CSDI [26] provide external reference levels from distinct families of flexible generators, with common data splits. Direct training, obtained by a direct network parametrization and trained by minimization of the cost functional defined in (4), uses the same reference, network, ob-jective, batch sizes, and control bounds as Deep-MKV-TS, differing only in optimization. 
+
+## 3.2 Synthetic experiments 
+
+We start with experiments where the true target is known exactly : a solvable tree, a Heston model, a mixture of Heston models and a delayed volatility experiment. We measure results with six scores, all lower-is-better: path distance is the Sliced Wasserstein Distance (SWD) between stan-dardized paths, averaged over 256 random projections, realized-Volatility error is the normalized 𝑊 1 (RV W1) distance between realized-variance distributions, volatility clustering is the error on the absolute-return autocorrelation ( |𝑟 | ACF), early–future er-ror captures how well the dependence between early history and later realized variance is reproduced, regime error is the Total-Variation Distance (RTVD) between the eight regime proportions, and maximum-drawdown error is the 𝑊 1 distance between maximum-drawdown distributions (MDD 𝑊 1). The mathematical definitions of the metrics used are recalled in Appendix B and the full architecture and training details are given in Appendix C. 
+
+3.2.1 An exactly solvable tree. We first test the full learning proce-dure in a small setting where the correct answer can be computed exactly. We consider a GARCH time series with 𝑁 = 6. At each of six dates, the next return can take only one of three possible values (up, down, neutral), giving 3 6 = 729 complete paths. Since the probability of every branch is known, we can enumerate all possible futures after each partial path instead of estimating them from samples. This lets us compute both the exact conditional sig-nal (𝑍 𝑠 𝑘 )𝑘 and the best volatility correction at every node of the tree. We then hide these exact values from Deep-MKV-TS and run it following Algorithm 1. We set 𝑃 = 128 and 𝐾 = 300. For each prefix, the model only sees 𝑃 sampled continuations, from which it estimate the conditional expectation, store it in the GRU, and update the volatility step by step. This learned procedure recovers 96.4% of the objective improvement achieved by the exact solution. 
+
+3.2.2 Recovering Hidden Volatility from a Heston Model. This ex-periment tests whether Deep-MKV-TS can recover hidden stochas-tic volatility from prices alone. The target follows a Heston pro-cess [15], but its instantaneous variance is never revealed to the model. Paths are simulated under the Heston model with an initial variance of 0 .04, a long-run variance of 0 .04, a mean-reversion rate of 2, a volatility of variance of 0 .3, and a price variance correlation 
+
+Figure 1: Comparison of volatility statistics for the target data, the Heston reference model, Deep MKV-TS, and SBTS. Left: Empirical cumulative distribution of annualized realized volatility. Right: ACF of absolute returns across different lags, measuring volatility persistence. 
+
+of −0.7. The reference model is fitted following the discussion in Subsection 2. Deep-MKV-TS substantially corrects the reference’s volatility and dependence errors (Table 1): RV 𝑊 1 falls from 0 .089 to 0 .014, 
+
+|𝑟 | ACF error from 0 .068 to 0 .016, and early–future error from 0 .214 to 0 .018. The corrected model is therefore in the same performance range as flexible generators while retaining the reference dynamics. 
+
+Table 1: Heston: medians over four seeds, lower is better. 
+
+Method SWD RV 𝑊 1 |𝑟 | ACF Early–future MDD 𝑊 1
+
+Reference 0.060 0.089 0.068 0.214 0.059 Deep-MKV-TS 0.062 0.014 0.016 0.018 0.022 SBTS 0.089 0.005 0.004 0.012 0.039 LS4 0.039 0.026 0.023 0.037 0.021 
+
+CSDI 0.104 0.204 0.011 0.080 0.118 
+
+3.2.3 Recovering Hidden Volatility from a Mixture of Heston Mod-els. In this setting, we aim to recover the parameters of a two-dimensional Heston model. Following the framework introduced in [1], we sample eight parameter sets (𝜃, 𝜉, 𝜌 ) uniformly from a given range, each defining an equally likely regime where 𝜃 , 𝜉 and 
+
+𝜌 represent respectively the mean-reversion parameter, the volatil-ity of the variance and the correlation parameter. For every path, one of the eight regimes is drawn and held fixed throughout its trajectory, with 1000 paths generated per regime. The remaining parameters are shared across all regimes. Because the pooled reference blends the eight regimes, it pro-vides a deliberately misspecified starting point. Deep-MKV-TS sub-stantially reduces its errors across all diagnostics (Table 2), bringing the corrected model to a level comparable to SBTS despite retaining the reference structure. 
+
+Table 2: Mixture medians over four seeds, lower is better.                             
+
+> Method SWD RV 𝑊 1|𝑟 |ACF Early–future Regime TVD MDD 𝑊 1
+> Reference 0.347 0.479 0.322 0.765 0.629 0.309 Deep-MKV-TS 0.237 0.095 0.046 0.046 0.331 0.009
+> SBTS 0.407 0.493 0.094 0.05 0.563 0.478
+
+Figure 2: Quantile comparison of annualized realized volatility between the target data and the generated paths. The dotted line represents the ideal quantile matching, while the curves correspond to the Heston reference model, Deep MKV, and SBTS. The reported 𝑊 1 values quantify the discrepancy between the generated and target realized-volatility distributions. 
+
+Table 3: Lagged volatility: horizon scaling (top) and detailed errors at 𝑁 = 512                                             
+
+> (bottom). All configurations complete 4/4seeds except direct training at 𝑁 =512
+> (2/4). Statistics are computed over completed runs.
+> 𝑁 Deep dist. Deep dep. Direct dist. Direct dep. 128 31.6% 4.8% 15.7% −6.7%256 39.7% 6.9% 14.1% −3.4%512 62.2% 3.0% 52.6% −4.5%Method RV 𝑊 1|𝑟 |ACF Lagged-response Past–future error Reference 0.208 0.032 0.194 0.672 SBTS 0.088 0.023 0.205 0.818 Deep-MKV-TS 0.055 0.017 0.174 0.665
+> Direct training 0.046 0.038 0.212 0.855
+
+3.2.4 Delayed volatility: recovering a long-memory effect. This task tests a different kind of dependence than the previous two exper-iments: not whether the generator recovers the overall volatility level right, but whether it can remember an early event and cor-rectly apply its effect much later in the path. In the target process, a large drawdown silently activates a memory that only increases volatility after a fixed lag, then fades over time. The lagged-response error measures how well the model reproduces the delayed effect of past drawdowns on future volatility, while the past–future error 
+
+measures how well it preserves dependence between early and later parts of the path. Deep dist. and Direct dist. report the percentage of the reference model’s distributional error removed by Deep-MKV-TS and direct training, respectively. Similarly, Deep dep. and Direct dep. report the percentage of temporal-dependence error removed, with negative values indicating deterioration relative to the refer-ence. We test this at three horizons (128, 256, and 512 steps), scaling the lag and decay proportionally, to see whether the correction still works as the memory effect spans a longer history. The correction strengthens with horizon, removing 31 .6% of the reference distributional error at 𝑁 = 128 and 62 .2% at 𝑁 = 512 (Ta-ble 3). At 𝑁 = 512, direct training gives lower RV 𝑊 1 (0 .046 vs. 0 .055) on its completed runs, but only 2 /4 seeds complete successfully and temporal dependence deteriorates relative to the reference. Deep-MKV-TS completes all runs and continues to improve the reference dependence measures. Figure 3 exposes the learned intervention directly: the timing and magnitude of the volatility correction de-pend on the observed path history and can be traced relative to the reference. 
+
+Figure 3: Delayed-volatility experiment. Left: Difference in rolling volatility between paths that cross and do not cross the early drawdown threshold, showing the delayed volatility response in the target and generated scenarios. Right: Deep-MKV-TS volatility relative to the reference, conditioned on the same two path groups. The learned correction responds differently after the early-path event, making the timing and magnitude of the path-dependent intervention directly traceable. 
+
+## 3.3 Real futures data 
+
+Data and split. Data and split. We obtain Databento MBP-1 (market-by-price, depth-one) records for ES, NQ, and YM futures and aggregate them to one-second price series using the same proce-dure for all instruments. We use a common split of 496 training ses-sions (through May 2025), 144 validation sessions (June–December 2025), and 123 held-out test sessions (January–June 2026). Each dataset is trained separately. We use three futures on large-cap U.S. equity indices: ES , NQ and YM. Each series consists of con-tinuous one-second price records. Across the three indices, we use a common split of 496 training samples (through May 2025), 144 validation samples (June–December 2025), and 123 held-out test samples (January– June 2026). Each dataset is trained separately. 
+
+3.3.1 Conditional evaluation. We evaluate the forecasting power of our model using a path shadowing approach [20]. Given the first 65 log-prices values of a time series in the test set, we retrieve the 256 nearest generated histories from a pool of 8,192 simulated paths (fit on the train set), and use their next 32 returns as the predictive distribution for that test sample. Similarity between two histories is measured by Euclidean distance over four standardized feature blocks, computed on the training bank: the last 32 returns, a subsampled path shape (up to 24 points), rolling volatility over 5-, 10-, and 20-step windows, and absolute- and squared-return autocorrelations at lags 1, 2, 5, and 10. As two purely historical baselines, we also build two real-data-only banks of 8,192 paths: a moving-block bootstrap that rebuilds each session from blocks of eight consecutive returns, each drawn from a random training day but kept at its original intraday position, and a session bootstrap, where a session is an entire training day. We score each predictive distribution with the continuous ranked probability score (CRPS), CRPS (𝐹, 𝑦 ) =
+
+∫ ∞−∞ 
+
+ 𝐹 (𝑧 ) − 1{𝑦 ≤ 𝑧 }2 𝑑𝑧, 
+
+applied to cumulative return, individual returns, and future realized volatility (lower is better). Because the score is conditioned on the retrieved histories rather than computed unconditionally, it tests whether the generated continuations respond appropriately to the specific past observed for each test sample, not just whether the overall distribution is realistic. Table 4: Conditional-forecast CRPS ( ×1000 ; lower is better) on the 123-session chronological held-out test. The primary comparison is between Deep MKV and its matched fitted-drift reference. The remaining methods provide external benchmark levels. Deep MKV, its reference, and SBTS are reported as four-seed mean ± sample standard deviation.                                                                                                           
+
+> Index Method Cum. return Increment RV ES Reference 1.045 ±0.004 0.276 ±0.0002 0.897 ±0.005
+> Deep MKV 1.003 ±0.006 0.267 ±0.0003 0.634 ±0.013
+> SBTS 1.040 ±0.010 0.279 ±0.0003 0.623 ±0.003
+> Block bootstrap 1.042 0.272 0.771
+> Session bootstrap 1.066 0.282 0.620
+> NQ Reference 1.383 ±0.011 0.361 ±0.0005 1.092 ±0.002
+> Deep MKV 1.334 ±0.002 0.352 ±0.0004 0.746 ±0.009
+> SBTS 1.507 ±0.008 0.383 ±0.0007 0.907 ±0.013
+> Block bootstrap 1.385 0.359 0.990
+> Session bootstrap 1.432 0.370 0.802
+> YM Reference 1.030 ±0.004 0.266 ±0.0002 0.704 ±0.005
+> Deep MKV 1.013 ±0.006 0.263 ±0.0004 0.574 ±0.010
+> SBTS 1.117 ±0.004 0.297 ±0.0014 0.608 ±0.007
+> Block bootstrap 1.028 0.265 0.643
+> Session bootstrap 1.070 0.278 0.585
+
+Results. Table 4 reports conditional-forecast performance on the 123-session chronological held-out test. Deep MKV improves all three CRPS scores relative to its matched fitted-drift reference for each of ES, NQ, and YM. Thus, across all nine index–target combinations, the path-dependent correction improves the frozen reference model. The learned and historical generators provide external reference levels for the magnitude of this correction. After correction, Deep MKV reaches performance comparable to these flexible alternatives across the forecasting targets, while preserving the structure of the underlying reference model. 
+
+3.3.2 A downstream drawdown-risk decision. We now turn to a concrete use case: does a better generator lead to a better risk decision, not just better forecasts? For each test sample, we look up the 256 generated paths whose past history is closest to the observed one (Section 3.3.1), and use their future 32 steps as the set of possible continuations. We then estimate the largest expected future price drop by taking the 90th percentile of the largest drawdown across these 256 continuations, b𝑞 𝑠 . This estimate sets how much exposure a trader could safely take while keeping expected losses under a fixed 1% budget: exposure is capped at 5 and shrinks as b𝑞 𝑠 grows, 
+
+ℓ𝑠 = min 
+
+
+
+5, 0.01 
+
+𝑐 b𝑞 𝑠 
+
+
+
+, violation 𝑠 = 1{ℓ𝑠 𝑑 𝑠 > 0.01 },
+
+where 𝑑 𝑠 is the drawdown that actually occurred, 𝑐 is a safety factor calibrated on validation data, and a violation means the realized loss exceeded the 1% budget despite the chosen exposure. This measures risk capacity rather than trading profit, as a better generator should support more exposure while keeping violations near the prescribed 10% rate. Relative to the fitted reference, Deep-MKV-TS increases average exposure from 1 .85 to 1 .99 while remaining below the prescribed 10% violation limit, with an observed violation rate of 8 .13% (Ta-ble 5). This provides a downstream interpretation of the statistical correction: improving the conditional path distribution recovers ad-ditional risk capacity from the reference model without increasing violations beyond the target. The historical baselines attain similar violation rates and, in the case of the session bootstrap, a similar average exposure. We therefore interpret this experiment as evidence that the correction improves the decision usefulness of the reference scenarios, rather than as evidence of universal dominance over alternative scenario generation procedures. 
+
+Table 5: Frozen ES drawdown-risk decision: mean ± std over four seeds where applicable. T he prescribed violation limit is 10%. 
+
+Method Average exposure Violations Deep-MKV-TS 1.99 ± 0.06 8.13% ± 0.66% Fitted reference 1.85 ± 0.09 7.11% ± 1.02% SBTS 1.87 6.50% Block bootstrap 1.84 8.13% Session bootstrap 1.95 8.13% 
+
+## 4 Discussion and Conclusion 
+
+Deep-MKV-TS improves a reference financial model rather than replacing it: the drift remains fixed while path-dependent McKean– Vlasov control corrects volatility features missing from the refer-ence model. The correction is particularly effective for persistent, regime-dependent, and delayed volatility effects, and improves con-ditional forecasts and downstream risk capacity on held-out futures. Overall, the results show that a structured correction can bring an interpretable reference model toward the quality of flexible genera-tors while remaining traceable, retaining the structure it already captures and its interpretability. 
+
+## Acknowledgements 
+
+This work is part of a joint collaboration between Murex SAS and CMAP, École Polytechnique. Samy Mekkaoui is supported by the S-G Chair "Risques Fi-nanciers", and the "Deep Finance and Statistics" Qube-RT Chair. Alexandre Alouadi is supported by a CIFRE collaboration be-tween BNP-PAR and École Polytechnique. Yadh Hafsi acknowledges support from the Chaire Risque Fi-nanciers, Société Générale, at École Polytechnique, and from the Institut Europlace de Finance (IEF). Huyên Pham is supported by the Chair “Risques Financiers" Société Générale, and by FiME, Laboratoire de Finance des Marchés de l’Energie, and the “Finance and Sustainable Development” EDF -CACIB Chair. 
+
+## A Definition of the path features for the map 
+
+## 𝜑 vol 
+
+Let 𝒙 = (𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑁 ) ∈ ( R𝑑 )𝑁 be a normalized log-price path, with log returns 
+
+𝑟 𝑖 = 𝑥 𝑡 𝑖 +1 − 𝑥 𝑡 𝑖 , 𝑖 ∈ ⟦ 1, 𝑁 − 1⟧. (7) The broad path features are the complete path, its terminal value, and its return sequence: 
+
+
+
+𝜙 path (𝒙 ) = (𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑁 ),𝜙 terminal (𝒙 ) = 𝑥 𝑡 𝑁 ,𝜙 return (𝒙 ) = (𝑟 𝑖 )𝑁 −1 
+
+> 𝑖 =1
+
+.
+
+(8) The volatility feature map 𝜑 vol is built from the following quan-tities. 
+
+Absolute returns. We use the differentiable approximation 𝑎 𝑖 =√︃ 
+
+𝑟 2 
+
+> 𝑖
+
++ 𝜀 2 
+
+> 𝑎
+
+− 𝜀 𝑎 , which reduces to |𝑟 𝑖 | when 𝜀 𝑎 = 0. The feature is 
+
+𝜙 abs (𝒙 ) = (𝑎 𝑖 )𝑁 −1 
+
+> 𝑖 =1
+
+.
+
+Squared returns. We set 𝜙 sq (𝒙 ) = (𝑟 2 
+
+> 𝑖
+
+)𝑁 −1 
+
+> 𝑖 =1
+
+.
+
+Instantaneous realized variance. Setting (𝑞 𝑖 = 𝑟 2 
+
+> 𝑖
+
+/Δ𝑡 𝑖 )𝑁 −1 
+
+> 𝑖 =1
+
+, the feature is defined as 𝜙 instRV (𝒙 ) = (𝑞 𝑖 )𝑁 −1 
+
+> 𝑖 =1
+
+.
+
+Global realized variance. We set 
+
+𝜙 globalRV (𝒙 ) = 1
+
+𝑁 − 1 
+
+> 𝑁 −1
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑞 𝑖 . (9) 
+
+Rolling realized volatility. For a window of length 𝑤 ∈ ⟦ 1, 𝑁 −1⟧,
+
+𝑣 (𝑤 ) 
+
+> 𝑖
+
+= 1
+
+𝑤 
+
+> 𝑖
+
+∑︁  
+
+> 𝑗 =𝑖 −𝑤 +1
+
+𝑟 2 
+
+> 𝑗
+
++ 𝜀 2
+
+> 𝑣
+
+!1/2
+
+, 𝑖 ∈ ⟦ 𝑤, 𝑁 − 1⟧.
+
+with 𝜀 𝑣 a small numerical constant. The feature is 𝜙 (𝑤 ) 
+
+> rollRV
+
+(𝒙 ) =
+
+(𝑣 (𝑤 ) 
+
+> 𝑖
+
+)𝑁 −1 
+
+> 𝑖 =𝑤
+
+.
+
+State-variance pairs. To capture how volatility varies with the current state, 
+
+𝜙 stateRV (𝒙 ) =  (𝑥 𝑡 𝑖 , 𝑞 𝑖 )𝑁 −1 
+
+> 𝑖 =1
+
+.
+
+Volatility-persistence features. For any 1 ≤ 𝑖 ≤ 𝑁 − 1 and let 
+
+𝑢 𝑖 denote either 𝑎 𝑖 or 𝑟 2 
+
+> 𝑖
+
+, standardized as e𝑢 𝑖 = (𝑢 𝑖 − 𝑢 )/ 𝑠 𝑢 , where 
+
+𝑢 and 𝑠 𝑢 are its pooled mean and standard deviation. For a lag 
+
+ℓ ∈ ⟦ 0, 𝑁 − 2⟧,
+
+𝜙 𝑢  
+
+> lag ,ℓ
+
+(𝒙 ) =  e𝑢 𝑖 e𝑢 𝑖 +ℓ
+
+𝑁 −1−ℓ𝑖 =1 .
+
+These features capture the persistence of large absolute or squared returns across different lags. The complete volatility map collects all of the above: 
+
+𝜑 vol (𝒙 ) =
+
+
+
+𝜙 abs , 𝜙 sq , 𝜙 instRV , 𝜙 globalRV ,𝜙 (𝑤 )
+
+> rollRV
+
+, 𝜙 stateRV ,  𝜙 𝑎 
+
+> lag ,ℓ
+
+ 
+
+> ℓ∈ L
+
+,  𝜙 𝑟 2
+
+> lag ,ℓ
+
+ 
+
+> ℓ∈ L
+
+
+
+(𝒙 ),
+
+where L is the chosen set of persistence lags. 
+
+## B Evaluation metrics B.1 Mathematical definitions 
+
+Given 𝑝 ≥ 1 and 𝜇, 𝜈 ∈ P 𝑝 
+
+ (R𝑑 )𝑁 , the space of probability mea-sures with 𝑝 − 𝑡ℎ order, we define the Wasserstein distance as 
+
+W𝑝 (𝜇, 𝜈 ) =
+
+
+
+inf    
+
+> 𝜋 ∈Π(𝜇,𝜈 )
+
+∫   
+
+> (R𝑑 )𝑁 × ( R𝑑 )𝑁
+
+|𝑥 − 𝑦 |𝑝  
+
+> 2
+
+𝜋 (d𝑥, d𝑦 )
+
+ 1
+
+> 𝑝
+
+,
+
+where Π(𝜇, 𝜈 ) = 𝜋 ∈ P  (R𝑑 )𝑁 × ( R𝑑 )𝑁  : pr 1♯𝜋 = 𝜇 and pr 2♯𝜋 =
+
+𝜈 , where pr 𝑖 denotes the projection maps for 𝑖 ∈ { 1, 2} and where 
+
+|𝑥 − 𝑦 |2 denotes the Euclidean norm of (R𝑑 )𝑁 . The Sliced Wasser-stein distance associated to 𝑝 (SWD 𝑝 ) is given by SWD 𝑝 (𝜇, 𝜈 ) =
+
+ ∫ 
+
+> S𝑑𝑁 −1
+
+W𝑝 𝑝 (𝑃 𝜃 ♯𝜇, 𝑃 𝜃 ♯𝜈 )d𝜎 (𝜃 )
+
+ 1
+
+> 𝑝
+
+, (10) with S𝑑𝑁 −1 := 𝜃 ∈ ( R𝑑 )𝑁 : ∥𝜃 ∥2 = 1 the sphere, 𝑃 𝜃 (𝑥 ) = 𝜃 · 𝑥 
+
+the coordinate of the projection of 𝑥 ∈ ( R𝑑 )𝑁 on the vector space Vect (𝜃 ) and 𝜎 representing the uniform measure on S𝑑𝑁 −1. We shall notice that 𝑃 𝜃 ♯𝜇 ∈ P 𝑝 (R) for any 𝜇 ∈ P 𝑝 
+
+ (R𝑑 )𝑁  and we recall [24, Theorem 2.9] that we can rewrite (10) as 
+
+SWD 𝑝 (𝜇, 𝜈 ) =
+
+ ∫ 
+
+> S𝑑𝑁 −1
+
+∫ 10
+
+|𝐹 −1  
+
+> 𝑃 𝜃 ♯𝜇
+
+(𝑡 ) − 𝐹 −1  
+
+> 𝑃 𝜃 ♯𝜈
+
+(𝑡 ) | 𝑝 d𝑡 d𝜎 (𝜃 )
+
+ 1 
+
+> 𝑝
+
+,(11) 
+
+where 𝐹 𝜇 denotes the cumulative distribution function associated to 𝜇 and 𝐹 −1 
+
+> 𝜇
+
+its generalized inverse. The total variation distance (TVD ) between two Borel probability measures 𝜇, 𝜈 on a Polish space 𝐸 is defined as 
+
+𝑑 TVD (𝜇, 𝜈 ) = sup  
+
+> 𝐴 ∈ B ( 𝐸 )
+
+|𝜇 (𝐴 ) − 𝜈 (𝐴 )| ,
+
+where B( 𝐸 ) denotes the Borel sets of 𝐸 . When 𝐸 = {𝑥 1, . . . , 𝑥 𝑛 },then we have [18, Proposition 4.2], 
+
+𝑑 TVD (𝜇, 𝜈 ) = 12
+
+> 𝑛
+
+∑︁ 
+
+> 𝑘 =1
+
+|𝜇 ({ 𝑥 𝑘 }) − 𝜈 ({ 𝑥 𝑘 })| . (12) 
+
+## B.2 Experimental evaluation metrics 
+
+Let 𝒙 = (𝑥 𝑡 1 , . . . , 𝑥 𝑡 𝑁 ) ∈ ( R𝑑 )𝑁 be a normalized log-price path. We recall the notation introduced in (7) for the log-returns. 
+
+SWD. The Sliced Wasserstein distance between the generated path and the true path is computed by SWD 1 (𝜇 data , 𝜇 gen ) by the formula (11) where we set 𝜇 data for the law of the data samples, 𝜇 gen for the law of the generated samples 
+
+Maximum drawdown. We define the maximum-drawdown for the log-prices as MDD (𝒙 ) := max 
+
+> 0≤𝑛 ≤𝑁
+
+  max  
+
+> 0≤𝑘 ≤𝑛
+
+𝑥 𝑘 − 𝑥 𝑛 
+
+. (13) We then set MDD W1 := W1 (MDD ♯𝜇 data , MDD ♯𝜇 gen )
+
+E𝑋 ∼𝜇 data [MDD (𝑋 )] 
+
+where the MDD map is defined in (13). 
+
+Realized volatility. We set RV W1 := W1 (𝜙 globalRV ♯𝜇 data , 𝜙 globalRV ♯𝜇 gen )
+
+E𝑋 ∼𝜇 data [𝜙 globalRV (𝑋 )] ,
+
+where we defined 𝜑 globalRV in (9). 
+
+𝑉 (𝑟 ) ACF. Let L denotes the set of lags. For any 𝑙 ∈ L and any 
+
+𝜇 ∈ P 2 (( R𝑑 )𝑁 ), we define for any map 𝑉 : R → R the quantity 
+
+𝜌 𝜇 𝑉 (𝑙 ) := 1
+
+𝑁 − 1 − 𝑙  
+
+> 𝑁 −1−𝑙
+
+∑︁ 
+
+> 𝑖 =1
+
+Corr 𝜇 (𝑉 (𝑟 𝑖 ), 𝑉 (𝑟 𝑖 +𝑙 )) .
+
+Here, for any measurable functions Φ1 and Φ2, Corr 𝜇 (Φ1, Φ2) de-notes the correlation between the random variables Φ1 (𝑋 ) and 
+
+Φ2 (𝑋 ) when 𝑋 ∼ 𝜇 .We then define the corresponding discrepancy metric as 
+
+𝑉 (𝑟 ) ACF : =   1
+
+|L| ∑︁ 𝑙 ∈ L 
+
+ 𝜌 𝜇 data    
+
+> 𝑉 (𝑟 )
+
+(𝑙 ) − 𝜌 𝜇 gen    
+
+> 𝑉 (𝑟 )
+
+(𝑙 )2  12 , (14) Setting 𝑉 (𝑟 ) := |𝑟 |, we get the metric |𝑟 | ACF. 
+
+Early-future. The early future metric is defined for the Heston and the mixture of Heston experiments as follows. Let 
+
+𝑉 early (𝒙 ) :=   64 ∑︁ 
+
+> 𝑖 =1
+
+𝑟 2
+
+> 𝑖
+
+ 12 , 𝑉 future (𝒙 ) :=   96 ∑︁ 
+
+> 𝑖 =65
+
+𝑟 2
+
+> 𝑖
+
+ 12 .
+
+We then set early-future = |Corr 𝜇 data (𝑉 early , 𝑉 future ) − Corr 𝜇 gen (𝑉 early , 𝑉 future )| ,
+
+Lagged-response and past-future Let ℎ be the early-history cut-off and 𝑎 > 0 the prescribed threshold. We set the early-event indicator as 
+
+𝐸 (𝒙 ) := 1 max       
+
+> 0≤𝑛 ≤ℎ(max
+> 0≤𝑘 ≤𝑛 𝑥 𝑘 −𝑥 𝑛 ) ≥ 𝑎
+
+.
+
+Let 𝑠 > ℎ denoting the beginning of future window and 𝐻 its length. We then define the global realized variance during the period 
+
+⟦𝑠, 𝑠 + 𝐻 ⟧ as 
+
+𝑉 R𝑠 +𝐻 𝑠 (𝒙 ) :=   1
+
+𝐻 
+
+> 𝑠 +𝐻
+
+∑︁ 
+
+> 𝑖 =𝑠 +1
+
+𝑟 2
+
+> 𝑖
+
+Δ𝑡 𝑖 
+
+ 12 .
+
+We then define 
+
+Δ𝑉 (𝜇 ) := E𝑋 ∼𝜇 [𝑉 R𝑠 +𝐻 𝑠 (𝑋 )| 𝐸 (𝑋 ) = 1] − E𝑋 ∼𝜇 [𝑉 R𝑠 +𝐻 𝑠 (𝑋 )| 𝐸 (𝑋 ) = 0],
+
+representing the difference in average future realized volatility between paths for which the event 𝐸 occurs and those for which it does not. 
+
+
+
+Lagged-response := |Δ𝑉 (𝜇 data ) − Δ𝑉 (𝜇 gen )| ,
+
+Past-future error := |Corr 𝜇 data (𝐸 (𝑋 ), 𝑉 R𝑠 +𝐻 𝑠 (𝑋 )) −Corr 𝜇 gen (𝐸 (𝑋 ), 𝑉 R𝑠 +𝐻 𝑠 (𝑋 ))| 
+
+(15) 
+
+Regime TVD. The regime TVD is defined for the mixture of Heston experiment. Let 𝑙 ∈ N★ be the number of mixture of components and assume that a classifier map 𝑐 ★ : (R𝑑 )𝑁 → ⟦ 1, 𝑙 ⟧ has been trained to identify the mixture component. Then, we set Regime TVD : = 𝑑 𝑇𝑉 𝐷 (𝑐 ★♯𝜇 data , 𝑐 ★♯𝜇 gen ),
+
+where Regime TVD is computed following (12). 
+
+Dist and dep. For any metric 𝑚 , we define respectively 𝑒 ref  
+
+> 𝑚
+
+and 
+
+𝑒 model  
+
+> 𝑚
+
+as the reference and the model errors. We then define 
+
+𝑒 𝑚 = 𝑒 ref  
+
+> 𝑚
+
+− 𝑒 model 
+
+> 𝑚
+
+𝑒 ref 
+
+> 𝑚
+
+= 1 − 𝑒 model 
+
+> 𝑚
+
+𝑒 ref 
+
+> 𝑚
+
+.
+
+A positive value for 𝑒 𝑚 means an improvement, while a negative one means deterioration. We then define the metrics as 
+
+(
+
+Dist := Median (𝑒 SWD , 𝑒 MMD W1 , 𝑒 RV W1 , 𝑒 Ter W1 , 𝑒 return W1 ),
+
+Dep := Median (𝑒 𝑟 ACF , 𝑒 |𝑟 | ACF , 𝑒 𝑟 2 ACF , 𝑒 L-R , 𝑒 P-F ),
+
+where we set 
+
+
+
+Ter W1 = W1 (𝜙 terminal ♯𝜇 data ),𝜙 terminal ♯𝜇 gen )
+
+√V𝑋 ∼𝜇 data [𝜙 terminal (𝑋 ) ] ,
+
+return W1 = W1 (𝜙 return ♯𝜇 data ),𝜙 return ♯𝜇 gen )
+
+√V𝑋 ∼𝜇 data [𝜙 return (𝑋 ) ] ,
+
+with the maps 𝜙 terminal and 𝜙 return being defined in (8). Moreover, 𝑟 
+
+ACF, |𝑟 | ACF, 𝑟 2 ACF are computed from (14) choosing respectively the maps 𝑉 (𝑟 ) = 𝑟 , 𝑉 (𝑟 ) = |𝑟 | and 𝑉 (𝑟 ) = 𝑟 2 and where 𝑒 L-R and 𝑒 P-F 
+
+refer respectively to the metrics lagged-response and past-future error defined in (15). 
+
+## C Training Configuration 
+
+Every run uses four training seeds and 8192 paths per split. We report the median over seeds unless stated otherwise. Deep-MKV-TS uses a one-layer, 96-unit GRU trained with AdamW, and a batch size of 256 for both generated and target paths. On the synthetic tasks, we use ridge penalty 10 −3, weight decay 10 −5, and volatility bounds [10 −3, 0.6]. All other settings are listed in Table 6. 
+
+Table 6: Locked Deep-MKV-TS settings. 
+
+Heston Mixture Delayed vol. Futures 
+
+𝑁 128 128 128/256/512 128 
+
+Δ𝑡 0.004 0.004 0.004/0.002/0.001 one session 
+
+(𝑤 path , 𝑤 vol ) (50,100) (25,50) (25,50) (25,50) 
+
+𝐾 2,500 3,000 3,000/2,500/2,500 400 Learning rate 0.002 0.0015 0.002 0.00025 Drift rule fitted zero zero zero 
+
+## References 
+
+[1] Alexandre Alouadi, Baptiste Barreau, Laurent Carlier, and Huyên Pham. Robust time series generation via Schrödinger bridge: A comprehensive evaluation. In 
+
+ACM International Conference on AI in Finance , 2025. [2] Alexandre Alouadi, Grégoire Loeper, Célian Marsala, Othmane Mazhar, and Huyên Pham. SBBTS: A unified Schrödinger-Bass framework for synthetic financial time series. arXiv preprint arXiv:2604.07159 , 2026. [3] Jean-David Benamou, Guillaume Chazareix, Marc Hoffmann, Grégoire Loeper, and François-Xavier Vialard. Entropic semi-martingale optimal transport. 
+
+https://arxiv.org/abs/2408.09361 , 2024. [4] Jean-Philippe Bouchaud, J. Doyne Farmer, and Fabrizio Lillo. How markets slowly digest changes in supply and demand. In Handbook of Financial Markets: Dynamics and Evolution , pages 57–160. Elsevier, 2009. [5] Samer El Boustany, Samy Mekkaoui, Yadh Hafsi, Alexandre Alouadi, and Huyên Pham. Learning generative dynamics with soft law constraints: A McKean-Vlasov FBSDE approach. arXiv preprint arXiv:2605.08928 , 2026. [6] Rainer Buckdahn, Juan Li, Junsong Li, and Chuanzhi Xing. Path-dependent controlled mean-field coupled forward-backward sdes: The associated stochastic maximum principle. SIAM Journal on Control and Optimization , 63(3):2124–2153, 2025. [7] Haoyang Cao, Minshuo Chen, Yinbin Han, and Renyuan Xu. Diffusion models for adaptive sequential data generation. arXiv preprint arXiv:2606.06007 , 2026. [8] René Carmona and François Delarue. Probabilistic Theory of Mean Field Games with Applications I . Springer, Cham, 2018. [9] Rama Cont. Empirical properties of asset returns: Stylized facts and statistical issues. Quantitative Finance , 1(2):223–236, 2001. [10] Tomas Espana, Yadh Hafsi, Fabrizio Lillo, and Edoardo Vittori. Reinforcement learning in queue-reactive models: Application to optimal execution. arXiv preprint arXiv:2511.15262 , 2025. [11] Julien Guyon and Jordan Lekeufack. Volatility is (mostly) path-dependent. Quan-titative Finance , 23(9):1221–1258, 2023. [12] Yadh Hafsi, Samy Mekkaoui, and Huyên Pham. Stochastic maximum principle for mckean–vlasov control with discrete path dependence. Work in Progress ,2026. [13] Yadh Hafsi and Edoardo Vittori. Optimal execution with reinforcement learning in a multi-agent market simulator. In 2026 International Conference on Artificial Intelligence, Computer, Data Sciences and Applications (ACDSA) . IEEE, 2026. [14] Mohamed Hamdouche, Pierre Henry-Labordère, and Huyên Pham. Nonpara-metric generative modeling for time series via schrödinger bridge. Journal of Machine Learning Research , 27(58):1–23, 2026. [15] Steven L. Heston. A closed-form solution for options with stochastic volatility. 
+
+Review of Financial Studies , 6(2):327–343, 1993. [16] Yifan Jiang, Renyuan Xu, and Luhao Zhang. Schrödinger bridge with transport relaxation. arXiv preprint arXiv:2602.08118 , 2026. [17] Patrick Kidger, James Foster, Xuechen Li, and Terry J. Lyons. Neural SDEs as infinite-dimensional GANs. In Proceedings of the International Conference on Machine Learning , pages 5453–5463, 2021. [18] David A Levin and Yuval Peres. Markov chains and mixing times . American Mathematical Society, 2026. [19] Samy Mekkaoui, Huyên Pham, and Amine Zitoun. Path dependent mean-field control in discrete time with applications to linear quadratic control problems and generative AI. Work in Progress , 2026. [20] Rudy Morel, Stéphane Mallat, and Jean-Philippe Bouchaud. Path shadowing Monte-Carlo. Quantitative Finance , 24(8):1199–1225, 2024. [21] Yuriy Nevmyvaka, Yi Feng, and Michael J. Kearns. Reinforcement learning for optimized trade execution. In Proceedings of the 23rd International Conference on Machine Learning (ICML) , pages 673–680. ACM, 2006. [22] Hao Ni, Lukasz Szpruch, Marc Sabate-Vidales, Baoren Xiao, Magnus Wiese, and Shujian Liao. Sig-wasserstein GANs for time series generation. In ACM International Conference on AI in Finance , pages 1–8, 2021. [23] Kashif Rasul, Calvin Seward, Ingmar Schuster, and Roland Vollgraf. Autore-gressive denoising diffusion models for multivariate probabilistic time series forecasting. In International conference on machine learning , pages 8857–8868. PMLR, 2021. [24] Filippo Santambrogio. Optimal Transport for Applied Mathematicians: Calculus of Variations, PDEs, and Modeling , volume 87 of Progress in Nonlinear Differential Equations and Their Applications . Birkhäuser/Springer, Cham, 2015. [25] Bharath K Sriperumbudur, Arthur Gretton, Kenji Fukumizu, Bernhard Schölkopf, and Gert RG Lanckriet. Hilbert space embeddings and metrics on probability measures. The Journal of Machine Learning Research , 11:1517–1561, 2010. [26] Yusuke Tashiro, Jiaming Song, Yang Song, and Stefano Ermon. CSDI: Conditional score-based diffusion models for probabilistic time series imputation. In Advances in Neural Information Processing Systems , pages 24804–24816, 2021. [27] Magnus Wiese, Robert Knobloch, Ralf Korn, and Peter Kretschmer. Quant GANs: Deep generation of financial time series. Quantitative Finance , 20(9):1419–1440, 2020. [28] Jinsung Yoon, Daniel Jarrett, and Mihaela Van der Schaar. Time-series generative adversarial networks. Advances in neural information processing systems , 32, 2019. [29] Benjamin J Zhang and Markos A Katsoulakis. A mean-field games laboratory for generative modeling. arXiv preprint arXiv:2304.13534 , 2023. [30] Linqi Zhou, Michael Poli, Winnie Xu, Stefano Massaroli, and Stefano Ermon. Deep latent state space models for time-series generation. In Proceedings of the International Conference on Machine Learning , 2023.

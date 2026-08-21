@@ -6,38 +6,44 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-20
-- 运行时间：2026-08-20 20:25:21 UTC
+- 最新运行日期：2026-08-21
+- 运行时间：2026-08-21 20:51:03 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：5
-- 速读区：0
+- 本次总论文数：8
+- 精读区：6
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读5篇金融AI论文，聚焦金融文档验证与多模态问答。  
-最值得关注的是两篇9.0分工作：跨模态金融问答的对抗多智能体框架，以及金融文档审计的逻辑感知验证框架。  
-建议后续可深入对比这两类方法在真实金融业务场景中的适用性与落地成本。
-- 详情：[/202608/20/README](/202608/20/README)
+今日精读6篇、速读2篇，聚焦金融新闻摘要与集中流动性做市。最值得看：LLM+检索增强生成在金融新闻摘要中表现亮眼（9.0），强化学习优化流动性提供亦有价值（8.0）。建议关注大模型金融信息处理落地，并留意Solana链上预测与概率时间序列建模的新进展。
+- 详情：[/202608/21/README](/202608/21/README)
 
 ### 精读区论文标签
-1. [CLAIR-Fin: An Adversarial Multi-Agent Framework for Claim-Level Verification and Adaptive Debate in Cross-Modal Financial QA](/202608/20/2608.13706v2-clair-fin-an-adversarial-multi-agent-framework-for-claim-level-verification-and-adaptive-debate-in-cross-modal-financial-qa)  
+1. [Automated Summarization of Financial News Using Large Language Models and Retrieval-Augmented Generation: An Early Empirical Study (Fall 2023)](/202608/21/2608.19526v1-automated-summarization-of-financial-news-using-large-language-models-and-retrieval-augmented-generation-an-early-empirical-study-fall-2023)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：金融问答中的自然语言处理与声明级验证
-2. [LAVA: Logic-Aware Validation and Augmentation Framework for Large-Scale Financial Document Auditing](/202608/20/2608.16763v1-lava-logic-aware-validation-and-augmentation-framework-for-large-scale-financial-document-auditing)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：多模态大模型流水线用于金融文档审计与验证
-3. [Multi-Level Market Making with Reinforcement Learning](/202608/20/2608.18195v1-multi-level-market-making-with-reinforcement-learning)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：多层级限价订单簿做市的强化学习框架
-4. [Converting Expert Deliberation into Financial Signals Through A Context-Aware NLP Pipeline](/202608/20/2608.18911v1-converting-expert-deliberation-into-financial-signals-through-a-context-aware-nlp-pipeline)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：将会议文本转化为金融预测信号的NLP流水线
-5. [FinRCA-Bench: Benchmarking Evidence Retrieval and Reasoning for Financial AI Systems](/202608/20/2608.18534v1-finrca-bench-benchmarking-evidence-retrieval-and-reasoning-for-financial-ai-systems)  
+   evidence：利用大语言模型与检索增强生成自动摘要金融新闻，辅助投资决策
+2. [Concentrated Liquidity Provision: a Reinforcement Learning Perspective](/202608/21/2608.19389v1-concentrated-liquidity-provision-a-reinforcement-learning-perspective)  
    标签：评分：8.0/10、query:ai-finance
-   evidence：针对金融AI系统的证据检索与推理基准
+   evidence：强化学习用于去中心化金融中的动态流动性做市
+3. [Deep-MKV-TS: Path-Dependent McKean--Vlasov Control for Financial Time Series Generation](/202608/21/2608.19394v1-deep-mkv-ts-path-dependent-mckean--vlasov-control-for-financial-time-series-generation)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：神经随机最优控制生成金融时间序列，是深度学习的金融应用
+4. [Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning](/202608/21/2608.19447v1-quantifying-event-impacts-on-time-series-via-multiscale-contrastive-learning)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：多尺度对比学习量化事件对金融时间序列的异常损失冲击，属于深度学习金融应用
+5. [Reliable Financial Named Entity Recognition under Domain Shift](/202608/21/2608.19558v1-reliable-financial-named-entity-recognition-under-domain-shift)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：领域偏移下的金融命名实体识别置信估计与选择性预测
+6. [ReguSim: Evaluating LLM Agent Rule Grounding in Financial Compliance](/202608/21/2608.19974v1-regusim-evaluating-llm-agent-rule-grounding-in-financial-compliance)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：面向金融合规的LLM智能体评估
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Time Series Forecasting based on Solana Digital Asset Dataset](/202608/21/2608.19521v1-time-series-forecasting-based-on-solana-digital-asset-dataset)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：提供Solana数字资产时间序列数据集支撑预测与市场结构分析，是金融数据与AI应用基础
+2. [CLaST: Context-aware Contrastive VAE for Probabilistic Time Series Forecasting](/202608/21/2608.20025v1-clast-context-aware-contrastive-vae-for-probabilistic-time-series-forecasting)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：通用的深度生成式概率时间序列预测VAE，可应用于金融
 
 
 <div class="dpr-home-promo-card">

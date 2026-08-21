@@ -1,0 +1,565 @@
+Title: Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning
+
+URL Source: https://arxiv.org/pdf/2608.19447v1
+
+Published Time: Fri, 21 Aug 2026 00:18:14 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning 
+
+# Yiming Sun 
+
+Rutgers University New Brunswick, NJ, USA yiming.sun99@rutgers.edu 
+
+# Shengyu Chen 
+
+NEC Laboratories America Princeton, NJ, USA shchen@nec-labs.com 
+
+# Zhengzhang Chen 
+
+NEC Laboratories America Princeton, NJ, USA zchen@nec-labs.com 
+
+# Haoyu Wang 
+
+NEC Laboratories America Princeton, NJ, USA haoyu@nec-labs.com 
+
+# Xiaowei Jia 
+
+Rutgers University New Brunswick, NJ, USA xj159@cs.rutgers.edu 
+
+# Haifeng Chen 
+
+NEC Laboratories America Princeton, NJ, USA haifeng@nec-labs.com 
+
+## Abstract 
+
+Shocks that spread through the web, such as cybersecurity breach disclosures, can abruptly disrupt financial time series and cause substantial abnormal losses. While these events are disclosed as discrete records through news reports, regulatory filings, or public databases, their consequences unfold through continuous market dynamics. This creates an event-conditioned impact prediction problem: given pre-event market history and limited event meta-data, the goal is to estimate short-term post-disclosure abnormal loss rather than reconstruct the full post-event trajectory. However, most time-series forecasting models focus on endogenous regu-larities such as trend, seasonality, and autocorrelation, and thus struggle with rare and heterogeneous external events. The challenge is further amplified by sparse high-impact events and background market noise. We introduce EventTime, a multi-resolution frame-work that combines long-horizon market context, short-horizon pre-event dynamics, and event metadata. It incorporates an event fusion module that couples temporal representations with event attributes to identify relevant recent market patterns. To mitigate sparse supervision, EventTime further introduces a dynamic con-trastive objective that constructs event- and time-series-aware pos-itive and negative pairs during training. We also construct SECURE, a real-world dataset aligning cybersecurity incidents with stock-market time series and structured and LLM-derived semantic fea-tures. Experiments show that EventTime consistently outperforms state-of-the-art time-series and event-aware baselines in estimat-ing post-event financial losses. Further analyses demonstrate more event-sensitive representations, greater robustness to incomplete metadata, and more interpretable estimates of short-term market impact following cybersecurity disclosures. 
+
+## CCS Concepts 
+
+• Computing methodologies → Machine learning ; • Informa-tion systems → Data mining .
+
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> CIKM ’26, Rome, Italy
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2539-5/2026/11 https://doi.org/10.1145/3799682.3840920
+
+## Keywords 
+
+event-conditioned prediction, time series, contrastive learning, cy-bersecurity, financial modeling 
+
+ACM Reference Format: 
+
+Yiming Sun, Shengyu Chen, Zhengzhang Chen, Haoyu Wang, Xiaowei Jia, and Haifeng Chen. 2026. Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning. In Proceedings of the 35th ACM International Conference on Information and Knowledge Management (CIKM ’26), November 07–11, 2026, Rome, Italy. ACM, New York, NY, USA, 11 pages. https://doi. org/10.1145/3799682.3840920 
+
+## 1 Introduction 
+
+Cybersecurity incidents have become a prominent class of web-scale external shocks. They are often disclosed and disseminated through news portals, regulatory filings, public breach databases, and social media, where a single report can rapidly reshape investor perception of a firm. Unlike endogenous market fluctuations that evolve gradually through trends, cycles, and short-term autocorre-lation, such disclosures arrive as discrete and irregular events, but their consequences unfold through continuous financial time series. This interaction between discrete web events and continuous mar-ket dynamics raises an important problem: how can we estimate the short-term abnormal market response following an event from the market context observed before its disclosure? This problem is practically important because cybersecurity in-cidents can trigger abrupt stock price movements and economic losses. Empirical studies show that major breaches can erase bil-lions of dollars in market capitalization within days, erode consumer trust, and depress trading activity for weeks. At the macroeconomic level, cybercrime is estimated to cause annual global losses on the order of trillions of dollars [2, 21]. For investors, firms, and regula-tors, the key quantity of interest is often not the entire post-event price trajectory, which is affected by many confounding factors after disclosure, but the magnitude of the abnormal loss associated with the event. Accurately estimating this impact is essential for cyber-risk assessment, portfolio protection, and understanding how online security incidents propagate through financial markets. Figure 1 shows this perspective using the Facebook–Cambridge Analytica disclosure in March 2018. Following the disclosure, Face-book’s stock price dropped sharply from approximately $185 to $152 within days, reflecting an immediate market reaction to the cybersecurity-related event [12]. Such examples highlight why arXiv:2608.19447v1 [cs.LG] 19 Aug 2026 CIKM ’26, November 07–11, 2026, Rome, Italy Sun et al. 
+
+Figure 1: Stock market shock induced by a cybersecurity event: Facebook’s 2018 data breach. 
+
+event-aware modeling is needed: forecasting systems that rely only on endogenous temporal patterns may underestimate abnormal losses during shocks, while models that ignore the event context cannot distinguish event-driven reactions from routine market volatility. Failing to quantify these impacts can lead to mispriced risk, inadequate portfolio protection, and limited regulatory vis-ibility into how shocks spread across firms and industries [26]. Therefore, modeling the impact of rare but consequential cyber-security disclosures is a crucial step toward more resilient and adaptive financial decision-making. Despite rapid advances in time-series forecasting, most existing models are primarily designed to capture endogenous temporal reg-ularities, such as long-term trends, seasonal cycles, and short-term autocorrelation [13, 15, 31]. Discrete external events, such as cyber-security disclosures, are often underrepresented or incorporated only as auxiliary covariates through simple concatenation or indica-tor features. Such treatments are insufficient for event-conditioned impact prediction, where the goal is not to extrapolate a smooth future trajectory, but to estimate how a rare event interacts with the pre-event market state and induces abnormal loss. In particular, existing models often fail to capture which aspects of historical dynamics make a firm more vulnerable to a disclosure, how event metadata should be aligned with temporal representations, and how to learn robust event-aware patterns from sparse observations. We therefore identify three key challenges in modeling the impact of discrete events on continuous financial signals: 
+
+• Multi-resolution market context : Pre-event financial dynam-ics span multiple temporal scales, including long-term valuation trends, medium-term market regimes, and short-term volatility. These scales jointly shape market responses to cybersecurity disclosures, requiring models to capture multi-resolution con-text for abnormal impact estimation. 
+
+• Event–temporal integration : Cybersecurity incidents involve heterogeneous, non-temporal metadata, such as breach type, affected scale, severity, and data sensitivity. Their financial con-sequences depend on interactions with the market state, which simple feature concatenation cannot explicitly capture. 
+
+• Sparse event supervision : High-impact cybersecurity disclo-sures are rare and diverse, yielding limited labeled data. Stan-dard regression may overfit background market patterns and underuse event semantics, motivating training strategies that amplify event-relevant signals and separate similar from dis-similar event–market contexts. To address these challenges, we propose EventTime , a unified framework for event-conditioned financial impact prediction. Event-Time models pre-event dynamics at multiple temporal resolutions to capture long-horizon market context and short-horizon fluctua-tions. An attention-based fusion mechanism aligns structured event metadata with temporal signals to identify recent patterns most relevant to the event. To address sparse supervision from rare and heterogeneous events, EventTime further uses dynamic contrastive learning to strengthen event-relevant representations by contrast-ing similar and dissimilar event–market contexts. Together, these components improve short-term abnormal loss estimation over conventional forecasting models that mainly rely on endogenous temporal patterns. We evaluate EventTime on a real-world dataset that links pub-licly disclosed cybersecurity incidents with U.S. stock market data. This setting provides a challenging testbed for event-conditioned impact prediction: cybersecurity disclosures are sparse and het-erogeneous, yet they can induce disproportionate abnormal losses within a short reaction window. Experimental results show that EventTime consistently outperforms strong baselines, including state-of-the-art time-series forecasting models and event-augmented variants, in estimating post-event financial losses. To examine the broader applicability of our framework, we further evaluate Event-Time on a hydrological event-impact prediction task, where extreme rainfall events are used to predict subsequent streamflow responses. This cross-domain study shows that the same event-conditioned modeling principle can also capture natural shocks in environmen-tal systems, underscoring the generality of our approach. In summary, this paper makes the following contributions: 
+
+• We formulate cybersecurity event impact prediction as an event-conditioned time-series task, where the objective is to estimate short-term abnormal financial loss from pre-event market dynamics and event metadata, rather than reconstruct the full post-event trajectory. 
+
+• We propose EventTime , combining multi-resolution encoding of pre-event market signals, attention-based fusion of hetero-geneous event metadata, and dynamic contrastive learning to strengthen rare-event signals under sparse supervision. 
+
+• We develop a novel dataset, SECURE , by integrating stock-level financial time series from Yahoo Finance 1 with cyberse-curity event records from the Privacy Rights Clearinghouse (PRC) [1], enabling a systematic study of how disclosed secu-rity incidents affect short-term market losses. 
+
+• We empirically demonstrate that EventTime consistently out-performs competitive time-series and event-aware baselines on the SECURE dataset. Beyond the financial domain, we fur-ther validate our approach on a hydrological event-impact prediction benchmark, illustrating its potential to model di-verse event-driven responses.  
+
+> 1https://github.com/ranaroussi/yfinance Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning CIKM ’26, November 07–11, 2026, Rome, Italy
+
+## 2 Problem Definition 
+
+We formulate the problem as event-conditioned impact prediction .Given a historical time-series segment before a discrete external event and metadata describing the event, the goal is to estimate a scalar post-event impact score. This formulation differs from conventional multi-step forecasting, which predicts the full future trajectory. In our setting, the post-event trajectory contains both event-induced reactions and unrelated market movements, such as market-wide fluctuations, sector trends, and subsequent news. Directly forecasting every future time step can therefore obscure the specific effect of the event. Instead, we focus on estimating a compact impact label that summarizes the short-term abnormal response associated with the event. Let 𝑋 = {𝑥 1, 𝑥 2, . . . , 𝑥 𝑇 } denote a pre-event economic time series, where each observation 𝑥 𝑡 ∈ R represents a financial indicator, such as excess return, at time 𝑡 . Each sequence segment is constructed around a discrete external event, with the final observed time step 
+
+𝑇 aligned to the event occurrence or disclosure date. The event is characterized by a metadata vector 𝑒 𝑇 ∈ R𝑘 , which includes attributes such as event type, affected scale, incident severity, and data sensitivity. Rather than assuming that the pre-event sequence has a sin-gle characteristic frequency, we consider that 𝑋 contains dynam-ics across multiple temporal scales. We therefore define a set of scale-specific transformations {𝑓 (1) , 𝑓 (2) , . . . , 𝑓 (𝑀 ) }, where each 
+
+𝑓 (𝑚 ) extracts patterns of 𝑋 at a different granularity, such as long-term trends, medium-term regimes, or short-term fluctuations. This yields a collection of multi-scale representations: 
+
+X = {𝑋 (𝑚 ) = 𝑓 (𝑚 ) (𝑋 ) | 𝑚 = 1, . . . , 𝑀 },
+
+where each 𝑋 (𝑚 ) represents a different temporal resolution of the same pre-event sequence. The prediction target is a scalar outcome 𝑦 ∈ R that summa-rizes the short-term abnormal response after event disclosure. The precise definition of 𝑦 may vary across domains. In our financial setting, 𝑦 is instantiated as the maximum excess-return decline within a short post-event window, capturing the worst abnormal loss after disclosure while filtering out market- and sector-wide movements. Formally, the objective is to learn a function ˆ𝑦 = 𝑓 𝜃 (X , 𝑒 𝑇 ),
+
+where 𝑓 𝜃 maps pre-event multi-scale time-series dynamics and event metadata to the predicted impact score. 
+
+## 3 Methodology 
+
+We present EventTime , a unified framework for event-conditioned financial impact prediction. Given a segment of market history pre-ceding a disclosed cybersecurity event, together with structured and unstructured metadata describing the event, EventTime estimates the event’s short-term abnormal financial impact. The framework is built around three core components: (i) a multi-resolution time-series encoder that captures pre-event market context across multiple temporal scales; (ii) an event–feature fusion module that aligns het-erogeneous event metadata with temporal representations; and (iii) a dynamic contrastive learning strategy that strengthens rare-event signals under sparse supervision. An overview of the architecture is provided in Figure 2. 
+
+## 3.1 Model Structure 
+
+3.1.1 Multi-resolution Time-series Encoder. Pre-event financial dy-namics contain information at multiple temporal scales. Long-horizon patterns reflect the broader market condition and firm-level trajectory before disclosure, while shorter horizons capture recent volatility, momentum, and local instability. These signals jointly shape how the market reacts to a cybersecurity event: the same disclosure may induce different losses depending on whether the firm is already in a stable, volatile, declining, or recovering state. Modeling these multi-scale dynamics therefore provides the contextual background for estimating event-attributable impact. To capture this structure, EventTime employs a multi-resolution long-term encoder that jointly processes daily, weekly, and monthly views of the historical sequence. Given a raw daily sequence 𝑋 (𝑑 ) =
+
+{𝑥 1, . . . , 𝑥 𝑇 }, where 𝑇 denotes the event date, we derive aggregated signals by temporal averaging: 
+
+𝑋 (𝑤 ) 
+
+> 𝑡
+
+= 1
+
+𝑛 𝑤 𝑛 𝑤 −1∑︁ 
+
+> 𝑖 =0
+
+𝑥 𝑡 −𝑖 , 𝑋 (𝑚 ) 
+
+> 𝑡
+
+= 1
+
+𝑛 𝑚 𝑛 𝑚 −1∑︁ 
+
+> 𝑖 =0
+
+𝑥 𝑡 −𝑖 ,
+
+where 𝑛 𝑤 and 𝑛 𝑚 denote the number of trading days in a week and a month, respectively. This produces aligned views {𝑋 (𝑑 ) , 𝑋 (𝑤 ) , 𝑋 (𝑚 ) },each emphasizing a different temporal granularity of the same pre-event history. Each view is encoded by a dedicated branch 𝐸 (𝑧 ) (·) , 𝑧 ∈ { 𝑑, 𝑤, 𝑚 },producing 
+
+𝐻 (𝑧 ) = 𝐸 (𝑧 ) (𝑋 (𝑧 ) ), 𝐻 (𝑧 ) ∈ R𝑝 .
+
+The daily encoder 𝐸 (𝑑 ) (·) models fine-grained fluctuations, the weekly encoder 𝐸 (𝑤 ) (·) captures medium-term patterns, and the monthly encoder 𝐸 (𝑚 ) (·) summarizes coarse-grained market con-text. Together, the embeddings {𝐻 (𝑑 ) , 𝐻 (𝑤 ) , 𝐻 (𝑚 ) } form a multi-resolution representation of the pre-event market state, which is later used for event-conditioned impact estimation. In addition to the long-term multi-resolution context, EventTime includes a short-term encoder that focuses on the most recent daily window before the event. While the long-term branches summarize broader historical conditions, the short-term encoder isolates the local market state immediately preceding disclosure. Concretely, from the daily sequence 𝑋 (𝑑 ) = {𝑥 1, . . . , 𝑥 𝑇 }, we extract a local window of length 𝐿 :
+
+𝑋 (𝑠 ) = {𝑥 𝑇 −𝐿 +1, . . . , 𝑥 𝑇 }.
+
+This window is processed by a short-term encoder 𝐸 (𝑠 ) (·) , produc-ing time-step-level embeddings 
+
+𝐻 (𝑠 ) = 𝐸 (𝑠 ) (𝑋 (𝑠 ) ), 𝐻 (𝑠 ) ∈ R𝐿 ×𝑝 .
+
+This design reflects the intuition that event impact depends on both broad historical context and immediate pre-event conditions: the former characterizes baseline vulnerability or resilience, while the latter captures the local state with which the event interacts. To integrate long-term context with local momentum, EventTime performs cross-attention between the two representations. For each long-term embedding 𝐻 (𝑧 ) ∈ R1×𝑝 , 𝑧 ∈ { 𝑑, 𝑤, 𝑚 }, we use 𝐻 (𝑧 ) as the query, while the short-term embedding 𝐻 (𝑠 ) provides the keys and values: ˜𝐻 (𝑧 ) = Attn 
+
+
+
+𝑄 = 𝐻 (𝑧 )𝑊 (𝑧 ) 
+
+> 𝑄
+
+, 𝐾 = 𝐻 (𝑠 )𝑊 (𝑧 ) 
+
+> 𝐾
+
+, 𝑉 = 𝐻 (𝑠 )𝑊 (𝑧 )
+
+> 𝑉
+
+
+
+,CIKM ’26, November 07–11, 2026, Rome, Italy Sun et al. Negative Positive 
+
+> daily weekly monthly
+
+…… …… ……  
+
+> historical continuous time series On March 12, 2021, Company A, a financial services provider, disclosed a data breach. The incident exposed customer names, account numbers, and partial social security identifiers, compromising roughly 25,000 client records …
+> event descriptions
+> heuristic similarity fused similarity Positive Negative Anchor trends rhythms volatility self attention self attention self attention
+> QKVQKVQKV
+> GRU GRU GRU
+> GRU
+> cross attention cross attention cross attention
+> QKVQKVQKV
+> trends-conditioned rhythms-conditioned volatility-conditioned
+> LLM feature extractor
+> cross attention
+> QKV
+> cross attention
+> QKV
+> background target prediction predictor
+> contrastive learning
+> current dynamics
+> date: mm/dd/yyyy company: 2 sensitivity: 4 ……
+> momentum
+
+Figure 2: Overall framework of EventTime. 
+
+where 𝑊 (𝑧 ) 
+
+> 𝑄
+
+,𝑊 (𝑧 ) 
+
+> 𝐾
+
+,𝑊 (𝑧 ) 
+
+> 𝑉
+
+are learnable projection matrices. This op-eration allows each scale-specific long-term summary to selectively attend to recent observations that are most relevant to that scale. The resulting representations { ˜𝐻 (𝑑 ) , ˜𝐻 (𝑤 ) , ˜𝐻 (𝑚 ) } preserve multi-resolution historical context while emphasizing salient pre-event fluctuations for subsequent event-conditioned fusion. 
+
+3.1.2 Event Fusion Module. While multi-resolution and short-term encoders capture endogenous dynamics, financial time series are also influenced by exogenous shocks. Firm-specific disclosures, such as cybersecurity incidents or earnings announcements, can induce abnormal returns and volatility spikes that deviate from historical patterns. Ignoring such events degrades predictive accu-racy by conflating event-driven losses with routine fluctuations. Therefore, explicitly incorporating structured event metadata along-side temporal signals is essential for modeling event-conditioned momentum. We define this momentum not only as recent price fluctua-tions, but as fluctuations conditioned on the event at time 𝑇 . For-mally, let 𝑒 𝑇 ∈ R𝑝 𝑚 denote the event metadata (e.g., type, sever-ity, affected customers), which is projected by an event encoder 
+
+𝐻 (𝑒 ) = 𝐸 (𝑒 ) (𝑒 𝑇 ) ∈ R𝑝 . A naive solution would be to directly con-catenate 𝐻 (𝑒 ) with the short-term embeddings 𝐻 (𝑠 ) ∈ R𝐿 ×𝑝 . How-ever, such early fusion overlooks the heterogeneity of daily signals: some pre-event days already reflect anticipatory volatility driven by rumors, sector contagion, or correlated shocks, while others capture only routine fluctuations. The coupling between daily dynamics and the event therefore varies as markets internalize indirect sig-nals even before disclosure. Treating them equally risks diluting the true event-driven signal. We introduce an event fusion module where event queries the short-term sequence to identify sensitive positions and modulate their influence through a two-layer attention mechanism, inter-pretable as a translate–locate–imprint process. 
+
+(1) Translate (Event-to-Temporal Projection). A key challenge is the heterogeneous nature of event metadata and temporal observa-tions. In the first attention layer, the event embedding 𝐻 (𝑒 ) serves as the query while the short-term daily embeddings 𝐻 (𝑠 ) act as keys and values, projecting the event into temporal modality: 
+
+𝛼 = (𝐻 (𝑒 )𝑊 (𝑡 ) 
+
+> 𝑞
+
+)( 𝐻 (𝑠 )𝑊 (𝑡 ) 
+
+> 𝑘
+
+)⊤
+
+√𝑑 ∈ R1×𝐿 , 𝑐 = 𝛼 𝐻 (𝑠 )𝑊 (𝑡 ) 
+
+> 𝑣
+
+∈ R1×𝑝 .
+
+Here 𝛼 highlights event-relevant temporal positions and 𝑐 is a translated event representation in the temporal modality. 
+
+(2) Locate (Event-Guided Re-attention). In the second attention layer, the translated summary 𝑐 ∈ R1×𝑝 serves as the query to re-attend over the short-term sequence 𝐻 (𝑠 ) (as keys and values), producing contextual weights 
+
+𝛽 = (𝑐𝑊 (𝑙 ) 
+
+> 𝑞
+
+)( 𝐻 (𝑠 )𝑊 (𝑙 ) 
+
+> 𝑘
+
+)⊤
+
+√𝑑 ∈ R1×𝐿 .
+
+The distribution 𝛽 highlights which pre-event positions are most related under the event context. 
+
+(3) Imprint (Contextual Modulation). Finally, the attention weights 
+
+𝛽 are imprinted back onto the short-term tokens to yield an event-aware sequence representation:              
+
+> ˜𝐻 (𝑠 )=𝐻 (𝑠 )+𝛽 ⊤𝐻 (𝑒 )∈R𝐿 ×𝑝 .
+
+This modulation reinforces abnormal fluctuations that align with the event while down-weighting routine noise, producing ˜ 𝐻 (𝑠 ) as an event-conditioned refinement of short-term momentum. Finally, the momentum ˜ 𝐻 (𝑠 ) is passed through the fusion encoder 𝐸 (𝑓 ) to obtain the final fused representation: 𝐻 (𝑓 ) = 𝐸 (𝑓 ) ( ˜𝐻 (𝑠 ) ) ∈ R𝑝 .In summary, the event fusion module maps event metadata to time series, finds the most relevant pre-event points, and blends the event effect into local dynamics. The fused representation 𝐻 (𝑓 )
+
+keeps the event information and short-term context, and is then combined with the long-term embeddings { ˜𝐻 (𝑑 ) , ˜𝐻 (𝑤 ) , ˜𝐻 (𝑚 ) } to produce a single combined representation to predict the impact of the post-event. To support this multi-resolution modeling, our architecture in-cludes three specialized components: a Transformer encoder [28] followed by a GRU module [7] to capture long-term dependen-cies across daily, weekly, and monthly sequences; a GRU-based encoder to summarize short-term patterns before the event; and a multi-layer perceptron (MLP) [25] that fuses the event-conditioned Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+short-term representation with long-term context. Figure 2 provides an overview of the overall architecture and information flow. 
+
+## 3.2 Dynamic Contrastive Learning 
+
+While supervised objectives are necessary for event-conditioned impact prediction, they are often insufficient in financial settings. Labeled instances are scarce because only a limited number of cy-berattack disclosures can be reliably aligned with publicly traded firms and valid market histories. Moreover, impact labels are noisy: post-event losses may reflect not only the disclosed incident, but also market-wide fluctuations, sector trends, and unrelated firm-specific news. A regression loss encourages accurate fitting of scalar impact values, but provides limited guidance on how the represen-tation space should be organized with respect to event semantics and event–market context. As a result, the model may rely heavily on endogenous time-series signals, while the sparse but informative event metadata receives weak supervision. To address this limitation, we introduce a dynamic contrastive learning objective as auxiliary representation-level supervision. The key intuition is that two samples should have closer represen-tations if they share similar event–market contexts, even when their exact impact labels are noisy. For example, two disclosures with similar breach severity, affected scale, data sensitivity, and pre-event volatility patterns may induce comparable market responses, whereas an unrelated disclosure under a different market condition should be separated in the latent space. This pairwise supervision complements the pointwise regression loss by encouraging the model to preserve event-relevant structure beyond what can be learned from individual labels. A central challenge is how to define positive and negative pairs. Using only event metadata may ignore the fact that the same type of cybersecurity incident can lead to different financial impacts de-pending on the firm’s pre-event market state. Conversely, using only time-series similarity may group together firms with similar price movements but unrelated event semantics. We therefore compute sample similarity from two complementary views: a heuristic view based on stable pre-computed event and time-series descriptors, and a learned view based on the fused event-conditioned represen-tations produced by EventTime. The heuristic view stabilizes pair construction early in training, when model embeddings are not yet reliable, while the learned view gradually captures task-specific event–temporal relationships as training progresses. This dynamic design allows contrastive learning to evolve from prior-guided alignment to model-driven alignment. 
+
+3.2.1 Similarity Computation. To enable contrastive learning, we measure similarity using both heuristic statistics and learned repre-sentations. For numerical stability, we define a normalized cosine similarity sim (𝑎, 𝑏 ) = 1 + cos (𝑎, 𝑏 )
+
+2 ,
+
+which maps cosine similarity to the range [0, 1].
+
+Heuristic similarity. From each short-term pre-event window, we compute a descriptive feature vector 𝑇 (𝑠 ) summarizing key as-pects of market behavior: central tendency and dispersion (mean and standard deviation), extreme values (maximum and minimum), 
+
+temporal dynamics (linear slope of returns), volatility change (vari-ance difference between early and late segments), and recent shocks 
+
+(relative change on the last day and over the last five days). These statistics provide a compact summary of the local market state immediately before the event, capturing both stable patterns and abrupt fluctuations. For the event side, we use the metadata embedding 𝑒 𝑇 described in Section 4.1, which encodes attributes such as breach type, inci-dent severity, affected scale, and data sensitivity. Similarity between event metadata vectors reflects event-level resemblance. The heuris-tic similarity between samples 𝑖 and 𝑗 is defined as 
+
+𝑆 heur  
+
+> 𝑖 𝑗
+
+= sim (𝑇 (𝑠 ) 
+
+> 𝑖
+
+,𝑇 (𝑠 ) 
+
+> 𝑗
+
+)𝛼 · sim (𝑒 𝑇 𝑖 , 𝑒 𝑇 𝑗 )1−𝛼 ,
+
+where 𝛼 ∈ [ 0, 1] balances the influence of short-term time-series statistics and event metadata. This score favors pairs that are similar in both pre-event market condition and event semantics. 
+
+Learned similarity. Heuristic descriptors are stable but limited, as they may miss nonlinear interactions between event attributes and temporal dynamics. We therefore also compute similarity from the fused event-conditioned embeddings 𝐻 (𝑓 ) obtained by the event fusion module: 
+
+𝑆 fuse  
+
+> 𝑖 𝑗
+
+= sim 
+
+
+
+𝐻 (𝑓 ) 
+
+> 𝑖
+
+, 𝐻 (𝑓 )
+
+> 𝑗
+
+
+
+.
+
+This learned similarity evolves during training and captures task-specific relationships that heuristic features may overlook. 
+
+Dynamic weighting. In the early stages of training, when en-coder representations are not yet well formed, we place greater emphasis on heuristic similarity. As the model improves, we gradu-ally increase the contribution of learned similarity. Formally, the combined similarity at epoch 𝑡 is 
+
+𝑆 𝑖 𝑗 (𝑡 ) =  𝑆 heur 
+
+> 𝑖 𝑗
+
+1−𝜆 𝑡 ·  𝑆 fuse 
+
+> 𝑖 𝑗
+
+𝜆 𝑡 ,
+
+where 𝜆 𝑡 ∈ [ 0, 1] is a scheduling coefficient that increases with training progress. This dynamic mixture ensures stable pair con-struction at the beginning of training while progressively shifting toward more expressive, model-driven similarities. 
+
+Contrastive pair selection. For each anchor sample 𝑖 , positive samples are selected from the top-𝑘 most similar samples whose dy-namic similarity 𝑆 𝑖 𝑗 (𝑡 ) exceeds a threshold 𝜌 . Negative samples are selected from samples whose similarity is below a lower threshold 
+
+𝜌 ′. This thresholded top-𝑘 strategy avoids treating all non-positive samples as equally negative, which is important because differ-ent cybersecurity events may share partial semantic or temporal similarity. The resulting pairs provide auxiliary supervision that en-courages the representation space to reflect event–market context rather than only scalar label proximity. 
+
+3.2.2 Training Objectives. Our model is trained using a combina-tion of supervised prediction and auxiliary contrastive objectives. The prediction objective estimates the post-event impact 𝑦 from the fused long- and short-term representations { ˜𝐻 (𝑑 ) , ˜𝐻 (𝑤 ) , ˜𝐻 (𝑚 ) }
+
+together with the event-fused summary 𝐻 (𝑓 ) , optimized using the mean squared error loss 
+
+Lpred = ∥𝑦 − ˆ𝑦 ∥22.
+
+For contrastive learning, the dynamic similarity 𝑆 𝑖 𝑗 (𝑡 ) is used to construct positive and negative pairs, while the contrastive logits CIKM ’26, November 07–11, 2026, Rome, Italy Sun et al. 
+
+are computed from the learned fused representations. Specifically, for each anchor 𝑖 , let 𝑄 + 
+
+> 𝑖
+
+and 𝑄 − 
+
+> 𝑖
+
+denote its positive and negative sets. We define the representation similarity ˆ𝑆 fuse  
+
+> 𝑖𝑘
+
+= sim 
+
+
+
+𝐻 (𝑓 ) 
+
+> 𝑖
+
+, 𝐻 (𝑓 )
+
+> 𝑘
+
+
+
+,
+
+and optimize the InfoNCE-style loss 
+
+Lcontrast = −∑︁ 
+
+> 𝑖
+
+log 
+
+Í𝑗 ∈𝑄 + 
+
+> 𝑖
+
+exp 
+
+ ˆ𝑆 fuse  
+
+> 𝑖 𝑗
+
+/𝜏 
+
+Í𝑘 ∈𝑄 +   
+
+> 𝑖 ∪𝑄 −
+> 𝑖
+
+exp 
+
+ ˆ𝑆 fuse  
+
+> 𝑖𝑘
+
+/𝜏 
+
+ ,
+
+where 𝜏 is a temperature parameter. Using 𝑆 𝑖 𝑗 (𝑡 ) for pair construc-tion and ˆ 𝑆 fuse  
+
+> 𝑖 𝑗
+
+for contrastive logits separates the mining criterion from the optimized representation similarity, making the objective more stable. To further align learned representations with stable heuristic priors, we introduce a similarity regularization term: 
+
+Lsimilarity =∑︁ 
+
+> 𝑖,𝑗
+
+ ˆ𝑆 fuse  
+
+> 𝑖 𝑗
+
+− 𝑆 heur 
+
+> 𝑖 𝑗
+
+2
+
+.
+
+This term prevents the learned similarity from drifting too far from event and market descriptors that are known before training, while the dynamic contrastive objective still allows the model to discover task-specific relationships. The final training objective is 
+
+L = Lpred + 𝜆 Lcontrast + 𝛾 Lsimilarity ,
+
+where 𝜆 and 𝛾 balance the auxiliary losses. This joint objective encourages accurate impact prediction while structuring the em-bedding space so that rare but high-impact events exert stronger influence on representation learning. 
+
+## 4 Experiments 
+
+To evaluate the effectiveness and interpretability of our approach, we conduct extensive experiments on the SECURE dataset centered around four research questions. 
+
+• RQ1 (Model Effectiveness) evaluates how EventTime com-pares with strong time-series and event-aware baselines in estimating post-event abnormal financial loss. 
+
+• RQ2 (Training Strategy) examines whether dynamic con-trastive learning improves performance beyond standard su-pervised fine-tuning and how it enhances the quality of learned event-conditioned representations. 
+
+• RQ3 (Event Fusion Design) investigates whether the pro-posed two-layer translate–locate attention mechanism improves event–temporal fusion over a single-layer design and identi-fies which event features most strongly influence the learned impact representation. 
+
+• RQ4 (Model Robustness) assesses whether contrastive learn-ing increases resilience to missing event metadata. 
+
+## 4.1 Dataset 
+
+We construct SECURE (Stock-market Event-driven dataset for Cyber breach Understanding and Response Estimation) by aligning stock-level financial time series with firm-level cybersecurity disclosures. Daily closing prices and sector indices are obtained from Yahoo Fi-nance, while cybersecurity incidents are collected from the Privacy Rights Clearinghouse (PRC), which documents data breaches, ran-somware attacks, and related security events with attributes such as affected firm, disclosure date, and number of customers impacted. SECURE covers 268 publicly listed firms from 2005 to 2025 and 3,034 documented incidents. After filtering for valid public-firm matches and sufficient financial history, the final dataset contains 1,128 firm–event pairs, with an average of approximately four events per firm. For each affected firm, we align the input sequence so that the final observed day corresponds to the disclosure date 𝑇 . This en-sures that the model only observes pre-event market dynamics when estimating post-event impact. We use a long-term window of 
+
+𝐿 long = 520 trading days, approximately two years, and a short-term window of 𝐿 short = 20 trading days, approximately one month. The input sequence 𝑋 = {𝑥 1, . . . , 𝑥 𝑇 } consists of daily excess returns, 
+
+𝑥 𝑡 = 𝑃 𝑡 − 𝑃 𝑡 −1
+
+𝑃 𝑡 −1
+
+− 𝐼𝑋 𝑡 − 𝐼𝑋 𝑡 −1
+
+𝐼𝑋 𝑡 −1
+
+,
+
+where 𝑃 𝑡 denotes the stock closing price and 𝐼𝑋 𝑡 denotes the cor-responding industry index. This adjustment removes market- and sector-wide movements, thereby emphasizing firm-specific dynam-ics that are more directly related to the cybersecurity event. Following standard event-study practice, we define the post-event impact using the maximum excess-return decline within 𝑑 
+
+trading days after the disclosure: 
+
+𝑌 0 = min    
+
+> 𝑇 <𝑡 ≤𝑇 +𝑑
+
+ 𝑃 𝑡 − 𝑃 𝑇 
+
+𝑃 𝑇 
+
+− 𝐼𝑋 𝑡 − 𝐼𝑋 𝑇 
+
+𝐼𝑋 𝑇 
+
+
+
+,
+
+where 𝑑 = 5, corresponding to one trading week. This label summa-rizes the worst short-term abnormal return after the event, rather than requiring the model to reconstruct the full post-event price trajectory. A smaller value of 𝑌 0 indicates a larger abnormal loss. In implementation, we use this scalar impact label as the prediction target, consistent with the objective of estimating event-attributable financial loss. Each event is associated with structured PRC metadata, includ-ing organization type , breach type , and customers affected , which provide categorical and numerical context. We further process tex-tual descriptions with an LLM-assisted annotation pipeline using GPT-4.1 and a fixed prompt to extract three semantic attributes from disclosure-time information: incident severity , an ordinal esti-mate of event seriousness inferred from both textual reports and structured metadata; data sensitivity , which characterizes the type of compromised information, such as Social Security Numbers ver-sus names or addresses; and company size , a coarse classification of firm scale. We manually inspect a subset of the generated annota-tions for consistency, and no post-event market information is used in this process. Together, these features form an event metadata vector 𝑒 𝑇 ∈ R𝑘 used by the event fusion module. We split the dataset chronologically according to disclosure dates: the earliest 80% of firm–event pairs are used for training, and the most recent 20% are held out for testing. This temporal split better reflects a realistic forecasting scenario, where models are trained on historical cybersecurity disclosures and evaluated on future events. The split is not constrained to keep firms shared across training and testing; therefore, some test events may correspond to firms that do not appear in the training set. This setting makes the evaluation Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+more challenging and tests whether the model can generalize to future disclosures beyond firms observed during training. For each event, all input features are constructed only from the pre-disclosure window, and the post-event prices are used solely to compute the scalar impact label. 
+
+## 4.2 Experimental Setup 
+
+We compare EventTime with a broad set of representative time-series and event-aware baselines under the same event-conditioned impact prediction setting. For all methods, the input consists of the same pre-disclosure financial history and the same event metadata, and the output is the scalar post-event impact label defined in Sec-tion 4.1. Since most time-series forecasting models are not originally designed to incorporate discrete event metadata, we adapt them using a unified late-fusion protocol for fair comparison. Specifically, each baseline first encodes the pre-event input window into a time-series representation, while the event metadata is processed using the same event encoder as EventTime. The two representations are then concatenated and passed to a shared prediction head to estimate the post-event abnormal loss. This design ensures that performance differences mainly reflect the ability of each backbone to model pre-event temporal dynamics, rather than differences in event encoder capacity or prediction-head design. Our time-series baselines cover several major families of modern forecasting architectures. Linear and decomposition-based mod-els include DLinear [34], which provides a strong simple baseline for trend-based temporal modeling. Mixer-style models include TimeMixer [29] and WPMixer [22], which capture multi-scale tem-poral patterns through mixing operations. Transformer-based base-lines include Autoformer [33], PatchTST [24], iTransformer [20], Pyraformer [19], and TimeXer [30], covering decomposition-based attention, patch-based modeling, inverted attention, pyramidal at-tention, and exogenous-variable-aware forecasting. These models provide strong comparisons for assessing whether EventTime’s multi-resolution and event-conditioned design offers advantages beyond generic temporal representation learning. To further assess event awareness, we include two recent event-driven methods. Text2Timeseries [16] aligns textual event descrip-tions with time-series dynamics, providing a relevant comparison for models that use event semantics. EventTSF [10] applies diffusion-based modeling to generate event-conditioned trajectories. Because our task predicts a scalar post-event impact rather than a full future trajectory, we adapt EventTSF by using its event-conditioned rep-resentation for scalar impact prediction under the same prediction head. All methods are trained with identical input windows, event metadata, train/test splits, and evaluation metrics. All methods are trained under the same experimental protocol. We use the Adam optimizer with a learning rate of 10 −3, batch size 32, and train each model for 50 epochs. We set the hidden dimension to 32 and use 4 attention heads for Transformer-based models when applicable. The event encoder is implemented as a two-layer MLP with hidden dimension 64, and the final prediction head is kept the same across adapted baselines to ensure fair comparison. All reported results are evaluated on the chronological test split described in Section 4.1. 
+
+Table 1: Comparison of Backbones Under Identical Finetun-ing Strategy.                                                        
+
+> Model 𝑅 2MAE RMSE IC Rank IC DLinear -3.5240 0.0315 0.0395 0.1285 0.0716 TimeMixer 0.0154 0.0125 0.0160 0.1850 0.2570 WPMixer 0.1125 0.0121 0.0152 0.3910 0.3855 Autoformer 0.1450 0.0122 0.0149 0.4310 0.2185 PatchTST 0.2150 0.0120 0.0143 0.3655 0.2980 iTransformer 0.2280 0.0118 0.0142 0.4320 0.3750 Pyraformer 0.2715 0.0118 0.0138 0.5115 0.3320 TimeXer 0.2690 0.0119 0.0138 0.4750 0.4765 Text2Timeseries 0.2854 0.0118 0.0136 0.5162 0.4850 EventTime(s) 0.3212 0.0117 0.0135 0.5145 0.4999
+
+We evaluate impact prediction performance using five comple-mentary metrics. 𝑅 2 measures explanatory power, while MAE and RMSE quantify prediction errors, with RMSE penalizing large mis-takes more heavily. We also report IC and Rank IC, computed as Pearson and Spearman correlations between predicted and ground-truth impacts, respectively. These metrics jointly assess numerical accuracy and ranking consistency, which is important for financial risk screening when exact loss magnitudes are noisy. 
+
+## 4.3 Quantitative Evaluation 
+
+4.3.1 Impact Prediction Performance (RQ1). To assess the contri-bution of EventTime’s architecture, we evaluate several backbone baselines alongside EventTime on the SECURE dataset under a uniform fine-tuning setup. Table 1 summarizes the results across baselines. In our observations, linear baselines such as DLinear per-form the worst, confirming that simple trend–seasonality separa-tion is inadequate for event-driven forecasting. Mixer-style models (TimeMixer, WPMixer) offer modest gains but still struggle to cap-ture the joint dependencies between events and temporal dynamics. Transformer architectures perform substantially better, especially those aligned with our motivation: Pyraformer, with its pyrami-dal multi-scale attention, and TimeXer, which explicitly models exogenous variables, lead among Transformer baselines. Regarding event-centric methods, Text2Timeseries achieves strong perfor-mance, demonstrating the effectiveness of aligning textual event semantics with temporal dynamics. In contrast, EventTSF shows unstable behavior, with negative 𝑅 2 values. We attribute this to its reliance on diffusion-based full-trajectory generation, which is not well suited for the scalar impact prediction required in this setting. Ultimately, our EventTime(s) variant, which uses the EventTime encoder but trained using only Lpred (without contrastive and sim-ilarity losses), surpasses all of them. These results demonstrate that combining multi-resolution temporal modeling with event-aware fusion, even without contrastive learning, yields a stronger backbone than existing designs and underscores the architectural soundness of EventTime independent of its training strategy. 
+
+4.3.2 Effectiveness of Event-Conditioned Training (RQ2). Table 2 summarizes the impact of progressively enhancing EventTime’s CIKM ’26, November 07–11, 2026, Rome, Italy Sun et al. 1 2 3 4 5Number of Attention Layers 0.4 0.5 0.6 0.7 0.8  
+
+> Metric Value
+> R2IC
+
+(a) Effect of attention depth in event fusion on downstream prediction performance. organization type breach type affected level incident severity data sensitivity company size 0.00 0.02 0.04 0.06 0.08 0.10 
+
+> Perturbation Sensitivity
+> EventTime(s) EventTime
+
+(b) Feature-wise embedding sensitivity of EventTime(s) and EventTime. 0 1 2 3Number of Missing Features 0.2 0.3 0.4 0.5 
+
+> R2 EventTime EventTime(s)
+
+(c) Robustness under increasing event-feature missing rates. 
+
+Figure 3: Analysis of EventTime model performance and robustness. 
+
+Figure 4: Post-disclosure excess-return dynamics. The target impact label is defined as the maximum excess-return decline. 
+
+Figure 5: Representative stock-price trajectories and predicted short-term losses around cybersecurity disclosures. Table 2: Comparison of Training Strategies for EventTime. We denote EventTime(s) as the variant trained with super-vised loss only, EventTime(-) as the variant using heuristic contrastive similarity, and EventTime as the full model. 
+
+Training 𝑅 2 MAE RMSE IC Rank IC EventTime w/o 𝑒 0.2455 0.0115 0.0145 0.4850 0.4950 EventTime(s) 0.3212 0.0117 0.0135 0.5145 0.4999 EventTime(-) 0.4152 0.0102 0.0128 0.6580 0.5525 EventTime 0.5242 0.0096 0.0119 0.7446 0.5579 
+
+training strategy. Introducing event embeddings (from EventTime w/o 𝑒 to EventTime(s)) improves performance, but test gains remain limited despite a substantial reduction in training loss, suggest-ing that naive fine-tuning does not generalize well. Incorporating contrastive learning (EventTime(-)) leads to a clear performance improvement, indicating that contrastive objectives help the model learn more robust event-conditioned representations, even when positive and negative pairs are defined using heuristic similarity. The full EventTime further integrates fused similarity by jointly considering event semantics and time-series context to construct more informative and dynamic contrastive pairs. This design yields additional gains in predictive accuracy and correlation metrics, highlighting the benefit of aligning multiple similarity views in event-driven learning. Overall, these results show that contrastive training not only strengthens the model’s use of event metadata but also guides it toward more interpretable and generalizable event-aware representations. Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+4.3.3 Visualization of Event-Driven Financial Impact Prediction. We further visualize representative post-event stock-price trajectories in Figure 5. These trajectories are not used as full-sequence forecast-ing targets; instead, they provide qualitative context for interpreting the scalar impact estimates produced by different models. Across these cases, contrastive variants of EventTime produce more ac-curate estimates of post-event abnormal return magnitude than the supervised-only EventTime(s) baseline. In particular, the full EventTime model better matches the direction and scale of realized short-term losses, indicating stronger sensitivity to event-specific context. These qualitative results support the quantitative findings and illustrate how contrastive learning helps EventTime estimate abnormal financial impact after cybersecurity disclosures. 
+
+## 4.4 Ablation Study and Analysis 
+
+4.4.1 Impact of Attention Depth in Event Fusion Module (RQ3). To identify an appropriate model complexity for event–temporal align-ment, we study the effect of attention depth by varying the number of cross-attention layers from one to five, as shown in Figure 3a. We observe a clear performance improvement when increasing the depth from one to two layers. A single layer provides only coarse alignment between event metadata and temporal representations, whereas the two-layer design separates event-to-temporal trans-lation from event-guided temporal localization. Specifically, the first layer maps event attributes into the temporal representation space, and the second layer identifies the pre-event positions most relevant under the event context. In contrast, increasing the depth beyond two layers yields no further performance gains and intro-duces mild instability. This saturation suggests that two layers are sufficient to capture the event–temporal dependencies required for scalar impact prediction. Additional layers add unnecessary model complexity and may exacerbate overfitting under sparse event su-pervision. Accordingly, we adopt a two-layer configuration as the best trade-off between expressiveness and generalization. 
+
+4.4.2 Feature Sensitivity Analysis of Fused Embeddings. To under-stand how different training strategies affect event representation, we conduct a feature-wise perturbation analysis in Figure 3b. For each event feature, we randomly shuffle its values across samples while keeping the remaining inputs unchanged, and then measure the resulting change in the fused embedding by its 𝐿 2 norm. A larger change indicates that the learned representation is more sensitive to that feature. 
+
+How does contrastive learning enhance the quality of learned event embeddings (RQ2)? Across all features, embed-dings from the contrastively trained model, EventTime, show larger changes in response to perturbations than those from the supervised-only variant, EventTime(s). This indicates that contrastive learning makes the fused representation more responsive to variations in event metadata. In contrast, EventTime(s) exhibits uniformly lower sensitivity, suggesting that supervised fine-tuning alone may un-deruse event semantics under sparse supervision. These findings confirm that contrastive objectives encourage richer and more struc-tured event-conditioned representations, where the model learns to distinguish meaningful event attributes from background temporal variation. 
+
+Which event features influence the learned impact repre-sentation most (RQ3)? Among the event metadata, incident sever-ity, a high-level semantic attribute derived from LLM-assisted an-notation, has the strongest influence, leading to the largest change in the fused embeddings when perturbed. Other influential features include data sensitivity, which characterizes the type of compro-mised information, and affected level, which reflects the scope of impact. These results indicate that EventTime not only incorporates event metadata, but also assigns greater representational influence to attributes with clearer real-world relevance to financial loss. As a result, the learned embedding space captures a meaningful event structure in which semantically important features have stronger effects on downstream impact prediction. 
+
+4.4.3 Missing Feature Robustness (RQ4). To assess robustness un-der partial event information, we perform an ablation study by randomly masking event metadata features. We vary the number of missing attributes from zero to three and evaluate the resulting performance degradation. As shown in Figure 3c, both EventTime and EventTime(s) exhibit declining performance as more event fea-tures are removed. However, the contrastively trained EventTime degrades more slowly and consistently retains stronger impact prediction performance across all missing-feature settings. This behavior suggests that contrastive supervision encourages more structured event-conditioned representations, enabling the model to better generalize when event descriptors are incomplete or par-tially corrupted. Overall, the analysis shows that contrastive training improves EventTime in two complementary ways. First, it makes the fused representation more responsive to meaningful variations in event metadata. Second, it improves robustness when some event at-tributes are unavailable. Together, these findings support the role of dynamic contrastive learning in producing generalizable and interpretable event-aware representations for post-event impact prediction. 
+
+## 4.5 Cross-Domain Generalization on Hydrological Event Impact Prediction 
+
+To evaluate whether EventTime generalizes beyond cyber-financial impact prediction, we further conduct experiments on the CAMELS (Catchment Attributes and Meteorology for Large-sample Studies) dataset [3, 23], a widely used benchmark in hydrological model-ing. CAMELS provides long-term meteorological and hydrolog-ical records for 671 river basins across the continental United States. These basins span diverse geological and eco-climatological regimes, making the dataset suitable for evaluating whether an event-conditioned model can capture system responses outside the financial domain. In this setting, we formulate a hydrological event impact pre-diction task. A precipitation spike is treated as an external event, defined as a day where observed precipitation exceeds 50 mm/day. Such events often trigger substantial changes in streamflow, but the magnitude of the response depends on both the antecedent hydro-logical state and event-day meteorological conditions. This provides a natural cross-domain testbed for EventTime: as in the financial setting, the model must combine historical temporal context with event-specific attributes to estimate a post-event response. CIKM ’26, November 07–11, 2026, Rome, Italy Sun et al. 
+
+Table 3: Cross-domain evaluation on CAMELS for hydrologi-cal event impact prediction.                                        
+
+> Model 𝑅 2MAE RMSE DLinear 0.2736 10.9538 18.1245 TimeMixer 0.2982 10.2326 17.8543 WPMixer 0.2822 10.4819 18.0169 Autoformer 0.2941 9.5585 17.8676 PatchTST 0.3070 10.1851 17.7033 iTransformer 0.3078 10.5662 17.6930 Pyraformer 0.3192 9.7099 17.5461 TimeXer 0.3070 10.1851 17.7033 Text2Timeseries 0.3325 9.6241 17.3184 EventTime(s) 0.3570 9.4665 17.0519 EventTime(-) 0.3836 8.9196 16.7959 EventTime 0.3922 8.7924 16.5795
+
+For each identified event, the model takes as input a 730-day historical window of daily streamflow measurements preceding the event day, together with a structured event metadata vector derived from event-day meteorological features, including precipitation, so-lar radiation, maximum and minimum temperature, and vapor pres-sure. The output is the streamflow value on the day following the event, which represents the immediate hydrological response to the precipitation shock. This task remains a scalar event-impact predic-tion problem rather than full-trajectory forecasting, and therefore provides a consistent evaluation of EventTime’s event-conditioned modeling principle. From a selected subset of 100 representative basins, we iden-tify 1,818 extreme precipitation events spanning the period from 1 October 1999 through 30 September 2008. To ensure temporal generalization, we split the events chronologically: the earliest 80% (1,416 events) are used for training, while the most recent 20% (402 events) are reserved for testing. This setup reflects realistic deploy-ment conditions, where models trained on historical events are evaluated on future unseen events. Table 3 compares multiple backbones under the same event-conditioned impact prediction setting, as well as different training strategies applied to the EventTime architecture. Consistent with the results on SECURE, EventTime(s) outperforms all baseline back-bones, including Transformer-based models such as Autoformer, PatchTST, iTransformer, and Pyraformer. This suggests that Event-Time’s multi-resolution encoding and event-aware fusion remain effective beyond financial time series. Moreover, the full EventTime model equipped with dynamic contrastive learning achieves the best performance, improving both error-based metrics and explana-tory power. These results demonstrate that EventTime’s architec-ture and training strategy can generalize to another domain where discrete external events perturb continuous temporal processes. 
+
+## 5 Related Work 5.1 Financial Time-series Modeling 
+
+Financial time series are highly noisy and non-stationary, reflect-ing a mix of long-term macro trends, sector-level conditions, and short-term fluctuations. Traditional models such as ARIMA [27] and GARCH [6] capture autoregressive or volatility patterns but rely on stationarity and linearity assumptions, limiting their expressive-ness. Deep learning methods, including recurrent networks [11], temporal convolutions [5], and Transformers [28], have improved nonlinear temporal modeling. Recent architectures such as Aut-oformer [33], FEDformer [35], PatchTST [24], iTransformer [20], and TimesNet [32] further emphasize decomposition, patching, or multi-resolution representation to better capture long-term and cross-scale patterns. However, these models mainly extrapolate endogenous dynamics from historical observations and are not designed to estimate the short-term abnormal impact of discrete ex-ternal events, such as cybersecurity disclosures, regulatory actions, or unexpected firm-specific shocks. 
+
+## 5.2 Event-driven Financial Modeling 
+
+Financial markets are shaped not only by internal dynamics but also by external events. Early event-driven modeling showed that extracting structured events from text improves prediction of ab-normal returns, volatility shifts, and risk spillovers [8, 9], while pre-trained models such as FinBERT [4] enhance event extraction and sentiment analysis from financial text. Empirical studies further show that firm-specific disclosures can generate short-term abnor-mal returns, such as post-earnings announcement drift [17], and that cybersecurity incidents can cause immediate losses followed by gradual recovery [14]. However, existing methods often either extract textual event features without explicitly conditioning them on the surrounding temporal state, or treat events as static auxil-iary covariates, as in general exogenous-input forecasting models such as TFT [18]. This overlooks the fact that the same event can induce different financial impacts depending on pre-event market context. EventTime addresses this gap by aligning event metadata with multi-resolution pre-event dynamics and using contrastive learning to strengthen rare-event representations. 
+
+## 6 Conclusion 
+
+In this work, we introduced EventTime , a framework for quan-tifying the financial impact of cybersecurity disclosures through event-conditioned time-series modeling. By combining long-term market context, short-term pre-event dynamics, and a dedicated event-fusion module, EventTime estimates how discrete external events relate to short-term abnormal financial losses. To address sparse event supervision and improve robustness, we incorporated dynamic contrastive learning with fused similarity, which strength-ens event-aware representations by aligning similar event–market contexts. Experiments on real-world firm–event data show that EventTime consistently outperforms strong time-series and event-aware baselines, while case studies and ablation analyses confirm its ability to produce more accurate and interpretable estimates of post-event impact. These results highlight the importance of explicitly modeling exogenous events in financial time-series analysis. Fu-ture directions include extending EventTime to other event-impact settings, such as macroeconomic crises, policy changes, and envi-ronmental disruptions, and leveraging large language models for richer event semantics under scarce-event regimes. Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning CIKM ’26, November 07–11, 2026, Rome, Italy 
+
+## References 
+
+[1] [n. d.]. Privacy Rights Clearinghouse: Data Breach Chronology. https:// privacyrights.org/data-breaches. [2] 2024. HACKED: Understanding the stock market response to cyberattacks. 
+
+Journal of International Financial Markets, Institutions and Money 97 (2024), 102082. doi:10.1016/j.intfin.2024.102082 [3] Nans Addor, Andrew J Newman, Naoki Mizukami, and Martyn P Clark. 2017. The CAMELS data set: catchment attributes and meteorology for large-sample studies. Hydrology and Earth System Sciences 21, 10 (2017), 5293–5313. [4] Dogu Araci. 2019. Finbert: Financial sentiment analysis with pre-trained language models. arXiv preprint arXiv:1908.10063 (2019). [5] Shaojie Bai, J Zico Kolter, and Vladlen Koltun. 2018. An empirical evaluation of generic convolutional and recurrent networks for sequence modeling. arXiv preprint arXiv:1803.01271 .[6] Luc Bauwens, Sébastien Laurent, and Jeroen VK Rombouts. 2006. Multivariate GARCH models: a survey. Journal of applied econometrics 21, 1 (2006), 79–109. [7] Rahul Dey and Fathi M Salem. 2017. Gate-variants of gated recurrent unit (GRU) neural networks. In 2017 IEEE 60th international midwest symposium on circuits and systems (MWSCAS) . IEEE, 1597–1600. [8] Xiao Ding, Yue Zhang, Ting Liu, and Junwen Duan. 2015. Deep learning for event-driven stock prediction.. In Ijcai , Vol. 15. 2327–2333. [9] Xiao Ding, Yue Zhang, Ting Liu, and Junwen Duan. 2016. Knowledge-driven event embedding for stock prediction. In Proceedings of coling 2016, the 26th international conference on computational linguistics: Technical papers . 2133–2142. [10] Yunfeng Ge, Ming Jin, Yiji Zhao, Hongyan Li, Bo Du, Chang Xu, and Shirui Pan. 2025. EventTSF: Event-Aware Non-Stationary Time Series Forecasting. arXiv preprint arXiv:2508.13434 (2025). [11] Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long Short-Term Memory. 
+
+Neural Computation 9, 8 (1997), 1735–1780. [12] Vahidin Jeleskovic and Yinan Wan. 2024. The impact of Facebook-Cambridge Analytica data scandal on the USA tech stock market: An event study based on clustering method. arXiv preprint arXiv:2402.14206 (2024). [13] Jongseon Kim, Hyungjoon Kim, HyunGi Kim, Dongjun Lee, and Sungroh Yoon. 2025. A comprehensive survey of deep learning for time series forecasting: architectural diversity and open challenges. Artificial Intelligence Review 58, 7 (2025), 1–95. [14] Seohyun Kim, Masayoshi Chida, and Naoyuki Yoshino. 2025. Cybersecurity Incidents, AI Sentiment, and Stock Market Valuation: A Comparative Study of Japan and Korea. SSRN. https://papers.ssrn.com/sol3/papers.cfm?abstract_id= 5202602 Preprint; SSRN. [15] Xiangjie Kong, Zhenghao Chen, Weiyao Liu, Kaili Ning, Lechao Zhang, Syauqie Muhammad Marier, Yichen Liu, Yuhao Chen, and Feng Xia. 2025. Deep learning for time series forecasting: a survey. International Journal of Machine Learning and Cybernetics (2025), 1–34. [16] Litton Jose Kurisinkel, Pruthwik Mishra, and Yue Zhang. 2024. Text2timeseries: Enhancing financial forecasting through time series prediction updates with event-driven insights from large language models. arXiv preprint arXiv:2407.03689 
+
+(2024). [17] Qiujun Lan, Yuxuan Xie, Xianhua Mi, and Chunyu Zhang. 2024. Post Earnings Announcement Drift: A Simple Earnings Surprise Measure, the Medium Effect of Investor Attention and Investing Strategy. International Review of Financial Analysis 95 (2024), 103460. [18] Bryan Lim, Sercan Ö Arık, Nicolas Loeff, and Tomas Pfister. 2021. Temporal fusion transformers for interpretable multi-horizon time series forecasting. International journal of forecasting 37, 4 (2021), 1748–1764. [19] Shizhan Liu, Hang Yu, Cong Liao, Jianguo Li, Weiyao Lin, Alex X Liu, and Schahram Dustdar. 2022. Pyraformer: Low-Complexity Pyramidal Attention for Long-Range Time Series Modeling and Forecasting. In International Conference on Learning Representations .[20] Yong Liu, Tengge Hu, Haoran Zhang, Haixu Wu, Shiyu Wang, Lintao Ma, and Mingsheng Long. 2023. iTransformer: Inverted transformers are effective for time series forecasting. arXiv preprint arXiv:2310.06625 .[21] António Miguel Martins, Nuno Moutinho, and Susana Cró. 2025. Stock market effects of major cyber-attacks: evidence for breached and cybersecurity listed firms. Journal of Banking Regulation (2025), 1–10. [22] Md Mahmuddun Nabi Murad, Mehmet Aktukmak, and Yasin Yilmaz. 2025. Wp-mixer: Efficient multi-resolution mixing for long-term time series forecasting. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 19581–19588. [23] Andrew J Newman, Martyn P Clark, Kevin Sampson, Andrew Wood, Lauren E Hay, Andy Bock, Roland J Viger, David Blodgett, Levi Brekke, JR Arnold, et al. 2015. Development of a large-sample watershed-scale hydrometeorological data set for the contiguous USA: data set characteristics and assessment of regional variability in hydrologic model performance. Hydrology and Earth System Sciences 
+
+19, 1 (2015), 209–223. [24] Yuqi Nie, Nam H Nguyen, Phanwadee Sinthong, and Jayant Kalagnanam. 2022. A time series is worth 64 words: Long-term forecasting with transformers. arXiv preprint arXiv:2211.14730 .[25] Martin Riedmiller and A Lernen. 2014. Multi layer perceptron. Machine learning lab special lecture, University of Freiburg 24 (2014), 11–60. [26] Mehmet Sahiner. 2024. Volatility spillovers and contagion during major crises: an early warning approach based on a deep learning model. Computational Economics 63, 6 (2024), 2435–2499. [27] Robert H Shumway and David S Stoffer. 2017. ARIMA models. In Time series analysis and its applications: with R examples . Springer, 75–163. [28] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances in neural information processing systems 30 (2017). [29] Shiyu Wang, Haixu Wu, Xiaoming Shi, Tengge Hu, Huakun Luo, Lintao Ma, James Y Zhang, and JUN ZHOU. 2024. TimeMixer: Decomposable Multiscale Mixing for Time Series Forecasting. In International Conference on Learning Representations (ICLR) .[30] Yuxuan Wang, Haixu Wu, Jiaxiang Dong, Yong Liu, Yunzhong Qiu, Haoran Zhang, Jianmin Wang, and Mingsheng Long. 2024. Timexer: Empowering trans-formers for time series forecasting with exogenous variables. Advances in Neural Information Processing Systems (2024). [31] Qingsong Wen, Tian Zhou, Chaoli Zhang, Weiqi Chen, Ziqing Ma, Junchi Yan, and Liang Sun. 2022. Transformers in time series: A survey. arXiv preprint arXiv:2202.07125 (2022). [32] Haixu Wu, Tengge Hu, Yong Liu, Hang Zhou, Jianmin Wang, and Mingsheng Long. 2022. Timesnet: Temporal 2d-variation modeling for general time series analysis. arXiv preprint arXiv:2210.02186 .[33] Haixu Wu, Jiehui Xu, Jianmin Wang, and Mingsheng Long. 2021. Autoformer: De-composition transformers with auto-correlation for long-term series forecasting. 
+
+Advances in neural information processing systems 34, 22419–22430. [34] Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu. 2022. Are Transformers Effective for Time Series Forecasting? arXiv preprint arXiv:2205.13504 (2022). [35] Tian Zhou, Ziqing Ma, Qingsong Wen, Xue Wang, Liang Sun, and Rong Jin. 2022. Fedformer: Frequency enhanced decomposed transformer for long-term series forecasting. In International conference on machine learning . PMLR, 27268–27286.
