@@ -6,44 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-21
-- 运行时间：2026-08-21 20:51:03 UTC
+- 最新运行日期：2026-08-22
+- 运行时间：2026-08-22 20:24:28 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：6
-- 速读区：2
+- 本次总论文数：4
+- 精读区：0
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读6篇、速读2篇，聚焦金融新闻摘要与集中流动性做市。最值得看：LLM+检索增强生成在金融新闻摘要中表现亮眼（9.0），强化学习优化流动性提供亦有价值（8.0）。建议关注大模型金融信息处理落地，并留意Solana链上预测与概率时间序列建模的新进展。
-- 详情：[/202608/21/README](/202608/21/README)
+今日速读4篇论文，无精读；覆盖动态投资组合、表格数据异常检测与多变量时间序列预测。最值得关注的是两篇7分工作：约束动态组合的策略迭代与基于流匹配的无监督异常检测。建议优先精读这两篇，后续可结合具体场景评估方法迁移性。
+- 详情：[/202608/22/README](/202608/22/README)
 
 ### 精读区论文标签
-1. [Automated Summarization of Financial News Using Large Language Models and Retrieval-Augmented Generation: An Early Empirical Study (Fall 2023)](/202608/21/2608.19526v1-automated-summarization-of-financial-news-using-large-language-models-and-retrieval-augmented-generation-an-early-empirical-study-fall-2023)  
-   标签：评分：9.0/10、query:ai-finance
-   evidence：利用大语言模型与检索增强生成自动摘要金融新闻，辅助投资决策
-2. [Concentrated Liquidity Provision: a Reinforcement Learning Perspective](/202608/21/2608.19389v1-concentrated-liquidity-provision-a-reinforcement-learning-perspective)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：强化学习用于去中心化金融中的动态流动性做市
-3. [Deep-MKV-TS: Path-Dependent McKean--Vlasov Control for Financial Time Series Generation](/202608/21/2608.19394v1-deep-mkv-ts-path-dependent-mckean--vlasov-control-for-financial-time-series-generation)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：神经随机最优控制生成金融时间序列，是深度学习的金融应用
-4. [Quantifying Event Impacts on Time Series via Multiscale Contrastive Learning](/202608/21/2608.19447v1-quantifying-event-impacts-on-time-series-via-multiscale-contrastive-learning)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：多尺度对比学习量化事件对金融时间序列的异常损失冲击，属于深度学习金融应用
-5. [Reliable Financial Named Entity Recognition under Domain Shift](/202608/21/2608.19558v1-reliable-financial-named-entity-recognition-under-domain-shift)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：领域偏移下的金融命名实体识别置信估计与选择性预测
-6. [ReguSim: Evaluating LLM Agent Rule Grounding in Financial Compliance](/202608/21/2608.19974v1-regusim-evaluating-llm-agent-rule-grounding-in-financial-compliance)  
-   标签：评分：8.0/10、query:ai-finance
-   evidence：面向金融合规的LLM智能体评估
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Time Series Forecasting based on Solana Digital Asset Dataset](/202608/21/2608.19521v1-time-series-forecasting-based-on-solana-digital-asset-dataset)  
+1. [Self-Consistent Adjoint Policy Iteration for Constrained Dynamic Portfolio Choice](/202608/22/2608.17808v1-self-consistent-adjoint-policy-iteration-for-constrained-dynamic-portfolio-choice)  
    标签：评分：7.0/10、query:ai-finance
-   evidence：提供Solana数字资产时间序列数据集支撑预测与市场结构分析，是金融数据与AI应用基础
-2. [CLaST: Context-aware Contrastive VAE for Probabilistic Time Series Forecasting](/202608/21/2608.20025v1-clast-context-aware-contrastive-vae-for-probabilistic-time-series-forecasting)  
+   evidence：基于仿真的策略迭代用于动态投资组合选择，与智能投顾组合管理相关
+2. [Unsupervised Anomaly Detection Using Flow Matching on Tabular Data](/202608/22/2608.19801v1-unsupervised-anomaly-detection-using-flow-matching-on-tabular-data)  
+   标签：评分：7.0/10、query:ai-finance
+   evidence：流匹配用于含污染训练集的金融表格数据无监督异常检测
+3. [AsyTO: Asymmetric Temporal Operator for Parameter-Efficient Multivariate Time Series Forecasting](/202608/22/2608.16098v1-asyto-asymmetric-temporal-operator-for-parameter-efficient-multivariate-time-series-forecasting)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：通用的深度生成式概率时间序列预测VAE，可应用于金融
+   evidence：参数高效的深度预测模型，适用于多元金融时间序列
+4. [Dynamic Portfolio Optimization under CVaR Constraints](/202608/22/2608.20179v1-dynamic-portfolio-optimization-under-cvar-constraints)  
+   标签：评分：6.0/10、query:ai-finance
+   evidence：CVaR约束下的投资组合优化，可应用于机器人投顾的组合管理
 
 
 <div class="dpr-home-promo-card">

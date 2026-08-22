@@ -1,0 +1,481 @@
+Title: AsyTO: Asymmetric Temporal Operator for Parameter-Efficient Multivariate Time Series Forecasting
+
+URL Source: https://arxiv.org/pdf/2608.16098v1
+
+Published Time: Tue, 18 Aug 2026 02:05:44 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+## AsyTO: Asymmetric Temporal Operator for Parameter-Efficient Multivariate Time Series Forecasting 
+
+Xiachong Lin 1, Du Yin 1, Hao Xue 2, Wen Hu 1, Imran Razzak 3, Arian Prabowo 1,Matthew Amos 4, Flora D. Salim 1
+
+> 1
+
+University of New South Wales  
+
+> 2
+
+Hong Kong University of Science and Technology (Guangzhou)  
+
+> 3
+
+Mohamed bin Zayed University of Artificial Intelligence  
+
+> 4
+
+CSIRO Energy Centre 
+
+Abstract 
+
+Multivariate time-series forecasting faces a structural dilemma: sharing one temporal predictor across variables is parameter-efficient but forces heterogeneous variables through an identical history-to-future map, whereas learning an independent predictor per variable restores flexibility at a cost that grows with the product of variable count, context length, and horizon. We argue that this dilemma dissolves once the object being compressed is the forecasting oper-ator rather than the observed series. Auditing per-variable linear history-to-future maps across standard benchmarks, we find that a phase-locked seasonal component paired with a compact residual operator outperforms a dense phase-blind reference in most audited settings. The residual transport is also directional : lag-invariant alternatives consistently under-perform asymmetric history-to-future maps. Guided by this structure, we propose AsyTO, an Asymmetric Temporal Op-erator that factorizes the tensor of per-variable operators into shared but distinct history-reading and future-writing tempo-ral modes with per-variable mode-wise gains, complemented by a low-rank periodic prototype and a cycle-separable factor-ization of the temporal modes. Each forecast reads only its own variable’s history, so parameters and compute grow linearly in the number of variables. Across eleven benchmarks and multi-ple forecast horizons, AsyTO attains the best lightweight error in 30 of 44 dataset-horizon settings, locating at the accuracy-compute Pareto frontier. 
+
+Introduction 
+
+Long-horizon multivariate time series forecasting has recently been reshaped by lightweight models. Linear and frequency-domain predictors with modest parameter counts (Zeng et al. 2023; Xu, Zeng, and Xu 2024; Lin et al. 2024b) match or outperform Transformer-based fore-casters (Zhou et al. 2021; Wu et al. 2021; Nie et al. 2023) on standard benchmarks. The central question has therefore shifted from whether a forecaster can be small to how its limited parameter budget should be allocated. Compact fore-casters spend this budget along both variable and temporal dimensions. Sharing one map across variables is efficient but imposes a common temporal response, whereas learning a dense map for each variable preserves heterogeneity but scales poorly with the panel size. Temporal compression re-duces this cost, yet common constructions describe both ends of the forecasting map with the same object, such as basis, kernel, or pattern set. Their efficiency is therefore obtained by tying how historical evidence is read to how the future trajectory is written. We argue that these roles should remain distinct. Reading the history is an evidence-extraction prob-lem that may concentrate on a few informative lags, whereas writing the forecast requires coordinating the entire horizon. We call this functional distinction history–future asymmetry .Preserving it ordinarily requires separate temporal parame-ters, creating a tension between role specialization and model size. The key question is whether asymmetry can be retained without surrendering compactness. Our model resolves this tension through periodic structure. A low-rank periodic prototype first estimates the recurring component and produces a residual series. The Asymmetric Temporal Operator (AsyTO) acts exclusively on this resid-ual, using separate history-reading and future-writing factors shared across variables. Variable-specific gains are generated from coordinates learned by the periodic prototype, while cycle-separable factorization compresses both temporal fac-tors. The final forecast combines the periodic component with the predicted residual, and each variable is predicted solely from its own history. Main contributions of this work are organized as below: 
+
+• We formulate parameter-efficient multivariate time se-ries forecasting as structured compression of the pervari-able history-to-future operator tensor, and formalize his-tory–future asymmetry as a distinct budget-aware induc-tive bias. 
+
+• We propose AsyTO , which factorizes each variable-specific operator and combines it with a low-rank, phase-aligned periodic prototype and cycle-separable tempo-ral factors. Prototype-conditioned gains encode hetero-geneous temporal responses in a shared low-dimensional space. 
+
+• Extensive structural controls and benchmark evaluations validate the proposed design across several real-world time-series datasets. Our AsyTO improves forecasting accuracy across most datasets while requiring substan-tially fewer parameters. The proposed modules further improve several popular lightweight backbones in most cases, respectively. arXiv:2608.16098v1 [cs.LG] 17 Aug 2026 Related Works 
+
+Compact Forecasting and Temporal Compression. 
+
+Lightweight temporal models range from linear predictors such as DLinear (Zeng et al. 2023), MixLinear (Ma, Sha, and Luo 2024), and LightTS (Zhang et al. 2022) to sparse or spectral designs including FITS (Xu, Zeng, and Xu 2024), SparseTSF (Lin et al. 2024b), FreTS (Yi et al. 2023), and Fil-terNet (Yi et al. 2024). An orthogonal distinction concerns variable interaction: iTransformer (Liu et al. 2024) and query-based models (Lin et al. 2025) mix information across the panel, whereas PatchTST (Nie et al. 2023) enforces channel independence; this trade-off is studied in (Han, Ye, and Zhan 2024). Existing approaches also compress the history-to-forecast map through fixed-basis spectral interpolation (Xu, Zeng, and Xu 2024), relative-lag convolutions (Liu et al. 2022), or learned temporal modes (Ni et al. 2023). AsyTO follows channel-independent data flow while sharing its tem-poral factors across variables, but differs from these compres-sion schemes by assigning separate learned factors to history reading and forecast generation under the same parameter budget. 
+
+Explicit Periodic Modeling. CycleNet (Lin et al. 2024a) removes a learned cycle before forecasting the residual, while SparseTSF (Lin et al. 2024b), PhaseFormer (Niu, Deng, and Tong 2025), and FreqCycle (Zhang et al. 2026) exploit periodicity through downsampling, phase tokenization, and cycle-aligned spectra. AsyTO shares CycleNet’s decompo-sition step and makes no novelty claim for periodic removal. Its distinction is to reuse the periodic prototype to param-eterize residual forecasting: prototype coordinates generate variable responses, while cycle–phase structure compresses the asymmetric temporal factors. 
+
+Methodology 
+
+Problem Formulation 
+
+Denote a batch of historical time-series observations X ∈ 
+
+RB×L×C , the objective is to predict the subsequent H ob-servations Y ∈ RB×H×C , where B, L, and H denote the batch size, context length, and forecast horizon. For sample b
+
+and variable c, Xb, :,c ∈ RL and Yb, :,c ∈ RH are its historical context and future trajectory. The forecasting problem for the given variable is defined as 
+
+bYb, :,c = fθ (Xb, :,c ; c) , c ∈ { 1, . . . , C }. (1) where fθ ∈ RL×H is the forecaster operator bridging the information transport from history to future. 
+
+Low-Rank Periodic Prototype 
+
+Let P be the dataset period and sb ∈ { 0, . . . , P −1} the phase of the first historical observation of sample b, so position τ
+
+carries phase πb(τ ) = ( sb + τ − 1) mod P . Instead of a dense phase–variable table in RP ×C , we learn a low-rank prototype 
+
+Q = UV ⊤, U ∈ RP ×Rp , V ∈ RC×Rp , (2) where U holds within-cycle patterns shared by all variables and Vc, : places variable c in that subspace, reducing the cost from P C to Rp(P +C). The assumption is low rank of the periodic template, not of the observations themselves. History and future components are read off the same proto-type by phase, Qhist  
+
+> b,t,c
+
+= Qπb(t),c and Qfuture  
+
+> b,h,c
+
+= Qπb(L+h),c .Subtracting the first leaves the periodicity-exclusive residual 
+
+Rhist  
+
+> b
+
+= eXb − Q hist  
+
+> b
+
+∈ RL×C , (3) which the operator transports, while Qfuture supplies the phase-aligned future component and will be added back eventually. We initialize U orthogonally and V to zero, so training starts from a neutral template while V still receives gradient. 
+
+Asymmetric Temporal Operator 
+
+The residual Rhist must now be transported to the future axis. Giving every variable its own dense map means an operator W ∈ RC×H×L with CHL parameters; sharing one map across variables is far smaller but forces identical temporal responses. We interpolate between the two with a CP factorization into three semantically distinct factors: history-side factors Ψ ∈ RL×Rm , future-side factors Φ ∈
+
+RH×Rm , and a variable–mode response G ∈ RC×Rm whose 
+
+c-th row is Gc. For variable c,
+
+Wc = Φ diag( Gc)Ψ⊤ =
+
+> Rm
+
+X
+
+> m=1
+
+Gc,m ϕmψ⊤
+
+> m
+
+, (4) and Rfuture  
+
+> b, :,c
+
+= Wc Rhist 
+
+> b, :,c
+
+. Here ψm = Ψ:,m reads a pat-tern out of the historical residual and ϕm = Φ:,m writes the corresponding future trajectory; both are shared across variables, and Gc,m sets how strongly variable c responds to mode m.The operator never has to be materialized. Contracting in mode space, 
+
+Zb,m,c =
+
+> L
+
+X
+
+> t=1
+
+Ψt,m Rhist 
+
+> b,t,c
+
+, Rfuture  
+
+> b,h,c
+
+=
+
+> Rm
+
+X
+
+> m=1
+
+Φh,m Gc,m Zb,m,c ,
+
+(5) costs Rm(L + H + C) parameters and O(BC (L + H)Rm)
+
+arithmetic. It also makes the target-only property explicit: the forecast for variable c reads Rhist  
+
+> b, :,c
+
+and never another variable’s observations. Crucially, Ψ and Φ are parameterized separately. Even when L = H, reading evidence from a past position and generating a future one are different operations, and tying 
+
+Ψ = Φ would force a symmetric temporal map. The or-dered pair (Ψ , Φ) is what makes the transport directional, and this asymmetry is the property the operator cannot give up (Figure 3). 
+
+Cycle-Separable Temporal Factorization 
+
+Equation (5) already shares Ψ and Φ across variables, so they now dominate the budget: Rm(L+H) against only RmC for the response. Both factors are indexed by absolute time, yet the signal is periodic, so a position matters mainly through the cycle it falls in and its phase within that cycle. Writing 
+
+t − 1 = ( k − 1) P + p for cycle index k and phase p, we give Figure 1: AsyTO. A low-rank periodic prototype Q = UV ⊤ is removed from the history and restored on the future axis by phase lookup; the periodicity-exclusive residual is transported by an asymmetric operator whose history and future factors (Ψ, Φ)
+
+are separate and shared across variables, with a per-variable modal response G. Both temporal factors are further compressed into a cycle-index and a within-cycle phase factor (CeST), and G reuses the prototype’s variable coordinates, so each additional variable costs only Rp parameters. each temporal factor a rank-Rk Cycl e-Separable Temporal (CeST) form, 
+
+Ψt,m =
+
+> Rk
+
+X
+
+> r=1
+
+AΨ
+
+> k,r,m
+
+BΨ
+
+> p,r,m
+
+, (6) a Kronecker product of a cycle-index factor AΨ ∈
+
+RK×Rk ×Rm and a within-cycle phase factor BΨ ∈
+
+RP ×Rk ×Rm , with K = ⌈L/P ⌉. The cost falls from LR m to 
+
+RkRm(K + P ), and the two factors separate how far back 
+
+evidence lies from where in the cycle it sits. 
+
+History-End CeST. Applying Eq. (6) to Ψ gives the mode coefficients Zb,m,c of Eq. (5) without materializing Ψ. A strictly periodic basis cannot express a transient in the last few observations, so we add a short dense correction over the final M steps, 
+
+Zb,m,c =
+
+> L
+
+X
+
+> t=1
+
+Ψt,m Rhist  
+
+> b,t,c
+
++
+
+> M
+
+X
+
+> j=1
+
+Ej,m Rhist  
+
+> b,L −M+j,c
+
+, (7) with E ∈ RM ×Rm initialized to zero, so the model starts from the purely periodic basis and departs from it only if the data demand it. History-side cost is RkRm(K +P )+ M R m.
+
+Future-End CeST. The same factorization applies to Φ
+
+with K′ = ⌈H/P ⌉ output cycles. It is only used when the horizon spans at least one full cycle: if H ≤ P there is no cycle index to separate, and Φ stays dense. This condition, rather than any property of the data, is what makes the future-side term inactive on the short-horizon PEMS settings. 
+
+Cycle-Shared Variable Response. The response G ∈
+
+RC×Rm is the last term that still grows with C. The prototype already assigns every variable a coordinate Vc, : ∈ RRp , so we reuse it, 
+
+G = 1 + γ tanh( VM G), MG ∈ RRp×Rm , (8) where γ bounds the modulation. This replaces CR m param-eters by RpRm. Since Rp ≤ C by construction, the factor-ization is never more expensive, and each additional variable then costs only the Rp entries of its prototype coordinate. The phase coordinates U supply an analogous modulation of Φ across future phases. 
+
+Residual Echo. The observation at the same phase one cycle earlier is a direct local cue that the mode basis need not carry. For future step h we read s(h) = L − P + (( h −
+
+1) mod P ) + 1 and add a phase-conditioned, cycle-decayed copy of Rhist 
+
+> b,s (h),c
+
+, gated to zero whenever s(h) < 1. The term is therefore identically zero when the window is shorter than one cycle. 
+
+Experimental Results 
+
+Datasets We evaluate AsyTO on datasets including: the ETT family (Zhou et al. 2021), Electricity and Traf-fic (Lai et al. 2018), Weather (Wu et al. 2021), and 4 PEMS datasets (Liu et al. 2022). The appendix summa-rizes the statistics, including the period P each dataset is assumed to have. For the 7 non-PEMS datasets, we use a context length of L = 720 and forecasting horizons of 
+
+H ∈ { 96 , 192 , 336 , 720 }. ETT follows the standard calen-dar split, while Electricity, Traffic, and Weather use chrono-logical 70%/10%/20% splits. Following the standard short-horizon traffic forecasting protocol, we evaluate the PEMS datasets using L = 96 , H ∈ { 12 , 24 , 48 , 96 }, and chrono-logical splits of 60%/20%/20%. Baselines and Metrics We compare against 12 published forecasters, including lightweight group: SparseTSF (Lin et al. 2024b), MixLinear (Ma, Sha, and Luo 2024), Phase-Former (Niu, Deng, and Tong 2025), FITS (Xu, Zeng, and Xu 2024), CycleNet (Lin et al. 2024a), DLinear (Zeng et al. 2023) and FreqCycle (Zhang et al. 2026). The conventional 
+
+group: FilterNet (Yi et al. 2024), PatchTST (Nie et al. 2023), TQNet (Lin et al. 2025), iTransformer (Liu et al. 2024) and FreTS (Yi et al. 2023). Mean squared error (MSE) and mean absolute error (MAE) on the standardized series are reported for evaluation, averaged over seeds {2024 , 2025 , 2026 }.
+
+Implementation Details All models in this work are im-plemented with PyTorch (Paszke et al. 2019), training uses the Adam optimizer with MSE loss. All the experiments are conducted on NVIDIA H100 GPUs. 
+
+Main Results 
+
+Table 1 reports MSE and MAE across all 11 benchmarks. Within the lightweight group, AsyTO attains the lowest MSE in 30 of the 44 cells and the lowest MAE in 21 , and its mean rank among the eight lightweight models is 1.96 on the 7 standard benchmarks and 1.06 on PEMS. The advantage is concentrated where the periodic structure the model assumes is actually present, and it holds across horizons rather than only short ones. AsyTO is best across all four horizons on ETTm1, Weather, and Electricity, and in 15 of the 16 PEMS cells (where the regime with the shortest look-back relative to the period is least identifiable from the data). On ETTh2 the lightweight methods are separated by less than the seed-to-seed spread, and the leader changes with the horizon, so no method can be said to win there. Traffic is the one benchmark where AsyTO loses at ev-ery horizon, trailing PhaseFormer by 4.5% , 4.5% , 2.9% and 
+
+1.3% as the horizon grows. This is the expected cost of the target-only design: Traffic has 862 sensors whose predic-tive information is largely shared, and a model that forecasts each variable from its own history alone cannot recover it. The gap narrows as the horizon lengthens, consistent with cross-sensor information being most useful at short range. We treat this as a scope boundary rather than a tuning fail-ure, and return to it in the discussion. Against the conventional group AsyTO remains competi-tive without matching their budget: it attains the lowest MSE of all thirteen models in 13 of the 44 cells while using two to three orders of magnitude fewer parameters, which is the trade-off Figure 2 makes explicit. 
+
+Efficiency Analysis 
+
+Figure 2 places AsyTO and baselines on the accuracy-compute plane at L=720 → H=96 , using multiply accumu-late operations (MACs) per forward sample as a hardware-agnostic measure of compute and trainable parameters as bubble area. AsyTO sits on the Pareto frontier, and it does so at a compute scale set by the cheap end of the field rather than the expensive one: on Electricity, it uses 47 .5×, 62 .2×,and 590 .4× fewer MACs than TQNet, iTransformer, and PatchTST, and on Weather the gap to PatchTST reaches 
+
+2527 ×. The parameter gap is wider: 92 .5× against TQNet and 155 × against iTransformer on Electricity, indicating the conventional models carry per-variable or per-token machin-ery that AsyTO replaces with shared factors. The frontier is crowded at its cheap end, and AsyTO does not dominate on every axis. PhaseFormer matches our com-pute on Electricity ( 1.0× MACs) with a tenth of the parame-ters, and CycleNet is marginally cheaper ( 0.9× MACs); both trail in error by 1.5% and 1.0% . The claim supported by the figure is therefore specific: among models at this compute scale AsyTO is the most accurate, not the smallest. What does scale favourably is the cost of an additional variable. Instantiating the shipped configuration at C and 
+
+C+1 variables shows the parameter count growing by ex-actly Rp per variable: 2 on Weather, 4 on ETTm1, 8 on Traffic and 16 on Electricity. This is because the temporal factors are shared and the variable response is expressed in the prototype’s coordinates rather than stored per variable. A dense per-variable temporal map would instead add HL 
+
+coefficients per variable, or 69 ,120 at 720 → 96 .
+
+Validating the Structural Priors 
+
+To validate the sources of AsyTO’s performance gain, we design two complementary experiments: module ablations in Table 2 and controlled operator constraints in Figure 3. Table 2 replaces each stage with a simpler alternative while retaining the training protocol. w/o Q applies the operator to the raw series instead of the periodicity-exclusive residual, 
+
+w/o ATO replaces the factorized operator by an independent dense H × L map per variable, w/o G forces every variable to share one response, and w/o recent removes the dense correction over the latest observations. Entries are raw test MSE, 3-seed means over 4 horizons. The three interventions reveal different roles. Periodic removal changes MSE only marginally on the seven long-context datasets, but improves it by 20 –34% on PEMS, where the look-back is shorter than the dominant cycle. The periodic prototype is therefore a regime-specific necessity rather than a universal source of improvement. In contrast, the dense replacement is worse on ten of eleven datasets despite using 26 –19 ,509 × more parameters, showing that unstructured per-variable capacity cannot replace shared residual structure. Recent correction has improved the displayed averages in most cases, but its effect is at most 2.3% , identifying it as a secondary refine-ment. The dense ablation replaces the entire residual operator and therefore cannot isolate history–future asymmetry. Fig-ure 3 provides this control using the same operator family at L=H. Asym learns separate history and future factors. 
+
+Sym ties them by setting Φ = Ψ, testing the common-basis constraint but using fewer parameters. Sym-PA reallocates the saved capacity to match the parameter count of Asym ,separating directionality from model size. Toeplitz instead makes the map depend only on relative lag, testing whether a shift-invariant rule is sufficient. Every displayed compar-ison favors separate factors, by 1.1–25 .5% . After averaging the tested window lengths, Asym wins 29 of 33 controlled setting comparisons across all datasets (see Appendix for more details), the 4 reversals occur only on ETTh1/2 and are within 1.4% . The persistence of the gap against Sym-Table 1: The main forecasting results, averaged over 3 seeds. Left: lightweight models; right: conventional models. The best and second-best results within each model group are shown in bold red and underlined blue, respectively. 
+
+H
+
+Lightweight Models Conventional Models Ours SparseTSF MixLinear PhaseFormer FITS CycleNet DLinear FreqCycle FilterNet PatchTST TQNet iTrans. FreTS                          
+
+> MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+> ETTh1
+
+96 0.353 0.393 0.374 0.405 0.367 0.401 0.374 0.395 0.379 0.402 0.379 0.403 0.395 0.419 0.368 0.401 0.407 0.435 0.379 0.410 0.382 0.410 0.395 0.426 0.452 0.462 192 0.389 0.415 0.404 0.412 0.396 0.419 0.407 0.414 0.413 0.423 0.418 0.427 0.439 0.450 0.404 0.427 0.443 0.453 0.417 0.435 0.426 0.437 0.429 0.449 0.500 0.495 336 0.418 0.434 0.432 0.427 0.412 0.436 0.439 0.435 0.433 0.439 0.449 0.447 0.467 0.470 0.428 0.441 0.454 0.466 0.444 0.455 0.457 0.457 0.493 0.493 0.527 0.510 720 0.449 0.469 0.427 0.450 0.423 0.453 0.425 0.444 0.431 0.457 0.475 0.482 0.512 0.524 0.484 0.493 0.500 0.502 0.468 0.484 0.503 0.507 0.674 0.598 0.606 0.562 
+
+> ETTh2
+
+96 0.273 0.335 0.286 0.344 0.287 0.345 0.281 0.343 0.273 0.338 0.272 0.337 0.323 0.382 0.282 0.345 0.327 0.380 0.278 0.341 0.284 0.349 0.306 0.362 0.366 0.408 192 0.340 0.380 0.343 0.379 0.340 0.379 0.343 0.381 0.332 0.376 0.333 0.380 0.408 0.432 0.345 0.391 0.381 0.410 0.345 0.383 0.359 0.396 0.403 0.419 0.442 0.454 336 0.375 0.409 0.358 0.397 0.359 0.397 0.375 0.408 0.355 0.397 0.365 0.410 0.495 0.488 0.387 0.427 0.400 0.432 0.370 0.407 0.395 0.422 0.460 0.458 0.608 0.538 720 0.399 0.437 0.381 0.423 0.382 0.424 0.421 0.453 0.378 0.424 0.416 0.450 0.833 0.646 0.441 0.468 0.422 0.451 0.403 0.440 0.420 0.452 0.433 0.463 1.202 0.765 
+
+> ETTm1
+
+96 0.287 0.340 0.343 0.374 0.333 0.374 0.298 0.346 0.319 0.360 0.319 0.362 0.315 0.359 0.296 0.351 0.323 0.372 0.297 0.352 0.298 0.352 0.319 0.371 0.356 0.392 192 0.324 0.364 0.355 0.379 0.353 0.383 0.331 0.365 0.345 0.374 0.339 0.373 0.347 0.381 0.334 0.372 0.356 0.389 0.337 0.376 0.339 0.377 0.349 0.389 0.388 0.410 336 0.353 0.383 0.381 0.393 0.391 0.408 0.360 0.382 0.372 0.390 0.363 0.386 0.373 0.394 0.364 0.389 0.383 0.400 0.366 0.396 0.373 0.397 0.382 0.410 0.416 0.427 720 0.405 0.411 0.425 0.416 0.432 0.429 0.414 0.412 0.420 0.416 0.412 0.413 0.424 0.425 0.416 0.415 0.432 0.424 0.422 0.422 0.439 0.431 0.448 0.448 0.468 0.460 
+
+> ETTm2
+
+96 0.161 0.252 0.176 0.264 0.167 0.257 0.174 0.264 0.167 0.258 0.160 0.250 0.178 0.273 0.168 0.260 0.184 0.276 0.165 0.256 0.174 0.262 0.182 0.276 0.180 0.268 192 0.214 0.290 0.226 0.298 0.221 0.295 0.227 0.299 0.221 0.295 0.215 0.289 0.282 0.359 0.222 0.297 0.238 0.309 0.217 0.294 0.225 0.300 0.249 0.320 0.248 0.317 336 0.269 0.328 0.277 0.331 0.271 0.328 0.274 0.329 0.272 0.329 0.267 0.326 0.296 0.359 0.275 0.333 0.286 0.341 0.270 0.329 0.285 0.343 0.303 0.355 0.308 0.354 720 0.353 0.383 0.356 0.381 0.353 0.381 0.353 0.379 0.351 0.380 0.354 0.384 0.414 0.433 0.350 0.384 0.370 0.399 0.352 0.381 0.373 0.395 0.376 0.402 0.380 0.409 
+
+> Weather
+
+96 0.145 0.198 0.180 0.236 0.175 0.231 0.148 0.193 0.174 0.229 0.165 0.221 0.172 0.234 0.148 0.203 0.157 0.213 0.148 0.199 0.157 0.210 0.178 0.229 0.159 0.223 192 0.193 0.243 0.221 0.269 0.218 0.268 0.194 0.238 0.215 0.263 0.211 0.259 0.215 0.272 0.193 0.245 0.207 0.257 0.192 0.242 0.208 0.257 0.226 0.268 0.201 0.263 336 0.241 0.281 0.263 0.300 0.264 0.303 0.245 0.280 0.260 0.296 0.255 0.292 0.258 0.305 0.247 0.287 0.262 0.297 0.246 0.285 0.258 0.295 0.291 0.313 0.251 0.302 720 0.311 0.332 0.324 0.343 0.327 0.347 0.316 0.331 0.321 0.340 0.321 0.339 0.319 0.357 0.321 0.338 0.314 0.334 0.311 0.332 0.335 0.348 0.358 0.362 0.315 0.347 
+
+> ECL
+
+96 0.127 0.222 0.139 0.233 0.150 0.245 0.129 0.221 0.142 0.243 0.128 0.223 0.133 0.230 0.129 0.225 0.142 0.240 0.130 0.224 0.136 0.235 0.134 0.229 0.131 0.229 192 0.143 0.237 0.151 0.245 0.163 0.257 0.146 0.236 0.156 0.256 0.143 0.237 0.147 0.244 0.148 0.242 0.170 0.265 0.147 0.241 0.152 0.247 0.153 0.247 0.147 0.243 336 0.159 0.254 0.166 0.260 0.178 0.273 0.167 0.258 0.172 0.271 0.159 0.254 0.162 0.261 0.162 0.259 0.187 0.283 0.162 0.257 0.171 0.267 0.167 0.263 0.164 0.263 720 0.196 0.287 0.205 0.294 0.217 0.305 0.200 0.286 0.210 0.303 0.197 0.287 0.197 0.294 0.198 0.292 0.221 0.311 0.197 0.288 0.198 0.294 0.188 0.284 0.200 0.299 
+
+> Traffic
+
+96 0.379 0.263 0.389 0.266 0.406 0.281 0.363 0.233 0.393 0.279 0.381 0.265 0.422 0.327 0.393 0.272 0.355 0.260 0.369 0.255 0.397 0.296 0.345 0.250 0.378 0.269 192 0.395 0.270 0.399 0.270 0.419 0.286 0.378 0.242 0.404 0.283 0.394 0.272 0.434 0.332 0.410 0.275 0.371 0.268 0.383 0.261 0.395 0.274 0.360 0.259 0.398 0.279 336 0.409 0.277 0.411 0.276 0.429 0.292 0.397 0.251 0.417 0.288 0.406 0.279 0.449 0.338 0.421 0.281 0.386 0.275 0.397 0.268 0.418 0.295 0.369 0.266 0.417 0.287 720 0.440 0.296 0.448 0.296 0.469 0.313 0.434 0.271 0.454 0.308 0.442 0.301 0.491 0.359 0.458 0.304 0.437 0.298 0.434 0.289 0.440 0.297 0.394 0.280 0.470 0.312 
+
+> PEMS03
+
+12 0.062 0.167 0.185 0.296 0.197 0.306 0.095 0.205 0.116 0.226 0.079 0.191 0.103 0.218 0.069 0.175 0.068 0.173 0.080 0.190 0.061 0.161 0.067 0.171 0.080 0.190 24 0.081 0.188 0.324 0.395 0.429 0.474 0.156 0.265 0.234 0.323 0.121 0.238 0.180 0.293 0.100 0.212 0.096 0.204 0.131 0.244 0.078 0.183 0.093 0.202 0.123 0.236 48 0.115 0.219 0.650 0.586 0.776 0.661 0.292 0.368 0.542 0.522 0.156 0.257 0.317 0.407 0.167 0.276 0.149 0.258 0.232 0.330 0.107 0.215 0.151 0.260 0.196 0.305 96 0.156 0.249 1.186 0.846 1.352 0.927 0.513 0.502 1.063 0.791 0.199 0.292 0.451 0.507 0.256 0.351 0.228 0.326 0.385 0.444 0.149 0.254 0.319 0.392 0.262 0.362 
+
+> PEMS04
+
+12 0.075 0.180 0.197 0.312 0.209 0.322 0.113 0.226 0.130 0.241 0.089 0.200 0.114 0.228 0.081 0.188 0.078 0.183 0.102 0.215 0.066 0.165 0.085 0.188 0.096 0.207 24 0.090 0.200 0.336 0.412 0.440 0.492 0.195 0.301 0.249 0.341 0.127 0.244 0.188 0.300 0.113 0.225 0.097 0.209 0.159 0.272 0.077 0.180 0.116 0.223 0.142 0.257 48 0.115 0.227 0.675 0.608 0.808 0.684 0.371 0.423 0.570 0.542 0.187 0.305 0.319 0.405 0.179 0.288 0.135 0.253 0.278 0.370 0.096 0.204 0.177 0.280 0.224 0.331 96 0.143 0.252 1.269 0.887 1.429 0.959 0.659 0.585 1.166 0.838 0.190 0.294 0.424 0.481 0.270 0.367 0.201 0.316 0.446 0.489 0.124 0.232 0.271 0.357 0.288 0.382 
+
+> PEMS07
+
+12 0.058 0.155 0.179 0.300 0.190 0.308 0.091 0.203 0.109 0.221 0.073 0.180 0.100 0.214 0.064 0.165 0.061 0.160 0.075 0.183 0.056 0.153 0.064 0.161 0.077 0.184 24 0.077 0.177 0.328 0.407 0.437 0.489 0.160 0.270 0.229 0.326 0.102 0.207 0.192 0.304 0.094 0.202 0.085 0.188 0.120 0.231 0.064 0.160 0.090 0.192 0.126 0.238 48 0.119 0.208 0.675 0.606 0.806 0.682 0.329 0.393 0.546 0.529 0.154 0.253 0.381 0.440 0.152 0.263 0.125 0.232 0.212 0.310 0.084 0.184 0.137 0.239 0.224 0.320 96 0.182 0.238 1.252 0.881 1.388 0.943 0.607 0.552 1.094 0.797 0.204 0.291 0.580 0.542 0.248 0.343 0.180 0.287 0.344 0.403 0.106 0.206 0.279 0.362 0.323 0.392 
+
+> PEMS08
+
+12 0.080 0.183 0.188 0.304 0.201 0.313 0.105 0.214 0.127 0.241 0.091 0.201 0.113 0.226 0.081 0.187 0.078 0.179 0.099 0.207 0.070 0.169 0.078 0.178 0.095 0.202 24 0.117 0.222 0.323 0.404 0.426 0.485 0.180 0.282 0.252 0.348 0.143 0.253 0.197 0.301 0.119 0.227 0.108 0.213 0.167 0.272 0.094 0.195 0.111 0.211 0.150 0.255 48 0.190 0.286 0.678 0.609 0.817 0.689 0.353 0.404 0.604 0.568 0.264 0.340 0.389 0.431 0.202 0.296 0.170 0.264 0.314 0.384 0.152 0.247 0.179 0.266 0.247 0.334 96 0.336 0.379 1.346 0.900 1.509 0.974 0.703 0.569 1.322 0.893 0.281 0.335 0.667 0.542 0.371 0.394 0.285 0.329 0.561 0.521 0.260 0.310 0.326 0.361 0.356 0.399 
+
+1st Cnt ∗ 30 21 0 3 2 0 4 14 3 2 4 4 0 0 1 0 – – – – – – – – – –
+
+1st Cnt † 13 7 0 3 2 0 0 13 3 2 3 3 0 0 1 0 0 0 1 0 16 15 5 1 0 0
+
+Best and Second-best within each model group. For the lightweight group, the original source annotations retain tie-breaking based on unrounded values. 1st Cnt ∗ within the lightweight group, counted per metric over all settings, ties are broken on unrounded values. 1st Cnt †
+
+among all compared models. 
+
+Table 2: Module ablation for structure prior validation. 
+
+Dataset w/o Q w/o ATO w/o Rct. AsyTO ETTh1 0.406 0.468 0.407 0.402 
+
+ETTh2 0.348 0.397 0.354 0.346 
+
+ETTm1 0.347 0.352 0.344 0.342 
+
+ETTm2 0.251 0.253 0.249 0.249 
+
+Weather 0.221 0.218 0.223 0.223 ECL 0.159 0.161 0.157 0.156 
+
+Traffic 0.406 0.428 0.410 0.406 
+
+PEMS03 0.130 0.134 0.105 0.104 
+
+PEMS04 0.142 0.133 0.107 0.106 
+
+PEMS07 0.131 0.128 0.109 0.109 
+
+PEMS08 0.219 0.232 0.182 0.181 
+
+PA rules out parameter count as its explanation, while the Toeplitz comparison shows that relative lag alone cannot re-place distinct history-reading and future-writing structure. Figure 4 shows the asymmetry mechanism, where the his-tory modes are localized in time while future modes spread across the horizon, indicating the two temporal bases are specialized rather than converge. Panel (d) puts a number on the gap: for each dataset’s target variable ρasy is 1.37 on ETTm1 and 1.39 on Weather, placing 46 .9% and 48 .3% of the operator’s energy in its antisymmetric part. Panel (c) il-lustrates the responses grouping thermo-dynamically related variables, showing that shared modes are adapted across the panel rather than duplicated. 10 5 10 6 10 7 10 8                    
+
+> MACs per sample (log scale) 0.28 0.30 0.32 0.34 0.36 MSE (3-seed mean)
+> TQNet FreTS PatchTST iTransformer FreqCycle DLinear CycleNet
+> Ours
+> PhaseFormer FITS SparseTSF MixLinear
+> ETTm1, L= 720 H= 96
+> 10 510 610 710 810 9
+> MACs per sample (log scale) 0.15 0.16 0.17 0.18
+> TQNet iTransformer FreTS PatchTST FreqCycle DLinear CycleNet
+> Ours
+> PhaseFormer FITS SparseTSF MixLinear
+> Weather, L= 720 H= 96
+> 10 610 710 810 910 10
+> MACs per sample (log scale) 0.125 0.130 0.135 0.140 0.145 0.150
+> TQNet iTransformer FreTS PatchTST FreqCycle DLinear CycleNet FITS
+> Ours
+> PhaseFormer SparseTSF MixLinear params
+> Electricity, L= 720 H= 96
+> 10 8
+> 10 6
+> 10 4
+
+Figure 2: Visualization of accuracy vs. compute Pareto on ETTm1, Weather, Electricity under the setting of L = 720 → H = 96 .The bubble size indicates the scale of the trainable parameters, where the dashed step in grey indicates the Pareto frontier. Sym Sym-PA Toeplitz                                     
+
+> 96 96
+> 336 336
+> 720 720
+> 96 96
+> 336 336
+> 720 720
+> 96 96
+> 336 336
+> 720 720
+> 24 24
+> 48 48
+> 96 96
+> +3.8 +3.8 +2.8 +5.9 +4.0 +3.0 +2.3 +2.1 +1.1 +6.6 +6.5 +13.1 +4.1 +3.7 +12.6 +1.4 +1.1 +8.0 +3.4 +2.8 +3.6 +1.9 +1.1 +1.2 +4.3 +4.2 +4.2 +23.3 +23.1 +18.2 +25.4 +25.5 +18.4 +19.2 +20.6 +19.6 ETTm1 Weather Electricity PEMS04  15
+> 10
+> 5
+> 0510 15
+> Relative MSE reduction of Asy (%)
+
+Figure 3: Directionality control. Each cell is the 3-seed av-eraged relative MSE reduction of Asym ( Ψ̸ = Φ) in per-centage, against 3 constrained alternatives: Sym sets Φ = Ψ
+
+with a parameter aligned version Sym-PA , and shift-invariant 
+
+Toeplitz . Blue means Asym is better. 
+
+Cost of Factorization 
+
+The preceding experiments establish which structures are needed, this section answers whether their compressed pa-rameterizations discard useful capacity. Table 3 changes one storage choice at a time at L = H = 720 . Shared variants remove variable specificity, Independent variants store a sep-arate prototype or response for every variable, and Dense 
+
+variants replace one cycle-separable temporal factor with its unrestricted counterpart. 
+
+Variable-side Storage. The benefit of amortization in-creases with panel width. Relative to AsyTO, storing an in-dependent prototype Qc increases the total parameter count by 1.06 ×, 1.45 ×, 2.41 ×, and 7.32 × on ETTm1, Weather, ECL, and Traffic, respectively, without improving the re-ported MSE. Independent responses Gc follow the same scal-ing trend ( 1.01 –2.19 ×) and match or underperform AsyTO except on Weather, where they reduce MSE from .311 to 
+
+.307 for a 4.5% increase in parameters. Full sharing is not a uniform substitute either: it helps on Weather but degrades ETTm1 and ECL. The coordinate-generated form there-fore provides the useful middle ground between a channel-homogeneous model and costly per-variable storage, with Weather marking a possible capacity boundary when inde-pendent responses are inexpensive. 
+
+Temporal Storage. Replacing either temporal factor with a dense one raises the total model size by 1.63 –2.90 ×, while changing MSE by at most .003 and with no consistent di-rection. Dense factors slightly improve ECL and Traffic, but match or underperform AsyTO on ETTm1 and Weather. The cycle-separable form therefore removes 39 –65% of the parameters required by its dense counterpart while retain-ing nearly all of its accuracy. The two factorizations ad-dress complementary scaling terms: variable-side compres-sion prevents per-variable storage from dominating wide panels, whereas temporal compression controls the shared history–future cost and is most visible on narrow panels. Both are therefore required for efficiency across panel widths. Table 3: Cost of factorization at L=720 → H=720 , the one horizon at which every arm exists. Each row stores one component differently; Par. is its trainable-parameter count. All eleven datasets and horizons are in the appendix. 
+
+Parameterization ETTm1 Weather Electricity Traffic MSE Par. MSE Par. MSE Par. MSE Par. 
+
+Low-Rank Periodic Prototype Qs = UV ⊤
+
+Shared Q 0.411 10,498 0.309 6,846 0.200 38,346 0.440 23,074 Indep. Qc 0.410 11,074 0.311 9,726 0.196 92,106 0.446 167,722 
+
+Cycle-Shared Variable Response G
+
+Shared Gs 0.406 10,281 0.310 6,691 0.197 37,475 0.440 23,512 Indep. Gc 0.405 10,498 0.307 7,006 0.196 57,698 0.441 50,234 
+
+History-CeST Factorization Ψ
+
+Dense Ψdense 0.407 27,042 0.312 14,302 0.195 67,042 0.439 37,338 
+
+Future-CeST Factorization Φ
+
+Dense Φdense 0.407 30,114 0.311 15,838 0.195 73,186 0.437 40,410 AsyTO 0.405 10,402 0.311 6,702 0.196 38,178 0.440 22,906 0 180 360 540 720 Future position M1 M2 M3 M4 M5 M6 Mode (a) Future modes                                                                       
+
+> 0180 360 540 720 History position M1 M2 M3 M4 M5 M6 Mode (b) History modes
+> M1 M2 M3 M4 M5 M6 Mode (decreasing operator energy) HUFL HULL MUFL MULL LUFL LULL OT ETTm1 variable (c) Variable-specific modal responses G= [ gc]c
+> 0180 360 540 720 History position 0180 360 540 720 Future position (d) Reconstructed Wc, OT; asy = 1.37
+> 1.0 0.5 0.0 0.5 1.0
+> q99-scaled signed loading / response
+> 0.02 0.01 0.00 0.01 0.02
+> Operator weight
+> Modal Response parameterization: Wc=Diag( gc)ETTm1, 720 720 (seed 2026) 0180 360 540 720 Future position M1 M2 M3 M4 M5 M6 Mode (a) Future modes
+> 0180 360 540 720 History position M1 M2 M3 M4 M5 M6 Mode (b) History modes
+> M1 M2 M3 M4 M5 M6 Mode (decreasing operator energy)
+> p (mbar) T (degC) Tpot (K) Tdew (degC) rh (%) VPmax (mbar) VPact (mbar) VPdef (mbar) sh (g/kg) H2OC (mmol/mol) rho (g/m**3) wv (m/s) max. wv (m/s) wd (deg) rain (mm) raining (s) SWDR (W/m 2)PAR ( mol/m 2/s)
+> max. PAR ( mol/m 2/s)
+> Tlog (degC) OT
+> Weather variable (c) Variable-specific modal responses G= [ gc]c
+> 0180 360 540 720 History position 0180 360 540 720 Future position (d) Reconstructed Wc, OT; asy = 1.39
+> 1.0 0.5 0.0 0.5 1.0
+> q99-scaled signed loading / response
+> 0.002 0.001 0.000 0.001 0.002
+> Operator weight
+> Modal Response parameterization: Wc=Diag( gc)Weather, 720 720 (seed 2026)
+
+Figure 4: The learned factorization on ETTm1 and Weather at 720 → 720 . (a, b) The six highest-energy future-writing and history-reading modes, (c) the variable mode responses, (d) the operator reconstructed for variables, with ρasy = ∥W − W ⊤∥F /∥W∥ F .Table 4: Transferability analysis on frozen PhaseFormer and MixLinear. T 0 is the backbone MSE, T 1∆ and T 2∆ are rel-ative MSE changes after adding Q and Q + CeST . Negative is better, performance gains exceeding 5% are bold. Dataset PhaseFormer MixLinear T0 T1 ∆ T2 ∆ T0 T1 ∆ T2 ∆
+
+ETTh1 0.419 -0.8% -0.2% 0.400 +3.0% +2.7% ETTh2 0.354 -0.0% -0.2% 0.342 +0.2% +0.1% ETTm1 0.350 -0.2% -0.9% 0.377 -0.4% -8.1% 
+
+ETTm2 0.257 -0.7% -2.6% 0.253 -1.6% -1.8% Weather 0.225 +0.1% -1.7% 0.249 -0.4% -13.4% 
+
+ECL 0.160 -1.8% -3.0% 0.174 -4.8% -9.4% 
+
+Traffic 0.393 -0.6% -0.7% 0.417 -1.7% -2.5% PEMS03 0.176 -12.1% -24.7% 0.587 -43.1% -70.7% 
+
+PEMS04 0.192 -16.9% -30.0% 0.619 -30.7% -66.2% 
+
+PEMS07 0.208 -14.9% -31.8% 0.609 -45.1% -72.6% 
+
+PEMS08 0.363 -16.7% -35.6% 0.634 -30.9% -64.3% 
+
+Transferability Analysis 
+
+Ablations establish that the proposed components are useful within AsyTO, but not whether they remain effective outside the architecture for which they were designed. We there-fore attach them to two independently trained lightweight forecasters, PhaseFormer (Niu, Deng, and Tong 2025) and MixLinear (Ma, Sha, and Luo 2024), while keeping all back-bone weights frozen. T 0 is the frozen backbone, T 1 trains only the periodic prototype Q, and T 2 trains Q together with CeST. 
+
+T 2 reduces MSE in 39 of 44 PhaseFormer cells and 40 
+
+of 44 MixLinear cells. Across the seven standard bench-marks, the mean reductions are 1.3% and 4.6% , respectively; on PEMS, where the look-back is shorter than one cycle (L = 96 < P = 288 ), they increase to 30 .5% and 68 .4% .This contrast is consistent with the periodic path being most useful when the backbone cannot observe a complete cycle, although the ratio L/P is not the only factor that differs between these datasets. CeST also contributes beyond periodic removal: T 2 out-performs T 1 on 21 of the 22 displayed backbone–dataset pairs. On PEMS, it raises the mean reduction from 15 .2% 
+
+to 30 .5% for PhaseFormer and from 37 .5% to 68 .4% for MixLinear. The only material regression relative to T 0 is MixLinear on ETTh1 ( +2 .7% ), where the long input already spans many cycles. Because these gains are obtained with-out updating any backbone weight, they demonstrate that the modules provide a transferable correction rather than relying on co-adaptation with the AsyTO architecture. 
+
+Discussion and Conclusion 
+
+This work presented AsyTO, a compact forecasting oper-ator that assigns distinct parameterizations to history-side evidence extraction and future-side trajectory generation. After estimating and removing a low-rank periodic com-ponent, AsyTO maps the residual through separate history and future factors. Cycle-separable factorization controls the temporal cost, while prototype-derived coordinates generate variable-specific responses. Matched-budget controls sub-stantiate the asymmetric design, and AsyTO achieves the lowest error among lightweight forecasters in 30 of 44 set-tings. Rather than using either one temporal map for all vari-ables or an independent dense map for each, AsyTO shares temporal factors across the panel and specializes their effects through variable-specific responses. Each forecast, however, uses only the history of its target variable. This intermediate design preserves variable specificity with modest parame-ter growth, but cannot exploit predictive signals available exclusively from other variables. Selective cross-variable in-teraction is therefore a natural direction for future work. References 
+
+Han, L.; Ye, H.-J.; and Zhan, D.-C. 2024. The capacity and robustness trade-off: Revisiting the channel indepen-dent strategy for multivariate time series forecasting. IEEE Transactions on Knowledge and Data Engineering , 36(11): 7129–7142. Lai, G.; Chang, W.-C.; Yang, Y.; and Liu, H. 2018. Modeling long-and short-term temporal patterns with deep neural net-works. In The 41st International ACM SIGIR Conference on Research & Development in Information Retrieval , 95–104. Lin, S.; Chen, H.; Wu, H.; Qiu, C.; and Lin, W. 2025. Tem-poral Query Network for Efficient Multivariate Time Series Forecasting. In International Conference on Machine Learn-ing , 37797–37814. PMLR. Lin, S.; Lin, W.; Hu, X.; Wu, W.; Mo, R.; and Zhong, H. 2024a. Cyclenet: Enhancing time series forecasting through modeling periodic patterns. Advances in Neural Information Processing Systems , 37: 106315–106345. Lin, S.; Lin, W.; Wu, W.; Chen, H.; and Yang, J. 2024b. SparseTSF: Modeling Long-term Time Series Forecasting with* 1k* Parameters. In International Conference on Ma-chine Learning , 30211–30226. PMLR. Liu, M.; Zeng, A.; Chen, M.; Xu, Z.; Lai, Q.; Ma, L.; and Xu, Q. 2022. SCINet: Time series modeling and forecasting with sample convolution and interaction. In Advances in Neural Information Processing Systems , volume 35, 5816–5828. Liu, Y.; Hu, T.; Zhang, H.; Wu, H.; Wang, S.; Ma, L.; and Long, M. 2024. itransformer: Inverted transformers are effec-tive for time series forecasting. In International conference on learning representations , volume 2024, 11116–11140. Ma, A.; Sha, M.; and Luo, D. 2024. MixLinear: Extreme Low Resource Multivariate Time Series Forecasting with 
+
+0.1k Parameters. arXiv preprint .Ni, Z.; Yu, H.; Liu, S.; Li, J.; and Lin, W. 2023. BasisFormer: Attention-based time series forecasting with learnable and interpretable basis. In Advances in Neural Information Pro-cessing Systems , volume 36. Nie, Y.; Nguyen, N. H.; Sinthong, P.; and Kalagnanam, J. 2023. A Time Series is Worth 64 Words: Long-term Fore-casting with Transformers. In The Eleventh International Conference on Learning Representations .Niu, Y.; Deng, J.; and Tong, Y. 2025. PhaseFormer: From Patches to Phases for Efficient and Effective Time Series Forecasting. arXiv preprint arXiv:2510.04134 .Paszke, A.; Gross, S.; Massa, F.; Lerer, A.; Bradbury, J.; Chanan, G.; Killeen, T.; Lin, Z.; Gimelshein, N.; Antiga, L.; et al. 2019. Pytorch: An imperative style, high-performance deep learning library. Advances in neural information pro-cessing systems , 32. Wu, H.; Xu, J.; Wang, J.; and Long, M. 2021. Autoformer: Decomposition transformers with auto-correlation for long-term series forecasting. In Advances in Neural Information Processing Systems , volume 34, 22419–22430. Xu, Z.; Zeng, A.; and Xu, Q. 2024. FITS: Modeling time series with 10 k parameters. In International Conference on Learning Representations , volume 2024, 26295–26318. Yi, K.; Fei, J.; Zhang, Q.; He, H.; Hao, S.; Lian, D.; and Fan, W. 2024. FilterNet: Harnessing frequency filters for time series forecasting. In Advances in Neural Information Processing Systems , volume 37. Yi, K.; Zhang, Q.; Fan, W.; Wang, S.; Wang, P.; He, H.; An, N.; Lian, D.; Cao, L.; and Niu, Z. 2023. Frequency-domain mlps are more effective learners in time series fore-casting. Advances in Neural Information Processing Systems ,36: 76656–76679. Zeng, A.; Chen, M.; Zhang, L.; and Xu, Q. 2023. Are trans-formers effective for time series forecasting? In Proceedings of the AAAI conference on artificial intelligence , volume 37, 11121–11128. Zhang, B.; Yin, S.; Zhu, H.; and He, X. 2026. FreqCycle: A Multi-Scale Time-Frequency Analysis Method for Time Series Forecasting. In Proceedings of the AAAI Conference on Artificial Intelligence .Zhang, T.; Zhang, Y.; Cao, W.; Bian, J.; Yi, X.; Zheng, S.; and Li, J. 2022. Less Is More: Fast Multivariate Time Series Forecasting with Light Sampling-oriented MLP Structures. 
+
+arXiv preprint arXiv:2207.01186 .Zhou, H.; Zhang, S.; Peng, J.; Zhang, S.; Li, J.; Xiong, H.; and Zhang, W. 2021. Informer: Beyond efficient transformer for long sequence time-series forecasting. In Proceedings of the AAAI conference on artificial intelligence , volume 35, 11106–11115.
