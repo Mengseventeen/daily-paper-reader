@@ -6,33 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-22
-- 运行时间：2026-08-22 20:24:28 UTC
+- 最新运行日期：2026-08-23
+- 运行时间：2026-08-23 19:08:29 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：0
-- 速读区：4
+- 本次总论文数：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日速读4篇论文，无精读；覆盖动态投资组合、表格数据异常检测与多变量时间序列预测。最值得关注的是两篇7分工作：约束动态组合的策略迭代与基于流匹配的无监督异常检测。建议优先精读这两篇，后续可结合具体场景评估方法迁移性。
-- 详情：[/202608/22/README](/202608/22/README)
+今日聚焦3篇AI金融研究，精读1篇高分论文揭示LLM金融预测中的校准退化风险，另速读货币套利与多智能体分析两篇。最值得关注的是高分论文：大模型做隔夜市场风险预测时存在校准退化，且提供了审计追踪案例，对AI金融应用有警示意义。下一步建议普通读者重点关注模型预测的可信度验证，勿盲目依赖AI投资建议。
+- 详情：[/202608/23/README](/202608/23/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Calibration-Induced Degeneracy in LLM Financial Forecasting: An Audit-Trailed Case Study on Next-Day Market Risk](/202608/23/2608.20304v1-calibration-induced-degeneracy-in-llm-financial-forecasting-an-audit-trailed-case-study-on-next-day-market-risk)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：研究LLM特征在金融预测中的校准退化问题，直接属于自然语言处理在金融分析中的应用
 
 ### 速读区论文标签
-1. [Self-Consistent Adjoint Policy Iteration for Constrained Dynamic Portfolio Choice](/202608/22/2608.17808v1-self-consistent-adjoint-policy-iteration-for-constrained-dynamic-portfolio-choice)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：基于仿真的策略迭代用于动态投资组合选择，与智能投顾组合管理相关
-2. [Unsupervised Anomaly Detection Using Flow Matching on Tabular Data](/202608/22/2608.19801v1-unsupervised-anomaly-detection-using-flow-matching-on-tabular-data)  
-   标签：评分：7.0/10、query:ai-finance
-   evidence：流匹配用于含污染训练集的金融表格数据无监督异常检测
-3. [AsyTO: Asymmetric Temporal Operator for Parameter-Efficient Multivariate Time Series Forecasting](/202608/22/2608.16098v1-asyto-asymmetric-temporal-operator-for-parameter-efficient-multivariate-time-series-forecasting)  
+1. [Resource-Efficient QUBO Formulation for Anchored Currency Arbitrage](/202608/23/2608.15889v1-resource-efficient-qubo-formulation-for-anchored-currency-arbitrage)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：参数高效的深度预测模型，适用于多元金融时间序列
-4. [Dynamic Portfolio Optimization under CVaR Constraints](/202608/22/2608.20179v1-dynamic-portfolio-optimization-under-cvar-constraints)  
+   evidence：面向货币套利的QUBO建模，纳入现实约束
+2. [A Multi-Agent Platform for Automated Enterprise Analytics and Insight Generation](/202608/23/2608.18740v1-a-multi-agent-platform-for-automated-enterprise-analytics-and-insight-generation)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：CVaR约束下的投资组合优化，可应用于机器人投顾的组合管理
+   evidence：多智能体自然语言业务智能平台，可应用于金融分析
 
 
 <div class="dpr-home-promo-card">
