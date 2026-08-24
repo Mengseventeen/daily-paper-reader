@@ -6,29 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-23
-- 运行时间：2026-08-23 19:08:29 UTC
+- 最新运行日期：2026-08-24
+- 运行时间：2026-08-24 19:55:29 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 本次总论文数：4
+- 精读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦3篇AI金融研究，精读1篇高分论文揭示LLM金融预测中的校准退化风险，另速读货币套利与多智能体分析两篇。最值得关注的是高分论文：大模型做隔夜市场风险预测时存在校准退化，且提供了审计追踪案例，对AI金融应用有警示意义。下一步建议普通读者重点关注模型预测的可信度验证，勿盲目依赖AI投资建议。
-- 详情：[/202608/23/README](/202608/23/README)
+今日精读2篇高分论文、速读1篇，聚焦金融智能体与合成场景研究；最值得关注的是《Mint-Agent》与《Rethinking Synthetic Scenario Realism》，均获9.0分，指向金融原生大模型和场景兼容性优于保真度的结论；建议普通读者优先了解这两个方向，并结合Fuzzy-MoE的时序预测思路拓展应用。
+- 详情：[/202608/24/README](/202608/24/README)
 
 ### 精读区论文标签
-1. [Calibration-Induced Degeneracy in LLM Financial Forecasting: An Audit-Trailed Case Study on Next-Day Market Risk](/202608/23/2608.20304v1-calibration-induced-degeneracy-in-llm-financial-forecasting-an-audit-trailed-case-study-on-next-day-market-risk)  
+1. [Mint-Agent: Introducing Finance-Native Agentic Foundation Models](/202608/24/2608.16386v2-mint-agent-introducing-finance-native-agentic-foundation-models)  
    标签：评分：9.0/10、query:ai-finance
-   evidence：研究LLM特征在金融预测中的校准退化问题，直接属于自然语言处理在金融分析中的应用
+   evidence：金融原生智能体基础模型
+2. [Rethinking Synthetic Scenario Realism: Compatibility, Not Fidelity, Drives Hedging Performance](/202608/24/2608.20842v1-rethinking-synthetic-scenario-realism-compatibility-not-fidelity-drives-hedging-performance)  
+   标签：评分：9.0/10、query:ai-finance
+   evidence：合成数据兼容性与深度对冲
+3. [Auditable by Construction: An Ontology-Driven Framework for Trustworthy LLM Analytics in Enterprise Finance](/202608/24/2608.20661v1-auditable-by-construction-an-ontology-driven-framework-for-trustworthy-llm-analytics-in-enterprise-finance)  
+   标签：评分：8.0/10、query:ai-finance
+   evidence：企业金融中的LLM分析与可审计RAG
 
 ### 速读区论文标签
-1. [Resource-Efficient QUBO Formulation for Anchored Currency Arbitrage](/202608/23/2608.15889v1-resource-efficient-qubo-formulation-for-anchored-currency-arbitrage)  
+1. [Fuzzy-MoE: Interpretable Regime-Conditioned Expert Routing for Non-Stationary Multivariate Time Series Forecasting](/202608/24/2608.20761v1-fuzzy-moe-interpretable-regime-conditioned-expert-routing-for-non-stationary-multivariate-time-series-forecasting)  
    标签：评分：6.0/10、query:ai-finance
-   evidence：面向货币套利的QUBO建模，纳入现实约束
-2. [A Multi-Agent Platform for Automated Enterprise Analytics and Insight Generation](/202608/23/2608.18740v1-a-multi-agent-platform-for-automated-enterprise-analytics-and-insight-generation)  
-   标签：评分：6.0/10、query:ai-finance
-   evidence：多智能体自然语言业务智能平台，可应用于金融分析
+   evidence：面向金融等领域的深度时间序列预测方法
 
 
 <div class="dpr-home-promo-card">
