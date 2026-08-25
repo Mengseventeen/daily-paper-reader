@@ -1,0 +1,472 @@
+Title: ChequeMark: An Ensemble Machine Learning Framework for After-Hours Business Deposit Fraud Detection
+
+URL Source: https://arxiv.org/pdf/2608.21629v1
+
+Published Time: Tue, 25 Aug 2026 00:13:17 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# ChequeMark: An Ensemble Machine Learning Framework for After-Hours Business Deposit Fraud Detection 
+
+Ann Youduo Xu 
+
+Royal Bank of Canada 
+
+annxyd12345@outlook.com 
+
+Emily Yu 
+
+Royal Bank of Canada 
+
+emily.nzyu@gmail.com 
+
+Justin Leski 
+
+Royal Bank of Canada 
+
+justinleski@icloud.com 
+
+William Lam 
+
+Royal Bank of Canada 
+
+williamntlam@gmail.com 
+
+# Abstract 
+
+Cheque fraud is a material risk in after-hours business deposit operations because funds may be released within one business day, while cheque clearing takes several days. This timing gap creates a fraud exposure window for financial institutions. Prior mitigation relies on static, deposit-level checks and therefore miss histor-ical client behavior and evolving patterns. To address this gap, we propose a multi-view ensemble ML framework that combines 1: Extreme Gradient Boosting (XGBoost) for known fraud patterns, Isolation Forest for label-free anomaly de-tection, and Graph Sample and Aggregate (GraphSAGE) for relational patterns associated with transaction activities. We then combine the three outputs into a single client-level risk score. Under stable conditions, performance is comparable to XGBoost; under a targeted distribution shift, our framework performs best (F1: 83.77%, FPR: 0.69%) versus XGBoost (F1: 82.77%, FPR: 0.72%). These results indicate improved robustness to distribution shift while preserving interpretabil-ity through plain-language explanations grounded in behavioral, anomaly, and relational evidence. 
+
+# 1 Introduction 
+
+Commercial banking is a critical sector in banking. Due to higher transaction volumes and more sophisticated transaction behaviors, commercial banking clients present elevated fraud risk, with after-hours business deposit services being one of the exposed workflows. After-hours business deposit services enable commercial banking clients to deposit cheques, coin, and cash outside business hours with next-business-day fund availability. While coin and cash are immediately verifiable upon physical receipt, cheques introduce a distinct fraud vulnerability: a cheque is a deferred payment instrument whose validity cannot be confirmed until it clears with the originating financial institution. While domestic cheques require up to five business days to clear and cheques drawn on foreign financial institutions can take up to thirty days, receiving banks provide next-business-day fund availability to improve customer experience and prevent client attrition to competitors that offer faster access. During this window, the receiving bank bears the full fraud exposure, as funds already withdrawn from a fraudulent cheque cannot be recovered from the originating financial institution. While the clearing delay creates inherent fraud exposure, several operational factors further compound this risk. First, fraud teams receive only an aggregate deposit total rather than individual cheque 
+
+> 1This work was completed at Royal Bank of Canada as part of the RBC Amplify program. Preprint. arXiv:2608.21629v1 [cs.LG] 21 Aug 2026
+
+details. Second, fraud teams need to manually review each cheque in a fraud alert image by image—a process that can consume up to twenty minutes per alert while drawing on multiple disparate legacy systems. Third, alerts are generated at the transaction level without client context, forcing fraud teams to separately compile client history before they can assess risk. The intervention opportunity is clear: fraud teams must accurately assess suspicious deposits before clients can withdraw funds. This time-pressured setting makes Machine Learning (ML) valuable because it can integrate client history, deposit behaviors and cheque details, detect complex, non-linear patterns patterns that static rules may miss and assess risks in seconds. Before the adoption of ML methods, fraud detection relied on rules-based assessment systems, where predefined conditional rules determine whether a transaction is flagged as potentially fraudulent. The core limitations of rule-based systems are high false positive rates due to simplistic thresholds, labor-intensive tuning and inability to respond to novel fraud cases. Recognizing the limitations of rules-based systems, the financial services industry has increasingly turned to ML-based fraud detection. Research in ML spans multiple decades and includes both traditional statistical models and modern deep learning methods. It also includes both supervised learning approaches, which require labels, and unsupervised learning approaches, which identify anomalies without explicit labels. Despite this rich body of work, existing ML literature for operational fraud detection exhibits four key limitations. First, many prior ML studies [29, 8, 3, 14] focused on transaction or deposit-level classification, overlooking client behavioral patterns that emerge only when transaction histories are modeled jointly. Second, many of these studies relied on a single model architecture, which can underrepresent complementary fraud evidence, such as relational or anomaly-based signals. In particular, models trained only on tabular transaction features may miss relational signals embedded in counterparty networks. Third, some prior works [37, 18] didn’t address operational constraints such as integration into deposit workflows and low inference latency. Fourth, as [31] pointed out, fraud must be explained, especially in the banking sector to protect customers from financial losses, meet legal requirements, and prevent unfair bias. However, many prior ML studies [21, 35, 40, 2] provided limited decision-level explainability, which reduces fraud officers’ trust and makes regulatory auditability difficult in operational fraud detection. 
+
+1.1 Contribution 
+
+We address these gaps through the following three main contributions. 
+
+Client-Level Multi-View Ensemble Framework. We propose a a client-level, multi-view ensemble ML framework that learns from aggregated client profiles and transaction histories, by ensembling a supervised, an unsupervised, and a graph-based ML model. The framework captures cross-deposit patterns and improves robustness under concept drift. 
+
+Operational Deployment in ChequeMark. We propose and implement deployment of the frame-work via REST API as a microservice of the fraud detection system we designed. We name the fraud detection system ChequeMark. 
+
+Human-Centered Explainability. We propose a human-centered explainability layer that supports auditability and human-in-the-loop decision making. Explanations are generated in plain language by Large Language Models (LLMs), grounded in SHAP (SHapley Additive exPlanations) feature attributions and gradient-based graph influence and masking. 
+
+1.2 Outline 
+
+Section 2 reviews work related to our ML framework. Section 3 formalizes the problem as client-level binary classification with risk scoring objectives and defines our multi-view feature engineering approach. Section 4 details the proposed multi-ensemble ML framework, training protocols, and explainability mechanisms. Section 5 presents experimental results on synthetic after-hours business deposit data. Section 6 discusses ML inference microservice deployment considerations. Section 7 details the conclusion, limitations and future work. 22 Related Work 
+
+Fraud detection literature has extensively applied various single-modality ML methods—approaches that rely on a single algorithm—including supervised learning, unsupervised learning, and graph-based representation learning. We refer to these as single-learners to distinguish them from ensemble approaches that combine multiple modalities. While single-learners have demonstrated strong performance in specific contexts, each modality exhibits inherent limitations that constrain detection effectiveness when deployed in isolation. In the following, we first review prior single-learner methods (Section 2.1), then discuss ensemble approaches (Section 2.2). 
+
+2.1 Single-Learners Supervised Learning Supervised learning methods can struggle when fraud pattern drifts and when faced with more complex fraud scenarios such as fraud ring network or laundering behav-iors. Probabilistic methods, such as Naïve Bayes classifiers and logistic regression, enable rapid inference and straightforward interpretation of feature coefficients, but they are relatively too sim-ple to effectively detect fraud [5, 23]. Distance-based methods, such as Support Vector Machine [22] and K-Nearest Neighbors [2, 40], adopt hyperplanes and proximity to historical examples to detect fraudulent transactions, but they require prohibitive computational cost during inference on large transaction volumes. In contrast, tree models have a more robust performance. Ensemble trees (Random Forest [23]) and gradient boosting models (including XGBoost[11], CatBoost[27], LightGBM [39], AdaBoost[20], and RUSBoost[1]) consistently outperform across credit card fraud, money laundering, insurance fraud, and payment system anomalies. To address traditional classifiers’ inability of catching temporal patterns, some researchers apply Long Short-Term Memory(LSTM) networks to capture transaction sequences [7, 17]. Nevertheless, these algorithms all fail to adapt to unseen fraud tactics without retraining. 
+
+Unsupervised Learning Unsupervised learning methods complement the limitation of supervised methods by its adaptability to evolving fraud tactics. As fraudsters develop novel schemes, unsu-pervised models can continue identifying statistical deviations without requiring labeled retraining data. Density-based, distance-based and tree-based unsupervised methods have proven effective for real-time fraud or anomaly monitoring. [36] applied Fixed Width Anomaly Detection, Local Outlier Factor (LOF), and boxplot-based techniques to Value Added Tax declarations, demonstrating high predictive power for fraud detection. Later, [15] analyzed Density-Based Spatial Clustering of Applications with Noise (DBSCAN), LOF, Isolation Forest, and Elliptic Envelope to identify atypical bank transactions, revealing that unsupervised anomaly detection captures contextual irregularities missed by supervised methods. Another effective algorithm is Autoencoders, the resconstruction-based deep learning method that mark anomalies by learning from compressed representations of normal patterns [30]. Variational Autoencoders (VAE) extend the capability to sophisticated minority fraud synthesis that can address class imbalance in realistic fraud scenarios [33]. The problem with unsupervised methods, however, is an elevated false-positive rate without labeled guidance, which can harm operational performance of financial institutions. 
+
+Graph Representation Learning Graph representational learning techniques, with particular attention on learning node embeddings, add another pieces to the puzzle by constructing a fraud graph that maps networks of receivers and senders. One of the most important contributions was Graph Convolutional Networks (GCN)[13] which rely heavily on node features and support supervised learning on large and sparse graphs. GCN applications in fraud detection settings include [26], [34]. However, GCNs are largely transductive approaches that require the entire graph during node embedding generation, forcing continuous retraining every time new transactions come in. As a result, most cutting-edge research turned to examine the inductive learnings—for example Graph Sample and Aggregate (GraphSAGE) [19]—that can handle unseen nodes and enable real-time inference for high-throughput fraud detection. Building on this, [25] integrated an attention mechanism into GraphSAGE that reduces interference from abnormal samples while amplifying influence of normal ones. [35] also tested the performance of GraphSAGE and Fast Inductive Graph Representation Learning (FI-GRL) on highly imbalanced credit card transaction networks. But a key drawback is: node embeddings learned via message passing are encoded and decoded through multiple non-linear transformations, making them difficult to interpret. Unlike tabular features with direct business meaning, embeddings lack transparency and may lose domain-specific information during compression. 32.2 Ensemble-Learners 
+
+This heterogeneity in single-learners’ strengths and weaknesses has motivated us to explore ensemble frameworks that combine complementary algorithmic perspectives. The fundamental principle of ensemble-learners are consistent: to add robustness, reduce variance and bridge the performance gap of any individual constituent algorithm, though the mechanisms for aggregation are diverse. Simple ensemble frameworks include hard voting, soft voting and weighted averaging. Hard voting integrates predictions by summing votes across models, with highest-voted class declared winner [4]. Soft voting alternatively averages class probability estimates across models for more refined aggregation. Weighted averaging is another way to optimize combination weights based on model performance. [32] demonstrated this approach on financial statement fraud, developing a weighted ensemble combining Naive Bayes and K-Nearest Neighbors with a 2:1 weight ratio after multi-metric evaluation. Learned ensemble frameworks, on the other hand, train secondary models to discover optimal combinations of base learner predictions. For example, [1] employed meta-learners that learn weighted combinations of base model outputs and capture non-obvious synergies and interaction effects between constituent models for Chinese financial statement fraud detection. [12] ensembled the results of a supervised LSTM and unsupervised LSTM-AutoEncoder, which are then fed into an SVM classifier that learns the optimal way to combine them. The results often outperform constituent algorithms. 
+
+# 3 Problem Formulation 
+
+In this section, we describe the underlying probabilistic learning problem that formalizes the fraud detection task, while stating our proposed multi-view ensemble ML framework as an estimator for this problem. 
+
+Random Variables and Notations. Let X ∈ Rd denote the tabular features of a client, G denote the graph encoding relationships among entities, and Y ∈ { 0, 1} denote the fraud label. Assume the observations are drawn from an unknown joint distribution (X, G, Y ) ∼ P (X, G, Y ). The goal is to estimate the conditional probability P (Y = 1 |X, G ), which is unknown. 
+
+Decision Rule And The Difficulty. We define a classifier f : X × G → [0 , 1] where f (X, G )
+
+maps a feature instance X and a graph G to a probability score in [0 , 1] , estimating the conditional probability P (Y = 1 |X, G ). The final binary prediction ˆY ∈ { 0, 1} is determined by a hard decision threshold τ ∈ [0 , 1] , ˆY = 1 if f (X, G ) > τ , otherwise ˆY = 0 . The optimal classifier is 
+
+f ∗(X, G ) = P (Y = 1 |X, G ), but estimating this distribution is difficult because: in practice, (1) only a subset of frauds are labeled due to reliance on manual human reporting, delayed discovery, and extreme data volume, (2) fraud tactics evolve over time because fraudsters continuously adapt their strategies, (3) graph dependence violates the assumption that observations are independent, and (4) some novel frauds correspond to low-density regions of the feature space, making them hard to distinguish from rare legitimate behaviour. Consequently, P (Y |X, G ) cannot be accurately estimated from labeled tabular data alone. 
+
+Multi-View Decomposition. Instead of approximating P (Y |X, G ) using a single model, we decompose the evidence into three complementary components: 
+
+Predictive Evidence (Labeled Covariates): We estimate a calibrated score fpred (X) ≈ P (Y = 1 |X)
+
+from labeled data. This component captures direct associations between client-level covariates and fraud risk. 
+
+Anomaly Evidence (Distributional Deviation): We estimate an anomaly score fanom (X) = A(X),which increases as an observation becomes less typical under the marginal data distribution p(X).I.e., A(X) corresponds to inverse association with p(X), which helps surface novel or weakly labeled fraud patterns. 
+
+Relational Evidence (Graph Dependence): We estimate a structural risk score frel (X, G ) using neighborhood-dependent information derived from the interaction graph. This component captures 4dependence patterns (e.g., local connectivity, flow concentration, and relational context) that are not identifiable from independent tabular rows. Aggregating these evidence, we estimate the conditional probability P (Y = 1 |X, G ) using a straight-forward weighted linear combination F (fpred , f anom , f rel ) to preserve model interpretability: 
+
+F (fpred , f anom , f rel ) = w1 · fpred + w2 · fanom + w3 · frel , where 
+
+> 3
+
+X
+
+> i=1
+
+wi = 1 (1) 
+
+Learning Objective. The ultimate learning objective can be written as: 
+
+min  
+
+> f
+
+E(X,G,Y )∼P [L(Y, f (X, G ))] (2) where L is a classification loss (e.g., cross-entropy). Since f is difficult to estimate directly, we approximate it by combining three estimators: 
+
+f (X, G ) = F (fpred (X), f anom (X), f rel (X, G )) (3) 
+
+Explainability objective. To add explainability, we formalize this as a post-hoc attribution problem: given a trained classifier f (X, G ) and an instance (Xi, G i) with prediction ˆyi = f (Xi, G i), we seek to identify (1) a set of salient features S ⊆ { 1, . . . , d } that most strongly contribute to ˆyi in the tabular components, and (2) a set of influential graph neighbors Ni ⊆ V (G) that propagate risk through the network structure in the graph component. The attribution mechanism must satisfy interpretability constraints: feature contributions should be quantifiable, neighbor influences should be traceable, and the combined explanation should be translatable into plain language for fraud officers without ML expertise. 
+
+# 4 Proposed Framework 
+
+4.1 Constituent Algorithms XGBoost as Supervised Fraud Detection Model. We select Extreme Gradient Boosting (XG-Boost) based on its ability to capture complex non-linear feature interactions through gradient boosting. Its built-in L1/L2 regularization also prevents overfitting on the minority class. XGBoost is a gradient boosting framework that builds an ensemble of decision trees sequentially, where each tree corrects errors of previous trees. Given client features X ∈ Rd, the predictive component estimates fraud probability [10]: 
+
+fpred (X) = σ
+
+> K
+
+X
+
+> k=1
+
+fk(X)
+
+!
+
+(4) where fk represents the k-th decision tree, K denotes the total number of boosting rounds, and σ(·)
+
+is the logistic sigmoid function mapping scores to probabilities. The model minimizes regularized binary cross-entropy loss with class weighting to address class imbalance [10]: 
+
+Lpred = − 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+vi [Yi log fpred (Xi) + (1 − Yi) log(1 − fpred (Xi))] + 
+
+> K
+
+X
+
+> k=1
+
+Ω( fk) (5) where N is the number of training samples, vi assigns higher weight to minority class samples (fraud cases), and Ω( ·) is a regularization term that penalizes tree complexity (depth, number of leaves) across the K boosting rounds to prevent overfitting. 
+
+Isolation Forest as Unsupervised Anomaly Detection Model. We select Isolation Forest because of linear time complexity, a low memory requirement and the capacity to scale up to handle extremely large data size and high-dimensional problems [24]. Isolation Forest detects anomalies by measuring how easily a sample can be isolated in feature space. The algorithm builds an ensemble of isolation trees, where each tree recursively partitions the feature space via random splits, and anomalous points require fewer splits to isolate. For client features X ∈ Rd, the anomaly score is computed as [24]: 
+
+fanom (X) = 2 − E[h(X)]  
+
+> c(n)
+
+(6) 5where h(X) represents the path length required to isolate X in a random tree, E[·] denotes the expectation over all trees in the ensemble, and c(n) is the average path length normalization factor for a dataset of size n. Scores closer to 1 indicate anomalies (short isolation paths), while scores near 0 indicate normal instances (long isolation paths). 
+
+GraphSAGE as Graph Representation Learning Model. We select GraphSAGE in order to identify network behaviors after analyzing multiple transductive and inductive Graph Neural Network (GNN) methods on the transaction network. GraphSAGE learns node embeddings by aggregating features from local neighborhoods via message passing, enabling detection of fraud rings and coordinated schemes invisible to tabular models. For the transaction graph G = ( V, E), we employ a multi-layer GraphSAGE architecture with hybrid edge aggregation. At layer ℓ, node v’s embedding is updated via [19]: 
+
+h(ℓ) 
+
+> v
+
+= ReLU 
+
+
+
+W(ℓ) · CONCAT 
+
+
+
+h(ℓ−1)  
+
+> v
+
+, AGG (ℓ) 
+
+{h(ℓ−1)  
+
+> u
+
+: u ∈ N (v)}
+
+ 
+
+(7) where N (v) denotes the neighborhood of node v, AGG (ℓ) is the aggregation function, W(ℓ) is a learnable weight matrix, ReLU (·) is the Rectified Linear Unit activation function, and CONCAT (·, ·)
+
+denotes vector concatenation. We employ a hybrid aggregator combining max, mean, and sum pooling to capture diverse neighborhood patterns: AGG hybrid ({h(ℓ−1)  
+
+> u
+
+}) = CONCAT max  
+
+> u
+
+h(ℓ−1)  
+
+> u
+
+, 1
+
+|N (v)|
+
+X
+
+> u
+
+h(ℓ−1)  
+
+> u
+
+, X
+
+> u
+
+h(ℓ−1) 
+
+> u
+
+!
+
+(8) This hybrid framework captures local extremes (max), average patterns (mean), and aggregate signals (sum), enabling the model to identify both individual high-risk neighbors and collective neighborhood characteristics indicative of fraud networks. The final relational component frel (X, G ) is obtained by passing the learned node embeddings through a classification head that outputs fraud probability. 
+
+4.2 Multi-view Ensemble ML Framework 
+
+Our multi-view ensemble ML framework (see Figure 1) addresses fundamental limitations of single-learner approaches: supervised models excel at known patterns but fail against novel schemes; unsupervised models adapt to evolving tactics but generate high false-positive rates; graph models capture network structures but cannot leverage tabular features. By systematically combining these modalities, the ensemble achieves robustness against concept drift while maintaining high precision and recall. Following the multi-view decomposition in Section 3, we implement the three complementary components in the model layer: 1. fpred (X): XGBoost gradient boosting on tabular features X, optimizing binary cross-entropy with class weight adjustment; 2. fanom (X): Isolation Forest tree-based unsupervised anomaly detection on X; 3. frel (X, G ): GraphSAGE graph neural network on transaction graph G, learning node embeddings via 2-hop message passing and predicting fraud via supervised classification on labeled nodes. Each model outputs a fraud probability or anomaly score normalized to [0 , 1] . The final client risk score is computed via the weighted linear combination defined in Section 3 where weights are determined via PR-AUC (Precision-Recall AUC) proportional allocation, with each model’s weight proportional to its individual test set PR-AUC: 
+
+wi = PR-AUC i
+
+PR-AUC pred + PR-AUC anom + PR-AUC rel 
+
+,
+
+> 3
+
+X
+
+> i=1
+
+wi = 1 (9) Clients are flagged for investigation if f (X, G ) ≥ τop , with threshold τop set based on operational constraints. 
+
+4.3 Training and Ensemble Weight Optimization 
+
+Our model development protocol consists of two stages: (1) independent training of each constituent model on the same stratified train-test split, and (2) ensemble weight determination via PR-AUC pro-portional allocation. All models are trained on a deterministic client-level stratified split. Stratification maintains the same fraud prevalence ratio in both partitions to ensure representative evaluation. 6Figure 1: Multi-view Ensemble ML Framework 
+
+> The framework consists of three layers: (1) a data ingestion layer that aggregates raw transaction records into client-level transaction networks and tabular features, (2) a model layer where three constituent algorithms process their respective inputs independently, and (3) an aggregation layer that combines model outputs via weighted averaging and generates explainable rationales for fraud officers.
+
+Each constituent model is trained independently through cross-validation. fpred (XGBoost) is trained via gradient boosting with binary cross-entropy loss and class weighting to address imbalance, using early stopping to prevent overfitting. fanom (Isolation Forest) is trained without labels by building an ensemble of isolation trees on random subsamples. frel (GraphSAGE) is trained via supervised node classification with binary cross-entropy loss on labeled training nodes, allowing message passing over the full graph while restricting supervision to training labels. After independent training, ensemble weights are determined via PR-AUC proportional allocation, where each model’s weight is proportional to its individual test set PR-AUC. All constituent scores are normalized to a common range before weighted aggregation into the final ensemble score f (X, G ).
+
+4.4 Explainability Mechanisms 
+
+Operational fraud detection requires transparency at multiple levels of abstraction to serve different stakeholders and decision contexts. Thus, we employ three complementary explainability mecha-nisms: (1) SHAP values provide rigorous feature attributions for models trained on tabular dataset; (2) gradient-based counterfactual graph analysis that identify which transaction counterparties propagate fraud risk through the graph structure; and (3) LLM-based plain language translates numbers into business-focused narratives for fraud officers without ML expertise. These three mechanisms work synergistically. 
+
+SHAP Values For tree-based fpred and fanom , we employ SHAP TreeExplainer, a model-agnostic explanation framework grounded in cooperative game theory. SHAP values quantify each feature’s contribution to the predicted client risk score [28]. Positive SHAP values indicate that the feature increases fraud risk, while negative values indicate that the feature decreases risk, with magnitude reflecting contribution strength. TreeExplainer leverages the tree structure to compute exact SHAP values efficiently, enabling real-time explanations during inference. 
+
+Graph Influence Analysis The graph influence analysis method is built on the method introduced by [38]. For frel (X, G ), we identify influential neighbors via gradient-based analysis to explain graph-based predictions and decode the learned node embeddings. We compute neighbor influence 7as: 
+
+I(u → v) = ∂P rel (yv = 1) 
+
+∂hu
+
+(10) where I(u → v) measures how much neighbor u’s embedding hu affects node v’s fraud probability 
+
+Prel (yv = 1) through backpropagation, with higher values indicating stronger influence. This gradient-based approach identifies which transaction partners most strongly influence a client’s risk score, revealing potential fraud rings. We complement this with counterfactual influence via neighbor masking: 
+
+∆P (u → v) = Prel (yv = 1 | N (v)) − Prel (yv = 1 | N (v) \ { u}) (11) where N (v) is the full neighborhood of v and N (v) \ { u} is the neighborhood with u removed. This counterfactual ∆P (u → v) quantifies the change in fraud probability when removing neighbor u
+
+from the graph, providing causal explanations for fraud officers to understand network-based risk propagation. 
+
+LLM-Based Plain Language Explanations After extracting SHAP values and graph influence scores, these technical attributions are translated into plain-language rationales via Large Language Model (LLM) integration. This bridges the gap between model outputs and human understanding. The microservice will prompt an LLM (e.g. GPT-4) with structured JSON inputs containing feature importance vectors and neighbor influence scores, instructing it to generate concise bullet points (typically 2-6) ordered by impact while avoiding statistical jargon and technical terminology. The LLM-based approach is preferred over template-based explanations because it adapts phrasing to the specific fraud pattern. 
+
+# 5 Experimentation Results 
+
+5.1 Experimental Setting Data. The dataset employed in this study is fully synthetic and generated via a rule-based, proba-bilistic simulation pipeline designed to replicate operational characteristics of after-hours business deposit fraud detection. The synthetic generation process produces four interconnected data sources: (1) after-hours business deposit transaction records, (2) cheque-level records, (3) business client pro-files, and (4) account transaction history. The dataset comprises 17,093 after-hours business deposit clients, 480,000 deposit slips, 2,000,000 cheques, and 1,500,000 account transactions spanning 12 months. From these raw data sources, we engineer 101 tabular features per client and a transaction network with 25,093 nodes and 967,522 directed edges. While synthetic data enables controlled experimentation and preserves privacy, tree-based models can directly learn the underlying generation rules, which may inflate reported performance metrics. Consequently, absolute performance metrics reported herein should be interpreted as upper bounds; final threshold tuning and policy decisions require validation against governed real data. Detailed data generation methodology, schema validation, and feature engineering procedures are provided in Appendix B. 
+
+Training and Testing The three constituent models are trained independently on a training set of 13,675 after-hours business deposit clients (350 fraud cases, 2.57% prevalence). A held-out test set of 3,418 clients (88 fraud cases, 2.57% prevalence) is used for model evaluation. The train-test split is performed at the client level using stratified sampling to maintain fraud prevalence ratios. Since client are strictly separated, this splitting protocol doesn’t introduce data leakage. However, it does not reflect realistic scenarios where models are trained on all historical data up to a cutoff date and evaluated on future fraud cases. A sequential train-testsplit where all training fraud cases precede all test cases in calendar time would provide more rigorous evaluation. Ensemble weights are optimized on the stable distribution test set using PR-AUC proportional allocation, and these fixed weights are applied without retuning to another distribution-shifted test set to enable evaluation of robustness to concept drift. 
+
+Hyperparameters Hyperparameters are selected via Optuna optimization with 5-fold stratified cross-validation maximizing PR-AUC. We conduct 50 trials with MedianPruner for XGBoost and 8Isolation Forest, and 15 trials for GraphSAGE due to higher computational cost. The final hyperpa-rameter configurations for each model are provided in Appendix A. 
+
+5.2 Experimental Results 
+
+We evaluate the proposed framework on two experimental settings to assess both baseline performance and robustness of our framework to distribution shift. First, we report performance on the stable test distribution where fraud patterns follow the same distribution as training data. Under stable conditions, we expect the ensemble to perform comparably to its strongest constituent model (i.e. XGBoost), as the supervised component dominates when fraud patterns are well-represented in training data. Second, we evaluate on a distribution-shifted test set that simulates emerging fraud scenarios where fraudsters exploit newly opened accounts that are underrepresented in training data. The shifted test set is constructed by filtering clients with account age less than 18 months. Under distribution shift, we expect the ensemble to outperform individual constituents through complementary signal aggregation, as unsupervised and graph-based components compensate when supervised learning fails to generalize. Our results confirm these 2 hypotheses. 
+
+Performance on Stable Distribution Table 1 reports the performance of the full ensemble and its constituent models on the full test set at a 3% operational flagging threshold. The ensemble aggregates the three models via PR-AUC proportional weighting. The full ensemble achieves Precision 0.8058, Recall 0.9432, and F1 0.8586, capturing 83 of 88 fraud cases while maintaining a low false positive rate of 0.63%. As expected, the ensemble performance closely tracks XGBoost ( fpred ), which achieves nearly identical metrics, reflecting the supervised component’s dominance when fraud patterns are well-represented in training data. Table 1: Performance on Stable Test Distribution 
+
+Model Precision Recall F1 FPR 
+
+Proposed Method (Full Ensemble) 0.8058 0.9432 0.8586 0.0063 Predictive Component ( fpred ) 0.8058 0.9432 0.8691 0.0060 Anomaly Component ( fanom ) 0.1359 0.1591 0.1466 0.0267 Relational Component ( frel ) 0.1456 0.1724 0.1579 0.0264 
+
+Performance Under Distribution Shift However, the ensemble’s primary advantage lies not in marginal gains under stable conditions, but in its robustness to shifting fraud landscapes. To evaluate robustness against concept drift and novel fraud patterns, we conduct a stress test on a distribution-shifted test subset where 20.7% of clients have account_age_months < 18 , compared to the natural 5.6% in a random stratified split. The 18-month threshold is selected based on operational domain knowledge and typical fraud incubation periods observed in banking fraud literature, where first-party fraudsters often nurture healthy credit profiles for over months or years before bust-out [6, 9, 16]. Fraud prevalence still remains balanced at 2.57% overall. This simulates the operational scenario where models trained on established client histories must generalize to cold-start risk assessment for early-tenure clients with sparse behavioral context, higher onboarding volatility, and elevated fraud risk. Table 2 reports the full ensemble’s and constituent models’ performance on the distribution-shifted subset at the 3% operational threshold. Table 2: Performance on Shifted Test Distribution 
+
+Model Precision Recall F1 FPR Proposed Method (Full Ensemble) 0.7767 0.9091 0.8377 0.0069 
+
+Predictive Component ( fpred ) 0.7670 0.8977 0.8272 0.0072 Anomaly Component ( fanom ) 0.2039 0.2386 0.2199 0.0246 Relational Component ( frel ) 0.1553 0.1818 0.1675 0.0261 The results empirically confirms the ensemble design’s rationale: by combining supervised, unsu-pervised, and graph-based models, the framework achieves graceful degradation under distribution shift. When fpred fails to generalize to novel fraud patterns absent from training data, fanom and 
+
+frel compensate by detecting outliers and network anomalies that do not require labeled historical 9precedent. This multi-view robustness is essential for operational fraud detection, where fraudsters continuously adapt tactics to evade detection, and model retraining lags behind emerging threats. 
+
+# 6 Deployment and Operations 
+
+This section describes the operational deployment of our proposed multi-view ensemble ML frame-work, which we refer to as the ML inference microservice. The ML inference microservice operates within the broader ChequeMark fraud detection system alongside other frontend and backend compo-nents that integrates into after-hours business deposit processing workflows. Subsection 6.1 describes the currently deployed microservice architecture. Subsection 6.2 presents operational performance metrics validated through local load testing and API latency measurements. Subsection 6.3 outlines a proposed retraining pipeline that is not yet deployed because automated retraining requires access to real, production data with confirmed fraud labels for model tuning and validation. 
+
+6.1 ML Inference Microservice Architecture 
+
+The ML inference microservice operates as part of the ChequeMark backend architecture that targets completion within the time-constrained processing window for a full day’s after-hours business deposits. The microservice follows a two-tier design: (1) a synchronous ML inference API delivering risk scores and (2) an asynchronous explanation worker that polls the database every 10 seconds to generate SHAP values, graph influence scores, and LLM-based plain-language rationales. This decoupling ensures that hold decisions are not delayed by computationally expensive explainability computations. The ML inference API is containerized with Docker and deployed as a FastAPI microservice on a Kubernetes-based orchestration platform, exposing REST endpoints for batch client risk scoring. 
+
+Validated Performance Metrics. Performance characteristics are validated through Quality Assur-ance Testing (QAT) and User Acceptance Testing (UAT) environments testing suites integrated into the Continuous Integration and Continuous Deployment (CI/CD) pipeline and local load testing on representative batch sizes (100-500 clients per request). Service Level Agreements (SLAs) define maximum acceptable response times for operational acceptance in QAT and UAT. Documented performance metrics include: (1) End-to-end batch latency : 2-3 seconds per batch for typical work-loads, including database I/O, feature engineering, and parallel three-model inference; (2) Concurrent request handling : up to 50 concurrent batch requests via semaphore-based concurrency control, preventing out-of-memory failures on 16GB RAM pods; (3) Cache fallback performance : distributed caching for client profiles and transaction history features with automatic database fallback when cache is unavailable, adding an estimated 1-2 seconds to batch latency. The microservice meets the 10-second timeout requirement imposed by the upstream backend service for ML inference API. Asynchronous explanation generation is excluded from this latency measurement and timeout requirement, as it occurs post-scoring that does not block hold decisions. Table 3 summarizes the latency breakdown for the ML inference microservice. 
+
+Scalability Strategy. Scalability to larger production volumes can be achieved through horizontal scaling. It can accommodate larger production volumes through multiple FastAPI pods behind a load balancer, with each pod handling independent batch requests subject to the 50-request semaphore limit. Database query optimization via connection pooling, prepared statements, and read replicas provides additional headroom. For the current scale of synthetic data, the in-memory Pandas-based pipeline is maintainable and cost-effective. However, if daily scoring volume exceeds 1 million clients/day or training data grows beyond 100 million transactions, we recommend considering migration to Spark-based data processing. For graph scalability beyond current volumes, we recommend adopting a graph database (e.g., Neo4j) for efficient subgraph sampling and neighbor retrieval, implementing mini-batch training and inference to bound memory usage, and exploring inductive GraphSAGE variants that compute embeddings without full-graph message passing. These are proposed enhancements, not currently implemented. 10 Table 3: ML Inference Microservice Latency Breakdown 
+
+Component Latency ML Inference API Batch Scoring 
+
+End-to-end latency per batch 2-3s - Database I/O Included - Feature engineering Included - Parallel model inference Included 
+
+Cache Performance 
+
+Cache hit ~50-200ms Cache miss (fallback) +1-2s 
+
+Operational SLAs 
+
+timeout 10s QAT SLA (single client) <10s QAT SLA (batch) <30s UAT SLA (batch) <60s 
+
+Concurrency 
+
+Max concurrent requests 50 Memory limit per pod 16GB Chunk size 1,000 clients 
+
+6.2 Error Handling and Recovery 
+
+The microservice implements multi-tier error handling to ensure operational resilience, validated through fault injection testing during development. Graceful degradation handles component failures by continuing with reduced functionality: if cache is unavailable, it falls back to database queries; if historical data is missing for a client, features are zero-filled and scoring proceeds with default values; if feature importance analysis fails, it returns scores without feature importance metadata (logged but non-blocking); if LLM integration times out, structured JSON explanations are returned without plain-language synthesis. These fallbacks ensure that fraud officers receive risk scores even under partial microservice failures, prioritizing availability over completeness. Hard failures that prevent scoring—such as model loading errors, database constraint violations, or inference exceptions—mark the job as failed and return HTTP 500 errors. Failed jobs are automatically retried via a background retry worker that polls every 60 seconds, implementing exponential backoff for up to 3 retry attempts. Persistent failures after 3 attempts are marked as permanently failed and trigger operational alerts. The microservice also implements checkpoint-based recovery that enables resumption from partial failures. The scoring pipeline persists risk score records and last-processed chunk metadata after each 1,000-client chunk. If a batch job crashes at chunk 8 of 10, the retry worker resumes processing from chunk 9, avoiding redundant computation. Similarly, the explanation worker tracks explanation status per client ( pending , completed , failed ) and retries failed explanations up to 3 times before marking them as permanently failed. This granular retry mechanism ensures that transient failures do not require full batch reprocessing. These design parameters are chosen based on typical transient failure recovery times observed during development to balance retry latency and database load. 
+
+6.3 Model Retraining and Monitoring 
+
+Model retraining and versioning pipelines are not deployed yet. However, we suggest that model retraining should follow a semi-automated pipeline informed by regulatory approval processes in financial institutions. It should be noted that frequent retraining risks performance degradation from accumulated concept shift. We also suggest implementing a continuous monitoring pipeline. When performance degrades below thresholds (e.g., 30-day average PR-AUC drops > 5% relative to baseline) or when significant 11 distribution shifts are detected (e.g., Kolmogorov-Smirnov test p < 0.01 for key features), the monitoring pipeline would trigger retraining alerts. Upon approval from relevant stakeholders, the retraining pipeline would extract 12 months of labeled data, retrain all three constituent models with Optuna hyperparameter tuning, and test performance on a held-out test set. Ensemble weights would be recalibrated via PR-AUC proportional allocation on the new validation set. In addition, as part of the monitoring pipeline, we suggest that model versioning could be managed through a centralized JSON registry that stores version number, training date, hyperparameters, ensemble weights, performance metrics, and deployment status ( shadow , production , retired )for each model iteration. Prediction logs would include model version fields to enable retrospective analysis of which model version produced each historical score. 
+
+# 7 Conclusion 
+
+We present a multi-view ensemble ML framework for after-hours business deposit fraud detection that addresses critical gaps in operational fraud detection. The framework combines XGBoost for supervised behavioral prediction, Isolation Forest for unsupervised anomaly detection, and GraphSAGE for graph-based network analysis. On held-out test data with stable distribution, the proposed framework achieves performance comparable to XGBoost alone. On held-out test data with shifted distribution simulating concept drift, the proposed framework achieves greater, more robust performance of 83.73% F1-score and 0.69% false positive rate, higher than any of its constituent model. The framework’s primary contributions are its ability to capture comprehensive fraud evidence across multiple views and its robustness to distribution shift or evolving fraud patterns. Beyond predictive robustness, the framework addresses operational requirements through three design principles. First, it introduces client-level risk scoring that evaluates deposits using each client’s full behavioral history rather than isolated deposit-level rules. This contribution helps fraud officers make more context-aware decisions and reduce avoidable false positives from one-size-fits-all alert logic. Second, the ML inference microservice, built on this framework, targets low latency and integration with existing deposit workflows. This contribution helps ensure timely fraud interception. Yet full production latency and reliability should be validated through controlled deployment benchmarks. Third, the framework combines multi-tier explainability through SHAP feature attributions, graph influence analysis, and LLM-generated plain-language rationales. This contribution helps support transparent decision-making and traceable case review. While broader adoption requires channel-specific validation on governed real data, as detailed in the next section, our multi-view ensemble ML framework provides a potentially transferable foundation for explainable operational fraud detection in other financial service channels. 
+
+7.1 Limitations and Future Work 
+
+The proposed framework exhibits several limitations that warrant consideration for production deployment and future research. 
+
+Synthetic Data Limitation. The training dataset is generated via rule-based probabilistic simulation with constraint enforcement and controlled fraud injection. While this approach preserves schema validity, regulatory compliance, and operational realism, some data generation rules may still be learnable by tree-based models. Consequently, absolute performance metrics should not be interpreted as production calibration. The ensemble’s true discriminative performance requires validation on governed real data, where fraud patterns exhibit latent dependencies, human behavioral drift, and institution-specific edge cases that synthetic data cannot reproduce. As a next step, threshold tuning and policy calibration should be performed through retrospective validation on confirmed real-world outcomes. 
+
+Label Quality Limitation. The model assumes ground truth fraud labels are accurate and com-plete. In practice, fraud labels may rely on manual reporting, delayed discovery, and retrospective investigation, meaning some fraud cases remain unlabeled in training data. This label noise can bias the supervised component toward known fraud patterns and may underestimate risk for novel schemes not yet discovered and labeled. The unsupervised component may partially mitigate this limitation by detecting statistical outliers independent of labels, but overall ensemble calibration 12 remains label-quality dependent. Future work can explore semi-supervised learning frameworks that leverage both labeled fraud cases and unlabeled suspicious patterns to improve detection coverage. 
+
+Evaluation Protocol Limitation. The train-test split is performed at the client level using stratified sampling to maintain fraud prevalence ratios, ensuring no client appears in both partitions. While this approach mitigates leakage, it does not preserve temporal ordering of fraud events. Because the split is random rather than sequential, training data may contain fraud cases that occurred chronologically after some test set cases. This violates realistic deployment scenarios where models are trained on historical data and evaluated on future fraud. A sequential train-test split—where all training fraud cases precede all test cases in time—would provide more rigorous evaluation of generalization to emerging fraud tactics. As a next step, future evaluation should explore time-based cross-validation strategies that partition data into sequential folds while maintaining sufficient fraud representation in each fold. In addition, the stress test performed in Section 5 focuses on a single shift dimension (account age) to simulate cold-start fraud risk in an elevated number of new clients. While this demonstrates robustness to one type of concept drift, real-world fraud landscapes exhibit multi-factor drifts that may interact in complex ways. Future work should test robustness under multi-dimensional drift scenarios, including: (1) burst of fraud cases concentrated in a particular industry sector, (2) shifting sender-network topology, and (3) seasonal transaction velocity spikes. Evaluating the ensemble under these compound shifts would provide stronger evidence of operational resilience. 
+
+# 8 Acknowledgments 
+
+We thank the RBC Amplify program for providing the opportunity to work on this project. 
+
+# References 
+
+[1] Muhammad Atif Khan Achakzai and Peng Juan. Using machine learning meta-classifiers to detect financial frauds. Finance Research Letters , 48:102915, 2022. [2] Alhanouf Abdulrahman Saleh Alsuwailem, Emad Salem, and Abdul Khader Jilani Saudagar. Performance of different machine learning algorithms in detecting financial fraud. Computa-tional Economics , 62(4):1631–1667, December 2023. [3] Ayed Alwadain, Rao Faizan Ali, and Amgad Muneer. Estimating financial fraud through transaction-level features and machine learning. Mathematics , 11(5), 2023. [4] Mohammed Rashad Baker, Zuhair Norii Mahmood, and Ehab Hashim Shaker. Ensemble learning with supervised machine learning models to predict credit card fraud transactions. 
+
+Revue d’Intelligence Artificielle , 34(4):509–518, August 2022. [5] Alexander Bakumenko and Ahmed Elragal. Detecting anomalies in financial data using machine learning algorithms. Systems , 10(5), 2022. [6] Bank Administration Institute. Combating first-party fraud. White paper, Bank Administration Institute, 2013. [7] Ibtissam Benchaji, Samira Douzi, and Bouabid El Ouahidi. Credit card fraud detection model based on lstm recurrent neural networks. Journal of Advances in Information Technology ,12(2):113–118, May 2021. [8] Siddhartha Bhattacharyya, Sanjeev Jha, Kurian Tharakunnel, and J. Christopher Westland. Data mining for credit card fraud: A comparative study. Decis. Support Syst. , 50(3):602–613, February 2011. [9] James Brown. Account opening fraud: How to protect your business. https://www.experian. co.uk/blogs/latest-thinking/guide/new-account-opening-fraud/ , 2024. [10] Tianqi Chen and Carlos Guestrin. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining ,page 785–794. ACM, August 2016. 13 [11] Yasheng Chen and Zhuojun Wu. Financial fraud detection of listed companies in china: A machine learning approach. Sustainability , 15(1), 2023. [12] Phakhawat Chullamonthon and Poj Tangamchit. Ensemble of supervised and unsupervised deep neural networks for stock price manipulation detection. Expert Systems with Applications ,220:119698, 2023. [13] Michaël Defferrard, Xavier Bresson, and Pierre Vandergheynst. Convolutional neural networks on graphs with fast localized spectral filtering, 2017. [14] Ajit Desai, Anneke Kosse, and Jacob Sharples. Finding a needle in a haystack: A machine learning framework for anomaly detection in payment systems. The Journal of Finance and Data Science , 11:100163, 2025. [15] Jenny Domashova and Elena Kripak. Development of a generalized algorithm for identify-ing atypical bank transactions using machine learning methods. Procedia Computer Science ,213:101–109, 2022. 2022 Annual International Conference on Brain-Inspired Cognitive Archi-tectures for Artificial Intelligence: The 13th Annual Meeting of the BICA Society. [16] Early Warning Services. Preventing account opening fraud. Technical report, Early Warning Services, LLC, 2024. [17] Ebenezer Esenogho, Ibomoiye Domor Mienye, Theo G. Swart, Kehinde Aruleba, and George Obaido. A neural network ensemble with feature engineering for improved credit card fraud detection. IEEE Access , 10:16400–16407, 2022. [18] Petr Hajek and Roberto Henriques. Mining corporate annual reports for intelligent detection of financial statement fraud – a comparative study of machine learning methods. Knowledge-Based Systems , 128:139–152, 2017. [19] William L. Hamilton, Rex Ying, and Jure Leskovec. Inductive representation learning on large graphs, 2018. [20] Emmanuel Ileberi, Yanxia Sun, and Zenghui Wang. Performance evaluation of machine learning methods for credit card fraud detection using smote and adaboost. IEEE Access , 9:165286– 165294, December 2021. [21] Johannes Jurgovsky, Michael Granitzer, Konstantin Ziegler, Sylvie Calabretto, Pierre-Edouard Portier, Liyun He-Guelton, and Olivier Caelen. Sequence classification for credit-card fraud detection. Expert Systems with Applications , 100:234–245, 2018. [22] Yeonkook J. Kim, Bok Baik, and Sungzoon Cho. Detecting financial misstatements with fraud intention using multi-class cost-sensitive learning. Expert Systems with Applications , 62:32–43, 2016. [23] Sanjay Kumar, Rafeeq Ahmed, Salil Bharany, Mohammed Shuaib, Tauseef Ahmad, Elsayed Tag Eldin, Ateeq Ur Rehman, and Muhammad Shafiq. Exploitation of machine learning algorithms for detecting financial crimes based on customers’ behavior. Sustainability , 14(21), 2022. [24] Fei Tony Liu, Kai Ming Ting, and Zhi-Hua Zhou. Isolation forest. In 2008 Eighth IEEE International Conference on Data Mining , pages 413–422, 2008. [25] GuanJun Liu, Jing Tang, Yue Tian, and Jiacun Wang. Graph neural network for credit card fraud detection. In 2021 International Conference on Cyber-Physical Social Intelligence (ICCSI) ,pages 1–6, 2021. [26] Zhiwei Liu, Yingtong Dou, Philip S. Yu, Yutong Deng, and Hao Peng. Alleviating the inconsis-tency problem of applying graph neural network to fraud detection. In Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval ,SIGIR ’20, page 1569–1572. ACM, 2020. [27] Mark Eshwar Lokanan and Kush Sharma. Fraud prediction using machine learning: The case of investment advisors in canada. Machine Learning with Applications , 8:100269, 2022. 14 [28] Scott M Lundberg and Su-In Lee. A unified approach to interpreting model predictions. In 
+
+Advances in Neural Information Processing Systems , pages 4765–4774, 2017. [29] Sam Maes, Karl Tuyls, Bram Vanschoenwinkel, and Bernard Manderick. Credit card fraud detection using bayesian and neural networks. In Proceedings of the First International NAISO Congress on Neuro Fuzzy Technologies , Havana, Cuba, January 2002. [30] Sumit Misra, Soumyadeep Thakur, Manosij Ghosh, and Sanjoy Kumar Saha. An autoencoder based model for detecting fraudulent credit card transaction. Procedia Computer Science ,167:254–262, 2020. International Conference on Computational Intelligence and Data Science. [31] Anna Nesvijevskaia, Sophie Ouillade, Pauline Guilmin, and Jean-Daniel Zucker. The accuracy versus interpretability trade-off in fraud detection model. Data & Policy , 3:e12, 2021. [32] Minghuan Shou, Xueqi Bao, and Jie Yu. An optimal weighted machine learning model for detecting financial fraud. Applied Economics Letters , 30(4):410–415, 2023. [33] Huang Tingfei, Cheng Guangquan, and Huang Kuihua. Using variational auto encoding in credit card fraud detection. IEEE Access , 8:149841–149853, 2020. [34] Atif Usman, Nasir Naveed, and Saima Munawar. Intelligent anti-money laundering fraud control using graph-based machine learning model for the financial domain. Journal of Cases on Information Technology (JCIT) , 25(1):20, 2023. [35] Rafaël Van Belle, Charles Van Damme, Hendrik Tytgat, and Jochen De Weerdt. Inductive graph representation learning for fraud detection. Expert Systems with Applications , 193:116463, 2022. [36] Jellis Vanhoeyveld, David Martens, and Bruno Peeters. Value-added tax fraud detection with scalable anomaly detection techniques. Applied Soft Computing , 86:105895, 2020. [37] David G. Whiting, James V. Hansen, James B. McDonald, Conan Albrecht, and W. Steve Albrecht. Machine learning methods for detecting patterns of management fraud. Computational Intelligence , 28(4):505–527, 2012. [38] Rex Ying, Dylan Bourgeois, Jiaxuan You, Marinka Zitnik, and Jure Leskovec. Gnnexplainer: Generating explanations for graph neural networks, 2019. [39] Cheng Huang Yong Fang, Yunyun Zhang. Credit card fraud detection based on machine learning. 
+
+Computers, Materials & Continua , 61(1):185–195, 2019. [40] Miguel Ângelo Lellis Moreira, Claudio de Souza Rocha Junior, Diogo Ferreira de Lima Silva, Marcos Alexandre Pinto de Castro Junior, Igor Pinheiro de Araújo Costa, Carlos Fran-cisco Simões Gomes, and Marcos dos Santos. Exploratory analysis and implementation of machine learning techniques for predictive assessment of fraud in banking systems. Pro-cedia Computer Science , 214:117–124, 2022. 9th International Conference on Information Technology and Quantitative Management. 
+
+# A Hyperparameter Configurations 
+
+This appendix provides the detailed hyperparameter configurations for all three constituent models in the ensemble. All hyperparameters were selected via Optuna optimization with 5-fold stratified cross-validation maximizing PR-AUC. 
+
+A.1 XGBoost Hyperparameters 
+
+Table 4 presents the optimal hyperparameters for the XGBoost fraud detection model, obtained from 50 Optuna trials with MedianPruner. 15 Table 4: XGBoost Hyperparameter Configuration 
+
+Parameter Value Description 
+
+learning_rate 0.163 Step size shrinkage for boosting 
+
+max_depth 5 Maximum tree depth 
+
+subsample 0.951 Fraction of samples per tree 
+
+colsample_bytree 0.560 Fraction of features per tree 
+
+scale_pos_weight 38.8 Class imbalance weight (neg/pos ratio) 
+
+objective binary:logistic Binary classification with logistic output 
+
+eval_metric logloss Training evaluation metric 
+
+early_stopping_rounds 30 Patience for early stopping 
+
+random_state 42 Random seed for reproducibility 
+
+A.2 Isolation Forest Hyperparameters 
+
+Table 5 presents the optimal hyperparameters for the Isolation Forest anomaly detection model, obtained from 50 Optuna trials with MedianPruner. Features are preprocessed via StandardScaler (mean=0, std=1) and SimpleImputer (median strategy), with correlation filtering applied at |r| > 0.8
+
+threshold. Table 5: Isolation Forest Hyperparameter Configuration 
+
+Parameter Value Description 
+
+n_estimators 100 Number of isolation trees 
+
+max_samples 0.795 Fraction of samples per tree 
+
+max_features 0.495 Fraction of features per tree 
+
+contamination 0.03 Expected fraud proportion (3% threshold) 
+
+n_jobs -1 Parallel processing (all cores) 
+
+random_state 42 Random seed for reproducibility 
+
+Preprocessing 
+
+Feature scaling StandardScaler Mean=0, std=1 normalization Missing values SimpleImputer Median imputation strategy Correlation filter |r| > 0.8 Remove highly correlated features 
+
+A.3 GraphSAGE Hyperparameters 
+
+Table 6 presents the optimal hyperparameters for the GraphSAGE graph neural network model, obtained from 15 Optuna trials with MedianPruner. The graph comprises 89-dimensional node features (in/out aggregations of 10 transaction features + external indicator) and 10-dimensional edge features. 
+
+# B Data Pipeline 
+
+B.1 Data Preparation. 
+
+The dataset employed in this study is fully synthetic and was generated via a rule-based, probabilistic simulation pipeline designed to replicate the characteristics of after-hours business deposit service data. The dataset schema for deposits and cheques—including column definitions, data types, and relational constraints—was validated to ensure alignment with typical production systems. We first extracted canonical schemas and business constraints from deposit and fraud detection system data models, then generated new records by sampling from target distributions and enforcing domain-specific rules. The generation process follows three stages: (1) synthetic record generation , where new entities (clients, owners, accounts, deposits, cheques, account transactions) are sampled to match expected operational volumes and behavioral patterns; (2) constraint-based simulation , where cheque routing number formats, account relationships, timestamp ordering, currency compatibility, and transaction semantics are enforced during generation; and (3) fraud scenario injection , where fraud labels ( is_fraud ) are generated through controlled risk cohorts with overlapping anomaly segments 16 Table 6: GraphSAGE Hyperparameter Configuration 
+
+Parameter Value Description Architecture 
+
+hidden_dim 160 Hidden layer dimension 
+
+embedding_dim 48 Final node embedding dimension 
+
+num_layers 2 Number of GraphSAGE layers 
+
+aggregator hybrid Max + mean + sum concatenation 
+
+activation ReLU Non-linear activation function 
+
+Regularization 
+
+dropout 0.42 Dropout rate (conv layers + MLP) 
+
+weight_decay 0.0096 L2 regularization coefficient 
+
+Training 
+
+learning_rate 0.0088 Adam optimizer learning rate 
+
+epochs 100 Training iterations 
+
+optimizer Adam Adaptive moment estimation 
+
+device CPU PyTorch execution device 
+
+MLP Classification Head 
+
+Layer 1 Linear(64 → 32) Fully connected layer Activation ReLU Non-linear activation Regularization Dropout(0.42) Dropout layer Layer 2 Linear(32 → 1) Output layer (fraud probability) 
+
+Graph Structure 
+
+Node features 89-dim In/out transaction aggregations + external flag Edge features 10-dim Transaction statistics per edge Total nodes 25,093 17,093 clients + 8,000 external accounts Total edges 967,522 Directed sender-receiver pairs to ensure fraud is not perfectly separable from legitimate behavior, thereby simulating real-world detection challenges. The synthetic generation process preserves critical structural and domain properties while masking sensitive content. Preserved elements include source-system schema shapes and key joins (e.g., deposit IDs, client IDs, account numbers), domain mechanics (cheque routing structure, processing-time consistency, currency as an account property), and macro-level class balance (e.g., monthly seasonality, sender scenario proportions). Regenerated elements include all identifiers and personally identifiable information (PII)-like profile content, account numbers, routing strings, timestamps, IP patterns, transaction amounts, sender relationships, and fraud events. Validation of the synthetic dataset is done as follows. Structural checks verify schema compliance, row counts, uniqueness constraints, and foreign key integrity. Behavioral checks enforce fraud-rate bounds, maximum fraud per client, timestamp ordering and windowing, currency integrity, transaction-type semantics, and sender-pool bounds. Stress and noise checks inject anomaly-fraud overlap, seasonal spikes, high-velocity bursts, dormant-then-burst behavior, and edge-case scenarios (e.g., a domestic currency account received cheques from foreign financial institutions) to test model robustness. The dataset is appropriate for end-to-end pipeline testing, feature engineering validation, model benchmarking under controlled class imbalance, and rule stress testing. However, synthetic data cannot reproduce all latent real-world dependencies, human behavioral drift, or institution-specific edge cases. Consequently, absolute performance metrics and parameters covered in this paper should not be treated as production calibration; final threshold tuning and policy decisions require evaluation on governed real data under operational conditions. 
+
+B.2 Data scope 
+
+The synthetic dataset comprises 17,093 after-hours business deposit client profiles, 480,000 after-hours business deposit slips, 2,000,000 after-hours business deposit cheques, and 1,500,000 business account transaction history entries spanning 12 months. These datasets represent linked entities within a unified relational data model, with magnitudes validated to reflect operational realities. The data model is structured hierarchically across four granularity levels: 17 • Client Level , where each business client is identified by a unique client ID and associated with one or more beneficial owners, with attributes including business type, jurisdiction, and deposit activity history; • Business-Account Level , where each client holds 1–5 accounts, each identified by a unique account number and associated with one or more owners, with account-specific attributes including currency (domestic or foreign) and transaction history; • Deposit Level , where each deposit, identified by a deposit slip, belongs to one depositing account and represents a single deposit event, with account number inferred from the deposit routing field; • Cheque Level , where each cheque row belongs to exactly one deposit (deposit ID), es-tablishing a one-to-many relationship between deposit and cheques. The distribution of cheques per deposit is intentionally skewed to match operational patterns: the mean is 4.2 cheques per deposit, but the tail extends to deposits containing 20+ cheques, reflecting bulk deposit behavior observed in commercial banking. The distribution of dataset is tuned to simulate realism in financial institutions. The client population is dominated by domestic currency accounts, with a smaller foreign currency subset representing cross-border operations. Business sectors are sampled from a mix of categories, including restaurants, caterers, hotels, business services, auto dealers, software vendors, miscellaneous retail, and financial services and identified by Standard Industrial Classification (SIC) codes. Of all fraudulent clients, those with high-risk SIC codes account for approximately 35% in our synthetic dataset. Jurisdictional diversity is maintained through multiple domestic and cross-border sender-receiver patterns: cheques are sent from either the receiving institution, other domestic financial institutions, or foreign financial institutions. This multi-dimensional heterogeneity ensures that the dataset captures the complexity of real-world fraud detection, where fraudulent behavior is not confined to a single business sector, jurisdiction, or sender-receiver pattern. 
+
+B.3 Feature Engineering 
+
+We engineer a multi-view feature representation to capture complementary fraud signals across tabular and graph modalities. These features map out the following aspects: • Business Profile : 45 dimensions after one-hot encoding, including industry classification, account tenure and service enrollment flags; • Deposit Behavior : 15 dimensions, including IP address deviations, transaction code or routing code mismatches, deposit outlier rates and normalized amounts; • Cheque History : 20 dimensions, including cheque deposit velocity and amount rolling windows of 1 day, 7 days, 30 days and 90 days for domestic and foreign currencies separately; • Account Health : 15 dimensions, including balance trends and volatility, activity patterns, dormancy and inbound/outbound flow anomalies; • Owner Profile : 5 dimensions, including credit score, mortgage, loan, primary business account balances, total business account balances. 18
