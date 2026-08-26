@@ -1,0 +1,1415 @@
+Title: Harvesting the Volatility Risk Premium: A Learning-to-Rank Approach
+
+URL Source: https://arxiv.org/pdf/2608.24786v1
+
+Published Time: Wed, 26 Aug 2026 01:25:11 GMT
+
+Number of Pages: 68
+
+Markdown Content:
+# Harvesting the Volatility Risk Premium: A Learning-to-Rank Approach 
+
+## Maciej Wysocki 1
+
+> 1
+
+Department of Quantitative Finance and Machine Learning, Faculty of Economic Sciences, University of Warsaw, Quantitative Finance Research Group 
+
+Abstract. This paper develops the first end-to-end application of cross-sectional learning-to-rank to the S&P 500 weekly options (SPXW) zero-day-to-expiration surface, integrated with margin-aware position sizing, an abstention rule driven by model uncertainty, and a strict out-of-time integrity check. A LightGBM LambdaRank ranker scores a daily nine-strategy cross-section composed of eight delta-targeted short-put positions and a SKIP 
+
+candidate, trained against a path-aware Sortino-on-bars label computed at one-minute resolution. The framework is evaluated under index-option margin requirements, a tiered fee schedule, and bid-to-mid execution assumptions across a four-window walk-forward over 2021–2024 and a strictly held-out 2025 out-of-time slice. Seven sizing methods produce out-of-time annualized Sharpe ratios between 4.31 and 5.76 , with the headline method reaching a Probabilistic Sharpe Ratio of 0.964 and a sample-period maximum drawdown of −2.28% , on a single hold-out year against a walk-forward range of 1.90 to 3.11 . Out of time, every method exceeds three passive benchmarks (CBOE PUT, CBOE WPUT, SPX buy-and-hold) by at least 3.84 in Sharpe ratio and five internal selection baselines by at least 3.69 . A two-by-two ablation of the confidence gate against the tail-risk features places 5.05 of the 5.59 out-of-time Sharpe gap over the CBOE PUT with the ranker and the selection layer, the two risk controls adding 0.54 between them. On walk-forward, where the gate binds, neither control comes close to the headline alone and their interaction supplies most of the result. A fifteen-group feature ablation shows that removing the multiplicative regime interactions collapses walk-forward statistical confidence. 
+
+Keywords: Volatility risk premium, Learning-to-rank, LambdaRank, S&P 500 index options, Zero-day-to-expiration, Short-put strategies. 
+
+JEL codes: G11, G13, G17, C45 
+
+Funding: This research was supported by IDUB University of Warsaw [grant number 501-D124-20-0004410]. 
+
+# 1 Introduction 
+
+The volatility risk premium (VRP) in S&P 500 index options is one of the most persistent empirical regularities in the literature on equity-index derivatives. Bondarenko (2014) reports 1arXiv:2608.24786v1 [q-fin.CP] 25 Aug 2026 that historical SPX put prices were structurally overpriced relative to the realized payoff distribution, with average excess returns to put buyers strongly negative across the moneyness range over an August 1987 to December 2000 sample. Bondarenko (2019) measures the same wedge in volatility terms. From 1990 to 2018 the VIX averaged 19 .3% against 15 .1% for the subsequently realized one-month volatility of the index, a difference of 4.2 annualized percentage points. Carr and Wu (2009) document the same wedge through synthetic variance-swap returns. The long-variance position earns a statistically significant negative average return at one-month horizons. Bakshi and Kapadia (2003) confirm the sign by a third route. A long option position that is dynamically hedged against moves in the underlying earns a negative average gain, and the shortfall widens with the position’s vega. The standard interpretation is that option buyers pay an insurance premium against the catastrophic-loss tail of equity-index movements, with the seller absorbing that tail risk in exchange for the premium. Passive index harvesters such as the CBOE PutWrite Index (PUT) and the CBOE Weekly PutWrite Index (WPUT) capture this premium through a static short-put rule and have produced positive long-horizon returns. These passive harvesters have a structural limitation, since the position is held continuously regardless of the prevailing market regime, so capital is allocated identically on days when the per-trade premium is wide and on days when it is narrow, and the same fixed exposure is in force during the worst stress windows. The research question of this paper is whether a more selective harvester, based on cross-sectional ranking of candidate strategies rather than a static rule, can extract a larger fraction of the available premium without incurring the stress-window losses that limit the passive baselines. The empirical literature on harvesting the volatility risk premium through option-writing strategies has paid limited attention to two issues that determine whether a published Sharpe ratio is realizable in deployment. The first issue is the practical implementation cost. Santa-Clara and Saretto (2009) report that margin requirements impose a binding limit on short-volatility positions and force liquidations precisely when realized losses are concentrated, and Do et al. (2016) and Hong et al. (2018) document that the headline Sharpe ratios of canonical short-volatility strategies fall substantially once explicit bid-ask spreads and margin rules are included. A related concern is that mean-variance optimization is poorly suited to the negatively-skewed, fat-tailed payoff distribution of short-option positions. Faias and Santa-Clara (2017) argue that expected-utility frameworks such as fractional Kelly sizing are required to allocate capital under these payoffs. The second issue is methodological. The machine-learning literature on option-strategy selection is dominated by point-prediction frameworks that treat the problem as one of fore-casting absolute returns, which is a noise-dominated task at the daily horizon. A more natural formulation of this task is learning-to-rank, in which a scoring function is trained to order candidates rather than to forecast their absolute returns. Duan and Kashima (2021) and Poh et al. (2021) report that learning-to-rank algorithms applied to the cross-section of equity returns improve out-of-sample ranking accuracy over absolute-return regressors, and Linger et al. (2025a) and Barak et al. (2025) extend the framework to long-short portfolio construction with tailored loss functions. The learning-to-rank literature has, however, developed almost entirely on equity cross-sections rather than on the option surface, and the few applications to options have not been integrated with margin-aware sizing, regime-conditional feature engineering, or out-of-time hold-out evaluation. 2The framework developed in this paper applies a LightGBM LambdaRank ranker (Burges, 2010; Ke et al., 2017) to a cross-section of nine candidate strategies in the S&P 500 weekly options (SPXW) zero-day-to-expiration (0DTE) market. Eight of the candidates are delta-targeted short-put positions spaced across the put wing of the volatility surface, and the ninth is a SKIP candidate that allows the ranker to express a zero-position day. A confidence gate sits between the ranker’s daily pick and the executed position and abstains on days when the ranker has low conviction in its top candidate. Seven independent sizing methods are evaluated in parallel under explicit margin, fee, and execution-cost assumptions. The evaluation comprises a four-window expanding-cycle walk-forward over 2021–2024, followed by a strictly held-out 2025 out-of-time slice that is never used during training, hyperparameter search, or model selection. To the best of our knowledge, this is the first end-to-end integration of cross-sectional learning-to-rank on the SPXW 0DTE option surface with margin-aware sizing, abstention under model uncertainty, and a strict out-of-time integrity check. The empirical claims of this paper are organized around three hypotheses. • Hypothesis 1 (H1): A LambdaRank ranker over a cross-section of delta-targeted SPXW short-put strategies, trained on a path-aware Sortino-on-bars label and combined with an abstention gate, produces risk-adjusted returns that exceed those of passive short-volatility benchmarks (CBOE PUT, CBOE WPUT, SPX buy-and-hold) and a panel of internal selection baselines, and the advantage survives explicit margin requirements, fee schedules, and slippage stress on a 2025 out-of-time hold-out. • Hypothesis 2 (H2): The strategy’s return is regime-conditional, rising with the level of realized volatility and peaking in the mid range of implied volatility, and the realized-volatility component of this conditioning transfers from the walk-forward training period (2021–2024) to the out-of-time hold-out (2025). • Hypothesis 3 (H3): Engineered multiplicative interactions of per-strategy exposures with volatility-state regime variables carry a substantial part of the walk-forward ranking signal. Removing these interaction features collapses walk-forward statistical confidence. On the 2025 out-of-time slice, the seven sizing methods produce annualized Sharpe ratios between 4.31 and 5.76 , exceeding every external benchmark and internal selection baseline by at least 3.69 in Sharpe ratio, consistent with H1. The headline strategy’s sample-period maximum drawdown is −2.28% . Regime-conditional annualized return rises monotonically across realized-volatility terciles on the out-of-time slice for six of the seven methods, consistent with H2, while the Sharpe ratio does not follow the same ordering. A fifteen-group feature ablation shows that removing the multiplicative regime-conditional interactions collapses walk-forward statistical confidence, consistent with H3, while out-of-time Sharpe degrades only modestly. The two-by-two ablation of the confidence gate against the tail-risk features places almost all of the out-of-time Sharpe gap over the CBOE PUT benchmark with the ranker and the selection layer, the two risk controls adding 0.54 between them. On the walk-forward slice, where the gate binds, the features alone lower Sharpe, the gate alone adds little, and the two together account for most of what is recorded there. The remainder of this paper is organized as follows. Section 2 surveys the related literature on the volatility risk premium, on machine-learning applications to option markets, and on 3learning-to-rank in cross-sectional asset selection. Section 3 sets out the LambdaRank model, the path-aware ranking target, the per-window feature selection pipeline, the confidence gate, and the position-sizing layer. Section 4 describes the SPXW options dataset and the feature engineering process. Section 5 reports the empirical results across the walk-forward and out-of-time slices. Section 6 presents the sensitivity, ablation, and execution-drag analysis. Section 7 decomposes the headline result into its component contributions and discusses the economic interpretation. Section 8 summarizes the findings against the three hypotheses and discusses the paper’s contributions and limitations. 
+
+# 2 Literature Review 
+
+The profitability of systematic short S&P 500 put strategies is rooted in the “overpriced puts puzzle” and the variance risk premium. Bondarenko (2014) documents that historical SPX put prices were significantly overpriced and produced large negative returns for buyers, a pattern that standard equilibrium models fail to reproduce. The overpricing is substantially explained by a persistently negative variance risk premium, that is, investors pay a premium to insure against increases in market volatility (Carr and Wu, 2009). Patel et al. (2024) empirically associate the excess returns of cash-secured put-write (PUTW) strategies with this VRP and interpret the premium as compensation for bearing disaster risk. Broadie et al. (2009) argue, in contrast, that the apparent mispricing is largely attributable to finite-sample noise and jump risk, and that explicit modeling of extreme tail risk is essential for any short-volatility strategy. Although passive benchmark indices such as the CBOE PUT have historically captured the VRP and generated long-term positive returns, as documented by Black and Szado (2022) and Ungar and Moran (2009), these static rules are capital-inefficient and produce uneven returns. Burrello et al. (2024) report that dynamically adjusting strike prices is associated with more consistent income and a more stable risk profile than fixed-strike short-put strategies. Capturing the VRP requires modeling a dynamic implied volatility surface. Cont and da Fonseca (2002) show that IV surfaces evolve through multi-factor dynamics in level, skew, and convexity, which motivates models capable of representing nonlinear interactions rather than purely static shifts. The surface also changes substantially during crises: Constantinides et al. (2013) argue that severe tail risks, such as market jumps and volatility spikes, account for the bulk of short-put pricing errors. Consistent with this view, Andersen et al. (2015) identify a left-tail jump factor in the SPX option surface that is not explained by market volatility alone but is essential for forecasting future risk premia. Furthermore, Da Fonseca and Xu (2019) report that the VIX itself contains separate variance and skew risk premiums. Predictive signals are central to timing short-put exposures. Malkiel et al. (2018) document that conditioning short-put entry on the level of the VIX is associated with higher absolute returns and lower downside risk. The shape of the volatility term structure is also informative: Vasquez (2017) reports that its slope predicts the cross-section of future option returns. Sheu and Wei (2011) show that adding investor-sentiment proxies, such as the VIX, improves both volatility forecasts and trading profitability. Tannous and Lee-Sing (2008) analyze theta decay under jump-diffusion dynamics and find that deterministic theta curves are misleading in realistic price paths. 4An important limitation of the existing option-strategy literature is that it typically abstracts from practical implementation constraints. Santa-Clara and Saretto (2009) show that margin requirements impose a binding limit to arbitrage and force investors to liquidate positions at substantial losses precisely during sharp market declines. Do et al. (2016) and Hong et al. (2018) further report that the theoretical Sharpe ratios of short-volatility strategies largely vanish once bid-ask spreads and margin rules are taken into account. Standard mean-variance optimization is inadequate for option portfolios. Faias and Santa-Clara (2017) argue that expected-utility frameworks, such as Kelly-type sizing, are necessary to size positions dynamically and to accommodate extreme tail risk. Israelov and Tummala (2017) show that sizing positions to loss capacity under stress scenarios is a more informative risk measure than return volatility alone. Schwalbach and McClelland (2018) argue for 30-day OTM puts, but their fully collateralized constraint nearly eliminates absolute returns, which is the capital inefficiency that explicit margin modeling can address. To navigate these changing market regimes, recent research has increasingly turned to machine learning. Gunnarsson et al. (2024) report in their systematic review that tree-based ensemble methods such as LightGBM often outperform traditional econometric models for volatility prediction. Huang et al. (2020) show that shallow econometric models cannot capture the non-stationary dynamics of option pricing, which motivates the use of richer nonlinear architectures. Within supervised machine learning, learning-to-rank is the formulation closest to the cross-sectional strategy-selection problem studied in this paper. Learning-to-rank (LTR) algorithms are well matched to cross-sectional asset selection and outperform standard classification or regression on this task. Duan and Kashima (2021) and Poh et al. (2021) report that LTR models improve ranking accuracy because they directly optimize the relative ordering of assets rather than absolute return predictions. The advantage grows with the heterogeneity of the input data, as documented by Wu et al. (2024) and Song et al. (2017). Extending LTR to long-short portfolio construction requires loss functions designed for that purpose. Linger et al. (2025a) and Zhang et al. (2022) argue for tailored loss functions such as ListFold and ListMLE-weighted, which give symmetric weight to the top and the bottom of the ranking rather than only the top. Recent frameworks in Linger et al. (2025b) and Barak et al. (2025) combine LTR rankings with dynamic portfolio weighting and sizing and report higher risk-adjusted returns than each component in isolation. These integrated LTR frameworks have, however, been developed and tested almost entirely on equity cross-sections, not on the option surface. The volatility risk premium has been studied extensively, and LTR algorithms have per-formed well in equity applications, yet existing work has rarely integrated these strands. Theoretical option-pricing studies typically abstract from margin limits and execution con-straints, while ML and LTR research has paid little attention to the non-stationary volatility surface of S&P 500 Index options. This paper addresses that gap by applying a LightGBM LambdaRank model directly to the SPX option surface. The model ranks strategies on regime features and is evaluated under explicit margin constraints, fee schedules, and dynamic sizing rules, so that the reported returns are net of the modeled frictions. 53 Methodology 
+
+The framework’s purpose is to identify, on each rebalancing day t, the single SPXW short-put strategy whose risk-adjusted forward return over the trading day is expected to be highest. The framework does not attempt to predict each candidate’s absolute point return, which is a noise-dominated task in short-horizon financial time series. The selection problem is instead formulated as a learning-to-rank problem in the sense of Burges (2010). A scoring function is trained to order candidates by relative quality on each day, not to estimate each candidate’s expected return on an absolute scale. Let S denote the parameterized universe of nine candidate strategies, defined in Section 3.1 as eight delta-targeted short puts and a SKIP option. At each trading day t, the candidate set Ct = S is refreshed by re-resolving each delta target to its closest-matching strike on the SPXW chain. A scoring function f (xs,t ) assigns a real-valued relevance score to each 
+
+s ∈ Ct from the candidate’s feature vector xs,t . Capital is then allocated to the highest-scoring candidate, s⋆t = arg max s∈Ct f (xs,t ), with the abstention overlay detailed in Section 3.5 acting between the score and the final position size. 
+
+## 3.1 Universe of Options Subject to Ranking 
+
+On every trading day at 10:00 ET, the ranker faces a candidate set of nine alternatives: eight short SPXW put positions, one per delta bucket, and a SKIP option, which is the choice not to trade. The eight delta targets are 
+
+∆tgt ∈ { 0.05 , 0.10 , 0.15 , 0.20 , 0.25 , 0.30 , 0.40 , 0.45 }, (1) spaced at 0.05 through the out-of-the-money wing, with a single wider step between 0.30 
+
+and 0.40 as the strike approaches the at-the-money forward. The grid is constructed this way because the volatility risk premium expressed in SPX put prices is concentrated in the OTM wing. The model, therefore, needs finer resolution in the region where the strike-quality decision is most sensitive. The candidate set is put-only. Bondarenko (2014) and Israelov and Klein (2016) document an asymmetric variance risk premium in SPX index options: put writers earn a larger expected return per unit of risk than call writers, because put buyers pay for crash insurance whose statistical-loss profile differs from the upside-participation profile call buyers seek. The carry profiles also differ. A short put benefits from the unconditional positive drift of the index. A short call absorbs that drift, so calls expire in the money more frequently than the probability implied by the option’s own volatility quote would suggest. We tested an all-options variant of the same architecture during the trial phase, and the calls leg was a consistent drag on performance across sizing methods. The presented configurations, therefore, restrict the candidate set to puts. The SKIP option is a synthetic ninth candidate carrying a fixed score of zero, and zero gross profit and loss by construction. SKIP enables the model to abstain on days when no candidate strike is more attractive than not trading at all. Including SKIP in the ranker turns the per-day decision from which strike to sell into whether to sell at all and which one , which is the economically appropriate framing for a strategy whose edge is regime-conditional rather 6than uniform. The SKIP row enters the LambdaRank label assignment with a fixed score of zero rather than a graded outcome of its own. The model then learns to rank SKIP above unattractive strikes and below attractive ones. The expiration choice is deterministic. Each day the universe resolver scans the SPXW chain and selects the shortest available DTE. What that rule returns depends on the listing calendar. SPXW carried Monday, Wednesday, and Friday expirations from the start of the sample and added Tuesdays on 18 April 2022 and Thursdays on 11 May 2022 (Chicago Board Options Exchange, 2022), so the rule returns a same-session expiry on 62 .0% of trading days over 2018 to 2021, on 87 .2% in 2022, and on every trading day from 2023 onward. On the remaining days it returns a one-day expiry, and no day in the sample resolves to a tenor longer than one session. The walk-forward test years 2023 and 2024 and the 2025 out-of-time slice therefore consist entirely of same-session contracts, while the earlier training windows and the 2021 test year mix same-session and one-day expiries in roughly three to two. Every listed SPXW strike for the selected expiration is eligible. The strike-selection criterion uses the Black–Scholes model with the effective federal funds rate (EFFR) as the risk-free rate. For each delta target ∆tgt , the resolver picks the strike that minimizes 
+
+|∆BS (K)| − ∆tgt , (2) where ∆BS (K) is the Black–Scholes put delta evaluated at strike K using the implied volatility recovered from the 10:00 ET option mid quote. Time to expiration τ is measured in trading time on the NYSE calendar. The same Black–Scholes model supplies the option Greeks consumed by the downstream feature pipeline and the position-sizing layer. The selected position is held to expiration and closed against the official PM cash settlement. The day’s gross profit and loss for a short put position is P&L gross = Q · multiplier ·  pentry − max( K − Ssettle , 0) , (3) where pentry is the per-share entry premium received, Q is the contract count selected by the sizing layer, and the SPXW multiplier is 100. 
+
+## 3.2 Ranking Target Construction 
+
+The ranker is trained against a per-day per-strategy score that reflects both realized premium collection and intraday drawdown stress. The score is constructed in four steps: per-bar profit-and-loss, aggregation into a Sortino-on-bars score, SKIP injection, and ordinal binning into LambdaRank grades. For each strategy s on each trade date t, the position is tracked at one-minute resolution from 10:00 ET entry through PM settlement. The mark series is mark =  pentry , a 1, a 2, . . . , a N −1, max( K − Ssettle , 0) , (4) where pentry is the entry premium received, ai is the option ask price at bar i, and the terminal mark is replaced by the settlement intrinsic. Marking intermediate bars to the ask follows the cost-to-close convention for a short position. At any intraday point, the position is valued at 7the price one would pay to buy it back, which is the most conservative intraday valuation for a writer. The per-bar profit-and-loss is 
+
+∆pi = mark i−1 − mark i, (5) positive when the mark falls (favorable for the short) and negative when the mark rises. The bar series telescopes to the trade-level gross P&L, P 
+
+> i
+
+∆pi = pentry − max( K − Ssettle , 0) , so the bar-level decomposition does not change the trade-level outcome but does expose the intraday path. The day’s score is the ratio of trade-level gross P&L to a path-aware downside measure: 
+
+ss,t = GrossPnL s,t 
+
+TDD s,t + ε , TDD s,t =
+
+sX
+
+> i
+
+min(∆ pi, 0) 2, (6) where GrossPnL s,t = P 
+
+> i
+
+∆pi is the per-trade gross profit-and-loss, TDD s,t is the trade down-side deviation aggregated only over negative bar moves, and ε = 10 −8 guards the ratio numerically. The numerator rewards strategies that finish the day profitably. The denominator penalizes strategies that arrive at the same terminal payoff through a stressed intraday path. Two candidates with identical terminal P&L but different drawdown profiles therefore receive different scores, so the model learns to rank strategies on realized path quality and not on terminal outcome alone. For each trade date t, one SKIP row is appended to the score panel with s0,t = 0 by construction. The fixed-zero score places SKIP in the second-lowest of the five grade bands in every training window. The ranker therefore grades SKIP above the worst-scoring decile of candidates and below any candidate scoring above the fortieth percentile. The SKIP row is excluded from the percentile computation when the binning thresholds are derived in the next step, so its synthetic score does not distort the empirical CDF that defines the grade boundaries. The continuous score is mapped to an integer grade gs,t ∈ { 0, 1, 2, 3, 4} through four absolute thresholds derived once per walk-forward training window from the empirical score distribution of non-SKIP candidates: 
+
+θp = Quantile p
+
+
+
+{ sj,t : j̸ = 0 , t ∈ T train }
+
+
+
+, p ∈ { 10 , 40 , 60 , 90 }. (7) The grade assignment is 
+
+gs,t =
+
+
+
+4 if ss,t > θ 90 
+
+3 if θ60 < s s,t ≤ θ90 
+
+2 if θ40 < s s,t ≤ θ60 
+
+1 if θ10 < s s,t ≤ θ40 
+
+0 if ss,t ≤ θ10 .
+
+(8) The percentile spacing {10 , 40 , 60 , 90 } produces target grade frequencies of {10%, 30%, 20%, 30%, 10%} in expectation on the training slice. The distribution places most of its mass in the two intermediate grades and least at the tails, which matches the LambdaRank objective’s emphasis on the top of the rank list. The thresholds are absolute and frozen at training time, so the same boundaries apply at inference regardless of the score distribution observed on any individual prediction day. 83.3 Feature Selection Pipeline 
+
+Market regimes exhibit material non-stationarity, and a feature that is informative during a low-volatility regime can be uninformative during a stress event. To address this, the framework retrains the LambdaRank model at every walk-forward step and runs an independent feature selection pipeline inside each training window, before hyperparameter tuning. Running the pipeline per window prevents look-ahead leakage from later periods into earlier-window selections, and the cross-window survival of features is itself reported in Section 7.2 as a regime-stability diagnostic. The pipeline (Algorithm 1) has five stages. Stages S1 and S2 are unsupervised data-quality filters. Stage S3 is a univariate target-relevance filter scoped differently for cross-sectional and per-strategy features. Stage S4 clusters correlated features at the Spearman threshold 
+
+|ρ| ≥ 0.85 , picks a deterministic representative per cluster, and then enforces per-group survivor caps that prevent any single economic block from dominating the feature set. Stage 
+
+S5 is a temporal-stability filter that re-runs stages S1-S4 on three expanding sub-windows of the training data and keeps features surviving in at least two of three sub-windows. Two design choices in the pipeline merit explicit comment because they shape the headline result. First, the S3 relevance score is scoped differently for cross-sectional and per-strategy features. Cross-sectional features take one value per trading day, so their relevance is computed cross-day against the day-mean label. Per-strategy features vary across the eight delta-bucket candidates plus SKIP within a single day, so their relevance is computed as the median across training days of the within-day Spearman rank correlation between f and y. The per-strategy formulation matches the within-day discriminative signal that the LambdaRank objective exploits, and prevents cross-day variation from masking economically meaningful within-day signal. Second, the S4 per-group survivor caps prevent the largest catalog group, the 53-feature implied-volatility surface, from displacing smaller but economically distinct groups on raw relevance grounds. Without the caps, the surface would be expected to supply most of the surviving features, leaving little room for morning-session, intra-strategy, or entry-liquidity blocks that carry information the surface alone does not. The cap values used are position 
+
+= 8, vol_surface = 4, vix = 6, calendar = 8, and a default of 5 in each remaining group. They are set by the relative size of each catalog group and are not separately tuned. The S5 stability filter operates inside one training window: it partitions the training dates into three expanding-time folds, re-runs stages S1-S4 on each, and retains a feature only if it survives in at least two of the three folds. This is structurally different from the cross-walk-forward feature-survival statistic. That statistic is computed across the four walk-forward windows and the out-of-time window, while S5 is computed inside each one before any other window is observed. After the pipeline returns the final feature subset for a given walk-forward window, hy-perparameter tuning is run on that subset within the same window: 50 Optuna trials with the Tree-structured Parzen Estimator sampler (Akiba et al., 2019), optimizing NDCG@1 on a 6-month inner-validation slice held out from the end of the training window. The se-quence of feature selection followed by hyperparameter tuning is repeated independently for every walk-forward boundary, so each window’s final model is both feature-selected and 9Algorithm 1 Per-window feature selection pipeline (S1–S5). 
+
+Require: Training-window feature matrix X, labels y, scope map scope : F → { CS , PS },group map group : F → G 
+
+Ensure: Selected feature subset Ffinal  
+
+> 1:
+
+F ← candidate features (approximately 190) 
+
+S1. Null filter  
+
+> 2:
+
+for each f ∈ F do  
+
+> 3:
+
+drop f if NullRate train, real (f ) > 0.30  
+
+> 4:
+
+end for S2. Variance and quasi-constant filter  
+
+> 5:
+
+for each f ∈ F do  
+
+> 6:
+
+drop f if Var (f ) < 10 −6 or ModeFreq (f ) > 0.99  
+
+> 7:
+
+end for S3. Target-relevance filter  
+
+> 8:
+
+for each f ∈ F do  
+
+> 9:
+
+if scope (f ) = CS then  
+
+> 10:
+
+ρ(f ) ← Spearman  ft, ¯yt
+
+ across training days  
+
+> 11:
+
+else  
+
+> 12:
+
+ρ(f ) ← median t Spearman  f·, t , y ·, t 
+
+ within day  
+
+> 13:
+
+end if  
+
+> 14:
+
+drop f if |ρ(f )| < 0.05  
+
+> 15:
+
+end for S4. Correlation clustering and per-group caps  
+
+> 16:
+
+Build a within-scope Spearman correlation matrix; cluster features at |ρij | ≥ 0.85  
+
+> 17:
+
+for each cluster C do  
+
+> 18:
+
+keep the feature with the largest |ρ(f )| from S3 , with ties broken by catalog-group priority, then by data quality, then by feature name  
+
+> 19:
+
+end for  
+
+> 20:
+
+for each group g ∈ G do  
+
+> 21:
+
+cap at cg: position 8, vol_surface 4, vix 6, calendar 8, default 5; drop the lowest-|ρ| representatives in over-cap groups  
+
+> 22:
+
+end for S5. Stability filter  
+
+> 23:
+
+Partition the training window into K = 3 expanding-time folds  
+
+> 24:
+
+Run stages S1-S4 on each fold; let s(f ) ∈ { 0, . . . , K } count fold survival  
+
+> 25:
+
+drop f if s(f ) < 2 
+
+> 26:
+
+return Ffinal 
+
+hyperparameter-tuned only on data that ends strictly before its prediction year. 10 3.4 Model Architecture and Optimization 
+
+The ranker is a LightGBM gradient-boosted decision-tree model trained under the LambdaRank objective (Burges, 2010; Ke et al., 2017). The LambdaRank objective treats learning to rank as a pairwise problem. For each pair of differently-graded candidates in a query group, the gradient applied to that pair is scaled by the change in NDCG (Normalized Discounted Cumulative Gain) that would result from swapping the two candidates’ positions in the predicted ranking. The resulting implicit cost function approximates direct NDCG optimization without requiring a closed-form differentiable surrogate. Tree-based gradient boosting frameworks have been reported to outperform standard econometric baselines on short-horizon volatility and option-related prediction tasks (Gunnarsson et al., 2024). This evidence motivates the choice of LightGBM over linear or shallow-network alternatives for the candidate-ranking problem at hand. A subset of LightGBM parameters is held fixed throughout. The objective is lambdarank. The evaluation metric is NDCG, reported at NDCG@1 and NDCG@3. The truncation level restricts the gradient computation to the top 5 positions of each ranked group, so the optimiza-tion focuses on the head of the rank list. The boosting type is gradient-boosted decision trees (GBDT). The LambdaRank gain weights associated with the five grades are  
+
+> label_gain
+
+= [ 0 , 1, 3, 7, 15 ] . (9) The geometric progression places super-linear emphasis on the top grade, so that the ranker’s loss is dominated by errors at the rank-1 position. The per-day decision is a single-pick problem: only the top-ranked candidate is acted on, so improvements that move a grade-3 candidate ahead of a grade-2 candidate at rank 5 contribute negligibly to the loss, while a single rank-1 misallocation is heavily penalized. LightGBM’s LambdaRank objective requires a query-group structure that delineates the candidate sets used for pairwise ranking comparisons. One query group is defined per trading day, so each group contains the day’s nine candidates: eight delta-targeted short puts and SKIP .Grouping by trade date keeps the pairwise comparisons within the cross-section of strategies competing for that day’s allocation, which is the economically appropriate unit of ranking. The model ranks candidates within a day rather than across days, because the cross-day dimension is dominated by regime-level noise rather than by within-day strike-quality information. The remaining parameters are tuned per walk-forward window using Optuna’s Tree-structured Parzen Estimator sampler (Akiba et al., 2019). The search runs 50 trials per window. The search space is reported in Table 1. Within each walk-forward training window, hyperparameter search and final model refit draw their validation slices from the end of the ranker’s training data. The ranker does not see the whole window. Its final 6 months are reserved for calibrating the confidence gate (Section 3.5) and are withheld from feature selection and from ranker training alike. The search slice is the last 6 months of what remains. Each Optuna trial samples a hyperparameter configuration, trains a candidate booster on the data preceding that slice, and returns the candidate’s NDCG@1 on the slice as the optimization objective. After 50 trials, the best-found hyperparameters are committed. The final model is then refit with those hyperparameters, with the last 3 months held back for early stopping. 11 Table 1. Hyperparameter search space for LightGBM LambdaRank. 
+
+Hyperparameter Search space Sampling 
+
+Number of leaves [16 , 256] log Learning rate [0 .01 , 0.10] log Minimum samples per leaf [20 , 200] log Subsampling fraction [0 .5, 1.0] uniform Row subsampling fraction [0 .5, 1.0] uniform Bagging frequency {0, 1, . . . , 10 } integer uniform L1 regularization ( λ1) [10 −3, 10] log L2 regularization ( λ2) [10 −3, 10] log Boosting rounds up to 2000 , early stopping –       
+
+> Note: Hyperparameters are re-tuned at each walk-forward retraining boundary by the Optuna Tree-structured Parzen Estimator (TPE) sampler (Akiba et al., 2019). The search runs 50 trials per window. Boosting rounds are bounded above at 2000 and resolved by early stopping with 50 rounds of patience on the most recent three months of the inner-validation slice. The search objective is NDCG@1 on the held-out inner-validation slice.
+
+The early-stopping slice is therefore the more recent half of the search slice rather than a separate period. The split addresses the inner-validation overfitting that arises when a single slice is used both for hyperparameter selection and for early stopping in time-series settings. Hyperparameters chosen to maximize an objective on a slice tend to overfit that slice, so re-using the whole of it for early stopping compounds the overfit. Restricting early stopping to the more recent 3 months limits the compounding without removing it, because those observations also entered the search objective. 
+
+## 3.5 Inference-Time Decision 
+
+A model-free overlay sits between the LightGBM ranker’s per-day predictions and the final position size. It is calibrated on training-window data and applied unchanged at inference. For each day t, the ranker emits a real-valued score per candidate. The confidence signal is the gap between the top-1 and top-2 scores, 
+
+∆ˆ yt = ˆ y(1) ,t − ˆy(2) ,t , (10) which captures how strongly the ranker prefers its first pick over the next-best alternative. Within each training window, a per-window threshold τ ⋆w is chosen on the last 6 months of the training data (the held-out gate-calibration slice) by maximizing the Sortino ratio of the implied top-1 NetPnL series across a grid of candidate τ values. At inference, the gate abstains on day t whenever ∆ˆ yt < τ ⋆w for the active walk-forward window w. The sizing layer then treats the day as a SKIP and assigns Qt = 0 .A forced-prediction model discards information when it emits an uncertainty signal. The LambdaRank score gap top1 - top2 is exactly such a signal, it measures how decisively the model separated its top pick from the next-best alternative. Geifman and El-Yaniv (2017) formalize this result. A classifier with a controlled abstention region can dominate its forced-predict 12 counterpart on calibration-aware metrics. The gate is a domain-specific realization of that result for a ranker. A near-tie at the top of the ranking corresponds to days on which no candidate strike carries a particularly attractive VRP. That indifference is consistent with a surface that is roughly fair across deltas. Trading those days pays the realization cost (half-spread, fees, occasional tail loss) without compensating expected return. The gate converts the model’s own measured uncertainty into a decision not to trade, retaining information that a rule selecting the top-ranked candidate unconditionally would discard. Sortino penalizes downside variability only, so the objective biases τ toward aggressively abstaining on days dominated by negative-skew realizations. That is consistent with the asymmetric loss profile of short-put writing, whose relevant risk is the left tail. A globally fixed τ would be expected to bind unevenly across volatility regimes. Per-window τ instead re-fits on each window’s own hold-out, and the calibrated trade rate ranges from 30.6% (2023) to 100% (2021 and 2025). The variation in caution emerges from the hold-out calibration rather than being imposed. 
+
+## 3.6 Walk-Forward Backtesting Simulation 
+
+A common shortcoming in volatility-trading research is the presentation of theoretical returns that overlook market frictions. Reported short-option profits are routinely overstated when margin requirements, bid-ask spreads, and exchange fees are not modeled (Hong et al., 2018; Santa-Clara and Saretto, 2009). To address this, every reported daily profit-and-loss in this paper applies (i) the Reg-T put-margin model 1, (ii) the tiered fees schedule defined according to the Interactive Brokers fees 2, and (iii) entry fills at the bid-ask midpoint (50% spread coverage), with the execution sensitivity of Section 6.4 probing the impact of less favorable fills. Position sizing is delegated to the calibrated sizing layer of Section 3.7, whose free parameter is re-fit on each walk-forward training window. The model is fit and re-fit on a four-window expanding walk-forward (WF) plus a one-window out-of-time (OOT) hold-out. The schedule is summarized in Table 2. Table 2. Walk-forward and out-of-time schedule. 
+
+Window Training years Prediction year 
+
+WF 1 2018–2020 2021 WF 2 2018–2021 2022 WF 3 2018–2022 2023 WF 4 2018–2023 2024 OOT 2018–2024 2025              
+
+> Note: The initial training window covers 3calendar years ( 2018 –2020 ), so that every training set contains at least one significant volatility-spike episode (the February 2018 Volmageddon episode, the Q4 2018 selloff, and the March 2020 COVID stress). Retraining cadence is 12 months. Year 2025 is held entirely out of every walk-forward fit and serves as a single-shot integrity check against the rest of the design.
+> 1See: Interactive Brokers Margin Requirements for more information.
+> 2See: Interactive Brokers Commissions.
+
+13 The expanding-window construction grows the training set by one year at each retraining boundary, so the WF 4 training set ( 2018 –2023 ) is a strict superset of the WF 1 training set (2018 –2020 ). At each retraining boundary, the full procedure is repeated on the new training data. Feature selection is re-run, the Optuna search re-tunes the LightGBM hyperparameters, the model is refit, the confidence-gate threshold τ ⋆ is recalibrated on a held-out slice (Sec-tion 3.5), and the per-method sizing parameter θ⋆ is re-fit by single-parameter grid search (Section 3.7). No information from a future year leaks into a past year’s model. The annual retraining cadence is the main configuration on bias-variance grounds, and the sensitivity to a 
+
+2-year initial training window is reported in Section 6. The single-shot OOT prediction in 2025 is the integrity check on the entire pipeline. The model trained on 2018 –2024 is used to predict every trading day of 2025 without further retraining or hyperparameter search. The day-by-day evaluation loop is summarized in Algorithm 2. Phase A repeats the entire training stack at each retraining boundary. Phase B walks forward through the out-of-sample days in the active window, generating one P&L observation per trading day under the headline configuration (model picks, margin cap, and tiered exchange fees). The architecture in Algorithm 2 approximates a live production environment under con-servative friction assumptions. The model’s information set grows monotonically across walk-forward boundaries, so the LightGBM ranker, the gate calibration, and the sizing cali-bration all adapt to evolving market microstructure and volatility regimes without temporal leakage. NAV is chained across windows by passing NAV Tw from the close of window w as the starting NAV of window w + 1 , so the reported equity curve is continuous over 2021 –2025 
+
+rather than reset at each retraining boundary. 
+
+## 3.7 Position Sizing 
+
+The sizing layer maps a daily prediction stream into a daily contract count Qt through one of seven candidate methods. Each method takes the gate-cleared top-1 strategy, the equal-volatility calibration objective, and the trade-day’s universe data, and returns a non-negative integer contract count. The seven methods share a common scaffold: each is parameterized by exactly one free scalar θ, fitted per walk-forward window. They differ only in how θ and the day’s data combine to produce the desired pre-cap contract count Qdes  
+
+> t
+
+. The margin cap and tiered fee schedule are applied identically across methods (Algorithm 2). 
+
+3.7.1 Margin, Fees, and Calibration Objective 
+
+Every short put incurs an upfront margin requirement under the Reg-T schedule 3. For an SPX short put with entry premium Pt, underlying spot St, and strike K, the per-contract margin is 
+
+Mt = 100 ·
+
+h
+
+Pt + max  0.15 St − max(0 , S t − K), 0.10 K i
+
+, (11) where max(0 , S t − K) is the put’s out-of-the-money amount. 
+
+> 3See Interactive Brokers Margin Requirements for the full schedule.
+
+14 Algorithm 2 Walk-forward backtesting simulation. 
+
+Require: Universe panel U over T trading days, walk-forward schedule W, sizing method 
+
+M, sizing configuration Csize  
+
+> 1:
+
+Initialize NAV 0 ← C size initial capital ( $5 ,000 ,000 )
+
+Phase A: Per-window training and calibration.  
+
+> 2:
+
+for each window w ∈ W do  
+
+> 3:
+
+Fw ← feature selection on the training years of w (Algorithm 1)  
+
+> 4:
+
+Φw ← Optuna search over 50 trials on the inner-validation slice of w 
+
+> 5:
+
+fw ← refit LightGBM ranker with Φw on the training window, excluding the 6-month gate hold-out and a final 3-month early-stopping slice  
+
+> 6:
+
+τ ⋆w ← calibrate confidence-gate threshold on the held-out slice (Section 3.5)  
+
+> 7:
+
+θ⋆w ← single-parameter grid search to minimize σtrain (θ) − 0.16 for M 
+
+> 8:
+
+end for 
+
+Phase B: Daily out-of-sample loop.  
+
+> 9:
+
+for day t = 1 to T do  
+
+> 10:
+
+w ← active walk-forward window for day t 
+
+> 11:
+
+ˆy·,t ← fw(x·,t ) over the day’s nine candidates  
+
+> 12:
+
+s⋆t ← arg max s ˆys,t , with confidence ∆ˆ yt = ˆ y(1) ,t − ˆy(2) ,t  
+
+> 13:
+
+if s⋆t = SKIP or ∆ˆ yt < τ ⋆w then  
+
+> 14:
+
+Qt ← 0, NetPnL $ 
+
+> t
+
+← 0 
+
+> 15:
+
+else  
+
+> 16:
+
+Mt ← per-contract Reg-T put margin  
+
+> 17:
+
+Qdes  
+
+> t
+
+← M (s⋆t , θ ⋆w, NAV t−1, Csize ) 
+
+> 18:
+
+Qt ← min  Qdes  
+
+> t
+
+, ⌊NAV t−1/M t⌋ ▷ margin cap  
+
+> 19:
+
+Gross t ← Qt · NetPnL (share ) 
+
+> t
+
+· 100  
+
+> 20:
+
+Fees t ← F (Qt, p entry ,t ) 
+
+> 21:
+
+NetPnL $ 
+
+> t
+
+← Gross t − Fees t 
+
+> 22:
+
+end if  
+
+> 23:
+
+NAV t ← NAV t−1 + NetPnL $ 
+
+> t
+> 24:
+
+end for 
+
+The contract count is capped at the maximum the current NAV can collateralize, Qt ≤⌊NAV t−1/M t⌋. The cap is rarely binding under the headline configuration because the equal-volatility calibration produces target utilization well below the cap on most days. Entry-only fees follow the IBKR index-options tier:  
+
+> fee_per_contract
+
+=
+
+
+
+$0 .25 if Pt < $0 .05 $0 .50 if $0 .05 ≤ Pt < $0 .10 $0 .65 if Pt ≥ $0 .10 ,
+
+(12) with a $1 .00 minimum total fee per non-empty trade. SPXW 0DTE positions are held to PM cash settlement, so no exit fee applies in such a case. For every method, the free parameter θ is selected by single-parameter grid search on the training window of each walk-forward fold. The headline objective is equal-volatility : pick the 15 θ⋆ that minimizes the deviation of the training-window NAV’s realized annualized volatility from the 16% risk anchor, 
+
+θ⋆ = arg min 
+
+> θ∈G M
+
+σtrain (θ) − 0.16 , (13) where GM is the per-method grid (Table 3) and σtrain (θ) is the annualized standard deviation of training-window daily NAV returns produced by running the full backtest at θ. Equal-volatility is intended to commit each method to the same target risk budget, so that cross-method Sharpe comparisons separate selection and shape differences from raw position-size differences. Two alternative objectives, sharpe-max and sortino-max , are reported as Section 6 sensitivities. Two qualifications apply to that intent. The first concerns what σtrain (θ) is computed on. The backtest that produces it runs on training-window predictions, which the ranker has already fitted, so the calibration inherits whatever optimism that fit carries. The direction of the effect is known: a better in-sample fit lowers training volatility, which raises θ⋆ and carries more leverage out of sample. The confidence gate avoids this by calibrating on a slice withheld from training (Section 3.5), and calibrating θ on an inner validation slice would be the consistent treatment. The second qualification is that the grid often binds before the anchor is reached. Across seven methods and five windows, θ⋆ settles on the largest value its grid allows in 24 of 35 cells, and the mean realized training volatility at θ⋆ is 0.139 against the 0.16 
+
+anchor, with a range of 0.081 to 0.165 . Where θ⋆ pins in this way the first channel cannot operate, since θ has no room to rise. For Edge Allocation the shortfall is structural rather than a matter of grid width, since matching the anchor would require umax between 1.07 and 1.58 
+
+in four of the five windows, and umax is a margin utilization fraction bounded above by one. The methods are therefore not placed on a common risk budget, in the training window or outside it, and cross-method Sharpe comparisons should be read as controlling for position size only in part. Realized volatility over the evaluation period, reported per method in Table 5, falls further below the anchor than the calibration does. 
+
+3.7.2 Sizing Methods 
+
+Fixed Margin Utilization (FMU) commits a constant fraction of NAV to margin every trading day, 
+
+Qdes  
+
+> t
+
+=
+
+fFMU · NAV t−1
+
+Mt
+
+
+
+, (14) with free parameter θ = fFMU ∈ (0 , 1) . FMU has no regime adaptation and is the baseline against which the other six methods are measured at the equal-volatility calibration point. Volatility Targeting (VT) replaces the constant-fraction rule with a dollar-volatility target. The per-contract dollar P&L volatility is approximated by the delta-based linearization 
+
+σ$,c t = |δt| · St · σintra ,5dt · 100 , (15) where σintra ,5dt is the 5-day realized intraday volatility of SPX. The day’s target dollar P&L volatility is 
+
+σ$,tgt  
+
+> t
+
+= fVT · σann 
+
+√252 · NAV t−1, (16) 16 with σann = 0 .16 . The contract count is 
+
+Qdes  
+
+> t
+
+=
+
+$
+
+σ$,tgt 
+
+> t
+
+σ$,c t
+
+%
+
+, (17) and θ = fVT is the per-day volatility-target multiplier. Short-Richness Scaling (SRS) ties per-day size to a 0DTE ATM IV richness measure that compares short-dated implied volatility against VIX9D, 
+
+Rt = σ0DTE ATM ,t 
+
+. VIX9D t
+
+100 , (18) where σ0DTE ATM ,t is the at-the-money-forward implied volatility on the 0DTE chain at 10:00 ET. The richness is normalized by its training-set median and capped at the training-set 95 th percentile, 
+
+St = min  Ctrain , max  1, Rt / median (Rtrain ) , (19) which floors the scale at 1 and prevents extreme richness readings from dominating sizing. The contract count is 
+
+Qdes  
+
+> t
+
+=
+
+fSRS · S t · NAV t−1
+
+Mt
+
+
+
+, (20) with θ = fSRS . The median and the cap are estimated once per training window and are not tunable. Edge Allocation (EA) ranks today’s IV-vs-RV edge against the empirical distribution of past edges rather than scaling on its raw level. The day’s edge of 0DTE ATM IV over annualized 5-day intraday realized volatility, 
+
+Et = σ0DTE ATM ,t − σintra ,5dt · √252 
+
+σintra ,5dt · √252 , (21) is mapped through the empirical CDF of the training-window edges, 
+
+ut = umax · bFE,train (Et), (22) producing a per-day margin-utilization fraction. The contract count is 
+
+Qdes  
+
+> t
+
+=
+
+ut · NAV t−1
+
+Mt
+
+
+
+, (23) with θ = umax ∈ (0 , 1) . EA is the headline sizing method (Section 5.2) and scales position size monotonically with the percentile rank of today’s edge in the training-window edge distribution. Gamma-Budgeted Sizing (GB) shifts the conditioning variable from the volatility surface to the position’s own Greeks. A scenario-loss bound caps per-trade exposure under a fixed adverse intraday move k, frozen at the training-set 95 th-percentile of daily maximum adverse moves. The per-contract Taylor-expansion scenario loss combines the linear and quadratic Greeks, 
+
+Lct =  |δt| · k · St + 12 |Γt| · (k · St)2 · 100 . (24) 17 The contract count is 
+
+Qdes  
+
+> t
+
+=
+
+bGB · NAV t−1
+
+Lct
+
+
+
+, (25) with θ = bGB , the fraction of NAV the budget is willing to lose if the scenario move materializes. The half-Kelly (HK) and quarter-Kelly (QK) variants size on the strategy’s own realized return distribution rather than on the option surface or position Greeks. Both apply the Kelly criterion (Kelly Jr., 1956; Thorp, 2008) to the per-trade return on margin, rct = NetPnL t ·100 / M t.A rolling 252 -day window of past per-day returns on margin is maintained at all times. The mean-variance Kelly fraction is 
+
+f ⋆t = ˆμrt
+
+ ˆσrt
+
+2 , (26) where ˆμrt and  ˆσrt
+
+2 are the rolling-window mean and variance. The fraction is fractional-Kelly-scaled and capped at the free parameter fCK ,
+
+ft = min  fCK , max(0 , α · f ⋆t ), (27) with α = 0 .5 for HK and α = 0 .25 for QK. The contract count is 
+
+Qdes  
+
+> t
+
+=
+
+ft · NAV t−1
+
+Mt
+
+
+
+. (28) The free parameter θ = fCK is the per-day cap on the deployed Kelly fraction. The two variants share a single calibration grid. The half- and quarter-Kelly multipliers α are not tunable and reflect the standard practitioner adjustments for parameter-estimation noise (Thorp, 2011). 
+
+3.7.3 Per-Method Calibration Grids 
+
+The single-parameter grid for each method is bounded by economic plausibility (e.g., fFMU ∈
+
+(0 , 1) ) and discretized at a step that produces a smooth σtrain (θ) curve under the equal-volatility objective. Table 3 reports the grids. Table 3. Per-method calibration grids for the equal-volatility objective. 
+
+Method Free parameter Grid 
+
+FMU fFMU {0.02 , 0.04 , . . . , 0.60 }
+
+VT fVT {0.1, 0.2, . . . , 2.5}
+
+SRS fSRS {0.02 , 0.04 , . . . , 0.50 }
+
+EA umax {0.05 , 0.10 , . . . , 0.80 }
+
+GB bGB {0.005 , 0.010 , . . . , 0.100 }
+
+HK, QK fCK {0.05 , 0.10 , . . . , 0.80 }           
+
+> Note: Grids are discretized in equal increments. The training-window backtest is run at every grid point. The point that minimizes |σtrain (θ)−0.16 |is committed as θ⋆for that walk-forward window. The HK and QK variants share the same grid. They differ only in the half- versus quarter-Kelly multiplier α∈ { 0.5,0.25 }applied inside the sizing formula.
+
+The sizing layer is therefore a composite function M : ( s⋆t , xt, θ ⋆w, NAV t−1) 7 → Qt
+
+that combines the chosen method, the per-window calibrated parameter, the day’s universe 18 data, and the running NAV into a single integer contract count. The seven methods explore distinct economic intuitions for what should govern position size (fixed margin draw, dollar-volatility target, IV-vs-RV richness, ATM-vs-VIX9D edge, Greek-budgeted scenario loss, or fractional Kelly on rolling returns), but operate under a common calibration discipline so that cross-method comparisons are interpretable. Without a common calibration, cross-method comparison conflates sizing-logic differences with risk-level differences, which is the role of the equal-volatility anchor of Equation (13). The 16% target reflects the long-run realized volatility of the SPX. The 2018–2020 training window contains the March 2020 COVID spike, so the in-sample realized volatility is approximately 21%. Anchoring to in-sample volatility would be expected to tilt sizing toward levels that anticipate continued elevated volatility. The long-run 16% anchor is insulated from volatility regimes specific to the training window. Sizing every method to that anchor would also place the strategies at the volatility of the buy-and-hold S&P 500, though the calibration does not reach it. Sensitivity analysis at additional targets of 12% and 20% is reported as a robustness check. 
+
+## 3.8 Strategy Performance and Risk Metrics 
+
+Evaluating a systematic short-volatility strategy requires both a baseline assessment of risk-adjusted profitability and an explicit treatment of the asymmetric, fat-tailed return distribution that premium-collection strategies typically generate. The out-of-sample performance of each ranked portfolio is evaluated against a suite of metrics that combines four canonical descriptors of return and risk, an asymmetric risk-adjusted ratio that targets the downside, and two probabilistic measures that account for distributional non-normality and multiple testing. The four descriptors are the Annualized Compounded Return (aRC), Annualized Standard Deviation (aSD), Maximum Drawdown (MD), and the Annualized Sharpe Ratio (SR) (Sharpe, 1994). Because short-volatility return distributions are negatively skewed and leptokurtic, the standard deviation underweights left-tail risk, so the Sharpe ratio overstates the realized compensation per unit of downside risk. To complement it, we report the Sortino ratio (Sortino and Price, 1994), which divides the annualized return by an annualized downside deviation rather than total volatility. To assess whether the realized Sharpe reflects a true Sharpe at or above the external benchmark rather than a sample-period or multiple-testing artifact, we use the Probabilistic Sharpe Ratio (PSR) of Bailey and Lopez de Prado (2012) and the Deflated Sharpe Ratio (DSR) of Bailey and Lopez de Prado (2014). The PSR converts the realized Sharpe into the probability that the true Sharpe exceeds an external benchmark given the observed sample skewness and kurtosis. Negative skewness and fat tails lower the PSR for a given point estimate. The DSR additionally deflates the benchmark by the expected maximum Sharpe under the null of Nt
+
+independently tested candidates, controlling for the multiple-configuration search reported in Section 3. The detailed mathematical expressions for all metrics used in this study, together with the Diebold–Mariano test used for benchmark comparisons, are provided in Appendix A. 19 4 Data 
+
+## 4.1 The S&P 500 Index and SPXW Options 
+
+The empirical analysis in this study uses minute-frequency price data on SPXW options written on the S&P 500 Index. The dataset includes 1-minute OHLC bars and intraday quote data, obtained directly from the Chicago Board Options Exchange (CBOE). SPXW options are European-style, cash-settled contracts on the S&P 500 that expire on every trading day. In contrast to standard SPX options, which use the open of the third Friday for AM settlement and cease trading the day before, SPXW contracts settle on the close of the expiration day (PM settlement) and remain tradable through that close. Settlement is in cash, computed as the difference between the strike and the closing level of the S&P 500, multiplied by a $100 contract multiplier 4.Two considerations motivate the use of SPXW contracts as the trading instrument. First, PM settlement combined with intraday tradability through expiration makes SPXW options well-suited to short-horizon volatility strategies that monetize close-to-expiry premium decay. Second, trading volume in the segment has expanded sharply, with a pronounced shift toward daily and zero-day-to-expiration (0DTE) cycles. This shift has been accompanied by deeper liquidity for the strategies analyzed in this paper (Andersen et al., 2017; Vasquez et al., 2025; Božović, 2025). The CBOE S&P 500 PutWrite Index (PUT) and the CBOE S&P 500 WeeklyPutWrite Index (WPUT) are the passive short-volatility benchmarks used in this paper. The PUT index reflects a continuous strategy of selling at-the-money one-month SPX puts on the third Friday of each month, holding the position to expiration, and rolling into the next monthly contract. The collateral is invested in zero-coupon U.S. Treasury bills with maturity matched to the option, so the index earns the corresponding T-bill yield on top of the option premium. The WPUT index applies the same construction to a weekly cycle, selling at-the-money SPX puts every Friday and rolling weekly. WPUT is therefore the closer passive analogue to the short-tenor SPXW writing strategies studied in this paper, although PUT is the longer-established of the two indices. Table 4. Summary statistics of daily log returns of the S&P 500 Index, VIX, CBOE PUT Index, and CBOE WPUT Index.                                                                           
+
+> Mean Median Std Dev (daily) Std Dev (ann) Skewness Excess Kurtosis Min Max MD VaR 95% CVaR 95% Autocorrelation (1) JB ADF LB(10) S&P 500 0.0005 0.0009 0.0124 0.20 -0.65 14.77 -0.1277 0.0909 -0.34 -1.83% -3.05% -0.15 18325*** -14.15*** 231.37***
+> VIX 0.0002 -0.0073 0.0810 1.29 1.40 8.88 -0.4424 0.7682 -0.86 -10.81% -15.23% -0.08 7321*** -18.62*** 26.45***
+> PUT 0.0003 0.0005 0.0089 0.14 -1.96 45.04 -0.1218 0.0903 -0.29 -1.16% -2.31% -0.26 170315*** -14.04*** 400.51***
+> WPUT 0.0001 0.0007 0.0084 0.13 -1.90 31.52 -0.1014 0.0836 -0.26 -1.28% -2.34% -0.20 83857*** -14.32*** 206.85***
+
+Note: The dataset spans from January 1, 2018 to December 31, 2025. Logarithmic returns were computed based on daily closing prices. The column MD contains the Maximum Drawdown statistic. The JB column contains the results of the Jarque-Bera test for normality of the series. The ADF column reports the results of the Augmented Dickey-Fuller test for stationarity of the series. The LB column contains the results of the Ljung-Box test for autocorrelation up to 10 lags. The asterisks *, **, and *** indicate statistical significance at the 0.1, 0.05, and 0.01 levels, respectively. 
+
+Table 4 reports descriptive statistics and standard test results for the daily log returns of 
+
+> 4
+
+See CBOE SPX Fact Sheet and CBOE SPX Product Specification. 
+
+20 the S&P 500 Index, the VIX, the PUT, and the WPUT over 2018-01-01 to 2025-12-31. This eight-year sample spans the periods used for model training (2018–2020), walk-forward evaluation (2021–2024), and the 2025 out-of-time hold-out, as detailed in Section 5.1. It is preceded by a 2017 warm-up year used only to initialize rolling features and per-strategy statistics. All four series have positive mean daily log returns, although the levels differ markedly. The S&P 500 earns 0.05% per day on average (median 0.09%), the PUT index 0.03%, and the WPUT index 0.01%. The lower realized mean of WPUT relative to PUT is consistent with the more frequent rolling cycle of the weekly index, which captures smaller absolute premia at higher turnover and so concentrates more of its daily distribution near zero. Annualized volatility is 20% for the S&P 500, 14% for PUT, and 13% for WPUT, in line with the documented variance-reducing effect of systematic put writing relative to direct long-equity exposure. The VIX itself has a daily mean of 0.02% but a sharply negative median of -0.73%. This pattern is consistent with the mean-reverting behavior of implied volatility. The index typically drifts downward in calm regimes and spikes upward in shocks. The result is a positive average despite a negative central tendency. None of the four series is well approximated by a Gaussian distribution. The S&P 500 has moderate negative skew (-0.65) and excess kurtosis of 14.77, in line with the pattern that equity drawdowns are sharper than recoveries. The two short-volatility benchmarks display materially stronger left-tail behavior, with skewness of -1.96 (PUT) and -1.90 (WPUT) and excess kurtosis of 45.04 (PUT) and 31.52 (WPUT). This shape is mechanically inherited from the convexity of short-put payoffs. Gains are bounded above by the option premium collected, while losses can rise sharply in stress regimes. The ordering of kurtosis between PUT and WPUT, with the monthly index more leptokurtic than the weekly one, is consistent with the diversification of premium-collection events across multiple weekly expirations, which dampens the influence of any single tail observation on the realized return distribution. The VIX, by contrast, is positively skewed (1.40), in line with its propensity for sudden upward spikes followed by gradual reversion. Jarque–Bera statistics reject normality at the 1% level for every series, with values ranging from 7,321 (VIX) to 170,315 (PUT). The rejection of normality across every series motivates non-parametric and machine-learning methods that do not impose Gaussianity. Tail risk metrics are consistent with this characterization. The S&P 500 incurred a maximum drawdown of 34% over the sample, driven by the COVID-19 sell-off of March 2020 and clearly visible in Figure 1. The PUT and WPUT indices realized smaller, but still substantial, drawdowns of 29% and 26%, respectively. The one-day 95% Value-at-Risk is -1.83% for the S&P 500, with an associated Conditional VaR of -3.05%. The put-write benchmarks have tighter daily-loss profiles, with VaR / CVaR of -1.16% / -2.31% for PUT and -1.28% / -2.34% for WPUT. Systematic put writing is therefore associated with lower typical daily volatility and a smaller magnitude of the most adverse single-day outcomes relative to direct equity exposure, although the tail thickness documented above indicates that these reductions do not extend to the most extreme stress events. All four series display statistically significant negative first-order autocorrelation, ranging from -0.08 for the VIX to -0.26 for PUT, with WPUT at -0.20 and the S&P 500 at -0.15. The negative sign points to short-horizon mean reversion in daily returns and is strongest in the put-write benchmarks, whose returns are dominated by alternating phases of premium collection 21 and recovery after expiry. The Ljung–Box test at ten lags rejects the joint hypothesis of zero autocorrelation at the 1% level for every series, with test statistics ranging from 26.45 (VIX) to 400.51 (PUT). Lagged return information therefore has measurable predictive content, which is consistent with the autoregressive features used in subsequent modeling stages carrying information. The Augmented Dickey–Fuller test, with the lag order selected by the Akaike information criterion and a constant-only deterministic term, rejects the unit-root null at the 1% level for all four series. The daily log returns are therefore stationary over the sample period. Figure 1. S&P 500 Index, VIX, PUT Index, and WPUT Index series from 2018-01-01 to 2025-12-31. 2018 2019 2020 2021 2022 2023 2024 2025 
+
+> Year
+> 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50
+> Cumulative Growth
+> S&P 500 Index CBOE PUT Index CBOE WPUT Index VIX 10 20 30 40 50 60 70 80
+> VIX
+
+Note: The chart shows the daily closing levels of the S&P 500 Index, the CBOE PUT Index, and the CBOE WPUT Index, all rescaled to a starting value of 1.0 and read against the left-hand axis (Cumulative Growth), together with the daily closing level of the VIX in raw index points on the right-hand axis. The sample period is 2018-01-01 to 2025-12-31. 
+
+## 4.2 Feature Engineering 
+
+The candidate feature catalog is organized into groups spanning approximately 190 features. Exact definitions, data sources, and rolling-window choices are documented in Appendix B, while this subsection motivates the taxonomy and grounds it in the literature. The catalog separates cross-sectional (CS) features, which take one value per trading day and are broadcast across all candidates, from per-strategy (PS) features, which vary across candidates on a given day. The LambdaRank objective exploits only within-day variation across candidates, so PS features supply the discriminative signal for ranking, whereas CS features are regime conditioners. The following groups are categorized as cross-sectional: calendar and event flags, morning-session dynamics, SPX index features, the VIX family, macroeconomic series, volatility-surface levels and skew, RV-versus-IV differentials, realized higher moments, VIX term-structure curvature, and medium-frequency trend. The per-strategy groups are: 22 option Greeks at entry, rolling P&L statistics, entry liquidity, intra-strategy term context, and regime-conditional sensitivities. The motivation for the principal blocks follows the volatility-risk-premium literature. • Implied-volatility surface (CS). ATMF IV at multiple DTEs, per-delta IV at the 10 ∆
+
+and 25 ∆ buckets, 252-day rolling percentiles, the 25 ∆ risk reversal as the primary skew measure, and forward-volatility differentials. The model ranks the eight delta buckets each day by their mispricing on this surface relative to expected realized volatility (Cont and da Fonseca, 2002; Constantinides et al., 2013). • Realized-minus-implied volatility differentials (CS). 5-, 21-, and 63-day RV-versus-IV spreads and ratios. These differentials provide a direct in-sample measure of the volatility risk premium. Consistent with the documented persistence of the equity-index VRP (Bondarenko, 2014; Carr and Wu, 2009), they are one of the largest contributors to model performance in the ablation panel of Section 6.3. • VIX family and term-structure curvature (CS). Levels and percentile statistics of VIX, VIX1D, VIX9D, VIX3M, VIX6M, and VVIX, the front-month VIX future together with its slope and roll yield, and three term-curvature combinations. The VIX level conditions the premium that short-volatility strategies collect, and the slope of the term structure has been reported to predict the cross-section of subsequent option returns (Vasquez, 2017; Da Fonseca and Xu, 2019; Malkiel et al., 2018). • Morning-session features (CS). Computed from 1-minute SPX bid-ask data and 09:35 ET volatility-surface snapshots, these capture the only fresh post-open information available at the 10:00 ET entry: morning log-return, intraday range, annualized realized volatility, the overnight gap and a gap-filled flag, and 09:35-to-10:00 changes in ATMF IV, 25 ∆ risk reversal, VIX, and VVIX. The block matters most for 0DTE, since the entry decision must reflect the regime that the morning auction has just revealed. • SPX index features and put-call ratios (CS). Multi-horizon SPX log returns, intraday realized volatility, and the SPX and VIX put-call ratios. The PCR series carry sentiment-driven information beyond what is contained in the implied-volatility surface itself (Sheu and Wei, 2011). • Macroeconomic indicators (CS). The effective Federal Funds rate (level, 1-year per-centile, rate of change) and seasonally non-adjusted initial jobless claims (level, year-on-year change, 1-year percentile). These are low-frequency regime conditioners on the realized volatility risk premium (Bollerslev et al., 2011; Corradi et al., 2013). • Calendar and event flags (CS). Day-of-week, day-of-month, and month-of-year in-tegers, monthly and quarterly OPEX flags, post- and pre-holiday session flags, and  
+
+> days_until_next
+
+/ is_X_day pairs for FOMC, CPI, NFP, and PCE releases. FOMC days are excluded upstream from the candidate universe. The surrounding macro-event days carry distinct volatility behavior and are included in the candidate feature set. 23 • Per-strategy blocks (PS) . Entry-time Black–Scholes Greeks (delta, gamma, theta, vega), with the dollar-delta, gamma exposure, log-moneyness, and per-strategy leverage mea-sure derived from them, supply the per-candidate risk profile. Per-strategy rolling statistics supply each candidate’s recent realized performance. Entry liquidity (bid-ask spread in dollars and as a percentage of mid, log entry premium, all measured at the 10:00 ET snapshot) flags whether a pick is executable at near-mid quality. Intra-strategy term context bridges each candidate’s specific point on the volatility surface back to the cross-sectional regime signals. The combined catalog of approximately 190 candidate features is reduced per walk-forward window by the selection pipeline described in Section 3.3 to roughly 50 to 60 surviving features. Twenty-seven of these survive across all four walk-forward windows and the out-of-time window, and are common to every fitted model. The remainder are window-specific or window-frequent, and Section 6.3 quantifies the marginal contribution of each base group. 
+
+# 5 Empirical Results 
+
+## 5.1 Setup 
+
+The strategy is evaluated over the period 2017–2025. The 2017 calendar year provides warm-up data for rolling features and per-strategy statistics, and the initial training window covers 2018–2020. The four-window walk-forward (WF) with annual retraining on an expanding window spans 2021–2024, and the 2025 calendar year is reserved as an out-of-time (OOT) hold-out, never used during training, hyperparameter search, or model selection. The LightGBM LambdaRank ranker described in Section 3 selects one position per day from the nine-candidate universe (eight delta-targeted short puts plus SKIP), entered at 10:00 ET, with sizing calibrated to a 16 % annual volatility target across the seven sizing methods of Section 3.7. The seven methods share the same model, selection layer, and confidence gate, and differ only in how the per-day position size Q is determined. The DSR multi-test correction reported in Section 5.3 uses Nt = 75 trials. 
+
+## 5.2 Per-method performance 
+
+Table 5 reports annualized Sharpe ratio, Sortino ratio, annualized return, annualized volatility, and maximum drawdown under each of the seven sizing methods, separately for the four-window walk-forward (2021–2024) and the 2025 out-of-time hold-out. Annualized WF Sharpe ranges from 1.897 for the quarter-Kelly variant to 3.105 for Edge Allocation, and annualized OOT Sharpe ranges from 4.308 to 5.761 across the same two methods. Every method has positive Sharpe on both slices, and every method’s OOT Sharpe exceeds its WF Sharpe by more than 2.4 units. The three highest WF Sharpe ratios belong, in order, to Edge Allocation, Short-Richness Scaling, and Fixed Margin Utilization, and the OOT ranking has the same three at the top. PSR values, computed against the worst of the three external benchmarks per slice, range from 0.906 to 1.000 on the WF slice and from 0.949 to 0.994 on the OOT slice. Six of the 24 seven methods clear 0.95 on the OOT slice, Volatility Targeting missing it narrowly at 0.949 .Three clear it on both: Edge Allocation ( 1.000 /0.964 ), Short-Richness Scaling ( 0.992 /0.994 ), and Fixed Margin Utilization ( 0.981 /0.984 ). The remaining four (Volatility Targeting, Gamma-Budgeted Sizing, and the two fractional-Kelly variants) fall short on WF, with WF PSR in the range 0.906 to 0.926 . The corresponding multi-test-corrected confidence under the Deflated Sharpe Ratio is reported in Section 5.3. Figure 2 plots cumulative net asset value for all seven methods from 2021-01-04 through 2025-12-31, starting from a common $5,000,000 initial capital. Over the four WF years the seven curves’ annualized volatilities range from 3.5% (Edge Allocation) to 6.7% (Volatility Targeting). Method-specific volatility differences appear as parallel offsets rather than as divergent trends. Each curve steepens after the WF/OOT split at 2025-01-01, consistent with the higher OOT Sharpes in Table 5. Edge Allocation finishes the five-year sample at $8.15M (a 63 .0 % cumulative gain, a geometric annualized return of 10 .8 % ). Volatility Targeting and Gamma-Budgeted Sizing reach the highest terminal NAVs, $10 .38 M and $10 .49 M ( 107 .7 % 
+
+and 109 .5 % cumulative). Their higher terminal NAVs reflect higher annualized volatility, not higher risk-adjusted return, relative to Edge Allocation. Figure 3 plots the drawdown trajectory per method. Edge Allocation’s deepest drawdown over the full sample is −2.28 % 
+
+on 2022-06-28. The deepest drawdown across the seven methods reaches −9.25 % for the quarter-Kelly variant on 2024-08-07. None of the seven methods experiences a drawdown in the −30 % to −50 % range that an unhedged passive short-volatility baseline produces over the same sample (Table 5). 
+
+## 5.3 Multi-test-corrected confidence 
+
+Table 6 reports the Probabilistic Sharpe Ratio (PSR) and Deflated Sharpe Ratio (DSR) of Bailey and Lopez de Prado (2014) for the three sizing methods that occupy the top of both the walk-forward and out-of-time Sharpe rankings (Edge Allocation, Fixed Margin Utilization, and Short-Richness Scaling). PSR is reported separately against three external benchmarks: SPX buy-and-hold (BH), the CBOE PUT index, and the CBOE WPUT index. DSR is benchmark-independent and incorporates a multi-test correction over Nt = 75 trials. The count includes every search that ranked its candidates by realized performance: the 28 configurations reported in this article (the headline strategy, 10 structural sensitivity runs, 15 feature-group ablations, and 2 post-processed execution-drag variants), the 40 confidence-gate calibrations of Section 3.5 (an 8-point trade-rate grid scored on Sortino in each of the five windows), the six sizing methods other than the one carried as headline, and the all-options variant abandoned in the trial phase of Section 3.1. Two larger searches do not enter the count. The 250 hyperparameter trials, 50 in each of the five windows, are scored on NDCG@1 over the inner validation slice. The 740 position-size grid evaluations are scored on the gap between realized training volatility and the 16 % anchor of Equation (13). Neither search ranks its candidates by realized performance, so neither inflates the expected maximum Sharpe ratio that the correction subtracts. For the sizing methods whose θ enters as a proportional scale, the Sharpe ratio is invariant to position scale, so those grid points cannot differ in the statistic being deflated. All three methods produce PSR values above 0.95 against every external benchmark on both 25 Table 5. Headline performance, internal baselines, and external benchmarks. Walk-forward (2021–2024) Out-of-time (2025) Sharpe Sortino Ann. return Ann. vol. Max DD Sharpe Sortino Ann. return Ann. vol. Max DD                                                                                                                                                       
+
+> Sizing methods
+> EA 3.1048 4.5234 0.1091 0.0351 0.0228 5.7612 7.0291 0.1048 0.0182 0.0143 FMU 2.5119 2.9925 0.1319 0.0525 0.0691 5.0632 6.0447 0.1795 0.0354 0.0196 SRS 2.7597 3.4259 0.1270 0.0460 0.0614 5.2622 6.9824 0.1755 0.0334 0.0172 VT 2.2102 2.4040 0.1489 0.0674 0.0900 4.6669 4.9068 0.2388 0.0512 0.0343 GB 2.0554 2.2676 0.1366 0.0665 0.0899 5.0147 5.8707 0.2995 0.0597 0.0338 HK 1.9464 2.2562 0.1200 0.0616 0.0860 4.3711 5.1981 0.2091 0.0478 0.0271 QK 1.8965 2.1857 0.1186 0.0625 0.0925 4.3084 5.1671 0.1993 0.0463 0.0273
+> Internal baselines
+> Random 0.0844 0.0912 0.0131 0.1550 0.3935 0.3415 0.3626 0.0570 0.1669 0.1091 Always-P25d -0.0191 -0.0203 -0.0030 0.1571 0.3438 0.0005 0.0005 0.0001 0.1663 0.1273 Always-P45d -0.0405 -0.0456 -0.0064 0.1581 0.3396 0.1577 0.1752 0.0248 0.1572 0.1146 Momentum -0.0051 -0.0057 -0.0008 0.1616 0.2894 -0.3982 -0.4276 -0.0669 0.1681 0.1490 Rolling-Sharpe 0.5569 0.5991 0.0698 0.1254 0.2383 0.6128 0.6258 0.0545 0.0890 0.0830
+> External index benchmarks
+> SPX buy-and-hold (BH) 0.6221 0.8871 0.1011 0.1625 0.3086 0.4622 0.6787 0.0884 0.1912 0.2008 CBOE PUT index 0.6795 0.9091 0.0675 0.0993 0.1994 0.1754 0.2605 0.0252 0.1436 0.1642 CBOE WPUT index 0.1449 0.1879 0.0145 0.1003 0.2285 0.1312 0.1593 0.0151 0.1152 0.1339
+
+Note: Every metric is reported separately for the four-window walk-forward (WF, 2021–2024) and the 2025 out-of-time hold-out (OOT). Strategy returns are daily profit and loss per unit of collateral. The collateral is held in cash and earns the risk-free rate, so these returns are already in excess of it. The CBOE PUT and WPUT indices are total-return series. The SPX series is a price index, so the continuous dividend yield is accrued daily before conversion, otherwise buy-and-hold would be understated by its dividend stream. All three are then converted to excess of EFFR to place both sides of the comparison on one basis. Sizing methods share the same model, selection layer, and confidence gate, and differ only in the per-day position-size rule. 
+
+the walk-forward and out-of-time slices. The smallest of the 18 PSR cells is Edge Allocation’s 
+
+0.964 against SPX buy-and-hold on the out-of-time slice. Under the multi-test correction the DSR falls below every PSR cell for the same method and slice. Edge Allocation and Short-Richness Scaling produce walk-forward DSR values above 0.95 (0.996 and 0.956 respectively), while FMU’s walk-forward DSR is 0.917 . On the out-of-time slice, the three DSR values are 
+
+0.856 for Edge Allocation, 0.864 for FMU, and 0.913 for Short-Richness Scaling. The out-of-time DSR shortfall follows from the combination of a single calendar year of hold-out data and the Nt = 75 trial penalty. The out-of-time Sharpe values before the multi-test deflation remain substantially higher than their walk-forward counterparts (Table 5), and the PSR results indicate separation from passive short-volatility benchmarks even after accounting for non-Gaussianity in daily returns. 
+
+## 5.4 Year-by-year heterogeneity 
+
+Table C.1, in Appendix C, reports per-year Sharpe ratios across the seven sizing methods, with each of the four walk-forward years (2021–2024) and the 2025 out-of-time hold-out shown separately. The four-year range is wide. For Edge Allocation, per-year Sharpe ranges from 
+
+0.41 in 2024 to 6.52 in 2021. The same pattern holds for the other six methods: every method’s strongest year is 2021 (per-year Sharpe in the range 6.52 to 9.21 ), and every method’s weakest year is 2024, with only Edge Allocation (at 0.41 ) and Volatility Targeting (at 0.05 ) posting a positive 2024 Sharpe and the remaining five methods negative. The 2022 and 2023 years are 26 Figure 2. Cumulative net asset value by sizing method, 2021-01-04 to 2025-12-31. 2021 2022 2023 2024 2025 2026 
+
+> Date
+> 5678910
+> NAV ($MM)
+> FMU VT SRS EA GB HK QK WF / OOT split
+
+Note: Cumulative net asset value for the seven sizing methods over the full 2021-01-04 to 2025-12-31 sample, starting from a common initial capital of $5,000,000. The vertical dashed line marks the WF/OOT split at 2025-01-01. The walk-forward (WF) period covers 2021–2024 across the four expanding-window training cycles. The 2025 calendar year is the out-of-time (OOT) hold-out, never used during training, hyperparameter search, or model selection. All seven curves use the same model, selection layer, and confidence gate, and differ only in the per-day position-size rule. 
+
+Figure 3. Underwater drawdown trajectory by sizing method, 2021-01-04 to 2025-12-31. 2021 2022 2023 2024 2025 2026 
+
+> Date
+> 8
+> 6
+> 4
+> 2
+> 0
+> Drawdown (%)
+> FMU VT SRS EA GB HK QK WF / OOT split
+
+Note: Underwater drawdown trajectory per sizing method over the full 2021-01-04 to 2025-12-31 sample. Draw-down is computed as the running NAV deficit from the historical high-water mark, expressed in percent. The vertical dashed line marks the WF/OOT split at 2025-01-01. 
+
+27 Table 6. Multi-test-corrected statistical confidence for top-3 sizing methods. Method Slice PSR vs BH PSR vs PUT PSR vs WPUT DSR EA WF 0.9999 0.9998 1.0000 0.9962 EA OOT 0.9636 0.9710 0.9721 0.8563 FMU WF 0.9837 0.9806 0.9967 0.9168 FMU OOT 0.9836 0.9887 0.9893 0.8638 SRS WF 0.9934 0.9919 0.9989 0.9561 SRS OOT 0.9944 0.9966 0.9968 0.9128                    
+
+> Note: Top-3 methods selected by walk-forward Sharpe (Edge Allocation, Fixed Margin Utilization, and Short-Richness Scaling), which is also the top-3 set by out-of-time Sharpe. PSR and DSR follow Bailey and Lopez de Prado (2014). The DSR multi-test correction uses Nt= 75 trials. PSR is reported against each of three external benchmarks: BH = SPX buy-and-hold, PUT = CBOE PUT index, WPUT = CBOE WPUT index. For the four methods outside the top three, PSR against the worst of the three benchmarks is 0.9240 (WF) and 0.9493 (OOT) for Volatility Targeting, 0.9063 and 0.9773 for Gamma-Budgeted Sizing, 0.9264 and 0.9722 for half-Kelly, and
+> 0.9203 and 0.9684 for quarter-Kelly.
+
+intermediate. All seven methods fall between 1.37 and 2.51 in 2022, and the five methods that trade in 2023 fall between 1.79 and 3.93 .The 2025 out-of-time year is comparable to but somewhat below 2021 across all seven methods, with per-year Sharpe in the range 4.31 (QK) to 5.76 (Edge Allocation). The hold-out year was not used during training, hyperparameter search, or model selection, and that separation is what the out-of-time design establishes. The credibility of that separation rests on the design of the hold-out, not on the size of the Sharpe ratio the hold-out produced. For Edge Allocation the 2025 figure of 5.76 sits closer to the strongest walk-forward year, 6.52 in 2021, than to the 2.51 , 1.79 and 0.41 recorded in 2022, 2023 and 2024. Every method’s out-of-time Sharpe also exceeds its own walk-forward figure by more than 2.4 units, which is the reverse of the direction a hold-out year would be expected to move. One hold-out year is therefore not sufficient to separate generalization from a favorable regime, and the four-year range reported above is the more informative summary of performance across volatility states. The out-of-time figures reported in the remainder of this article should be read against that range. The two fractional-Kelly variants (HK and QK) post a Sharpe of exactly zero in 2023. Both rules abstain when the estimated Kelly fraction falls below a positive threshold, and the 2023 zero reflects the abstention rule binding throughout that year rather than a degenerate trade or data error. The two variants trade again in 2024 but at a loss (Sharpe of −0.58 for HK and 
+
+−0.62 for QK) before recovering in 2025 (Sharpe of 4.37 and 4.31 ). 
+
+## 5.5 Performance across regimes 
+
+Table D.1, in Appendix D, reports per-VIX-regime Sharpe ratios across the seven sizing methods on the walk-forward and out-of-time slices. The VIX regime is computed from the entry-day close, with thresholds following the conventions VIX < 15 (low), 15 ≤ VIX ≤ 25 (mid), and 
+
+VIX > 25 (high). Regime-conditional figures cover every day whose VIX close falls in the regime, with days on which the model abstained or the gate blocked entry entering at a return 28 of zero, so they use the same convention as Table 5 applied to a subset of days. The Days and Trades columns of Table D.1 report the two counts separately. Walk-forward performance is strongly conditional on VIX regime across all seven methods, and the conditioning does not increase monotonically with the regime. The annualized return peaks in the mid-VIX band for six of the seven methods. Edge Allocation is the exception and rises across all three regimes, at 
+
+0.50% on low-VIX days, 13 .90% on mid-VIX days, and 15 .40% on high-VIX days. For Volatility Targeting and Gamma-Budgeted Sizing the high-VIX return sits below the low-VIX return, at 
+
+3.80% against 7.26% and 4.81% against 5.35% . The risk-adjusted ratio concentrates in the mid band more sharply still. Mid-VIX days carry the strongest regime-conditional Sharpe for five of the seven methods, and the mid-band ratios run from 3.59 (QK) to 4.48 (Gamma-Budgeted Sizing), against 0.29 to 2.77 on high-VIX days. Volatility Targeting and Gamma-Budgeted Sizing peak in the low band instead, at 5.46 and 6.62 , where their own return volatility is smallest at 1.33% and 0.81% . For Edge Allocation the annualized volatility of the strategy’s own returns rises from 1.91% to 3.28% to 5.57% across the three regimes, faster than the return it collects, which accounts arithmetically for the mid-band peak. One reading is that on the most elevated days realized volatility catches up with implied, and the additional premium arrives with more than proportional risk. The premium is therefore harvested most efficiently one regime below the top of the implied-volatility distribution, and for Volatility Targeting and Gamma-Budgeted Sizing two regimes below. The 2025 out-of-time slice reproduces this ordering only in the regime with an adequate sample. The mid-VIX regime holds 196 of Edge Allocation’s 237 out-of-time days and produces a regime-conditional Sharpe of 4.94 , somewhat above the 3.59 to 4.48 range on the walk-forward slice. The two outer regimes rest on 20 and 21 days. Annualized statistics computed on that many observations carry no useful precision. That is why the low-VIX cell reaches 
+
+13 .71 for Edge Allocation and 83 .29 for Gamma-Budgeted Sizing on an annualized return of 
+
+23 .78% . Those cells are reported for completeness and are not interpreted here. The VIX-regime evidence rests on the walk-forward panel, measured on 148 high-VIX, 593 mid-VIX, and 223 low-VIX days. Table D.2 reports per-tercile figures across the seven sizing methods. Realized volatility is the 5-day intraday realized volatility of the S&P 500 measured at the entry-day close, partitioned into equal-quantile terciles within each slice, so a tercile label spans different volatility levels on the two panels. The conditioning appears most clearly in annualized returns. Annualized return in the top tercile exceeds the bottom tercile for all seven methods on the out-of-time slice and for six of the seven on walk-forward, with the exception of Volatility Targeting at 
+
+13 .22% against 13 .53% . It rises monotonically across the three terciles for six of the seven on the out-of-time slice. For Edge Allocation it runs 4.11% , 10 .25% and 17 .67% out of time. The Sharpe ordering is less regular. On the walk-forward slice the highest tercile-conditional Sharpe sits in tercile 2 for six of the seven methods, Edge Allocation excepted, whose ratio rises across all three ( 2.77 , 2.98 , 3.55 ). On the out-of-time slice no method is monotone across the three terciles, although tercile 3 exceeds tercile 1 for six of the seven. The pattern parallels the VIX-regime result in the return dimension. Higher realized volatility coincides with a wider differential between implied and realized volatility, so the strategy earns more per day. The volatility of its own returns responds less uniformly across methods, rising with the tercile for six of the seven but falling for Edge Allocation out of time. The Sharpe ordering inherits that 29 unevenness. Figure 4 reports per-regime Sharpe ratios across all seven sizing methods for the two regime axes (VIX and realized-volatility tercile), separately for walk-forward and out-of-time. The qualitative pattern within each regime axis is similar across the seven methods, with magnitude variation that reflects the different leverage levels applied by each sizing rule. The 2025 out-of-time bars are larger than the walk-forward bars in 34 of the 42 regime cells, consistent with the WF/OOT pattern visible in the headline (Table 5). Six of the eight exceptions fall in the middle realized-volatility tercile, where every method but Edge Allocation inverts. The cross-regime variability dominates the cross-method variability, so the regime axis is the more informative dimension for understanding when the strategy’s regime-conditional Sharpe is largest. Figure 4. Per-regime Sharpe ratios across sizing methods. 0123456      
+
+> Sharpe (WF)
+> VIX regime
+> 0123456
+> Sharpe (WF)
+> RV tercile
+> low mid high 0246810 12 14 16
+> Sharpe (OOT)
+> 1230246810 12 14
+> Sharpe (OOT)
+> EA FMU SRS VT GB HK QK
+
+Note: Two regime axes (left to right): VIX regime and realized-volatility tercile. Top row reports the four-window walk-forward (2021–2024) regime-conditional Sharpe. Bottom row reports the 2025 out-of-time hold-out regime-conditional Sharpe. Each cell covers every day in the regime, with abstention days entering at a return of zero. Each panel reports seven grouped bars per regime label, one per sizing method, ordered as in Table 5. The out-of-time VIX panel is capped at 16 , with bars above the cap drawn hatched. Its low-VIX cell rests on 21 days and reaches a Sharpe of 88 .8, which on an unclipped axis flattens every interpretable bar. Per-year Sharpe ratios are reported in Table C.1. 
+
+## 5.6 Benchmark comparison 
+
+Table 5 reports walk-forward and out-of-time Sharpe ratios for the seven sizing methods alongside five internal baselines and three external index benchmarks. The internal baselines 30 disable the LightGBM ranker, the confidence gate, or both, but otherwise share the same option universe and execution as the strategy. Three of the five internal baselines produce negative Sharpe ratios on at least one slice: Always-short-25-delta-put ( −0.019 WF, 0.000 
+
+OOT), Always-short-45-delta-put ( −0.041 WF, 0.158 OOT), and Momentum ( −0.005 WF, 
+
+−0.398 OOT). Random earns 0.084 on walk-forward and 0.342 on out-of-time. The fifth baseline, a Rolling-Sharpe selector that picks the candidate with the highest 30-day rolling Sharpe, earns a positive but modest 0.557 on walk-forward and 0.613 on out-of-time. Every model variant exceeds the best internal baseline on both slices, with the smallest cross-method gap to Rolling-Sharpe at 1.34 on walk-forward (QK) and 3.70 on out-of-time (QK). External benchmarks contextualize the strategy’s performance against tradable passive comparators. The S&P 500 buy-and-hold (BH) earns a Sharpe of 0.62 on walk-forward and 0.46 
+
+on out-of-time. The CBOE PUT index earns 0.68 on walk-forward and 0.18 on out-of-time. The CBOE WPUT index earns 0.14 and 0.13 respectively. All seven of the model’s sizing methods exceed every external benchmark on both slices. Edge Allocation produces the largest gap in every (slice × benchmark) cell, ranging from 2.43 (PUT, WF) to 5.63 (WPUT, OOT). The smallest single (method × benchmark) gap on the walk-forward slice is the quarter-Kelly variant’s 1.22 against the PUT index, and the smallest gap on the out-of-time slice is the quarter-Kelly variant’s 3.85 against BH. The strategy’s gap above the passive short-volatility benchmarks (PUT, WPUT) is comparable in magnitude to its gap above outright equity exposure (BH). The model’s outperformance is therefore not simply explained by inheriting the passive volatility risk premium. The Diebold and Mariano (1995) test for equal predictive accuracy on daily profit-and-loss provides a more conservative statistical assessment than the Sharpe-based PSR reported in Section 5.3. On the 2025 out-of-time slice, the test does not reject the null of equal mean daily P&L for any of the seven methods at conventional levels after a Bonferroni correction over the three external benchmarks. The corrected minimum p-value is 1.000 for Edge Allocation, Fixed Margin Utilization, and Short-Richness Scaling, and the smallest among the seven methods is 
+
+0.231 for Gamma-Budgeted Sizing. The contrast with the PSR results reflects the difference between the two tests: PSR compares a Sharpe ratio against a benchmark’s Sharpe and benefits from the strategy’s much lower realized volatility, while the DM test compares mean daily P&L levels and is dominated by the noise in daily return differences. 
+
+# 6 Robustness 
+
+## 6.1 Walk-forward fragility, out-of-time robustness 
+
+The cross-cutting pattern of walk-forward Sharpe against out-of-time Sharpe for each sensi-tivity perturbation is that walk-forward Sharpe varies far more than out-of-time Sharpe. For Edge Allocation, walk-forward Sharpe ranges from −0.157 (training window shortened to two years) to 3.308 (hyperparameter search reduced to 25 trials), a 3.47-unit spread. Across the cells that trade, out-of-time Sharpe ranges from 4.817 (correlation-clustering threshold loosened to 0.95 ) to 5.800 (hyperparameter search widened to 100 trials), a 0.98-unit spread that is roughly three and a half times tighter than the walk-forward spread. One cell falls outside that comparison. At a correlation-clustering threshold of 0.90 the confidence gate 31 suppresses every 2025 trade, so the account is in cash for the full year and its excess return is zero on every day, which leaves the ratio undefined. The 0.000 recorded for that cell in Table 7 is the convention this article applies to a year without positions, not a measured performance. In economic terms, the underlying signal the model fits in the SPXW 0DTE market is stable enough to be expressed in 2025 even when training choices are perturbed. The walk-forward Sharpe estimator depends materially on which years are used for training, how the years are partitioned across the four expanding-window cycles, and how aggressively the hyperparameters are searched. The 2025 hold-out, which is never used during training or hyperparameter search, is the integrity check, and its near-uniform robustness across the perturbation matrix is evidence that the out-of-sample Sharpe is insensitive to the training choices perturbed here, with the one exception noted below. 
+
+## 6.2 Per-dimension structural sensitivities 
+
+Table 7 reports walk-forward and out-of-time Sharpe ratios, headline-relative ∆ Sharpe, and PSR under Edge Allocation for each perturbation. With the training window shortened from 3 years to 2, EA’s walk-forward Sharpe falls to 
+
+−0.157 (a −3.26 -unit move from the headline) and PSR (WF) collapses to 0.050 . Out-of-time Sharpe holds at 5.178 , only −0.58 below the headline. The 2-year window gives the LightGBM ranker too few examples per training cycle, so the walk-forward Sharpe estimator becomes noisy, while the 2025 hold-out result is largely unchanged. Across the seven sizing methods, walk-forward Sharpe drops by between −2.0 and −3.1 units while out-of-time Sharpe loses less than one unit per method. Switching from an expanding-window walk-forward to a 3-year rolling window reduces EA’s walk-forward Sharpe to 0.564 (a −2.54 -unit move) but holds out-of-time Sharpe at 
+
+5.227 (only −0.53 ). The rolling 3-year window discards earlier training data each cycle, so the training set is consistently smaller, but the 2025 hold-out still receives a model whose generalization error is comparable to the headline. The seven-method dispersion mirrors the EA pattern: walk-forward Sharpe drops by −1.5 to −2.4 units across methods. Adjusting the volatility-target anchor from the headline 16% to either 12% or 20% leaves Sharpe essentially unchanged. EA’s walk-forward Sharpe is 3.036 at 12% (a −0.07 move from the headline) and 3.105 at 20% (no change), and out-of-time Sharpe is 5.739 at 12% ( −0.02 )and 5.761 at 20% (no change). The other six sizing methods show similarly small changes, with absolute Sharpe shifts under 0.1 unit on both slices. The 20% arm should be read with care. Raising the anchor leaves θ⋆ unchanged in 24 of 35 
+
+method-window cells, and in all five EA windows, because θ⋆ already sits at the top of its grid at the headline anchor. For EA the 20% arm therefore reproduces the headline run without perturbing it, and its agreement with the headline is not evidence of insensitivity to the anchor. The 12% arm moves θ⋆ in one EA window, where it falls from 0.80 to 0.70 . Where θ⋆ is free to move, the calibration rescales exposure roughly proportionately, which leaves the Sharpe ratio close to unchanged. Reducing the hyperparameter search budget from 50 trials to 25 raises EA’s walk-forward Sharpe to 3.308 (a 0.20 move) and leaves out-of-time Sharpe essentially unchanged at 5.736 .Increasing the budget to 100 trials lowers walk-forward Sharpe to 0.706 (−2.40 ) but leaves 32 out-of-time Sharpe at 5.800 (0.04 ). The non-monotonic walk-forward response is consistent with multiple-testing over a finite hyperparameter space: more trials over-fit the walk-forward objective without producing a generalizably better model. The 2025 out-of-sample result is unaffected in either direction, which confirms that walk-forward Sharpe is the more sample-period-sensitive estimator, as discussed in Section 6.1. The correlation-clustering threshold controls how aggressively the feature pipeline col-lapses redundant features into single representatives. Loosening it from 0.85 to 0.95 lets more features survive, which lowers EA’s walk-forward Sharpe to 0.976 (−2.13 ) and out-of-time Sharpe to 4.817 (−0.94 ). The intermediate setting of 0.90 produces the matrix’s most severe out-of-time outcome. Walk-forward Sharpe falls to 0.281 , and in 2025 the gate places no posi-tion on any day, for all seven sizing methods alike. The 0.000 recorded out of time therefore reports an account that never traded rather than one that traded and earned nothing. Loosened correlation clustering admits more redundant features, which destabilizes the top-1-versus-top-2 confidence signal that the gate calibrates against. The gate’s hold-out τ calibration responds by tightening, and at the 2025 inference time no day’s confidence clears the tightened threshold, so the gate suppresses every trade. The out-of-time failure is a clean diagnosis that the gate’s calibration is contingent on appropriately-clustered feature representations. The perturbation matrix also locates where this design is fragile. The wide walk-forward dispersion and the single out-of-time failure have different sources. Nine of the ten structural perturbations leave out-of-time Sharpe between 4.817 and 5.800 while moving walk-forward Sharpe across a range of more than three units. The tenth differs from the others in kind, not in degree. It does not produce a worse set of positions. It produces none, and the component responsible is the confidence gate rather than the ranker or the sizing rule. The gate is also the only element of the pipeline governed by a single calibrated scalar, which makes its calibration the first place to look when the pipeline is perturbed. That failure is identifiable without reference to realized profit. The gate’s threshold is calibrated on the union of the four walk-forward held-out slices, 965 days in total, and the calibration records the fraction of those days that clear the threshold. Under the headline configuration the fraction is 1.0000 at τ ⋆ = 0 .0000 , and the 2025 slice admits every day, so the calibrated and realized admission rates agree. Under the 0.90 perturbation the same procedure sets τ ⋆ = 0 .0689 and a calibrated admission rate of 0.3005 , and the 2025 slice admits no day. The divergence between the two rates is present on the first morning the gate is consulted, whereas any return-based diagnostic requires positions to have been opened and closed first. The computation treats successive days as independent, an approximation, since the confidence signal is serially correlated. Under a calibrated rate of 0.3005 , ten consecutive abstentions have probability 0.028 and twenty have probability below 0.001 . The state the 0.90 cell produces is therefore separable from ordinary abstention within two trading weeks, on the signal alone. Switching the calibration objective from equal-volatility scaling to in-sample Sharpe max-imization gives EA walk-forward Sharpe of 2.947 (−0.16 ) and out-of-time Sharpe of 5.615 
+
+(−0.15 ). Switching to in-sample Sortino maximization gives EA walk-forward Sharpe of 2.902 
+
+(−0.20 ) and out-of-time Sharpe of 5.292 (−0.47 ). For Edge Allocation specifically, the choice of calibration objective is a small operational degree of freedom, not a structural change to the strategy. Across the seven sizing methods, both calibration variants leave the cross-method ordering of out-of-time Sharpe ratios unchanged. 33 Table 7. Per-dimension sensitivity matrix under Edge Allocation, headline-relative. Dimension Sharpe (WF) Sharpe (OOT) ∆ Sharpe (WF) ∆ Sharpe (OOT) PSR (WF) PSR (OOT)                                                                               
+
+> Headline (volatility anchor 16%) 3.105 5.761 0.000 0.000 1.000 0.964 Training window 2y −0.157 5.178 −3.262 −0.583 0.050 0.952 Rolling-3y window 0.564 5.227 −2.541 −0.534 0.454 0.953 Volatility anchor 12% 3.036 5.739 −0.069 −0.023 1.000 0.964 Volatility anchor 20% 3.105 5.761 0.000 0.000 1.000 0.964 HP trials 25 3.308 5.736 0.203 −0.025 1.000 0.963 HP trials 100 0.706 5.800 −2.399 0.039 0.530 0.959 Corr threshold 0.95 0.976 4.817 −2.129 −0.944 0.632 0.993 Corr threshold 0.90 0.281 0.000 −2.824 −5.761 0.281 0.000 Calib: Sharpe-max 2.947 5.615 −0.158 −0.146 1.000 0.966 Calib: Sortino-max 2.902 5.292 −0.202 −0.469 1.000 0.960 Execution: 75% spread cov. 2.826 5.426 −0.279 −0.335 0.999 0.957 Execution: sell-at-bid 2.725 5.311 −0.380 −0.450 0.999 0.954
+
+Note: Edge Allocation walk-forward (WF, 2021–2024) and 2025 out-of-time (OOT) Sharpe ratios under each structural and execution sensitivity perturbation, with ∆ Sharpe relative to the headline (volatility anchor 16%, equal-volatility calibration, expanding-window walk-forward, 3-year training window, 50 hyperparameter trials, correlation-clustering threshold 0.85 ). Each row reports one perturbation. Structural sensitivities sit between the two horizontal rules. The two execution rows below the second rule are post-processed re-runs of the headline backtest using the same selection layer, and their results are described in Section 6.4. PSR is reported against the worst of the three external benchmarks per slice. The out-of-time Sharpe of 0.000 at correlation threshold 0.90 
+
+records a year in which the confidence gate placed no position on any day, so no return series exists for that cell. 
+
+## 6.3 Feature-group ablation 
+
+We test the marginal contribution of each of fifteen feature groups by dropping one group at a time from the candidate feature set fed to the selection pipeline. Ten groups are cross-sectional (one value per day, broadcast across all candidates): calendar and event flags, morning-session features, SPX index features, VIX family and futures, macroeconomic indicators, implied-volatility surface, realized-minus-implied volatility differentials, realized higher moments, VIX term-structure curvature, and trend. The remaining five are per-strategy (one value per day-candidate pair): position greeks, per-strategy rolling statistics, entry liquidity, intra-strategy term context, and regime-conditional sensitivities (per-strategy quantities multiplied by cross-sectional regime variables). Two derived families are source-tagged to their primary-input group and dropped alongside the native features in each ablation. The within-day ranks are ordinal ranks of six per-strategy features across each day’s candidates. The tail-risk features are three stress signals added to the catalog: the relative gap between 5-day realized volatility and the 1-week ATMF implied volatility priced over the preceding week, the candidate strategy’s 5-day drawdown observed at the prior close, and the 60-day z-score of the VIX. Each is documented in Appendix B. Table 8 reports walk-forward and out-of-time Sharpe ratios per group for Edge Allocation, and Figure 5 plots ∆ Sharpe bars per group for each of the seven sizing methods. Three groups stand out as Sharpe-critical for the walk-forward slice: volatility surface (∆WF = −3.16 ), intra-strategy ( ∆WF = −3.02 ), and regime-conditional sensitivities ( ∆WF 
+
+= −2.91 ). Two further groups produce large walk-forward impact but smaller out-of-time impact: vix ( −2.64 WF, −0.46 OOT) and RV/IV ( −2.84 WF, −0.54 OOT). Two are execution-34 quality-critical: entry liquidity ( −1.98 WF, −0.66 OOT) and morning ( −2.72 WF, −2.10 OOT). Three further groups have modest walk-forward impact: calendar ( ∆WF −0.91 ), strategy (−0.96 ), and position ( −0.98 ), although calendar’s out-of-time drop of −2.50 is the largest in the matrix. VIX curvature carries a larger walk-forward cost ( ∆WF −2.37 ), comparable to the VIX and entry-liquidity groups. Cross-method agreement is strong on the walk-forward slice and weak out of time. Walk-forward group orderings correlate with the Edge Allocation ordering at Spearman 0.73 to 0.94 . Out of time the rank correlations fall to between 0.08 and 
+
+0.41 , and per-group differences from the Edge Allocation value reach 4.33 units. The trend group has zero impact in either slice. Diagnostic inspection of the per-window feature-survival data shows that none of the four features survives the selection pipeline in any of the four walk-forward windows or the out-of-time window: their cross-day Spearman correlation with the daily mean label sits below the relevance threshold ( ρ < 0.05 ) in every window. Trend signals are a natural hypothesis for short-volatility strategy selection, but the sample provides no evidence that they help within-day selection at this threshold. The mechanism is that medium-frequency directional signals do not vary enough across candidates on a given day to be useful for within-day selection, and they do not explain enough day-to-day variation in the daily mean label to clear the relevance threshold either. Macro is the only group whose removal raises Edge Allocation’s walk-forward Sharpe. It rises from 3.105 to 4.188 without macro features ( ∆WF = +1 .08 ) while out-of-time Sharpe drops from 5.761 to 4.975 (∆OOT = −0.79 ). On a raw-Sharpe reading, dropping macro features from the headline would be attractive. The PSR results argue against this. Without macro features, Edge Allocation’s PSR (OOT) drops from 0.964 to 0.931 (just below the 0.95 
+
+threshold used in Section 5.3). That trade-off is specific to Edge Allocation. Dropping macro features raises out-of-time Sharpe for the other six sizing methods, by between 1.13 and 1.98 
+
+units, and leaves their PSR (OOT) at or above 0.95 . A reading consistent with the grid is that the six macro features suppress the third and fourth moments of the realized return distribution. Without them, individual trade outcomes are more dispersed and the tails are heavier. The realized mean Sharpe is higher, but the PSR estimator penalizes the heavier tails enough to push the corrected confidence below 0.95 .Regime-conditional sensitivities produce one of the steepest walk-forward PSR collapses in the matrix despite a modest out-of-time Sharpe drop. The seven multiplicative interactions in this group encode “the same per-strategy quantity carries different weight in different macro regimes”. For Edge Allocation, walk-forward Sharpe drops from 3.105 to 0.196 (∆WF 
+
+= −2.91 ) and PSR (WF) falls from 1.000 to 0.229 , the third-lowest walk-forward PSR in the matrix behind the volatility-surface ( 0.092 ) and intra-strategy ( 0.165 ) cells. Out-of-time Sharpe drops only modestly, from 5.761 to 5.043 (∆OOT = −0.72 ), with PSR (OOT) at 0.933 . The asymmetry is interpretable, though it rests on a single out-of-time year and should not be over-read. Without the engineered products, the model must reconstruct any regime conditioning from the standalone per-strategy and regime features that remain in the candidate set. Across the variable 2021–2024 walk-forward window, which spans the elevated-VIX 2022 year and the calmer 2023–2024, the engineered interactions are decisive for the walk-forward ranking signal. Over the single 2025 out-of-time year the headline result is largely reproduced without them, which one hold-out year cannot distinguish from sampling variation. The position group ablation drops eight native greeks plus five sourced sensitivities, yet it costs only −0.98 in walk-35 forward Sharpe. The seven interaction terms therefore carry more of the regime-conditioning signal than the eight greeks they are sourced from. Group by group, the pattern is consistent with the strategy’s design. The volatility surface and rv-iv groups jointly describe the volatility risk premium across the SPXW IV surface, and are included to indicate which delta bucket is mispriced today. The intra-strategy group encodes how close each candidate’s realized features are to the targeted point on that surface (delta drift, IV at strike minus the at-the-money forward, days to expiry). The morning group conveys the only intraday information available before the 10:00 ET entry decision and is particularly important for 0DTE strategies. The vix and vix curvature groups supply regime classification for the gate’s confidence threshold. The entry liquidity group is the model’s selection-time defense against poor realized fills. The remaining groups supply progressively more specialized conditioning that improves either the walk-forward Sharpe directly or the realized return distribution’s tails as captured by the PSR estimator. Table 8. Feature-group ablation impact under Edge Allocation, headline-relative. Ablated group Sharpe (WF) Sharpe (OOT) ∆ Sharpe (WF) ∆ Sharpe (OOT) PSR (WF) PSR (OOT)                                                                                                 
+
+> Headline (no group dropped) 3.105 5.761 0.000 0.000 1.000 0.964 Vol surface −0.051 5.481 −3.156 −0.281 0.092 0.977 Intra-strategy 0.081 3.611 −3.024 −2.150 0.165 0.970 Regime sensitivities 0.196 5.043 −2.909 −0.718 0.229 0.933 RV/IV 0.264 5.224 −2.841 −0.538 0.277 0.952 Morning 0.389 3.660 −2.716 −2.101 0.348 0.895 VIX 0.469 5.299 −2.635 −0.462 0.402 0.976 VIX curvature 0.735 5.887 −2.370 0.126 0.539 0.963 Entry liquidity 1.124 5.102 −1.981 −0.660 0.731 0.987 Higher moments 1.673 4.162 −1.431 −1.599 0.912 0.915 SPX index 2.042 4.609 −1.062 −1.152 0.964 0.924 Position greeks 2.121 5.148 −0.984 −0.614 0.971 1.000 Per-strategy stats 2.145 4.791 −0.959 −0.970 0.958 0.935 Calendar 2.199 3.265 −0.906 −2.496 0.969 0.922 Trend 3.105 5.761 0.000 0.000 1.000 0.964 Macro 4.188 4.975 1.083 −0.786 0.998 0.931
+
+Note: Edge Allocation walk-forward (WF, 2021–2024) and 2025 out-of-time (OOT) Sharpe ratios under each of the fifteen feature-group ablations, with ∆ Sharpe relative to the headline (no group dropped). Each row reports one ablation. Rows are sorted by walk-forward ∆ Sharpe, from the largest negative impact (volatility surface) to the only positive impact (macro). Ten of the fifteen groups are cross-sectional (one value per day broadcast to all candidates) and five are per-strategy (one value per day-candidate pair). Each ablation drops the named group’s native features along with all source-tagged derived features (within-day ranks and tail-risk features), so a single ablation cell tests the joint marginal contribution of native and sourced features. PSR is reported against the worst of the three external benchmarks per slice. The trend row is exactly zero in both slices because none of the four trend features survives the selection pipeline in any walk-forward window, so that ablation leaves the model unchanged. Per-method values for the other six sizing methods are plotted in Figure 5. 
+
+## 6.4 Execution drag 
+
+We measure execution drag by re-pricing the headline strategy’s realized trades at three entry-fill assumptions while holding the model’s selections, gate decisions, and per-day position size 
+
+Q fixed. Re-pricing post hoc, without retraining the model under each fill assumption, isolates 36 Figure 5. Feature-group ablation impact bars across sizing methods. 2.5 2.0 1.5 1.0 0.5 0.0 0.5 1.0                                   
+
+> Sharpe
+> calendar morning SPX index VIX macro vol surface RV/IV higher moments VIX curvature trend position greeks per-strategy stats entry liquidity intra-strategy regime sensitivities FMU
+> 21012
+> Sharpe
+> VT
+> 32101
+> Sharpe
+> SRS
+> 32101
+> Sharpe
+> EA
+> 2.0 1.5 1.0 0.5 0.0 0.5 1.0 1.5
+> Sharpe
+> calendar morning SPX index VIX macro vol surface RV/IV higher moments VIX curvature trend position greeks per-strategy stats entry liquidity intra-strategy regime sensitivities GB
+> 5432101
+> Sharpe
+> HK
+> 54321012
+> Sharpe
+> QK
+> WF Sharpe
+> OOT Sharpe
+
+Note: Per-method horizontal bar charts of ∆ Sharpe relative to the headline for each of the fifteen feature-group ablations. Each panel reports one sizing method, with two bars per group: ∆ walk-forward Sharpe and ∆
+
+2025 out-of-time Sharpe. Bars are computed as the per-method Sharpe at each ablation cell minus the headline per-method Sharpe. The trend bar is exactly zero in both slices because none of the four trend features survives the selection pipeline in any walk-forward window. The macro bar is the only positive walk-forward impact for Edge Allocation in the panel. 
+
+the execution effect from any change in the trained ranker. The three fills are mid (50% spread coverage, the headline assumption), 75% spread coverage (sell at 0.75 · bid + 0 .25 · ask), and sell at bid (100% spread coverage). Locking Q holds the dollar position size at its headline level, so the reported drag does not benefit from any sizing re-calibration that a live deployment would apply under a worse fill regime. Table 9 reports walk-forward and out-of-time Sharpe ratios under the three fill assumptions across the seven sizing methods. The 2025 out-of-time Sharpe degradation is monotonic in fill aggressiveness (mid → 75% coverage → bid) for every method. At 75% spread coverage, the OOT percentage drag ranges from −4.7% (SRS) to −8.2% (VT). At sell-at-bid, the OOT drag widens to −6.5% (SRS) at the low end and −10 .9% (VT) at the high end. EA loses 5.8% of its OOT Sharpe at 75% spread coverage (5.761 to 5.426) and 7.8% at sell-at-bid (5.761 to 5.311). FMU and SRS, the other two top-Sharpe sizing methods, lose 6.5% and 4.7% respectively at 75% spread coverage and 8.8% and 6.5% at sell-at-bid. Walk-forward percentage drag is larger, even though the absolute Sharpe move is smaller there, at 0.380 against 0.450 for Edge Allocation at sell-at-bid. The walk-forward Sharpe is lower in absolute magnitude, so the same per-trade dollar drag translates into a larger percentage. The rank ordering of methods by Sharpe is preserved across all three fills. For a short option held to expiration, the cross-trade mean P&L scales linearly with the entry premium captured, while the variance is dominated by the long left tail of the settlement payoff. A reduction in entry premium therefore reduces the mean roughly proportionally 37 and leaves the variance largely unchanged, so Sharpe declines roughly proportionally to the premium reduction. The 4.7–8.2% OOT Sharpe drag at 75% spread coverage and the 6.5–10 .9% 
+
+drag at sell-at-bid are broadly consistent with this scaling. The per-share premium reduction at the bid fill is approximately twice that at the 75%-coverage fill, while the bid-fill Sharpe drag is roughly 1.4 times the 75%-coverage drag, somewhat less than the constant-variance benchmark would imply. Trading costs in U.S. options markets are documented directly in the microstructure literature (Battalio et al., 2016). The drags reported here are computed from the fill assumptions set out above rather than taken from that literature. Table 9. Execution-drag sensitivity. Mid 75 % spread cov. Sell at bid OOT % drag Method WF OOT WF OOT WF OOT 75 % Bid EA 3.105 5.761 2.826 5.426 2.725 5.311 −5.8 −7.8
+
+FMU 2.512 5.063 2.207 4.736 2.104 4.616 −6.5 −8.8
+
+SRS 2.760 5.262 2.453 5.017 2.349 4.918 −4.7 −6.5
+
+VT 2.210 4.667 1.882 4.286 1.772 4.158 −8.2 −10 .9
+
+GB 2.055 5.015 1.776 4.657 1.682 4.527 −7.1 −9.7
+
+HK 1.946 4.371 1.675 4.070 1.583 3.960 −6.9 −9.4
+
+QK 1.896 4.308 1.627 4.018 1.537 3.911 −6.7 −9.2        
+
+> Note: Walk-forward (WF, 2021–2024) and 2025 out-of-time (OOT) Sharpe ratios for each sizing method, evaluated under three entry-fill assumptions: mid (50% spread cov., the headline assumption), 75% spread cov. (sell at
+> 0.75 ·bid + 0 .25 ·ask), and sell at bid (100% spread cov., worst case). The percentage indicates the share of the bid-ask spread given up to the market. Per-method daily P&L is recomputed at each stressed entry premium with the model’s selections, gate decisions, and per-day position size Qheld fixed at their headline values. The OOT % drag columns report the percentage change in OOT Sharpe relative to the mid-fill OOT Sharpe.
+
+# 7 Mechanism Analysis 
+
+## 7.1 Confidence gate 
+
+The confidence gate is a per-window calibrated abstention threshold τ . The model produces a real-valued confidence signal per day, defined as the score gap between the highest-ranked and second-highest-ranked candidate (top-1 minus top-2). The threshold τ is calibrated on the last six months of each training window, held out from feature engineering and ranker training, by a one-dimensional grid search that maximizes the Sortino ratio on the held-out slice. At inference time, on any prediction day with confidence signal below τ ⋆, the per-day position size is set to zero regardless of the model’s pick, and the strategy abstains for the day. Table E.1, in Appendix E, reports the calibrated τ ⋆ and the implied trade rate per window. Two walk-forward windows (2021 and 2024) calibrate to a low τ ⋆ near zero with implied trade rates of 100% and 40 .0% respectively. The 2022 and 2023 windows calibrate to τ ⋆ values of 
+
+0.20 and 0.16 , with implied trade rates of 50 .4% and 30 .6% . The 2025 out-of-time slice and the union calibration over all walk-forward held-out slices both calibrate to τ ⋆ = 0 with a 38 100% trade rate. In both cases the held-out Sortino was strictly higher under no abstention than under any positive threshold considered. Across the four walk-forward windows the calibrated trade rate spans 30 .6% to 100% , a 3.3× range. The gate binds only in the windows whose calibration returned a positive threshold, 2022 through 2024, and admits every day in 2021 and in the 2025 out-of-time slice, where τ ⋆ = 0 .The gate is one realization of selective prediction. Its advantage over a forced-prediction baseline depends on the abstention region tracking the model’s epistemic uncertainty rather than the unconditional difficulty of the prediction task. The top-1-versus-top-2 score gap is a proxy for the ranker’s epistemic uncertainty over the candidate set on a given day, and the per-window Sortino calibration locates the threshold at the value that maximizes the held-out Sortino, which by construction rewards downside reduction more strongly than it penalizes forfeited upside. 
+
+## 7.2 Feature survival across selection windows 
+
+The selection pipeline runs independently in each walk-forward window, applying the same five stages to that window’s training data. The out-of-time window runs through the same pipeline on data through 2024, so its feature set is fixed before any 2025 observation enters the evaluation. Because each window draws on a different sample period, the surviving feature set varies by window. Across the four walk-forward windows and the out-of-time window, 85 unique features are selected at least once. The full distribution is concentrated at the extremes: 27 features survive in all five, 10 in four, 16 in three, 13 in two, and 19 in only one (the long tail of window-specific features that pass the relevance threshold for a particular sample period and then drop out elsewhere). The 27 features that survive in every window map cleanly onto economic mechanisms. Position greeks and exposures dominate with eight features: the four base greeks (delta, gamma, theta, and vega) plus dollar-delta, gamma exposure, log-moneyness, and the leverage measure. These are included to describe the risk profile each candidate carries. Volatility-surface features contribute three (the 252-day percentile of 1DTE ATMF IV, the intraday range of 10DTE ATMF IV, and the IV-to-spot-change ratio at 1DTE close), which supply same-session context on the level of the surface and its recent movement. Three intra-strategy features (delta-distance-from-target and the IV-at-strike-minus-ATMF measures in level and percent form) tell the model how far each candidate is from the ideal point on the surface. Three entry-liquidity features (bid-ask spread in dollars and percent, and log entry premium) prevent the ranker from selecting candidates that will be expensive to execute. Two VIX features capture short-horizon implied-volatility momentum. Two index features carry SPX 1-day returns and 252-day realized volatility. Two calendar features (the post-holiday-session indicator and the days-until-next-PCE counter) capture the macro-event-day patterns the model uses for sizing-related discrimination. The remaining four comprise two regime-conditional interaction terms (delta interacted with the VIX level, and gamma interacted with annualized morning realized volatility), one within-day-rank feature (the cross-sectional rank of the IV-at-strike-minus-ATMF measure), and one per-strategy statistic (the 30-day win rate). This always-selected core is a small subset, about 14% of the roughly 190 candidate features. The cross-window stability of the selection itself is summarized by the pairwise Jaccard 39 similarity of the surviving feature sets. The mean pairwise Jaccard across the four walk-forward windows and the OOT 2025 window is 0.58, with values ranging from 0.47 (the most-distant pair, 2022 vs OOT 2025) to 0.67 (the closest pair, 2023 vs 2024). Figure F.1, in Appendix F, shows the per-window survival pattern across the top 60 features as a heatmap. The 27 always-surviving features appear as the contiguous top block of always-on cells. Interpreted in the framework of Nogueira et al. (2018), who formalize selection stability as an expected-Jaccard-based statistic, a mean Jaccard of 0.58 across the five expanding training windows indicates a moderately stable selection. This is consistent with a persistent underlying signal, not a window-specific artifact. 
+
+## 7.3 Mechanism contribution decomposition 
+
+Table 10 separates the contributions of the two risk controls added to the base pipeline: the confidence gate, the abstention rule of Section 3.5 applied to the ranker’s daily output, and the three tail-risk features of Section 6.3, model inputs that mark days of elevated stress through the realized-versus-implied volatility surprise, the candidate’s recent drawdown, and the VIX z-score. In the headline configuration only the prior-close drawdown signal survives the selection pipeline, in four of the five windows, so the family also acts through the composition of the candidate catalog that the selection stages see. Four configurations are generated from the headline by toggling the confidence gate and the tail-risk features and changing nothing else, so the ranker, the selection pipeline, the training split, the sizing rule and the execution assumptions are common to all four. The gate is disabled by restricting its calibration grid to a trade rate of one, which holds the held-out-slice training discipline fixed and leaves the threshold admitting every day. Out of time the result rests on the configuration with neither risk control. With both controls disabled the strategy earns an out-of-time Sharpe of 5.221 against 0.175 for the CBOE PUT comparator, so 5.046 of the 5.586 gap is present before either control is added. The tail-risk features add 0.652 , the confidence gate adds 0.012 , and the interaction is −0.124 . The gate’s main effect is negligible because its 2025 calibration returns τ ⋆ = 0 in every configuration and admits every day of the hold-out, as Section 7.1 reports. The walk-forward slice, where the gate does bind, gives the opposite pattern. With both controls disabled walk-forward Sharpe is 0.623 . Adding the tail-risk features alone lowers it to 0.160 , adding the gate alone raises it to 0.759 , and the two together produce 3.105 . The interaction of +2 .809 exceeds either main effect, so the two controls are complementary rather than additive. The pattern is consistent with the gate withholding capital on days the tail-risk features mark as adverse, though the grid does not itself establish that day-level overlap, and neither device does much without the other. Read together, the two panels place the out-of-time performance in the pipeline with neither control, a baseline that bundles the ranker with the sizing rule, the margin model, and the execution assumptions, and the walk-forward performance in the joint action of the two controls, whose value appears in the windows where they bind rather than in the hold-out year. The gate withholds capital on low-confidence days in 2022 through 2024 and on no day of 2025. The grid also shows that measuring either control alone would misstate it, since on walk-forward the tail-risk features lower Sharpe when the gate is absent and raise it when the 40 gate is present. Table 10. Mechanism contribution decomposition for Edge Allocation. Sharpe (WF) Sharpe (OOT) 
+
+Panel A. Configuration grid 
+
+Neither control 0.623 5.221 Tail-risk features only 0.160 5.873 Confidence gate only 0.759 5.233 Both controls (headline) 3.105 5.761 
+
+Panel B. Additive decomposition 
+
+Baseline, neither control 0.623 5.221 Tail-risk features, main effect −0.463 +0 .652 
+
+Confidence gate, main effect +0 .136 +0 .012 
+
+Interaction +2 .809 −0.124 
+
+Total (headline) 3.105 5.761 CBOE PUT comparator 0.680 0.175  
+
+> Note: Two-by-two ablation of the two risk controls added to the base pipeline, the confidence gate and the three tail-risk features (the realized-versus-implied volatility surprise, the per-strategy prior-close drawdown, and the 60-day VIX z-score, Appendix B), under Edge Allocation. The four configurations are generated from the headline by toggling those two elements and differ from it in nothing else, so the training window, the label scheme, the selection pipeline, the sizing rule and the execution assumptions are common to all four. The gate is disabled by restricting its calibration grid to a trade rate of one, which holds the held-out-slice training split in force and leaves the calibrated threshold admitting every day. Panel B measures each main effect at the other factor’s disabled level and reports the interaction as the residual of the grid, so the four entries sum to the headline exactly. On the out-of-time slice the gate calibrates to a zero threshold in all four configurations and admits every day, which is why its main effect there is negligible. On the walk-forward slice the gate binds, at calibrated trade rates of 0.50, 0.31 and 0.40 in 2022, 2023 and 2024, and the interaction exceeds both main effects, so the walk-forward main effects should not be read on their own. Walk-forward covers 2021 to 2024, out-of-time is the 2025 hold-out.
+
+## 7.4 Discussion 
+
+The strategy harvests an empirical wedge between the implied volatility embedded in equity-index option prices and the volatility that is subsequently realized over a comparable horizon. Bondarenko (2019) reports an average VIX of 19 .3% against an average subsequently realized one-month volatility of 15 .1% from 1990 to 2018, a wedge of 4.2 annualized percentage points. Carr and Wu (2009) document the same wedge through synthetic variance-swap returns. In their sample the long-variance-swap position earns a statistically significant negative average return at one-month horizons, equivalent in sign to a positive expected return on the short side of the same trade. The economic interpretation is that option buyers pay an insurance premium against the catastrophic-loss tail of equity-index movements, with the marginal seller absorbing that tail in exchange for the premium. The strategy reported in this paper does not harvest the volatility risk premium uniformly across days. The LightGBM ranker selects, on each trading day, the delta bucket where the 41 gap between implied volatility and expected realized volatility is widest in the cross-section of nine candidates, conditional on a feature set that combines the volatility-surface state, the prior-day realized distribution, and a set of regime indicators. The confidence gate of Section 7.1 abstains on days when the model’s top-1-versus-top-2 score gap is small, which is a proxy for elevated uncertainty over the candidate ranking. Taken together, the strategy operates as a regime-conditional and uncertainty-aware harvester of the volatility risk premium rather than an unconditional short-volatility exposure. The closest passive short-volatility comparators are unhedged short-put strategies of the type characterized empirically by Israelov and Tummala (2017). The headline strategy’s seven sizing methods produce 2025 out-of-time Sharpe ratios in the range 4.31 to 5.76 , against 0.175 
+
+for the CBOE PUT index over the same hold-out period (Section 5.6). The deepest sample-period drawdown across the seven methods is −9.25% (Section 5.2), considerably below the magnitudes documented for unhedged short-put strategies during 2008, 2018, and 2020 stress events. The decomposition reported in Table 10 attributes the gap between the headline strategy and the passive comparator mainly to the pipeline without the two risk controls, which supplies 5.046 of out-of-time Sharpe before either control is added, with the tail-risk features adding 0.652 and the gate, inactive on this slice, 0.012 . The empirical advantage over the passive short-volatility comparator therefore reflects regime-conditional harvesting of the volatility risk premium rather than higher leverage applied to the same exposure, with the uncertainty-aware component contributing on the walk-forward windows where the gate binds. 
+
+# 8 Conclusions 
+
+The volatility risk premium in S&P 500 index options is one of the most persistent empirical regularities in the literature on equity-index derivatives, and passive harvesters such as the CBOE PUT and WPUT indices capture this premium through static short-put rules that allocate capital identically across regimes and absorb the same fixed exposure during stress windows. This paper asks whether a more selective harvester, based on cross-sectional ranking of candi-date strategies in place of a static rule, can extract a larger fraction of the available premium without incurring the stress-window losses that limit the passive baselines. The framework applies a LightGBM LambdaRank ranker to a cross-section of nine candidate strategies in the SPXW zero-day-to-expiration market, comprising eight delta-targeted short-put positions and a SKIP option, with a confidence gate that abstains under elevated model uncertainty. The strategy is evaluated under index-option margin requirements, a tiered fee schedule, and bid-to-mid execution assumptions, with a four-window walk-forward over 2021–2024 and a strictly held-out 2025 out-of-time slice that is never used for training, hyperparameter search, or model selection. On the 2025 hold-out the ranker delivers risk-adjusted returns that exceed both the passive short-volatility benchmarks and the panel of internal selection baselines, and the advantage survives explicit margin requirements, fee schedules, and slippage stress. The seven sizing methods produce annualized Sharpe ratios between 4.31 and 5.76 , and every method exceeds the three external benchmarks (CBOE PUT, CBOE WPUT, SPX buy-and-hold) by at least 3.84 
+
+42 and the five internal selection baselines by at least 3.69 . The headline strategy’s Sharpe of 5.76 
+
+corresponds to a Probabilistic Sharpe Ratio of 0.964 against the worst external benchmark and an out-of-time maximum drawdown of −1.43% , against −2.28% over the walk-forward. Those out-of-time figures rest on a single calendar year. Every method’s out-of-time Sharpe exceeds its own walk-forward figure by more than 2.4 units, and Section 5.4 reports a per-year range for the headline method running from 0.41 in 2024 to 6.52 in 2021. The hold-out result is one draw from that spread, not a stable operating level. The advantage holds on both the risk-adjusted and the absolute margin, but the two are established with different strength. On the out-of-time slice Edge Allocation earns 10 .48% in excess of the risk-free rate, against 8.84% 
+
+for the SPX buy-and-hold and 2.52% for the CBOE PUT index, at a realized volatility of 1.82% 
+
+against 19 .12% and 14 .36% respectively. The same ordering holds on walk-forward, although the margin over buy-and-hold narrows there to 10 .91% against 10 .11% . The risk-adjusted comparison is the more secure of the two. As Section 5.6 reports, the Diebold–Mariano test does not reject equality of mean daily P&L against any external benchmark after a Bonferroni correction, so the level difference, positive in every cell, is not statistically resolved on a single hold-out year. The size of that ratio has no counterpart in the option-writing literature, and the comparison is worth stating explicitly. Whaley (2002) reports a monthly Sharpe ratio of 0.234 for the CBOE BuyWrite index over June 1988 to December 2001 against 0.172 for the S&P 500 portfolio, which annualize to 0.81 and 0.59 , and Bondarenko (2019) reports 0.65 for the PUT index against 0.49 for the index over June 1986 to December 2018. The passive benchmarks of this paper land at or below that band on the present sample, at 0.68 for PUT and 0.14 for WPUT on the walk-forward and 0.18 and 0.13 out-of-time. A headline of 5.76 is therefore roughly seven times the highest of those figures, and the excess comes mainly from the denominator. Edge Allocation earns 10 .48% in excess of the risk-free rate on the hold-out against 8.84% for the buy-and-hold, while its denominator is 1.82% against 19 .12% . Two features of the design produce that denominator. Returns are measured per unit of posted collateral on positions the calibration sizes toward a 16% volatility anchor that no method reaches (Section 3.7), and abstention combined with the zero-day structure leaves a large share of sessions at or near zero profit and loss. The level is therefore not the same quantity as an index Sharpe ratio, since matching the PUT index’s out-of-time volatility would require scaling Edge Allocation by a factor of nearly eight, which margin, capacity, and overnight gap risk do not permit, and which is the reason the hold-out figure is read above as an upper bound on live deployment. Whaley (2002) also supplies the reason for reading any such ratio cautiously, since he finds the BuyWrite distribution negatively skewed at −1.44 with excess kurtosis of 4.98 and rejects normality, and standard mean-variance measures reward that shape. The assessment in Section 5.3 rests on the Probabilistic and Deflated Sharpe ratios, which price that shape and discount the headline, with the out-of-time deflated Sharpe ratio falling between 0.856 and 0.913 and the Diebold–Mariano test failing to reject equality of mean daily profit and loss. What the passive literature supports is the ordering of these methods on a common sample and a common excess basis, not the multiple between the two levels. The strategy’s return is regime-conditional, and the conditioning transfers from the walk-forward training period (2021–2024) to the 2025 out-of-time hold-out. Annualized return in the top realized-volatility tercile exceeds the bottom tercile for all seven methods out of time 43 and for six of the seven on walk-forward. On the walk-forward VIX panel the return peaks in the mid-VIX band for six of the seven methods, and rises from 0.50% on low-VIX days to 
+
+15 .40% on high-VIX days for the headline method alone. The risk-adjusted ratio peaks in the mid-VIX regime for five of the seven, because the volatility of the strategy’s own returns rises faster than the premium it collects. The out-of-time VIX extremes rest on twenty-odd days each and are not interpreted. Engineered multiplicative interactions of per-strategy exposures with volatility-state regime variables carry a substantial part of the walk-forward ranking signal. The fifteen-group feature ablation identifies the seven-feature multiplicative-interaction group as one of the largest contributors to walk-forward statistical confidence: removing it collapses walk-forward Probabilistic Sharpe from 1.000 to 0.229 , while out-of-time Sharpe loses about 0.72 .A two-by-two ablation of the confidence gate against the tail-risk features places 5.05 of the 5.59 out-of-time Sharpe gap over the CBOE PUT benchmark with the LightGBM ranker and the selection layer. The two risk controls add 0.54 between them, and the gate’s share of that is negligible because it admits every day of the hold-out year. On the walk-forward slice, where the gate binds, the ordering reverses. Neither control reproduces the headline on its own and their interaction supplies 2.81 of the 3.11 recorded there. In conclusion, the harvesting is conditional. The regime panels place the premium capture in the mid-volatility band, and the gate withholds exposure on walk-forward days when the top-1-versus-top-2 gap falls below its calibrated threshold. The paper makes two contributions. First, it provides an empirical demonstration that a selection architecture built around a learning-to-rank model can select profitable short-volatility positions on SPXW zero-day-to-expiration options, assessed against a stricter standard of evidence than the raw Sharpe ratios usual in this literature. The demonstration concerns the ranking model together with the selection layer, which carry the out-of-time gap between them, while the two risk controls earn their place on the walk-forward slice, where they act jointly. Every Probabilistic Sharpe Ratio in Table 6 exceeds 0.95 .The Deflated Sharpe Ratio, which prices the breadth of the configuration search back out, reaches that level on the walk-forward slice for Edge Allocation and Short-Richness Scaling and for no method on the out-of-time slice, a shortfall that Section 5.3 attributes to the single calendar year of hold-out data and the trial penalty acting together. Second, it sets out an architectural pattern combining a model, a confidence gate, and volatility-targeted sizing, and the two-by-two ablation evaluates each component’s contribution separately. Two of the study’s limitations deserve particular mention. The 2018–2025 sample contains no sustained 2008-style systemic stress. The deepest in-sample shock is the COVID-19 episode of March 2020, which was short and coincided with a rapid central-bank response. A future regime with a different stress microstructure would test the confidence gate more severely than anything in the sample, and it could produce drawdowns larger than the headline maximum. The backtest assumes immediate fills at the configured price field and does not model adverse selection, limit-order queue position and fill probability, or market impact at higher capital. The reported headline out-of-time Sharpe should therefore be read as an upper bound on what a live deployment would achieve at the same capital base. 44 References 
+
+Akiba, T., Sano, S., Yanase, T., Ohta, T., and Koyama, M. (2019). Optuna: A Next-generation Hyperparameter Optimization Framework. In Proceedings of the 25th ACM SIGKDD Interna-tional Conference on Knowledge Discovery & Data Mining , KDD ’19, pages 2623–2631, New York, NY, USA. Association for Computing Machinery. Andersen, T. G., Fusari, N., and Todorov, V. (2015). The risk premia embedded in index options. 
+
+Journal of Financial Economics , 117(3):558–584. Andersen, T. G., Fusari, N., and Todorov, V. (2017). Short-Term Market Risks Implied by Weekly Options. The Journal of Finance , 72(3):1335–1386. Bailey, D. H. and Lopez de Prado, M. (2012). The Sharpe Ratio Efficient Frontier. Journal of Risk , 15(2). Bailey, D. H. and Lopez de Prado, M. (2014). The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality. The Journal of Portfolio Management , 40(5):94– 107. Bakshi, G. and Kapadia, N. (2003). Delta-Hedged Gains and the Negative Market Volatility Risk Premium. The Review of Financial Studies , 16(2):527–566. Barak, S., Mousavi, A., and Hosseini, S. A. (2025). Deep Reinforcement Learning for Dynamic Learn to Rank: A Risk-Aware Framework for Cryptocurrency. Battalio, R., Shkilko, A., and Van Ness, R. (2016). To Pay or Be Paid? The Impact of Taker Fees and Order Flow Inducements on Trading Costs in U.S. Options Markets. The Journal of Financial and Quantitative Analysis , 51(5):1637–1662. Black, F. and Scholes, M. (1973). The Pricing of Options and Corporate Liabilities. Journal of Political Economy , 81(3):637–54. Black, K. and Szado, E. (2022). 35-Year Performance Analysis of Cboe S&P 500 Option-Selling Indices. Journal of Beta Investment Strategies , 13(3). Bollerslev, T., Gibson, M., and Zhou, H. (2011). Dynamic estimation of volatility risk premia and investor risk aversion from option-implied and realized volatilities. Journal of Econometrics ,160(1). Bondarenko, O. (2014). Why Are Put Options So Expensive? The Quarterly Journal of Finance ,04(03):1450015. Bondarenko, O. (2019). Historical Performance of Put-Writing Strategies. Božović, M. (2025). Intraday Jumps and 0DTE Options: Pricing and Hedging Implications. Broadie, M., Chernov, M., and Johannes, M. (2009). Understanding Index Option Returns. The Review of Financial Studies , 22(11):4493–4529. 45 Burges, C. J. (2010). From RankNet to LambdaRank to LambdaMART: An Overview. Technical Report MSR-TR-2010-82, Microsoft. Burrello, J., Fabozzi, F. J., Liang, H., Sood, A., and Vatanen, K. (2024). Applications of stock index options for income enhancement. Journal of Asset Management , 25(6):579–588. Carr, P. and Wu, L. (2009). Variance Risk Premiums. The Review of Financial Studies , 22(3):1311– 1341. Chicago Board Options Exchange (2022). Cboe to Add Tuesday and Thursday Expirations for SPX Weeklys Options. Press release, Cboe Global Markets. Constantinides, G. M., Jackwerth, J. C., and Savov, A. (2013). The Puzzle of Index Option Returns. The Review of Asset Pricing Studies , 3(2):229–257. Cont, R. and da Fonseca, J. (2002). Dynamics of implied volatility surfaces. Quantitative Finance ,2(1):45–60. Corradi, V., Distaso, W., and Mele, A. (2013). Macroeconomic determinants of stock volatility and volatility premiums. Journal of Monetary Economics , 60(2):203–220. Da Fonseca, J. and Xu, Y. (2019). Variance and skew risk premiums for the volatility market: The VIX evidence. Journal of Futures Markets , 39(3):302–321. Diebold, F. X. and Mariano, R. S. (1995). Comparing Predictive Accuracy. Journal of Business & Economic Statistics , 13(3):253–263. Do, B. H., Foster, A., and Gray, P. (2016). The Profitability of Volatility Spread Trading on ASX Equity Options. Journal of Futures Markets , 36(2):107–126. Duan, J. and Kashima, H. (2021). Learning to Rank for Multi-Step Ahead Time-Series Forecasting. 
+
+IEEE Access , 9:49372–49386. Faias, J. A. and Santa-Clara, P. (2017). Optimal Option Portfolio Strategies: Deepening the Puzzle of Index Option Mispricing. Journal of Financial and Quantitative Analysis , 52(1):277–303. Geifman, Y. and El-Yaniv, R. (2017). Selective classification for deep neural networks. In 
+
+Proceedings of the 31st International Conference on Neural Information Processing Systems ,NIPS’17, pages 4885–4894, Red Hook, NY, USA. Curran Associates Inc. Gunnarsson, E. S., Isern, H. R., Kaloudis, A., Risstad, M., Vigdel, B., and Westgaard, S. (2024). Prediction of realized volatility and implied volatility indices using AI and machine learning: A review. International Review of Financial Analysis , 93:103221. Hong, H., Sung, H.-C., and Yang, J. (2018). On profitability of volatility trading on S&P 500 equity index options: The role of trading frictions. International Review of Economics & Finance , 55:295–307. 46 Huang, S.-C., Chiou, C.-C., Chiang, J.-T., and Wu, C.-F. (2020). A novel intelligent option price forecasting and trading system by multiple kernel adaptive filters. Journal of Computational and Applied Mathematics , 369:112560. Israelov, R. and Klein, M. (2016). Risk and Return of Equity Index Collar Strategies. The Journal of Alternative Investments , 19(1):41–54. Israelov, R. and Tummala, H. (2017). Which Index Options Should You Sell? Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., and Liu, T.-Y. (2017). LightGBM: A Highly Efficient Gradient Boosting Decision Tree. In Advances in Neural Information Processing Systems , volume 30. Curran Associates, Inc. Kelly Jr., J. L. (1956). A New Interpretation of Information Rate. Bell System Technical Journal ,35(4):917–926. Linger, M., Mellouki, I., and Boulanger, G. (2025a). Unifying Asset Ranking and Portfolio Weighting through a Multi-Task Neural Network. The Journal of Financial Data Science ,7(2):84–104. Linger, M., Metz, T., Sbai, K., and Boulanger, G. (2025b). Enhancing Long–Short Portfolios: A Refined Approach Using Learn-to-Rank Algorithms. The Journal of Financial Data Science ,7(1):76–97. Malkiel, B. G., Rinaudo, A., and Saha, A. (2018). Option Writing: Using VIX to Improve Returns. 
+
+The Journal of Derivatives , 26(2):38–49. Natenberg, S. (2015). Option Volatility and Pricing , chapter Chapter 20: Volatility Revisited. McGraw-Hill Education, New York, 2nd edition. Nogueira, S., Sechidis, K., and Brown, G. (2018). On the Stability of Feature Selection Algorithms. 
+
+Journal of Machine Learning Research , 18(174):1–54. Patel, P., Raquel, A., and Chadwick, S. (2024). The cash-secured put-write strategy and the variance risk premium. Journal of Asset Management , 25(1):31–50. Poh, D., Lim, B., Zohren, S., and Roberts, S. (2021). Building Cross-Sectional Systematic Strategies by Learning to Rank. The Journal of Financial Data Science , 3(2):70–86. Santa-Clara, P. and Saretto, A. (2009). Option strategies: Good deals and margin calls. Journal of Financial Markets , 12(3):391–417. Schwalbach, J. B. M. and McClelland, D. (2018). An analysis of short put strategies and their role in asset allocation. Investment Analysts Journal , 47(3):272–283. Sharpe, W. F. (1994). The Sharpe Ratio. The Journal of Portfolio Management , 21(1):49–58. Sheu, H.-J. and Wei, Y.-C. (2011). Effective options trading strategies based on volatility forecasting recruiting investor sentiment. Expert Systems with Applications , 38(1):585–596. 47 Song, Q., Liu, A., and Yang, S. Y. (2017). Stock portfolio selection using learning-to-rank algorithms with news sentiment. Neurocomputing , 264:20–28. Sortino, F. A. and Price, L. N. (1994). Performance Measurement in a Downside Risk Framework. 
+
+The Journal of Investing , 3(3):59–64. Tannous, G. F. and Lee-Sing, C. (2008). Expected Time Value Decay of Options: Implications for Put-Rolling Strategies. Financial Review , 43(2):191–218. Thorp, E. O. (2008). The kelly criterion in blackjack sports betting, and the stock market. In 
+
+Handbook of Asset and Liability Management , pages 385–428. North-Holland, San Diego. Thorp, E. O. (2011). Understanding the Kelly Criterion. In The Kelly Capital Growth Investment Criterion , volume Volume 3 of World Scientific Handbook in Financial Economics Series , pages 509–523. World Scientific. Ungar, J. and Moran, M. T. (2009). The Cash-secured PutWrite Strategy and Performance of Related Benchmark Indexes. The Journal of Alternative Investments , 11(4):43–56. Vasquez, A. (2017). Equity Volatility Term Structures and the Cross Section of Option Returns. 
+
+Journal of Financial and Quantitative Analysis , 52(6):2727–2754. Vasquez, A., Amaya, D., Pearson, N. D., and Garcia-Ares, P. A. (2025). 0DTE Index Options and Market Volatility: How Large is Their Impact? Whaley, R. E. (2002). Return and Risk of CBOE Buy Write Monthly Index. The Journal of Derivatives , 10(2):35–42. Wu, M.-C., Huang, S.-H., and Chen, A.-P. (2024). Momentum portfolio selection based on learning-to-rank algorithms with heterogeneous knowledge graphs. Applied Intelligence ,54(5):4189–4209. Zhang, X., Wu, L., and Chen, Z. (2022). Constructing long-short stock portfolio with a new listwise learn-to-rank algorithm. Quantitative Finance , 22(2):321–331. 48 Appendix 
+
+# A Performance and Risk Metrics Definitions 
+
+This appendix lists the formulas and conventions used to evaluate the in- and out-of-sample performance of the strategies analyzed in this study. All annualized metrics assume 252 trading days per calendar year. The Sharpe, Sortino, Probabilistic, and Deflated Sharpe ratios are computed on excess returns, and the two sides of every comparison reach that basis by different routes. A strategy return is the day’s profit and loss per unit of collateral. The collateral is held in cash and earns the risk-free rate, so the series is already in excess of it and no further deduction is applied. Deducting the rate as well would charge it twice and would make an abstention day, on which the strategy holds only cash, register as a loss. The three external index benchmarks are total-return series, so each is converted to excess by subtracting the EFFR rate for the day, expressed in decimal form and divided by 252. Drawdown-based metrics and trade counts use unadjusted strategy returns. 
+
+## A.1 Return and risk components 
+
+• Daily returns ( ri): the simple return of the equity curve from one trading day to the next. With Pi the portfolio value at the close of day i:
+
+ri = Pi − Pi−1
+
+Pi−1
+
+(29) • Excess daily returns ( ˜ri): ri expressed net of the risk-free rate, which the strategy and benchmark series reach by different routes. With rfi the EFFR rate on day i in decimal form: 
+
+˜ri =
+
+
+
+ri strategy series 
+
+ri − rfi
+
+252 external benchmark series. (30) • Annualized compounded return (aRC): the geometric annualized growth rate of the strategy. For a sample of N trading days: 
+
+aRC =
+
+> N
+
+Y
+
+> i=1
+
+(1 + ri)
+
+!252 
+
+> N
+
+− 1 (31) • Annualized standard deviation (aSD): the annualized sample volatility of daily returns. With ¯r the arithmetic sample mean of the N -day series: 
+
+aSD = √252 ·
+
+vuut 1
+
+N − 1
+
+> N
+
+X
+
+> i=1
+
+(ri − ¯r)2 (32) 49 • Annualized downside deviation (aDD): the annualized root-mean-square of the negative-return tail, with target zero. Positive returns are floored at zero before squaring, and the average is taken over all N days: 
+
+aDD = √252 ·
+
+vuut 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ min( ri, 0) 2 (33) • Maximum drawdown (MD): the largest peak-to-trough percentage decline in the equity curve: 
+
+M D = max   
+
+> τ∈[0 ,T ]
+
+max t∈[0 ,τ ] Pt − Pτ
+
+max t∈[0 ,τ ] Pt
+
+
+
+(34) 
+
+## A.2 Risk-adjusted return ratios 
+
+• Sharpe ratio (SR): the standard risk-adjusted return measure of Sharpe (1994), computed on excess returns: 
+
+SR = aRC (˜ r)
+
+aSD (˜ r) (35) • Sortino ratio: an asymmetric variant that penalizes only downside volatility (Sortino and Price, 1994): Sortino = aRC (˜ r)
+
+aDD (˜ r) (36) The numerator of each ratio above is the compounded annual growth rate of the excess-return series, not its annualized arithmetic mean. For a series of simple returns with a positive mean and daily volatility as low as the series reported here, compounding over 252 days grows faster than multiplying the daily mean by 252, so the Sharpe ratio reported here sits slightly above its counterpart under the arithmetic convention. For the headline method on the out-of-time slice the two conventions give 5.761 and 5.489 respectively. The gap widens with the mean and is second-order at the return levels reported here. The probabilistic assessment below operates on the same daily excess-return series, but forms its Sharpe input as the ratio of the daily arithmetic mean to the daily standard deviation. The point estimate behind a reported PSR or DSR is therefore the arithmetic analogue of the Sharpe ratio tabulated beside it, and is the smaller of the two. 
+
+## A.3 Probabilistic performance assessment 
+
+Short-volatility strategies generate non-normal, negatively skewed return distributions for which point-estimate Sharpe ratios mis-state estimator uncertainty. To assess whether the realized Sharpe reflects a true Sharpe at or above an external benchmark, rather than an artifact of finite-sample noise, distributional asymmetry, or selection from a search over candidate configurations, we use the Probabilistic Sharpe Ratio of Bailey and Lopez de Prado (2012) and the Deflated Sharpe Ratio of Bailey and Lopez de Prado (2014). 50 • Probabilistic Sharpe Ratio (PSR): the probability that the true Sharpe ratio of the strategy exceeds a benchmark SR ∗, given the observed sample skewness ˆγ3 and kurtosis 
+
+ˆγ4:
+
+[P SR (SR ∗) = Φ 
+
+ ( cSR − SR ∗)√N − 1
+
+q
+
+1 − ˆγ3 cSR + ˆγ4−14 cSR 2
+
+ (37) where Φ( ·) is the standard-normal cumulative distribution function, N is the number of return observations, ˆγ4 is the sample kurtosis (not excess kurtosis, so ˆγ4 = 3 under Gaussianity), and cSR and SR ∗ are expressed at the same return horizon. SR ∗ is set to the realized daily Sharpe ratio of the named benchmark over the same evaluation slice, on the excess basis defined above. Negative skewness and fat tails enlarge the denominator and lower the PSR for a given point estimate. • Deflated Sharpe Ratio (DSR): the PSR with the benchmark replaced by the expected maximum Sharpe ratio under the null of Nt independent candidate strategies tested in parallel, an adjustment that accounts for selection bias from a multi-configuration search (Bailey and Lopez de Prado, 2014). The expected maximum is approximated as 
+
+E
+
+
+
+max 
+
+> n=1 ,...,N t
+
+cSR n
+
+
+
+≈
+
+rbV
+
+ cSR 
+
+
+
+·
+
+h
+
+(1 − γ) Φ −1
+
+
+
+1 − 1
+
+> Nt
+
+
+
++ γ Φ−1
+
+
+
+1 − 1
+
+> Nt·e
+
+ i (38) where γ ≈ 0.5772 is the Euler–Mascheroni constant, bV
+
+ cSR 
+
+
+
+= 1 /(N − 1) is the variance of the daily Sharpe estimator under the null, and Φ−1(·) is the standard-normal quantile function. The DSR is then 
+
+[DSR = [P SR (SR ∗
+
+> eff
+
+) ,SR ∗ 
+
+> eff
+
+= max 
+
+
+
+SR ∗, E
+
+
+
+max 
+
+> n=1 ,...,N t
+
+cSR n
+
+ (39) By raising the benchmark in proportion to the size of the search space, the DSR is a multiple-testing-aware analogue of the PSR. Both ratios are reported as values rather than reduced to a pass-or-fail classification, the PSR for every method and evaluation slice and the DSR for the three top-ranked methods on both slices. The PSR is computed separately against each external benchmark (CBOE PUT, CBOE WPUT, and the SPX buy-and-hold reference). The DSR is benchmark-independent, because its reference point is the expected maximum Sharpe ratio across the Nt trials rather than a benchmark return. Each value is read as a confidence level attached to that cell, and Section 5.3 states where those levels fall short of the 0.95 level conventionally treated as strong evidence. 
+
+## A.4 Significance testing for benchmark comparisons 
+
+Pairwise comparisons between the strategy and each external benchmark use the Diebold and Mariano (1995) test for equal predictive accuracy applied to daily P&L differentials, with a Bonferroni correction across the family of benchmark tests. 51 • Diebold–Mariano statistic: with di = πAi − πBi the difference between the day-i P&L of strategies A and B, ¯d its sample mean, and ˆσ2 
+
+> d
+
+an estimator of the long-run variance of di,
+
+DM = ¯d
+
+pˆσ2
+
+> d
+
+/N , p-value = 2 [1 − Φ( |DM |)] (40) For a one-step-ahead horizon ( h = 1 ) the sample variance of di is used. For h > 1 the first h − 1 Newey–West-style autocovariance terms are added. • Bonferroni correction: each raw p-value is multiplied by the family size m (the number of benchmark comparisons reported jointly) and capped at one. The Diebold–Mariano comparisons are evaluated at family-wise significance α = 0 .05 .52 B Definitions of Candidate Features 
+
+This appendix documents every feature in the candidate catalog of approximately 190 columns. Each feature group is annotated as cross-sectional (CS, one value per trading day, broadcast across all candidates) or per-strategy (PS, one value per (date, strategy) pair). Feature timing is set by the 10:00 ET entry decision rather than by the calendar day. A timestamp falling on day t is not sufficient on its own, because the closing values of day t also carry a day-t timestamp and are not observable when the position is opened at 10:00 ET that morning. Every predictor built from day-t closing prices, futures settlements, full-day volume or the realized outcome of the day’s trade is therefore held back by at least one trading day, so that the row dated t carries values observed no later than the close of t − 1. Predictors already fixed by 10:00 ET on day t enter without a lag: the calendar and event flags, the 09:30–09:59 morning session window, the 09:35 and 10:00 volatility-surface snapshots, and the entry-time Greeks and liquidity measured at the 10:00 ET snapshot. All rolling statistics are causal within these bounds. Table B.1 states the availability and the lag for each block. Table B.1. Predictor availability and the lag applied to each feature block. Feature block Earliest availability Lag applied Calendar and event flags (CS) Known in advance None Morning-session features (CS), 09:30–09:59 SPX window 10:00 ET, day t None Morning-session features (CS), 09:35-to-10:00 surface changes 10:00 ET, day t None Morning-session features (CS), VIX and VVIX closes Close, day t ≥ 1 trading day SPX index features (CS) Close, day t ≥ 1 trading day VIX family and futures (CS), spot family Close, day t ≥ 1 trading day VIX family and futures (CS), futures front complex Settlement, day t ≥ 1 trading day Macroeconomic indicators (CS) Release, day t ≥ 1 trading day Implied-volatility surface (CS), 10:00 snapshot 10:00 ET, day t None Implied-volatility surface (CS), closing snapshot and intraday changes Close, day t ≥ 1 trading day Realized-minus-implied volatility differentials (CS) Close, day t ≥ 1 trading day Realized higher moments (CS) Close, day t ≥ 1 trading day VIX term-structure curvature (CS) Close, day t ≥ 1 trading day Trend (CS) Close, day t ≥ 1 trading day Position Greeks and exposures (PS) 10:00 ET, day t None Per-strategy rolling statistics (PS) Trade outcome, day t ≥ 1 trading day Entry liquidity (PS) 10:00 ET, day t None Intra-strategy term context (PS) 10:00 ET, day t None Regime-conditional sensitivities (PS) Close, day t ≥ 1 trading day 
+
+Note: Availability and lag for every feature block in the candidate catalog. Lags are counted in trading days rather than calendar days, so a one-day lag spans a weekend or a market holiday whenever one intervenes. Three blocks appear on more than one row, since the lag differs across their sub-blocks. CS denotes cross-sectional and PS per-strategy. 
+
+## B.1 Conventions 
+
+• Pt denotes the SPX closing price on trading day t, and St the intraday SPX mid quote. • rN,t = Pt/P t−N − 1 denotes the N -day simple return, ℓN,t = ln( Pt/P t−N ) the corre-sponding log return. 53 • σ denotes implied or realized volatility in annualized decimal form, τ denotes days to expiration (DTE). • All annualized volatilities use 252 trading days per year. • Implied volatility, the entry-day Greeks, and the ATMF interpolation are computed under Black–Scholes with the EFFR rate as the risk-free rate and no dividends. Omitting the dividend yield raises the assumed forward by a factor of eqτ , an error of under 0.01% 
+
+of spot at the tenors that govern strike selection and the entry-time anchors and a few tenths of one percent at the 90-day tenor, the longest in the catalog. The selected strike is therefore unchanged in practice, and because the bias is one-signed and moves only with the dividend yield, it shifts the level of the longer-dated ATMF series rather than the daily variation the ranker scores on. • Per-strategy features do not take any value on the SKIP candidate where no option is sold. Cross-sectional features are populated for every trading day. • Per-strategy features ending in the suffix _wd_rank are the within-day ordinal rank of the named source feature across the eight delta-bucket candidates. SKIP candidates are assigned rank 8.5, which places them below all eight ranked alternatives. 
+
+## B.2 Calendar and event flags (CS) 
+
+Pure date arithmetic on the NYSE trading calendar plus a release-date table for the major macro announcements. • day_of_week , day_of_month , month_of_year : integer day-of-week (Mon = 1 , Fri 
+
+= 5 ), day-of-month (1–31), and month-of-year (1–12). • is_monthly_opex , is_quarterly_opex : indicator for the third Friday of any month, and for the third Friday of March, June, September, or December. • is_post_holiday_session , is_pre_holiday_session : indicator for the first trading session after, or the last session before, a market holiday. • days_until_next_fomc , days_since_last_fomc : trading-day counts to the next and from the previous FOMC announcement. • is_cpi_day , days_until_next_cpi : release-day indicator and forward count for the BLS CPI announcement. • is_nfp_day , days_until_next_nfp : same for the BLS Employment Situation (Non-farm Payrolls) report. • is_pce_day , days_until_next_pce : same for the BEA Personal Consumption Ex-penditures release. 54 B.3 Morning-session features (CS) 
+
+Features describing the 09:30 to 10:00 ET window. The 10:00 mark is taken as the 09:59 closing mid to avoid leakage from the entry minute itself. Let S09:30 , . . . , S 09:59 be 1-minute SPX mid prices over the window and S(t−1) 16:00 the prior-day close. • morning_spx_log_return : ln( S09:59 /S 09:30 ).• morning_spx_range_pct : (max t St − min t St)/S 09:30 over the 30-minute window. • morning_spx_rv_annualized : annualized realized volatility from minute log-returns, 
+
+σmorn =
+
+vuut252 · 390 · X
+
+> j
+
+
+
+ln Stj
+
+Stj−1
+
+2
+
+where 390 is the number of one-minute bars in a regular trading day. • morning_spx_directionality : close-to-range ratio in [−1, 1] , (S09:59 −
+
+S09:30 )/(max t St − min t St), set to zero when the range is zero. • morning_gap_size : overnight gap, (S09:30 − S(t−1) 16:00 )/S (t−1) 16:00 .• morning_gap_filled : indicator that the prior-day close lies within the 09:30 to 09:59 high-low range. • morning_atmf_iv_change : change in 1-DTE ATMF IV between the 09:35 and 10:00 volatility-surface snapshots. • morning_atmf_iv_pct_change : same change relative to the 09:35 level. • morning_skew_change : change in the 1-DTE 25-delta risk reversal σC 
+
+> 25
+
+− σP 
+
+> 25
+
+between the 09:35 and 10:00 snapshots. • morning_vix_level : VIX close lagged by one trading day. The same-day VIX level is not observable until close, so the row dated t carries the prior-day close. • morning_vix_change , morning_vvix_change : one-day changes in the VIX and VVIX closes, lagged by one trading day for the same observability reason. 
+
+## B.4 SPX index features (CS) 
+
+Multi-horizon SPX returns, intraday realized volatility, and the daily put-call ratios. • spx_{N}_returns for N ∈ { 1d, 5d, 10d, 1m, 3m, 6m, 1y }: N -period simple return 
+
+rN = Pt/P t−N − 1.• spx_returns_roll_avg_30d , spx_returns_roll_std_30d : 30-day rolling mean and standard deviation of spx_1d_returns .55 • spx_{N}d_rv for N ∈ { 5, 21 , 63 , 252 }: annualized realized volatility from daily log returns, 
+
+RV N = √252 ·
+
+vuut 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+
+
+ln Pt−i+1 
+
+Pt−i
+
+2
+
+.
+
+• spx_1y_percentile : 252-day rolling percentile rank of the current SPX close, the fraction of past 252 closes below Pt.• spx_position_52w : normalized position within the 252-day high-low range, 
+
+(Pt − min  
+
+> 252
+
+)/(max  
+
+> 252
+
+− min  
+
+> 252
+
+).
+
+• spx_put_call_ratio , spx_pcr_21d_avg : daily SPX put-call volume ratio and its 21-day rolling mean. • spx_pcr_5d_pct_change , spx_pcr_21d_pct_change : 5- and 21-day percentage changes of the SPX PCR. • vix_put_call_ratio , vix_pcr_21d_avg : daily VIX option PCR and its 21-day mean. • vix_pcr_5d_pct_change , vix_pcr_21d_pct_change : 5- and 21-day percentage changes of the VIX PCR. 
+
+## B.5 VIX family and futures (CS) 
+
+Daily closes for the spot VIX family and the front of the VIX futures complex. • VIX , VIX1D , VIX9D , VIX3M , VIX6M , VVIX : the 30-day VIX, the 1-day, 9-day, 3-month, and 6-month implied volatility indices, and the volatility-of-VIX index VVIX. • VIX_VIX1D_ratio , VIX_VIX9D_ratio , VIX_VIX3M_ratio , VIX_VIX6M_ratio :pairwise ratios of the 30-day VIX to the named tenor. A ratio above one for the short-tenor variants signals near-term term-structure inversion. • VIX_VIX1D_spread , VIX_VIX9D_spread , VIX_VIX3M_spread , VIX_VIX6M_ spread : the corresponding absolute spreads VIX − VIX T .• VIX_5d_pct_change , VIX_21d_pct_change : 5- and 21-day percentage changes of the 30-day VIX. • VIX1D_5d_pct_change , VIX1D_21d_pct_change : same for VIX1D. • VVIX_5d_pct_change , VVIX_21d_pct_change : same for VVIX. • {X}_1y_percentile for X ∈ { VIX , VIX1D , VVIX }: 252-day rolling percentile ranks within their own histories. • vix_futures_front_price : settlement price of the front-month VIX future. 56 • vix_front_slope : front-curve slope M2 − M1, where Mi denotes the settlement of the i-th nearest monthly future. • vix_front_curvature : second-difference proxy for curvature, 2M2 − M1 − M3.Positive values indicate a concave (humped) curve. • front_roll_yield : daily roll yield from holding the front contract, RollYield = M2 − M1
+
+D1
+
+,
+
+where D1 is the number of trading days to expiry of the front contract. • vix_z_60d (CS): z-score of today’s VIX against its trailing 60-day mean and standard deviation, 
+
+z60 d = VIX t − VIX 60 
+
+σVIX ,60 
+
+.
+
+One of the three tail-risk features. 
+
+## B.6 Macroeconomic indicators (CS) 
+
+Daily effective Federal Funds rate (EFFR) from FRED, and seasonally non-adjusted weekly initial unemployment claims forward-filled to the trading calendar. • effr_rate : daily EFFR in decimal form (e.g., 0.0525 for 5.25%). • effr_rate_1y_pct_change : 252-day percentage change of EFFR. • effr_rate_1y_percentile : 252-day rolling percentile rank of EFFR. • jobless_claims : weekly initial unemployment claims (level). • jobless_claims_1y_pct_change , jobless_claims_1y_percentile : 252-day percentage change and percentile rank of the weekly claims series. 
+
+## B.7 Implied-volatility surface (CS) 
+
+Features derived from the SPXW volatility-surface snapshots taken at 09:35 ET, 10:00 ET, and the official close. ATMF IV is the implied volatility of the put closest to the forward strike 
+
+F = S · erT . For each timestamp and DTE target τ , the chain expiration closest to τ is selected and an IV-vs-delta interpolation is fitted, per-delta IV at δ ∈ { 10 , 25 } refers to the IV at 
+
+|∆BSM ∓ δ/ 100 | = 0 for puts and calls respectively. 
+
+ATM-forward IV levels and intraday levels 
+
+• atmf_iv_{ τ }dte_close for τ ∈ { 1, 5, 20 , 30 , 60 , 90 }: closing ATMF IV at the named DTE target. • atmf_iv_1dte_1000 , atmf_iv_5dte_1000 : 10:00 ET ATMF IV at the 1-DTE and 5-DTE targets, used as the intraday entry-time anchors. 57 Per-delta IV levels 
+
+• call_25d_iv_{ τ }dte_close , put_25d_iv_{ τ }dte_close for τ ∈ { 5, 30 }: clos-ing IV of the 25-delta call and put at the named DTE target. 
+
+IV percentile 
+
+• atmf_iv_{ τ }dte_percentile_252d for τ ∈ { 1, 5, 30 }: fraction of past 252 closes on which the ATMF IV at DTE τ was below today’s value, 
+
+IVPct 252 = # {i : σt−i < σ t, i = 1 , . . . , 252 }
+
+252 .
+
+Skew 
+
+With σ∆ 
+
+> C
+
+, σ∆ 
+
+> P
+
+, and σATM the IVs of the ∆-delta call, ∆-delta put, and ATMF option: • risk_reversal_delta25_{ τ }dte_close for τ ∈ { 1, 5, 10 , 20 , 30 }: 25-delta risk reversal σ25  
+
+> C
+
+− σ25  
+
+> P
+
+. A more negative value indicates a steeper downside skew (puts more expensive than equidistant calls). • risk_reversal_delta10_{ τ }dte_close for τ ∈ { 0, 1, 5, 10 , 20 , 30 }: 10-delta risk reversal σ10  
+
+> C
+
+− σ10  
+
+> P
+
+.• put_skew_delta25_{ τ }dte_close for τ ∈ { 1, 5, 20 , 30 }: ATM-normalized put-side skew at 25-delta, 
+
+PutSkew 25 = σATM − σ25 
+
+> P
+
+σATM 
+
+.
+
+• call_skew_delta25_{ τ }dte_close for τ ∈ { 1, 5, 20 , 30 }: analogous call-side mea-sure (σATM − σ25  
+
+> C
+
+)/σ ATM .
+
+Forward implied volatility 
+
+Forward variance is extracted under the additivity assumption that total variance grows linearly with maturity (Natenberg, 2015). For two DTE targets a < b with maturities ti = DTE i/252 ,
+
+σ2 
+
+> a→b
+
+= σ2(tb) · tb − σ2(ta) · ta
+
+tb − ta
+
+.
+
+• atmf_forward_vol_{ a}d_{ b}d_close for (a, b ) ∈ {(5 , 10) , (5 , 30) , (10 , 20) ,
+
+(20 , 30) , (30 , 60) }: forward volatility between the two DTE targets, computed from ATMF IV at each leg. • put_25d_forward_vol_{ a}d_{ b}d_close for (a, b ) ∈ { (5 , 30) , (10 , 20) }: analo-gous forward volatility computed from 25-delta put IV at each leg, capturing the forward-volatility slope along the downside skew. • rv_surprise_5d : realized-vs-implied surprise at the 5-day horizon, 
+
+RV 5 − σATMF ,5 DTE ,5d
+
+σATMF ,5 DTE ,5d
+
+where the comparator is the 5-day rolling mean of atmf_iv_5dte_close . One of the three tail-risk features. 58 IV-to-spot change ratio 
+
+• iv_to_spot_change_ratio_{ τ }dte_close for τ ∈ { 0, 1, 5, 10 , 20 , 30 }: daily ratio of the percentage change in ATMF IV at DTE τ to the percentage change in Pt,
+
+IVSpotRatio = ∆% σATM ,τ 
+
+∆% Pt
+
+.
+
+Strongly negative values are characteristic of the leverage effect (IV up when spot down). 
+
+Intraday ATMF IV dynamics 
+
+For τ ∈ { 0, 10 , 30 }:• atmf_iv_{ τ }dte_intraday_pct_change : close-vs-09:35 percentage change of ATMF IV at DTE τ .• atmf_iv_{ τ }dte_intraday_range : daily high-minus-low range of ATMF IV at DTE 
+
+τ .
+
+## B.8 Realized-minus-implied volatility differentials (CS) 
+
+Derived purely from columns already on the index and volatility-surface frames. • rv_iv_spread_5d : spx_5d_rv − atmf_iv_5dte_close .• rv_iv_ratio_5d : spx_5d_rv / atmf_iv_5dte_close .• rv_iv_spread_21d , rv_iv_ratio_21d : same construction at the 21-day RV vs 20-DTE ATMF IV pair (20 DTE is the closest grid match to 21 trading days). • iv_term_slope_5d_30d : atmf_iv_30dte_close − atmf_iv_5dte_close .• rv_term_slope_5d_21d : spx_21d_rv − spx_5d_rv .• iv_minus_rv_term_slope : iv_term_slope_5d_30d − rv_term_slope_5d_ 21d .
+
+## B.9 Realized higher moments (CS) 
+
+Sample skewness and excess (Fisher) kurtosis of daily SPX log returns over rolling windows. • spx_realized_skew_21d , spx_realized_kurtosis_21d : 21-day rolling skew-ness and excess kurtosis of ℓ1,t .• spx_realized_skew_63d , spx_realized_kurtosis_63d : same statistics at the 63-day window. 59 B.10 VIX term-structure curvature (CS) 
+
+Three convexity-style combinations of VIX-family levels. • vix_curvature_9d_30d_3m : VIX9D − 2 · VIX + VIX3M. • vix_curvature_1d_9d_30d : VIX1D − 2 · VIX9D + VIX. • vix_curvature_1d_30d_3m : VIX1D − 2 · VIX + VIX3M. 
+
+## B.11 Trend (CS) 
+
+Simple-moving-average distances and slope. • spx_distance_from_50dma_pct : (Pt − MA 50 )/MA 50 .• spx_distance_from_200dma_pct : (Pt − MA 200 )/MA 200 .• spx_50_200_dma_signal : sign(MA 50 − MA 200 ), the classical golden / death-cross indicator. • spx_200dma_slope_21d_pct : 21-day percentage change in the 200-day moving aver-age. 
+
+## B.12 Position Greeks and exposures (PS) 
+
+Computed at entry from the Black–Scholes model with EFFR (Black and Scholes, 1973). • delta , gamma , theta , vega : the four Greeks of the candidate option at entry. • dollar_delta : |∆| · 100 , the dollar-delta exposure of one contract (each candidate corresponds to a one-contract position for label purposes). • gamma_exposure : −| Γ| · 100 · Sentry , where Sentry is the SPX mid at the 10:00 ET entry. Captures the dollar P&L per one-point move in the underlying for one short contract. • log_moneyness : ln( K/S entry ).• leverage : |Sentry · ∆/P entry |, where Pentry is the entry-mid premium of the option. 
+
+## B.13 Per-strategy rolling statistics (PS) 
+
+Statistics of the candidate strategy’s own realized return-on-margin series, computed per strategy and lagged by one trading day. Returns are defined as 
+
+ROM t = Gross P&L t
+
+Pentry ,t 
+
+,
+
+the gross P&L of the trade scaled by the entry premium (notional-of-margin convention). On the SKIP candidate ROM is defined to be zero. 60 • returns_on_margin : ROM t on day t.• rom_diff_to_spx : ROM t − rSPX 
+
+> 1d,t
+
+, the strategy’s ROM in excess of the day’s SPX simple return. • rom_roll_avg_30d , rom_roll_std_30d , rom_roll_skew_30d : 30-day rolling mean, sample standard deviation, and skewness of ROM .• sharpe_ratio_rom_60d : 60-day rolling daily Sharpe ratio of ROM , ¯ROM 60 /σ ROM ,60 .• sharpe_ratio_rom_std_60d : 60-day rolling sample standard deviation of sharpe_ ratio_rom_60d itself, a stability proxy for the rolling Sharpe. • drawdown_{N} for N ∈ { 63 , 126 , 252 }: rolling drawdown of the cumulative gross P&L over a window of N trading days, defined as (max N C − Ct)/ max N C with Ct =
+
+P 
+
+> i≤t
+
+Gross P&L i.• distance_from_max_{N} for N ∈ { 63 , 126 , 252 }: absolute distance Ct − max N C in dollar terms. • win_rate_30d : fraction of the trailing 30 days on which ROM > 0.• stability_coef_60d : squared Pearson correlation between ROM t and a within-window time index over the past 60 days, 
+
+StabCoef 60 = [corr(ROM t, t )] 2 ,
+
+a smoothness proxy. Values close to one indicate steadily increasing ROM, values near zero indicate erratic returns. • tail_ratio_rom_30d : ratio of the upper to the lower tail of ROM ,
+
+TailRatio 30 = |Q0.95 (ROM 30 )||Q0.05 (ROM 30 )|.
+
+• prior_day_strategy_drawdown_max_5d : 5-day rolling drawdown of the candidate strategy’s cumulative gross P&L, lagged by one trading day so that the row dated t
+
+reflects the drawdown observed at the close of t − 1. One of the three tail-risk features. • iv_at_strike_minus_atmf_wd_rank : within-day rank of iv_at_strike_ minus_atmf .• returns_on_margin_wd_rank : within-day rank of returns_on_margin .• sharpe_ratio_rom_60d_wd_rank : within-day rank of sharpe_ratio_rom_60d .• drawdown_63d_wd_rank : within-day rank of drawdown_63d .61 B.14 Entry liquidity (PS) 
+
+Captures the bid-ask cost and the size of the entry premium for the candidate option at the 10:00 ET snapshot. • entry_bid_ask_spread : (ask − bid) at entry, in dollars. • entry_bid_ask_spread_pct : (ask − bid) /mid at entry. • entry_log_premium : ln(mid entry ), the log of the entry-mid premium. • entry_bid_ask_spread_pct_wd_rank : within-day rank of entry_bid_ask_ spread_pct .• entry_log_premium_wd_rank : within-day rank of entry_log_premium .
+
+## B.15 Intra-strategy term context (PS) 
+
+Per-candidate features that locate the chosen strike on the surface relative to the ATM forward. • delta_distance_from_target : realized entry delta minus the strategy’s target delta (signed). • iv_at_strike_minus_atmf : IV of the selected strike at entry minus ATMF IV at the same DTE. • iv_at_strike_minus_atmf_pct : same difference relative to ATMF IV. • dte_of_selected_option : days to expiration of the chosen option (typically zero, with a one- or two-day fallback when no 0-DTE expiration exists). 
+
+## B.16 Regime-conditional sensitivities (PS) 
+
+Pairwise products of one PS source with one CS source, intended to let the model encode regime-conditional sensitivities. • delta_x_VIX : ∆ · VIX. • gamma_x_morning_spx_rv_annualized : Γ · σmorn .• vega_x_VIX_5d_pct_change : V · ∆5%VIX. • iv_at_strike_minus_atmf_x_VIX_VIX9D_spread : strike-vs-ATMF IV gap multi-plied by the VIX-minus-VIX9D spread. • theta_x_atmf_iv_5dte_percentile_252d : Θ multiplied by the 5-DTE ATMF IV percentile. • delta_distance_from_target_x_VVIX_1y_percentile : delta-target gap multi-plied by the VVIX 1-year percentile. • gamma_x_dte : Γ multiplied by DTE of the chosen option. 62 C Year-by-year Sharpe heterogeneity 
+
+Section 5.4 discusses year-by-year Sharpe heterogeneity for the headline strategy. Table C.1 reports the annualized Sharpe ratio for each of the seven sizing methods across the four walk-forward years (2021–2024) and the 2025 out-of-time hold-out, with the per-year and per-method values that the body summarizes by range and exception. Table C.1. Per-year Sharpe ratios across sizing methods. Method 2021 2022 2023 2024 2025 (OOT) EA 6.5184 2.5066 1.7852 0.4074 5.7612 FMU 7.3126 1.5074 2.5067 −0.2873 5.0632 SRS 7.3571 2.0167 2.6270 −0.2115 5.2622 VT 7.5322 1.3736 2.8968 0.0462 4.6669 GB 9.2101 1.4893 3.9302 −0.1927 5.0147 HK 7.3126 1.5266 0.0000 −0.5776 4.3711 QK 7.3126 1.5266 0.0000 −0.6205 4.3084 
+
+Note: Each column reports the annualised Sharpe ratio of that calendar year’s daily excess returns alone, computed as the year’s geometric annualised return divided by its annualised standard deviation. The four 2021–2024 years are drawn from the four-window walk-forward, each year’s training window expanding through the prior calendar year, and 2025 is reserved as the out-of-time hold-out, never used during training, model selection, or hyperparameter search. The two fractional-Kelly variants, HK and QK, hold no position on any day of 2023, because the estimated Kelly fraction stays below the abstention threshold throughout the year. The 0.0000 
+
+recorded in that column therefore describes a year without positions rather than a year of trading that earned nothing. 
+
+63 D Regime-conditional performance 
+
+Section 5.5 reports cross-regime patterns for the headline strategy across two regime axes: VIX (forward-looking implied volatility, partitioned at 15 and 25) and realized volatility (backward-looking 5-day intraday, partitioned into equal-quantile terciles). Tables D.1 and D.2 report the underlying per-method, per-regime Sharpe values on the walk-forward and out-of-time slices that the body summarizes by per-axis range and monotonicity. Both tables cover every day in the regime, with abstention days entering at a return of zero, and report the day count and the trade count separately. Table D.1. Headline performance by VIX regime. 
+
+Regime Method Split Sharpe Ann. return Ann. vol. Days Trades low EA WF 0.2611 0.0050 0.0191 223 61 mid EA WF 4.2354 0.1390 0.0328 593 337 high EA WF 2.7675 0.1540 0.0557 148 53 low EA OOT 13.7060 0.0549 0.0040 21 15 mid EA OOT 4.9387 0.0912 0.0185 196 187 high EA OOT 14.4589 0.3100 0.0214 20 18 low FMU WF 2.6184 0.0417 0.0159 223 68 mid FMU WF 4.1695 0.1901 0.0456 593 355 high FMU WF 0.5503 0.0527 0.0958 148 56 low FMU OOT 85.6325 0.1469 0.0017 21 21 mid FMU OOT 5.6371 0.1578 0.0280 196 196 high FMU OOT 5.3274 0.4568 0.0857 20 20 low SRS WF 1.7529 0.0319 0.0182 223 68 mid SRS WF 4.4101 0.1763 0.0400 593 355 high SRS WF 1.0494 0.0867 0.0826 148 56 low SRS OOT 63.9948 0.1258 0.0020 21 21 mid SRS OOT 5.8867 0.1454 0.0247 196 196 high SRS OOT 6.9412 0.5862 0.0845 20 20 low VT WF 5.4640 0.0726 0.0133 223 64 mid VT WF 3.8811 0.2084 0.0537 593 349 high VT WF 0.2859 0.0380 0.1329 148 54 low VT OOT 88.7880 0.2575 0.0029 21 21 mid VT OOT 5.5988 0.2621 0.0468 196 193 high VT OOT 0.1657 0.0164 0.0993 20 20 low GB WF 6.6201 0.0535 0.0081 223 68 mid GB WF 4.4769 0.1944 0.0434 593 355 high GB WF 0.3317 0.0481 0.1451 148 56 low GB OOT 83.2863 0.2378 0.0029 21 21 mid GB OOT 5.5620 0.2632 0.0473 196 196 high GB OOT 5.5906 0.8065 0.1443 20 20 low HK WF 1.8744 0.0366 0.0195 223 55 mid HK WF 3.6559 0.1725 0.0472 593 302 high HK WF 0.3839 0.0473 0.1232 148 55 low HK OOT 55.5100 0.1898 0.0034 21 20 mid HK OOT 4.6566 0.1756 0.0377 196 175 high HK OOT 5.3496 0.6196 0.1158 20 20 low QK WF 1.8152 0.0377 0.0208 223 55 mid QK WF 3.5873 0.1712 0.0477 593 302 high QK WF 0.3349 0.0419 0.1250 148 55 low QK OOT 55.3857 0.1846 0.0033 21 20 mid QK OOT 4.8011 0.1684 0.0351 196 174 high QK OOT 4.8847 0.5697 0.1166 20 20 
+
+64 Note: Sharpe ratios are computed on the daily returns of every day whose VIX close falls in the regime, with days on which the model abstained or the confidence gate blocked entry entering at a return of zero. The Days column counts those days and the Trades column counts how many of them carried a position, so the gap between the two is the abstention rate inside the regime. Returns are computed once on the ordered slice and attributed to the day they were earned on, so the three regime cells partition the slice. VIX is measured at the entry-day close, which is after the 10:00 ET entry, so the classification uses information the strategy itself never sees. Regime thresholds follow the convention VIX < 15 (low), 15 ≤ VIX ≤ 25 (mid), and VIX > 25 (high). The walk-forward (WF) slice covers 2021–2024 across the four expanding-window training cycles. The 2025 out-of-time (OOT) slice covers the hold-out year, never used during training, model selection, or hyperparameter search. Cells resting on fewer than about thirty days carry no useful precision and are reported for completeness rather than interpreted, as Section 5.5 sets out. 
+
+Table D.2. Headline performance by realized-volatility tercile. 
+
+Tercile Method Split Sharpe Ann. return Ann. vol. Days Trades 1 EA WF 2.7711 0.0965 0.0348 322 167 2 EA WF 2.9750 0.0886 0.0298 320 147 3 EA WF 3.5503 0.1416 0.0399 322 137 1 EA OOT 1.5499 0.0411 0.0265 80 77 2 EA OOT 13.9158 0.1025 0.0074 79 72 3 EA OOT 12.2625 0.1767 0.0144 78 71 1 FMU WF 2.6665 0.1021 0.0383 322 176 2 FMU WF 3.6109 0.1273 0.0352 320 157 3 FMU WF 2.2680 0.1689 0.0745 322 146 1 FMU OOT 4.8249 0.1032 0.0214 80 80 2 FMU OOT 3.1131 0.1159 0.0372 79 79 3 FMU OOT 7.7448 0.3362 0.0434 78 78 1 SRS WF 2.4899 0.0838 0.0336 322 176 2 SRS WF 3.8341 0.1168 0.0305 320 157 3 SRS WF 2.8145 0.1838 0.0653 322 146 1 SRS OOT 4.8857 0.0864 0.0177 80 80 2 SRS OOT 3.2211 0.1052 0.0327 79 79 3 SRS OOT 8.2180 0.3567 0.0434 78 78 1 VT WF 2.8840 0.1353 0.0469 322 171 2 VT WF 5.2927 0.1786 0.0337 320 153 3 VT WF 1.3061 0.1322 0.1012 322 143 1 VT OOT 5.0290 0.1787 0.0355 80 80 2 VT OOT 3.3516 0.2135 0.0637 79 78 3 VT OOT 6.5120 0.3312 0.0509 78 76 1 GB WF 3.6686 0.0917 0.0250 322 176 2 GB WF 6.3623 0.1657 0.0260 320 157 3 GB WF 1.4276 0.1558 0.1091 322 146 1 GB OOT 4.7558 0.1685 0.0354 80 80 2 GB OOT 2.9237 0.1872 0.0640 79 79 3 GB OOT 8.1170 0.5881 0.0725 78 78 1 HK WF 2.2623 0.0901 0.0398 322 160 2 HK WF 3.7739 0.1232 0.0326 320 127 3 HK WF 1.5791 0.1474 0.0933 322 125 1 HK OOT 4.5273 0.1289 0.0285 80 77 2 HK OOT 2.8110 0.1416 0.0504 79 73 3 HK OOT 6.3287 0.3752 0.0593 78 65 1 QK WF 2.3980 0.0948 0.0396 322 160 2 QK WF 3.6736 0.1216 0.0331 320 127 3 QK WF 1.4710 0.1398 0.0951 322 125 1 QK OOT 8.1524 0.1469 0.0180 80 77 2 QK OOT 2.5104 0.1271 0.0506 79 72 3 QK OOT 5.6502 0.3370 0.0596 78 65 
+
+65 Note: Sharpe ratios are computed on the daily returns of every day in the tercile, with days on which the model abstained or the confidence gate blocked entry entering at a return of zero. The Days column counts those days and the Trades column counts how many of them carried a position. Returns are computed once on the ordered slice and attributed to the day they were earned on, so the three tercile cells partition the slice. Realized volatility is the 5-day intraday realized volatility of the S&P 500, measured at the entry-day close, partitioned into terciles at the 1/3 and 2/3 quantiles. The entry-day close falls after the 10:00 ET entry, so the classification uses information the strategy itself never sees. The cut points are computed within each slice separately, so a given tercile label spans different realized-volatility levels on the walk-forward and out-of-time panels. The walk-forward (WF) slice covers 2021–2024. The 2025 out-of-time (OOT) slice covers the hold-out year, never used during training, model selection, or hyperparameter search. 
+
+66 E Confidence-gate calibration 
+
+Section 7.1 describes the confidence gate, a per-window calibrated abstention threshold τ
+
+that suppresses the day’s position when the model’s top-1-versus-top-2 score gap is below τ ⋆.Table E.1 reports the calibrated τ ⋆ value and the implied trade rate for each of the four walk-forward training cycles (2021–2024) plus the 2025 out-of-time slice and the union calibration over all walk-forward held-out slices. The values show a threshold that is re-fit rather than fixed, with the calibrated trade rate spanning 30 .6% to 100% across windows. Table E.1. Confidence gate calibration per window. Window τ ⋆ Calibrated trade rate Calibration metric 2021 0.0000 1.0000 Sortino 2022 0.2013 0.5041 Sortino 2023 0.1613 0.3058 Sortino 2024 0.0137 0.4000 Sortino OOT 2025 0.0000 1.0000 Sortino WF held-out union 0.0000 1.0000 Sortino 
+
+Note: Per-window calibration of the confidence gate’s abstention threshold τ ⋆. The threshold is selected on the last six months of each training window, held out from feature engineering and ranker training, by a one-dimensional grid search that maximizes the Sortino ratio on the held-out slice. At inference time, days whose confidence signal (top-1 minus top-2 candidate scores) falls below τ ⋆ produce zero positions for the day. The calibrated trade rate column reports the fraction of held-out days whose confidence signal exceeds τ ⋆. The final row reports the calibration on the union of the four walk-forward held-out slices, which produced the threshold applied to the 2025 out-of-time inference. The OOT 2025 row reports that threshold and the trade rate it implies on the 2025 slice. 
+
+67 F Feature survival across selection windows 
+
+Section 7.2 discusses feature survival across the four walk-forward training cycles and the out-of-time cycle, with the pipeline of Algorithm 1 run independently in each window. Figure F.1 shows the per-window survival pattern for the top 60 candidate features as a heatmap, and the 27 features selected in every window appear as the contiguous block of always-on cells. Figure F.1. Per-window feature survival heatmap. 2021 2022 2023 2024 OOT 2025 
+
+Window 
+
+is_post_holiday_session days_until_next_pce atmf_iv_1dte_percentile_252d atmf_iv_10dte_intraday_range iv_to_spot_change_ratio_1dte_close spx_252d_rv spx_1d_returns VIX_5d_pct_change VIX_21d_pct_change delta gamma theta vega dollar_delta gamma_exposure log_moneyness leverage win_rate_30d entry_bid_ask_spread entry_bid_ask_spread_pct entry_log_premium delta_distance_from_target iv_at_strike_minus_atmf iv_at_strike_minus_atmf_pct iv_at_strike_minus_atmf_wd_rank delta_x_VIX gamma_x_morning_spx_rv_annualized VVIX_5d_pct_change spx_realized_skew_63d vix_curvature_9d_30d_3m returns_on_margin_wd_rank drawdown_63d_wd_rank gamma_x_dte vega_x_VIX_5d_pct_change prior_day_strategy_drawdown_max_5d jobless_claims rom_roll_skew_30d is_nfp_day spx_5d_returns effr_rate_1y_pct_change iv_term_slope_5d_30d distance_from_max_126d returns_on_margin rom_diff_to_spx sharpe_ratio_rom_60d_wd_rank theta_x_atmf_iv_5dte_percentile_252d morning_spx_rv_annualized spx_10d_returns VIX_1y_percentile VIX_VIX9D_ratio delta_distance_from_target_x_VVIX_1y_percentile morning_spx_directionality morning_vix_change day_of_month is_pce_day morning_spx_log_return VIX_VIX9D_spread effr_rate_1y_percentile spx_realized_skew_21d spx_realized_kurtosis_63d 
+
+Note: Per-window survival pattern across the top 60 candidate features (rows) and the five selection windows (columns: the four walk-forward windows 2021–2024, and the 2025 out-of-time window). A filled cell indicates that the feature survives the selection pipeline in that window. The 27 always-surviving features appear as the contiguous block of always-on cells. 
+
+68
